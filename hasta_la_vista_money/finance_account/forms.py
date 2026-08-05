@@ -9,9 +9,10 @@ error handling for financial operations.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.forms import (
     CharField,
     ChoiceField,
@@ -23,7 +24,6 @@ from django.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.bank_constants import BANK_DEFAULT
 from hasta_la_vista_money.finance_account.base_forms import (
     BaseAccountForm,
     BaseTransferForm,
@@ -33,6 +33,7 @@ from hasta_la_vista_money.finance_account.base_forms import (
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.validators import (
@@ -70,8 +71,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         help_text=_('Выберите из списка тип счёта'),
     )
 
-    bank = ChoiceField(
-        choices=Account.BANK_LIST,
+    bank = ModelChoiceField(
+        queryset=Bank.objects.none(),
         label=_('Банк'),
         help_text=_('Выберите банк, выпустивший карту или обслуживающий счёт'),
         required=False,
@@ -122,6 +123,22 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         super().__init__(*args, **kwargs)
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
         self.setup_date_fields()
+        if self.request_user is not None:
+            bank_field = cast(
+                'ModelChoiceField[Bank]',
+                self.fields['bank'],
+            )
+            bank_field.queryset = Bank.objects.filter(
+                Q(is_system=True) | Q(user=self.request_user),
+            )
+        else:
+            bank_field = cast(
+                'ModelChoiceField[Bank]',
+                self.fields['bank'],
+            )
+            bank_field.queryset = Bank.objects.filter(
+                is_system=True,
+            )
 
     def clean_balance(self) -> Any:
         """Validate balance field.
@@ -148,10 +165,12 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             )
         return balance
 
-    def clean_bank(self) -> str:
-        """Use the placeholder bank value for non-credit accounts."""
-        bank = self.cleaned_data.get('bank')
-        return str(bank or BANK_DEFAULT)
+    def clean_bank(self) -> Bank:
+        """Use the default bank value for non-credit accounts."""
+        bank: Bank | None = self.cleaned_data.get('bank')
+        if bank is None:
+            return Bank.objects.get(code='-')
+        return bank
 
     def clean(self) -> dict[str, Any]:
         """Validate form data, ensuring credit fields are provided for
@@ -237,8 +256,12 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         self.transfer_service = transfer_service
         self.account_repository = account_repository
 
-        user_accounts = self.account_repository.get_by_user(user).exclude(
-            type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+        user_accounts = (
+            self.account_repository.get_by_user(user)
+            .filter(
+                archived_at__isnull=True,
+            )
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
         accounts = list(user_accounts)
         initial_accounts = self._get_default_transfer_accounts(

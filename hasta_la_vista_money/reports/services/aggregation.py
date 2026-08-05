@@ -12,6 +12,7 @@ from django.utils import timezone
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -332,11 +333,18 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
 
     period_range = report_period_range(period)
     transactions_qs = Transaction.objects.filter(user=user)
+    interest_events = DepositCapitalizationEvent.objects.filter(
+        deposit__account__user=user,
+    )
     if period_range is not None:
         start, end = period_range
         transactions_qs = transactions_qs.filter(
             date__date__gte=start,
             date__date__lte=end,
+        )
+        interest_events = interest_events.filter(
+            posting_on__gte=start,
+            posting_on__lte=end,
         )
 
     months_qs = (
@@ -352,6 +360,19 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
             month_date = d.date() if hasattr(d, 'date') else d
             if isinstance(month_date, date):
                 all_months_set.add(month_date)
+
+    interest_by_month = {
+        row['month']: row
+        for row in interest_events.annotate(
+            month=TruncMonth('posting_on'),
+        )
+        .values('month')
+        .annotate(
+            gross_total=Sum('gross'),
+            withholding_total=Sum('withholding'),
+        )
+    }
+    all_months_set.update(interest_by_month)
 
     months = sorted(all_months_set)
 
@@ -381,6 +402,12 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
 
     total_expense = _totals_by_month(expense_categories, months, expense_fact)
     total_income = _totals_by_month(income_categories, months, income_fact)
+    for index, month in enumerate(months):
+        interest = interest_by_month.get(month)
+        if interest is None:
+            continue
+        total_income[index] += float(interest['gross_total'] or 0)
+        total_expense[index] += float(interest['withholding_total'] or 0)
 
     chart_balance = (
         [total_income[i] - total_expense[i] for i in range(len(months))]

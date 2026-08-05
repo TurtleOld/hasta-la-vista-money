@@ -11,6 +11,9 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseMaturedDepositCommand,
+    CloseMaturedDepositResult,
+    ConfirmInterestPaymentCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     ForecastTerms,
@@ -36,8 +39,10 @@ from hasta_la_vista_money.deposits.models import (
     DepositPrincipalEvent,
     DepositRatePeriod,
     DepositTerm,
+    InterestPayoutDestination,
 )
 from hasta_la_vista_money.deposits.repositories import DepositRepository
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -46,6 +51,9 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 
 class DepositService:
@@ -220,10 +228,11 @@ class DepositService:
         account.type_account = constants.ACCOUNT_TYPE_DEPOSIT
         account.save(update_fields=['type_account', 'updated_at'])
 
+        bank_instance = self._resolve_bank(command.bank)
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,
@@ -302,6 +311,12 @@ class DepositService:
                 _('Остаток вклада не может быть отрицательным.'),
             )
 
+    def _resolve_bank(self, bank: 'Bank | str') -> Bank:
+        """Resolve a bank code or instance to a Bank instance."""
+        if isinstance(bank, Bank):
+            return bank
+        return Bank.objects.get(code=bank)
+
     def _create_agreement(
         self,
         *,
@@ -322,17 +337,18 @@ class DepositService:
         Returns:
             The persisted Deposit with associated account, term, and rate.
         """
+        bank_instance = self._resolve_bank(command.bank)
         account = self.account_repository.create_deposit_account(
             user=command.user,
             name_account=command.name,
-            bank=command.bank,
+            bank=bank_instance,
             currency=command.currency,
             balance=balance,
         )
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,
@@ -363,6 +379,9 @@ class DepositService:
             'accrual_end_included': forecast_terms.accrual_end_included,
             'payout_schedule_kind': forecast_terms.payout_schedule_kind,
             'business_day_convention': forecast_terms.business_day_convention,
+            'interest_payout_destination': (
+                forecast_terms.interest_payout_destination
+            ),
         }
 
     def _withdrawal_term_kwargs(
@@ -453,7 +472,10 @@ class DepositService:
                     'плавающей ставки.',
                 ),
             )
-        if term.state == DepositTerm.State.MATURED:
+        if term.state in (
+            DepositTerm.State.MATURED,
+            DepositTerm.State.CLOSED,
+        ):
             raise ValidationError(
                 _('Срок уже завершён, изменить ставку нельзя.'),
             )
@@ -525,6 +547,8 @@ class DepositService:
             raise ValidationError(
                 _('Счёт назначения не найден или недоступен.'),
             )
+        if destination.is_archived:
+            raise ValidationError(_('Счёт назначения находится в архиве.'))
         if destination.is_deposit:
             raise ValidationError(
                 _('Средства можно вывести только на обычный счёт.'),
@@ -536,6 +560,8 @@ class DepositService:
         if command.amount <= 0:
             raise ValidationError(_('Сумма снятия должна быть больше нуля.'))
         term = deposit.current_term
+        if term.state == DepositTerm.State.CLOSED:
+            raise ValidationError(_('Закрытый вклад недоступен для операций.'))
         if not command.exception_reason.strip():
             self._validate_withdrawal_terms(
                 term,
@@ -594,7 +620,7 @@ class DepositService:
             command.source_account_id,
             command.user,
         )
-        if source is None or source.is_deposit:
+        if source is None or source.is_deposit or source.is_archived:
             raise ValidationError(_('Исходный счёт не найден или недоступен.'))
         if source.currency != deposit.account.currency:
             raise ValidationError(
@@ -605,6 +631,8 @@ class DepositService:
                 _('Сумма пополнения должна быть больше нуля.'),
             )
         term = deposit.current_term
+        if term.state == DepositTerm.State.CLOSED:
+            raise ValidationError(_('Закрытый вклад недоступен для операций.'))
         account_ids = {source.pk, deposit.account.pk}
         locked_accounts = self.account_repository.get_by_ids_for_update(
             account_ids,
@@ -642,10 +670,16 @@ class DepositService:
         self._recalculate_forecast_for_term(term, command.effective_on)
         return event
 
-    @transaction.atomic
     def capitalize_interest(
         self,
         command: CapitalizeInterestCommand,
+    ) -> DepositCapitalizationEvent:
+        return self.confirm_interest_payment(command)
+
+    @transaction.atomic
+    def confirm_interest_payment(
+        self,
+        command: ConfirmInterestPaymentCommand,
     ) -> DepositCapitalizationEvent:
         try:
             deposit = self.deposit_repository.get_by_id_and_user(
@@ -657,15 +691,28 @@ class DepositService:
                 _('Вклад не найден или недоступен.'),
             ) from error
 
+        if deposit.current_term.state == DepositTerm.State.CLOSED:
+            raise ValidationError(_('Закрытый вклад недоступен для операций.'))
+
         self._validate_capitalization_amounts(command)
         forecast = self._resolve_capitalization_forecast(
             deposit,
             command,
         )
-
-        self.balance_service.apply_account_deltas(
-            {deposit.account.pk: command.net},
+        destination_account = self._resolve_interest_destination(
+            deposit,
+            command,
         )
+        account_deltas: dict[int, Decimal] = {}
+        if (
+            command.destination
+            == DepositCapitalizationEvent.Destination.CAPITALIZATION
+        ):
+            account_deltas[deposit.account.pk] = command.net
+        elif destination_account is not None:
+            account_deltas[destination_account.pk] = command.net
+        if account_deltas:
+            self.balance_service.apply_account_deltas(account_deltas)
         event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,
             forecast=forecast,
@@ -675,51 +722,350 @@ class DepositService:
             posting_on=command.posting_on,
             value_on=command.value_on,
             reason=command.reason.strip(),
+            destination=command.destination,
+            destination_account=destination_account,
         )
         if forecast is not None:
             self.deposit_repository.confirm_forecast(forecast.pk)
-        with contextlib.suppress(ValidationError):
-            self._recalculate_forecast_for_term(
-                deposit.current_term,
-                command.value_on,
-            )
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        if (
+            command.destination
+            == DepositCapitalizationEvent.Destination.CAPITALIZATION
+        ):
+            with contextlib.suppress(ValidationError):
+                self._recalculate_forecast_for_term(
+                    deposit.current_term,
+                    command.value_on,
+                )
         return event
+
+    @transaction.atomic
+    def close_matured_deposit(
+        self,
+        command: CloseMaturedDepositCommand,
+    ) -> CloseMaturedDepositResult:
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user_for_update(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+
+        existing_result = self._existing_closure_result(deposit.pk, command)
+        if existing_result is not None:
+            return existing_result
+        term = deposit.current_term
+        destination_account = self._resolve_closure_destination(
+            deposit,
+            command,
+        )
+        account_ids = {deposit.account.pk}
+        if destination_account is not None:
+            account_ids.add(destination_account.pk)
+        closure_accounts = self.account_repository.get_by_ids_for_update(
+            account_ids,
+        )
+        if len(closure_accounts) != len(account_ids):
+            raise ValidationError(_('Счёт закрытия не найден или недоступен.'))
+        deposit.account = closure_accounts[deposit.account.pk]
+        if destination_account is not None:
+            destination_account = closure_accounts[destination_account.pk]
+            if destination_account.is_archived:
+                raise ValidationError(
+                    _('Счёт назначения находится в архиве.'),
+                )
+        self._validate_closure_lifecycle(deposit, term, command)
+        self._validate_closure_interest_amounts(command)
+        forecast = self._resolve_closure_forecast(deposit, command.forecast_id)
+
+        account_deltas = {deposit.account.pk: -command.principal}
+        if destination_account is not None:
+            account_deltas[destination_account.pk] = (
+                command.principal + command.net
+            )
+        locked_accounts = self.balance_service.apply_account_deltas(
+            account_deltas,
+        )
+        closed_account = locked_accounts.get(
+            deposit.account.pk,
+            closure_accounts[deposit.account.pk],
+        )
+        if closed_account.balance != 0:
+            raise ValidationError(
+                _('После закрытия остаток счёта вклада должен быть нулевым.'),
+            )
+
+        principal_event = self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            amount=command.principal,
+            posting_on=command.posting_on,
+            effective_on=command.value_on,
+            source_account=None,
+            destination=command.destination,
+            destination_account=destination_account,
+        )
+        interest_event = self.deposit_repository.create_capitalization_event(
+            deposit=deposit,
+            forecast=forecast,
+            gross=command.gross,
+            withholding=command.withholding,
+            net=command.net,
+            posting_on=command.posting_on,
+            value_on=command.value_on,
+            reason=str(_('Финальная выплата при плановом закрытии.')),
+            destination=command.destination,
+            destination_account=destination_account,
+            is_final=True,
+        )
+        if forecast is not None:
+            self.deposit_repository.confirm_forecast(forecast.pk)
+        self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
+        self.deposit_repository.close_term(term.pk, command.value_on)
+        self.account_repository.archive(deposit.account.pk)
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        return CloseMaturedDepositResult(
+            principal_event=principal_event,
+            interest_event=interest_event,
+        )
+
+    def _existing_closure_result(
+        self,
+        deposit_id: int,
+        command: CloseMaturedDepositCommand,
+    ) -> CloseMaturedDepositResult | None:
+        principal_event = self.deposit_repository.get_planned_closure_event(
+            deposit_id,
+        )
+        interest_event = self.deposit_repository.get_final_interest_event(
+            deposit_id,
+        )
+        if principal_event is not None and interest_event is not None:
+            if not self._closure_matches_command(
+                principal_event,
+                interest_event,
+                command,
+            ):
+                raise ValidationError(
+                    _('Вклад уже закрыт с другими фактическими данными.'),
+                )
+            return CloseMaturedDepositResult(
+                principal_event=principal_event,
+                interest_event=interest_event,
+            )
+        if principal_event is not None or interest_event is not None:
+            raise ValidationError(
+                _('История закрытия вклада содержит неполные данные.'),
+            )
+        return None
+
+    @staticmethod
+    def _closure_matches_command(
+        principal_event: DepositPrincipalEvent,
+        interest_event: DepositCapitalizationEvent,
+        command: CloseMaturedDepositCommand,
+    ) -> bool:
+        return (
+            principal_event.destination == command.destination
+            and principal_event.destination_account_id
+            == command.destination_account_id
+            and principal_event.amount == command.principal
+            and principal_event.posting_on == command.posting_on
+            and principal_event.effective_on == command.value_on
+            and interest_event.forecast_id == command.forecast_id
+            and interest_event.gross == command.gross
+            and interest_event.withholding == command.withholding
+            and interest_event.net == command.net
+            and interest_event.posting_on == command.posting_on
+            and interest_event.value_on == command.value_on
+        )
+
+    def _validate_closure_lifecycle(
+        self,
+        deposit: Deposit,
+        term: DepositTerm,
+        command: CloseMaturedDepositCommand,
+    ) -> None:
+        if term.state != DepositTerm.State.MATURED:
+            raise ValidationError(
+                _('Плановое закрытие доступно только после окончания срока.'),
+            )
+        if (
+            command.posting_on < term.matures_on
+            or command.value_on < term.matures_on
+        ):
+            raise ValidationError(
+                _('Фактические даты закрытия не могут быть раньше срока.'),
+            )
+        if command.principal < 0:
+            raise ValidationError(
+                _('Возвращаемое тело вклада не может быть отрицательным.'),
+            )
+        if command.principal != deposit.account.balance:
+            raise ValidationError(
+                _('Возвращаемое тело должно совпадать с остатком вклада.'),
+            )
+
+    def _resolve_closure_destination(
+        self,
+        deposit: Deposit,
+        command: CloseMaturedDepositCommand,
+    ) -> Account | None:
+        if command.destination == InterestPayoutDestination.EXTERNAL:
+            if command.destination_account_id is not None:
+                raise ValidationError(
+                    _('Для внешнего возврата счёт назначения не указывается.'),
+                )
+            return None
+        if command.destination != InterestPayoutDestination.INTERNAL_ACCOUNT:
+            raise ValidationError(_('Неизвестное назначение закрытия вклада.'))
+        if command.destination_account_id is None:
+            raise ValidationError(_('Выберите счёт для возврата вклада.'))
+        destination = self.account_repository.get_by_id_and_user(
+            command.destination_account_id,
+            command.user,
+        )
+        if destination is None or destination.is_archived:
+            raise ValidationError(
+                _('Счёт назначения не найден или недоступен.'),
+            )
+        if destination.is_deposit:
+            raise ValidationError(
+                _('Закрытый вклад можно вернуть только на обычный счёт.'),
+            )
+        if destination.currency != deposit.account.currency:
+            raise ValidationError(
+                _('Счёт назначения должен быть в валюте вклада.'),
+            )
+        return destination
+
+    def _validate_closure_interest_amounts(
+        self,
+        command: CloseMaturedDepositCommand,
+    ) -> None:
+        self._validate_interest_amounts(
+            command.gross,
+            command.withholding,
+            command.net,
+            allow_zero_net=True,
+        )
+
+    def _resolve_closure_forecast(
+        self,
+        deposit: Deposit,
+        forecast_id: int | None,
+    ) -> DepositInterestForecast | None:
+        if forecast_id is None:
+            return None
+        try:
+            forecast = self.deposit_repository.get_forecast_for_update(
+                forecast_id,
+                deposit.current_term.pk,
+            )
+        except DepositInterestForecast.DoesNotExist as error:
+            raise ValidationError(
+                _('Ожидаемая финальная выплата не найдена.'),
+            ) from error
+        if forecast.confirmed:
+            raise ValidationError(
+                _('Эта ожидаемая выплата уже подтверждена.'),
+            )
+        if forecast.period_ends_on != deposit.current_term.matures_on:
+            raise ValidationError(
+                _('Для закрытия выберите финальную ожидаемую выплату.'),
+            )
+        return forecast
+
+    def _resolve_interest_destination(
+        self,
+        deposit: Deposit,
+        command: CapitalizeInterestCommand,
+    ) -> Account | None:
+        if command.destination not in tuple(
+            choice.value for choice in DepositCapitalizationEvent.Destination
+        ):
+            raise ValidationError(
+                _('Неизвестное назначение выплаты процентов.'),
+            )
+        if (
+            command.destination
+            != DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+        ):
+            if command.destination_account_id is not None:
+                raise ValidationError(
+                    _('Счёт можно указать только для внутренней выплаты.'),
+                )
+            return None
+        if command.destination_account_id is None:
+            raise ValidationError(
+                _('Выберите собственный счёт для выплаты процентов.'),
+            )
+        account = self.account_repository.get_by_id_and_user(
+            command.destination_account_id,
+            command.user,
+        )
+        if account is None:
+            raise ValidationError(
+                _(
+                    'Счёт выплаты не найден или принадлежит другому '
+                    'пользователю.',
+                ),
+            )
+        if account.is_archived:
+            raise ValidationError(_('Счёт выплаты находится в архиве.'))
+        if account.pk == deposit.account.pk:
+            raise ValidationError(
+                _('Для внутренней выплаты выберите другой собственный счёт.'),
+            )
+        if account.currency != deposit.account.currency:
+            raise ValidationError(
+                _('Валюта счёта выплаты должна совпадать с валютой вклада.'),
+            )
+        return account
 
     def _validate_capitalization_amounts(
         self,
         command: CapitalizeInterestCommand,
     ) -> None:
-        if command.gross < 0:
-            raise ValidationError(
-                _('Валовый процентный доход не может быть отрицательным.'),
-            )
-        if command.withholding < 0:
-            raise ValidationError(
-                _('Удержание не может быть отрицательным.'),
-            )
-        if command.net < 0:
-            raise ValidationError(
-                _('Чистый доход не может быть отрицательным.'),
-            )
-        if command.net == 0:
-            raise ValidationError(
-                _('Чистый доход должен быть больше нуля.'),
-            )
-        expected_net = (command.gross - command.withholding).quantize(
+        self._validate_interest_amounts(
+            command.gross,
+            command.withholding,
             command.net,
+            allow_zero_net=False,
         )
-        if expected_net != command.net:
+
+    @staticmethod
+    def _validate_interest_amounts(
+        gross: Decimal,
+        withholding: Decimal,
+        net: Decimal,
+        *,
+        allow_zero_net: bool,
+    ) -> None:
+        amounts = (gross, withholding, net)
+        if min(amounts) < 0:
             raise ValidationError(
-                _(
-                    'Суммы не согласованы: чистый доход (%(net)s) '
-                    'должен равняться валовому доходу (%(gross)s) '
-                    'за вычетом удержания (%(withholding)s).',
-                )
-                % {
-                    'net': command.net,
-                    'gross': command.gross,
-                    'withholding': command.withholding,
-                },
+                _('Суммы процентов не могут быть отрицательными.'),
+            )
+        if not allow_zero_net and net == 0:
+            raise ValidationError(_('Чистый доход должен быть больше нуля.'))
+        if any(
+            amount != amount.quantize(constants.MIN_MONEY_AMOUNT)
+            for amount in amounts
+        ):
+            raise ValidationError(
+                _('Суммы процентов должны иметь точность до копеек.'),
+            )
+        if gross - withholding != net:
+            raise ValidationError(
+                _('Чистые проценты должны равняться gross минус удержание.'),
             )
 
     def _resolve_capitalization_forecast(
@@ -730,12 +1076,13 @@ class DepositService:
         if command.forecast_id is None:
             if not command.reason.strip():
                 raise ValidationError(
-                    _('Для внеплановой капитализации укажите причину.'),
+                    _('Для внеплановой выплаты укажите причину.'),
                 )
             return None
         try:
-            forecast = deposit.current_term.interest_forecasts.get(
-                pk=command.forecast_id,
+            forecast = self.deposit_repository.get_forecast_for_update(
+                command.forecast_id,
+                deposit.current_term.pk,
             )
         except DepositInterestForecast.DoesNotExist as error:
             raise ValidationError(
@@ -834,6 +1181,10 @@ class DepositService:
             raise ValidationError(
                 _('Срок не найден или недоступен.'),
             ) from error
+        if term.state == DepositTerm.State.CLOSED:
+            raise ValidationError(
+                _('Прогноз закрытого вклада нельзя изменить.'),
+            )
         return self._recalculate_forecast_for_term(term)
 
     def _recalculate_forecast_for_term(
@@ -886,7 +1237,11 @@ class DepositService:
                 effective_on=ce.value_on,
                 amount=ce.net,
             )
-            for ce in term.deposit.capitalization_events.all()
+            for ce in term.deposit.capitalization_events.filter(
+                destination=(
+                    DepositCapitalizationEvent.Destination.CAPITALIZATION
+                ),
+            )
         ]
         principal_changes.extend(capitalization_changes)
         principal_changes.sort(key=lambda pc: pc.effective_on)

@@ -476,8 +476,11 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             user=current_user,
             type=TransactionType.EXPENSE,
         )
-        accounts = Account.objects.filter(user=current_user).order_by(
-            'name_account',
+        accounts = (
+            Account.objects.available_for_operations()
+            .filter(user=current_user)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            .order_by('name_account')
         )
         context.update(
             {
@@ -559,7 +562,11 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             user=request.user,
             type=type_value,
         )
-        accounts = Account.objects.filter(user=request.user)
+        accounts = (
+            Account.objects.available_for_operations()
+            .filter(user=request.user)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        )
         form_data = request.POST.copy()
         form_data['type'] = type_value
         form = TransactionForm(
@@ -633,8 +640,10 @@ class TransactionUpdateView(
             user=self.request.user,
             type=transaction_obj.type,
         )
-        kwargs['account_queryset'] = Account.objects.filter(
-            user=self.request.user,
+        kwargs['account_queryset'] = (
+            Account.objects.available_for_operations()
+            .filter(user=self.request.user)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
         kwargs.setdefault('initial', {})['type'] = transaction_obj.type
         return kwargs
@@ -1430,10 +1439,14 @@ class AccountView(
             users_in_group,
             limit=12,
         )
-        context['drawer_accounts'] = Account.objects.filter(
-            user=current_user,
-            type_account__in=constants.MANUALLY_CREATABLE_ACCOUNT_TYPES,
-        ).order_by('name_account')
+        context['drawer_accounts'] = (
+            Account.objects.available_for_operations()
+            .filter(
+                user=current_user,
+                type_account__in=constants.MANUALLY_CREATABLE_ACCOUNT_TYPES,
+            )
+            .order_by('name_account')
+        )
         context['drawer_income_categories'] = Category.objects.filter(
             user=current_user,
             type=TransactionType.INCOME,
@@ -1811,3 +1824,23 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
         return JsonResponse(
             {'ok': True, 'id': category.pk, 'name': category.name},
         )
+
+
+class QuickBankCreateView(LoginRequiredMixin, View):
+    """Lightweight JSON endpoint for adding a personal bank inline.
+
+    Lets the deposit creation form add a personal bank without leaving
+    the page, so the contract terms already entered stay intact.
+    """
+
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> JsonResponse:
+        name = (request.POST.get('name') or '').strip()
+        bank_service = request.container.finance_account.bank_service()
+        try:
+            bank = bank_service.get_or_create_user_bank(request.user, name)
+        except ValidationError as error:
+            return JsonResponse(
+                {'ok': False, 'error': error.message},
+                status=400,
+            )
+        return JsonResponse({'ok': True, 'id': bank.pk, 'name': bank.name})

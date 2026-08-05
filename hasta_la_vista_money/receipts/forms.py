@@ -560,7 +560,9 @@ class UploadImageForm(Form):
     def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
         kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = Account.objects.filter(user=user)  # type: ignore[attr-defined]
+        self.fields['account'].queryset = (  # type: ignore[attr-defined]
+            Account.objects.available_for_operations().filter(user=user)
+        )
         if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
             self.fields['account'].initial = self.fields[
                 'account'
@@ -597,7 +599,9 @@ class ScanQRForm(Form):
     def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
         kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = Account.objects.filter(user=user)  # type: ignore[attr-defined]
+        self.fields['account'].queryset = (  # type: ignore[attr-defined]
+            Account.objects.available_for_operations().filter(user=user)
+        )
         if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
             self.fields['account'].initial = self.fields[
                 'account'
@@ -720,7 +724,9 @@ class PendingReceiptReviewForm(Form):
             self.fields['account'],
         )
         if user is not None:
-            account_field.queryset = Account.objects.filter(user=user)
+            account_field.queryset = (
+                Account.objects.available_for_operations().filter(user=user)
+            )
         if account is not None:
             account_field.initial = account
         if receipt_data:

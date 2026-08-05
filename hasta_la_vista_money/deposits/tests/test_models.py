@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -10,7 +11,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositRatePeriod,
     DepositTerm,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
@@ -18,17 +19,18 @@ if TYPE_CHECKING:
 
 
 def _make_deposit(user: 'User') -> Deposit:
+    bank = Bank.objects.get(code='SBERBANK')
     account = Account.objects.create_deposit(
         user=user,
         name_account='Вклад для теста',
-        bank='SBERBANK',
+        bank=bank,
         currency='RUB',
         balance=Decimal('10000.00'),
     )
     return Deposit.objects.create(
         account=account,
         name='Вклад',
-        bank='SBERBANK',
+        bank=bank,
     )
 
 
@@ -109,3 +111,26 @@ class DepositTermRateKindTests(TestCase):
             self.fail('Expected a covering rate period.')
         self.assertEqual(rate.annual_rate, Decimal('9.50'))
         self.assertEqual(rate.note, 'КС ЦБ РФ + 2%')
+
+
+class DepositTermLifecycleTests(TestCase):
+    def test_term_is_matured_on_planned_maturity_date(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=30),
+            matures_on=today,
+            is_current=True,
+        )
+
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today,
+        ):
+            self.assertEqual(term.state, DepositTerm.State.MATURED)
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('10000.00'))
+        self.assertFalse(deposit.capitalization_events.exists())

@@ -5,6 +5,9 @@ from django.db.models import QuerySet
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseMaturedDepositCommand,
+    CloseMaturedDepositResult,
+    ConfirmInterestPaymentCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
@@ -131,3 +134,13 @@ class DepositServiceProtocol(Protocol):
         self,
         command: CapitalizeInterestCommand,
     ) -> DepositCapitalizationEvent: ...
+
+    def confirm_interest_payment(
+        self,
+        command: ConfirmInterestPaymentCommand,
+    ) -> DepositCapitalizationEvent: ...
+
+    def close_matured_deposit(
+        self,
+        command: CloseMaturedDepositCommand,
+    ) -> CloseMaturedDepositResult: ...

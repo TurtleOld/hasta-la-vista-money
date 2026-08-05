@@ -4,20 +4,22 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import (
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
 )
 from hasta_la_vista_money.finance_account.bank_constants import (
-    BANK_CHOICES,
     BANK_DEFAULT,
 )
 from hasta_la_vista_money.finance_account.currencies import currency_choices
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
@@ -148,6 +150,12 @@ class CreateDepositForm(forms.Form):
         required=False,
         label=_('Расписание выплат'),
     )
+    interest_payout_destination = forms.ChoiceField(
+        choices=DepositTerm.PayoutDestination.choices,
+        initial=DepositTerm.PayoutDestination.CAPITALIZATION,
+        required=False,
+        label=_('Обычный способ выплаты процентов'),
+    )
     custom_payout_dates = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'rows': 2}),
@@ -168,7 +176,10 @@ class CreateDepositForm(forms.Form):
         max_length=constants.TWO_HUNDRED_FIFTY,
         label=_('Название вклада'),
     )
-    bank = forms.ChoiceField(choices=BANK_CHOICES, label=_('Банк'))
+    bank = forms.ModelChoiceField(
+        queryset=Bank.objects.none(),
+        label=_('Банк'),
+    )
     currency = forms.ChoiceField(
         choices=currency_choices(),
         label=_('Валюта'),
@@ -215,20 +226,33 @@ class CreateDepositForm(forms.Form):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        bank_field = cast(
+            'forms.ModelChoiceField[Bank]',
+            self.fields['bank'],
+        )
         if user is not None:
             source_account_field = cast(
                 'forms.ModelChoiceField[Account]',
                 self.fields['source_account'],
             )
-            source_account_field.queryset = Account.objects.filter(
-                user=user,
-            ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            source_account_field.queryset = (
+                Account.objects.available_for_operations()
+                .filter(user=user)
+                .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            )
+            bank_field.queryset = Bank.objects.filter(
+                models.Q(is_system=True) | models.Q(user=user),
+            )
+        else:
+            bank_field.queryset = Bank.objects.filter(
+                is_system=True,
+            )
 
     def clean_bank(self) -> str:
-        bank = str(self.cleaned_data['bank'])
-        if bank == BANK_DEFAULT:
+        bank = cast('Bank | None', self.cleaned_data.get('bank'))
+        if bank is None or bank.code == BANK_DEFAULT:
             raise ValidationError(_('Выберите банк для срочного вклада.'))
-        return bank
+        return bank.code
 
     def clean_custom_payout_dates(self) -> list[date]:
         raw = str(self.cleaned_data.get('custom_payout_dates', '')).strip()
@@ -258,6 +282,11 @@ class CreateDepositForm(forms.Form):
         if not cleaned_data['business_day_convention']:
             cleaned_data['business_day_convention'] = (
                 DepositTerm.BusinessDayConvention.NONE
+            )
+        cleaned_data.setdefault('interest_payout_destination', None)
+        if not cleaned_data['interest_payout_destination']:
+            cleaned_data['interest_payout_destination'] = (
+                DepositTerm.PayoutDestination.CAPITALIZATION
             )
         opened_on = cleaned_data.get('opened_on')
         matures_on = cleaned_data.get('matures_on')
@@ -373,10 +402,11 @@ class TopUpDepositForm(forms.Form):
             'forms.ModelChoiceField[Account]',
             self.fields['source_account'],
         )
-        field.queryset = Account.objects.filter(
-            user=user,
-            currency=currency,
-        ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        field.queryset = (
+            Account.objects.available_for_operations()
+            .filter(user=user, currency=currency)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        )
 
     def clean_exception_reason(self) -> str:
         return str(self.cleaned_data['exception_reason']).strip()
@@ -387,6 +417,16 @@ class CapitalizeInterestForm(forms.Form):
         queryset=DepositInterestForecast.objects.none(),
         required=False,
         label=_('Ожидаемая выплата'),
+    )
+    destination = forms.ChoiceField(
+        choices=DepositCapitalizationEvent.Destination.choices,
+        required=False,
+        label=_('Фактическое назначение выплаты'),
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        required=False,
+        label=_('Собственный счёт для выплаты'),
     )
     gross = forms.DecimalField(
         min_value=Decimal(0),
@@ -421,21 +461,39 @@ class CapitalizeInterestForm(forms.Form):
         required=False,
         max_length=constants.TWO_HUNDRED_FIFTY,
         widget=forms.Textarea(attrs={'rows': 2}),
-        label=_('Причина внеплановой капитализации'),
+        label=_('Причина внеплановой выплаты'),
     )
 
     def __init__(
         self,
         *args: Any,
         term: DepositTerm,
+        user: 'User | None' = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self.initial.setdefault(
+            'destination',
+            term.interest_payout_destination,
+        )
         field = cast(
             'forms.ModelChoiceField[DepositInterestForecast]',
             self.fields['forecast'],
         )
         field.queryset = term.interest_forecasts.filter(confirmed=False)
+        account_field = cast(
+            'forms.ModelChoiceField[Account]',
+            self.fields['destination_account'],
+        )
+        if user is not None:
+            account_field.queryset = (
+                Account.objects.available_for_operations()
+                .filter(
+                    user=user,
+                    currency=term.deposit.account.currency,
+                )
+                .exclude(pk=term.deposit.account_id)
+            )
 
     def clean(self) -> dict[str, Any] | None:
         cleaned = super().clean()
@@ -446,15 +504,191 @@ class CapitalizeInterestForm(forms.Form):
         net = cleaned.get('net')
         forecast = cleaned.get('forecast')
         reason = str(cleaned.get('reason', '')).strip()
+        destination = (
+            cleaned.get('destination') or (self.initial['destination'])
+        )
+        destination_account = cleaned.get('destination_account')
+        cleaned['destination'] = destination
         if gross is None or withholding is None or net is None:
             return cleaned
         if not forecast and not reason:
             raise ValidationError(
                 _(
                     'Выберите ожидаемую выплату или укажите причину '
-                    'внеплановой капитализации.',
+                    'внеплановой выплаты.',
                 ),
             )
+        if (
+            destination
+            == DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and destination_account is None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Выберите собственный счёт для выплаты процентов.'),
+            )
+        if (
+            destination
+            != DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and destination_account is not None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Счёт можно указать только для внутренней выплаты.'),
+            )
+        return cleaned
+
+
+class CloseMaturedDepositForm(forms.Form):
+    destination = forms.ChoiceField(
+        choices=(
+            (
+                DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT,
+                _('На собственный счёт'),
+            ),
+            (
+                DepositCapitalizationEvent.Destination.EXTERNAL,
+                _('Внешнему получателю'),
+            ),
+        ),
+        label=_('Назначение возврата'),
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        required=False,
+        label=_('Собственный счёт для возврата'),
+    )
+    forecast = forms.ModelChoiceField(
+        queryset=DepositInterestForecast.objects.none(),
+        required=False,
+        label=_('Ожидаемая финальная выплата'),
+    )
+    principal = forms.DecimalField(
+        min_value=Decimal(),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Возвращаемое тело вклада'),
+    )
+    gross = forms.DecimalField(
+        min_value=Decimal(),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Финальные проценты gross'),
+    )
+    withholding = forms.DecimalField(
+        min_value=Decimal(),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        initial=Decimal(),
+        label=_('Удержание'),
+    )
+    net = forms.DecimalField(
+        min_value=Decimal(),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Финальные проценты net'),
+    )
+    posting_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата проводки'),
+    )
+    value_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата валютирования'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        user: 'User',
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.term = term
+        account_field = cast(
+            'forms.ModelChoiceField[Account]',
+            self.fields['destination_account'],
+        )
+        account_field.queryset = (
+            Account.objects.available_for_operations()
+            .filter(user=user, currency=term.deposit.account.currency)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        )
+        forecast_field = cast(
+            'forms.ModelChoiceField[DepositInterestForecast]',
+            self.fields['forecast'],
+        )
+        forecast_field.queryset = term.interest_forecasts.filter(
+            confirmed=False,
+            period_ends_on=term.matures_on,
+        )
+        self.initial.setdefault(
+            'principal',
+            term.deposit.account.balance,
+        )
+        self.initial.setdefault('posting_on', timezone.localdate())
+        self.initial.setdefault('value_on', timezone.localdate())
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned = super().clean()
+        if cleaned is None:
+            return cleaned
+        destination = cleaned.get('destination')
+        account = cleaned.get('destination_account')
+        principal = cleaned.get('principal')
+        gross = cleaned.get('gross')
+        withholding = cleaned.get('withholding')
+        net = cleaned.get('net')
+        posting_on = cleaned.get('posting_on')
+        value_on = cleaned.get('value_on')
+        if (
+            destination
+            == DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and account is None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Выберите собственный счёт для возврата вклада.'),
+            )
+        if (
+            destination
+            != (DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT)
+            and account is not None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Для внешнего возврата счёт не указывается.'),
+            )
+        if (
+            principal is not None
+            and principal != self.term.deposit.account.balance
+        ):
+            self.add_error(
+                'principal',
+                _('Возвращаемое тело должно совпадать с остатком вклада.'),
+            )
+        if (
+            isinstance(gross, Decimal)
+            and isinstance(withholding, Decimal)
+            and isinstance(net, Decimal)
+            and gross - withholding != net
+        ):
+            self.add_error(
+                'net',
+                _('Чистые проценты должны равняться gross минус удержание.'),
+            )
+        for field_name, actual_on in (
+            ('posting_on', posting_on),
+            ('value_on', value_on),
+        ):
+            if actual_on is not None and actual_on < self.term.matures_on:
+                self.add_error(
+                    field_name,
+                    _('Дата закрытия не может быть раньше окончания срока.'),
+                )
         return cleaned
 
 
@@ -523,10 +757,11 @@ class WithdrawDepositForm(forms.Form):
             'forms.ModelChoiceField[Account]',
             self.fields['destination_account'],
         )
-        field.queryset = Account.objects.filter(
-            user=user,
-            currency=currency,
-        ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        field.queryset = (
+            Account.objects.available_for_operations()
+            .filter(user=user, currency=currency)
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+        )
 
     def clean_exception_reason(self) -> str:
         return str(self.cleaned_data['exception_reason']).strip()

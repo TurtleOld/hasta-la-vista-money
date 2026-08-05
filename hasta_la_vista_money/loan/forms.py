@@ -188,7 +188,9 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         )
 
     def get_account_queryset(self) -> QuerySet[Account]:
-        accounts = Account.objects.filter(user=self.user)
+        accounts = Account.objects.available_for_operations().filter(
+            user=self.user,
+        )
 
         loan = Loan.objects.filter(user=self.user).values_list(
             'account',

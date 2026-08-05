@@ -380,7 +380,7 @@ class CreditCalculationService:
             purchase_end,
         ) or Decimal(str(constants.ZERO))
 
-        if account.bank in SUPPORTED_BANKS:
+        if account.bank.code in SUPPORTED_BANKS:
             payments_made = self.get_credit_card_payments(
                 account,
                 purchase_start,
@@ -483,7 +483,7 @@ class CreditCalculationService:
         """
         return (
             account.type_account in ('CreditCard', 'Credit')
-            and account.bank == BANK_RAIFFEISENBANK
+            and account.bank.code == BANK_RAIFFEISENBANK
         )
 
     def _calculate_purchase_period_for_raiffeisenbank(

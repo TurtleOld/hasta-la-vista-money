@@ -1,6 +1,6 @@
 """Bank constants and choices for finance accounts."""
 
-from typing import Final
+from typing import Any, Final
 
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -19,3 +19,9 @@ SUPPORTED_BANKS: Final[tuple[str, ...]] = (
     BANK_SBERBANK,
     BANK_RAIFFEISENBANK,
 )
+
+SYSTEM_BANKS: Final[list[dict[str, Any]]] = [
+    {'code': BANK_DEFAULT, 'name': str(_('—'))},
+    {'code': BANK_SBERBANK, 'name': str(_('Сбербанк'))},
+    {'code': BANK_RAIFFEISENBANK, 'name': str(_('Райффайзенбанк'))},
+]

@@ -10,8 +10,13 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.bank_constants import BANK_CHOICES
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
+
+
+class InterestPayoutDestination(models.TextChoices):
+    CAPITALIZATION = 'capitalization', _('Капитализация')
+    INTERNAL_ACCOUNT = 'internal_account', _('На собственный счёт')
+    EXTERNAL = 'external', _('Внешнему получателю')
 
 
 class Deposit(models.Model):
@@ -27,9 +32,10 @@ class Deposit(models.Model):
         max_length=constants.TWO_HUNDRED_FIFTY,
         verbose_name=_('Название вклада'),
     )
-    bank = models.CharField(
-        max_length=20,
-        choices=BANK_CHOICES,
+    bank = models.ForeignKey(
+        Bank,
+        on_delete=models.PROTECT,
+        related_name='deposits',
         verbose_name=_('Банк'),
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -51,6 +57,8 @@ class Deposit(models.Model):
 
 
 class DepositTerm(models.Model):
+    PayoutDestination = InterestPayoutDestination
+
     if TYPE_CHECKING:
         rate_periods: models.Manager['DepositRatePeriod']
         payout_schedule_dates: models.Manager['DepositPayoutScheduleDate']
@@ -60,6 +68,7 @@ class DepositTerm(models.Model):
         PLANNED = 'planned', _('Запланирован')
         ACTIVE = 'active', _('Активен')
         MATURED = 'matured', _('Срок истёк')
+        CLOSED = 'closed', _('Закрыт')
 
     class RateKind(models.TextChoices):
         FIXED = 'fixed', _('Фиксированная')
@@ -112,6 +121,12 @@ class DepositTerm(models.Model):
         choices=PayoutScheduleKind.choices,
         default=PayoutScheduleKind.MATURITY,
         verbose_name=_('Расписание выплат'),
+    )
+    interest_payout_destination = models.CharField(
+        max_length=20,
+        choices=InterestPayoutDestination.choices,
+        default=InterestPayoutDestination.CAPITALIZATION,
+        verbose_name=_('Обычный способ выплаты процентов'),
     )
     business_day_convention = models.CharField(
         max_length=10,
@@ -178,6 +193,11 @@ class DepositTerm(models.Model):
         blank=True,
         verbose_name=_('Максимальный остаток после пополнения'),
     )
+    closed_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Фактическая дата закрытия'),
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ['opened_on']
@@ -191,14 +211,23 @@ class DepositTerm(models.Model):
                 condition=Q(is_current=True),
                 name='one_current_term_per_deposit',
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(closed_on__isnull=True)
+                    | Q(closed_on__gte=models.F('matures_on'))
+                ),
+                name='planned_deposit_closure_not_before_maturity',
+            ),
         ]
 
     @property
     def state(self) -> str:
+        if self.closed_on is not None:
+            return self.State.CLOSED
         today = timezone.localdate()
         if today < self.opened_on:
             return self.State.PLANNED
-        if today > self.matures_on:
+        if today >= self.matures_on:
             return self.State.MATURED
         return self.State.ACTIVE
 
@@ -303,6 +332,7 @@ class DepositPrincipalEvent(models.Model):
         OPENING_POSITION = 'opening_position', _('Начальная позиция')
         TOP_UP = 'top_up', _('Пополнение')
         WITHDRAWAL = 'withdrawal', _('Снятие')
+        PLANNED_CLOSURE = 'planned_closure', _('Плановое закрытие')
 
     deposit = models.ForeignKey(
         Deposit,
@@ -316,6 +346,18 @@ class DepositPrincipalEvent(models.Model):
         validators=[MinValueValidator(0)],
     )
     effective_on = models.DateField(verbose_name=_('Дата события'))
+    posting_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата проводки'),
+    )
+    destination = models.CharField(
+        max_length=20,
+        choices=InterestPayoutDestination.choices,
+        null=True,
+        blank=True,
+        verbose_name=_('Назначение возврата тела'),
+    )
     source_account = models.ForeignKey(
         Account,
         blank=True,
@@ -349,6 +391,7 @@ class DepositPrincipalEvent(models.Model):
                     | Q(type='opening_position', amount__gte=0)
                     | Q(type='top_up', amount__gt=0)
                     | Q(type='withdrawal', amount__gt=0)
+                    | Q(type='planned_closure', amount__gte=0)
                 ),
                 name='deposit_principal_event_amount_valid',
             ),
@@ -365,8 +408,27 @@ class DepositPrincipalEvent(models.Model):
                         source_account__isnull=True,
                         destination_account__isnull=False,
                     )
+                    | Q(
+                        type='planned_closure',
+                        source_account__isnull=True,
+                        destination=(
+                            InterestPayoutDestination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account__isnull=False,
+                    )
+                    | Q(
+                        type='planned_closure',
+                        source_account__isnull=True,
+                        destination=InterestPayoutDestination.EXTERNAL,
+                        destination_account__isnull=True,
+                    )
                 ),
                 name='deposit_principal_event_source_valid',
+            ),
+            models.UniqueConstraint(
+                fields=['deposit'],
+                condition=Q(type='planned_closure'),
+                name='one_planned_closure_per_deposit',
             ),
         ]
 
@@ -478,16 +540,18 @@ class DepositCapitalizationEventQuerySet(
 ):
     def update(self, **kwargs: Any) -> int:
         raise ValidationError(
-            _('Подтверждённую капитализацию нельзя изменить.'),
+            _('Подтверждённую выплату процентов нельзя изменить.'),
         )
 
     def delete(self) -> tuple[int, dict[str, int]]:
         raise ValidationError(
-            _('Подтверждённую капитализацию нельзя удалить.'),
+            _('Подтверждённую выплату процентов нельзя удалить.'),
         )
 
 
 class DepositCapitalizationEvent(models.Model):
+    Destination = InterestPayoutDestination
+
     deposit = models.ForeignKey(
         Deposit,
         on_delete=models.PROTECT,
@@ -499,6 +563,20 @@ class DepositCapitalizationEvent(models.Model):
         blank=True,
         on_delete=models.PROTECT,
         related_name='capitalization_event',
+    )
+    destination = models.CharField(
+        max_length=20,
+        choices=InterestPayoutDestination.choices,
+        default=InterestPayoutDestination.CAPITALIZATION,
+        verbose_name=_('Фактическое назначение выплаты'),
+    )
+    destination_account = models.ForeignKey(
+        Account,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='deposit_interest_payouts',
+        verbose_name=_('Счёт назначения'),
     )
     gross = models.DecimalField(
         max_digits=constants.TWENTY,
@@ -521,7 +599,11 @@ class DepositCapitalizationEvent(models.Model):
         max_length=constants.TWO_HUNDRED_FIFTY,
         blank=True,
         default='',
-        verbose_name=_('Причина внеплановой капитализации'),
+        verbose_name=_('Причина внеплановой выплаты'),
+    )
+    is_final = models.BooleanField(
+        default=False,
+        verbose_name=_('Финальная выплата при закрытии'),
     )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 
@@ -542,12 +624,40 @@ class DepositCapitalizationEvent(models.Model):
                 condition=Q(net__gte=0),
                 name='deposit_capitalization_net_non_negative',
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        destination=(
+                            InterestPayoutDestination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account__isnull=False,
+                    )
+                    | Q(
+                        destination__in=(
+                            InterestPayoutDestination.CAPITALIZATION,
+                            InterestPayoutDestination.EXTERNAL,
+                        ),
+                        destination_account__isnull=True,
+                    )
+                ),
+                name='deposit_interest_destination_account_valid',
+            ),
+            models.UniqueConstraint(
+                fields=['forecast'],
+                condition=Q(forecast__isnull=False),
+                name='one_actual_interest_event_per_forecast',
+            ),
+            models.UniqueConstraint(
+                fields=['deposit'],
+                condition=Q(is_final=True),
+                name='one_final_interest_event_per_deposit',
+            ),
         ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:
             raise ValidationError(
-                _('Подтверждённую капитализацию нельзя изменить.'),
+                _('Подтверждённую выплату процентов нельзя изменить.'),
             )
         super().save(*args, **kwargs)
 
@@ -557,5 +667,5 @@ class DepositCapitalizationEvent(models.Model):
         **kwargs: Any,
     ) -> tuple[int, dict[str, int]]:
         raise ValidationError(
-            _('Подтверждённую капитализацию нельзя удалить.'),
+            _('Подтверждённую выплату процентов нельзя удалить.'),
         )

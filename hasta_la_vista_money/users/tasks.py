@@ -10,6 +10,7 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
@@ -78,6 +79,10 @@ def process_bank_statement_task(
             'user',
             'account',
         ).get(id=upload_id)
+        if upload.account.is_archived or upload.account.is_deposit:
+            raise BankStatementParseError(
+                _('Архивный счёт или счёт вклада недоступен для импорта.'),
+            )
         _initialize_upload(upload, self)
 
         classifier = ApplicationContainer().users.category_classifier()
