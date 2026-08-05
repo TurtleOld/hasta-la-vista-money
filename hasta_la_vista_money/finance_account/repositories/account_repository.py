@@ -66,6 +66,9 @@ class AccountRepository:
             archived_at=timezone.now(),
         )
 
+    def unarchive(self, account_id: int) -> None:
+        Account.objects.filter(pk=account_id).update(archived_at=None)
+
     def get_by_user(self, user: User) -> QuerySet[Account]:
         """Get all accounts for a user.
 

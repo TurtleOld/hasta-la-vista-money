@@ -17,6 +17,7 @@ from hasta_la_vista_money.deposits.commands import (
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
     RenewDepositCommand,
+    ReverseDepositEventCommand,
     TopUpDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
@@ -25,6 +26,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
+    DepositRenewalEvent,
     DepositTerm,
 )
 from hasta_la_vista_money.users.models import User
@@ -141,6 +143,13 @@ class DepositServiceProtocol(Protocol):
         self,
         command: TopUpDepositCommand,
     ) -> DepositPrincipalEvent: ...
+
+    def reverse_deposit_event(
+        self,
+        command: ReverseDepositEventCommand,
+    ) -> (
+        DepositPrincipalEvent | DepositCapitalizationEvent | DepositRenewalEvent
+    ): ...
 
     def capitalize_interest(
         self,

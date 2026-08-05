@@ -27,6 +27,7 @@ from hasta_la_vista_money.deposits.commands import (
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
     RenewDepositCommand,
+    ReverseDepositEventCommand,
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
@@ -36,6 +37,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
+    DepositRenewalEvent,
     DepositTerm,
 )
 from hasta_la_vista_money.finance_account.models import (
@@ -63,6 +65,468 @@ def _sberbank() -> Bank:
 
 
 class DepositServiceIntegrationTests(TestCase):
+    def test_reverse_rejects_blank_foreign_repeated_and_compensating_events(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        foreign_user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.open_existing_term_deposit(
+            OpenExistingDepositCommand(
+                user=user,
+                name='Вклад с ошибкой',
+                bank=_sberbank(),
+                currency='RUB',
+                current_balance=Decimal('500.00'),
+                tracking_started_on=date(2026, 1, 1),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        original = deposit.principal_events.get()
+        other_deposit = service.open_existing_term_deposit(
+            OpenExistingDepositCommand(
+                user=user,
+                name='Другой вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                current_balance=Decimal('100.00'),
+                tracking_started_on=date(2026, 1, 1),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        for label, command in (
+            (
+                'blank',
+                ReverseDepositEventCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    event_kind='principal',
+                    event_id=original.pk,
+                    reason='  ',
+                    reversed_on=date(2026, 1, 2),
+                ),
+            ),
+            (
+                'foreign',
+                ReverseDepositEventCommand(
+                    user=foreign_user,
+                    deposit_id=deposit.pk,
+                    event_kind='principal',
+                    event_id=original.pk,
+                    reason='Ошибка.',
+                    reversed_on=date(2026, 1, 2),
+                ),
+            ),
+            (
+                'wrong_deposit',
+                ReverseDepositEventCommand(
+                    user=user,
+                    deposit_id=other_deposit.pk,
+                    event_kind='principal',
+                    event_id=original.pk,
+                    reason='Ошибка.',
+                    reversed_on=date(2026, 1, 2),
+                ),
+            ),
+        ):
+            with self.subTest(label=label), self.assertRaises(ValidationError):
+                service.reverse_deposit_event(command)
+
+        reversal = service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='principal',
+                event_id=original.pk,
+                reason='Ошибка.',
+                reversed_on=date(2026, 1, 2),
+            ),
+        )
+        for event_id in (original.pk, reversal.pk):
+            with (
+                self.subTest(event_id=event_id),
+                self.assertRaises(
+                    ValidationError,
+                ),
+            ):
+                service.reverse_deposit_event(
+                    ReverseDepositEventCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        event_kind='principal',
+                        event_id=event_id,
+                        reason='Повтор.',
+                        reversed_on=date(2026, 1, 3),
+                    ),
+                )
+
+    def test_reverse_rolls_back_balances_when_event_storage_fails(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Пополняемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+        original = service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('250.00'),
+                effective_on=date(2026, 6, 30),
+            ),
+        )
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_principal_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.reverse_deposit_event(
+                ReverseDepositEventCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    event_kind='principal',
+                    event_id=original.pk,
+                    reason='Ошибка.',
+                    reversed_on=date(2026, 7, 1),
+                ),
+            )
+
+        source_account.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('750.00'))
+        self.assertEqual(deposit.account.balance, Decimal('750.00'))
+        self.assertFalse(hasattr(original, 'reversal'))
+
+    def test_reverse_renewal_keeps_terms_and_restores_previous_term(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Пролонгируемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2025, 1, 1),
+                matures_on=date(2025, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        previous_term = deposit.current_term
+        renewed_term = service.renew_matured_deposit(
+            RenewDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('11.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        original = DepositRenewalEvent.objects.get(renewed_term=renewed_term)
+
+        reversal = service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='renewal',
+                event_id=original.pk,
+                reason='Условия пролонгации указаны неверно.',
+                reversed_on=date(2026, 1, 2),
+            ),
+        )
+
+        previous_term.refresh_from_db()
+        renewed_term.refresh_from_db()
+        self.assertTrue(previous_term.is_current)
+        self.assertFalse(renewed_term.is_current)
+        self.assertTrue(DepositTerm.objects.filter(pk=renewed_term.pk).exists())
+        self.assertEqual(reversal.reversal_of, original)
+        self.assertEqual(
+            reversal.reversal_reason,
+            'Условия пролонгации указаны неверно.',
+        )
+
+    def test_reverse_planned_close_reopens_deposit_atomically(self) -> None:
+        user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('100.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Закрываемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2025, 1, 1),
+                matures_on=date(2025, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(
+                user=user,
+                term_id=deposit.current_term.pk,
+            ),
+        )
+        forecast = DepositInterestForecast.objects.get(
+            term=deposit.current_term,
+        )
+        closed = service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=(
+                    DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                ),
+                destination_account_id=destination.pk,
+                principal=Decimal('500.00'),
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 1, 2),
+                value_on=date(2026, 1, 2),
+                forecast_id=forecast.pk,
+            ),
+        )
+
+        reversal = service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='principal',
+                event_id=closed.principal_event.pk,
+                reason='Банк отменил закрытие.',
+                reversed_on=date(2026, 1, 3),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        term = DepositTerm.objects.get(deposit=deposit, is_current=True)
+        self.assertEqual(deposit.account.balance, Decimal('500.00'))
+        self.assertFalse(deposit.account.is_archived)
+        self.assertEqual(destination.balance, Decimal('100.00'))
+        self.assertIsNone(term.closed_on)
+        self.assertEqual(reversal.reversal_of, closed.principal_event)
+        interest_reversal = DepositCapitalizationEvent.objects.get(
+            reversal_of=closed.interest_event,
+        )
+        self.assertEqual(
+            interest_reversal.reversal_reason,
+            'Банк отменил закрытие.',
+        )
+
+        corrected = service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=(
+                    DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                ),
+                destination_account_id=destination.pk,
+                principal=Decimal('500.00'),
+                gross=Decimal('80.00'),
+                withholding=Decimal('8.00'),
+                net=Decimal('72.00'),
+                posting_on=date(2026, 1, 4),
+                value_on=date(2026, 1, 4),
+            ),
+        )
+        self.assertNotEqual(corrected.principal_event, closed.principal_event)
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            ).count(),
+            3,
+        )
+
+    def test_reverse_interest_restores_balance_and_kpis(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с капитализацией',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(
+                user=user,
+                term_id=deposit.current_term.pk,
+            ),
+        )
+        forecast = DepositInterestForecast.objects.get(
+            term=deposit.current_term,
+        )
+        original = service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Фактическая выплата банка.',
+                forecast_id=forecast.pk,
+            ),
+        )
+
+        reversal = service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='interest',
+                event_id=original.pk,
+                reason='Банк отменил выплату.',
+                reversed_on=date(2026, 7, 2),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('500.00'))
+        self.assertEqual(reversal.reversal_of, original)
+        self.assertEqual(reversal.reversal_reason, 'Банк отменил выплату.')
+        with patch(
+            'hasta_la_vista_money.users.services.dashboard_kpis.timezone.localdate',
+            return_value=date(2026, 7, 31),
+        ):
+            kpis = get_dashboard_month_kpis(user)
+        self.assertEqual(kpis['income'], Decimal('0.00'))
+        self.assertEqual(kpis['expenses'], Decimal('0.00'))
+        self.assertEqual(kpis['net_result'], Decimal('0.00'))
+        forecast.refresh_from_db()
+        self.assertTrue(forecast.confirmed)
+
+        corrected = service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('80.00'),
+                withholding=Decimal('8.00'),
+                net=Decimal('72.00'),
+                posting_on=date(2026, 7, 3),
+                value_on=date(2026, 7, 3),
+                reason='Исправленная выплата банка.',
+            ),
+        )
+        self.assertIsNone(corrected.forecast)
+
+    def test_reverse_top_up_restores_balances_and_keeps_history(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Пополняемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+        original = service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('250.00'),
+                effective_on=date(2026, 6, 30),
+            ),
+        )
+
+        reversal = service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='principal',
+                event_id=original.pk,
+                reason='Пополнение проведено ошибочно.',
+                reversed_on=date(2026, 7, 1),
+            ),
+        )
+
+        source_account.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('1000.00'))
+        self.assertEqual(deposit.account.balance, Decimal('500.00'))
+        self.assertEqual(reversal.reversal_of, original)
+        self.assertEqual(
+            reversal.reversal_reason,
+            'Пополнение проведено ошибочно.',
+        )
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(deposit=deposit).count(),
+            3,
+        )
+        reversal_log = TransferMoneyLog.objects.get(user=user)
+        self.assertEqual(reversal_log.from_account, deposit.account)
+        self.assertEqual(reversal_log.to_account, source_account)
+        self.assertEqual(reversal_log.amount, Decimal('250.00'))
+
     def test_top_up_transfers_principal_within_term_conditions(self) -> None:
         user = cast('User', UserFactory())
         source_account = Account.objects.create(
@@ -2757,6 +3221,26 @@ class CloseDepositEarlyServiceTests(TestCase):
         charts = budget_charts(user, period='y')
         self.assertEqual(charts['total_income'], 1500.0)
         self.assertEqual(charts['total_expense'], 945.0)
+
+        service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='principal',
+                event_id=result.principal_event.pk,
+                reason='Досрочное закрытие отменено банком.',
+                reversed_on=timezone.localdate(),
+            ),
+        )
+
+        reversed_kpis = get_dashboard_month_kpis(user)
+        self.assertEqual(reversed_kpis['income'], Decimal('1750.00'))
+        self.assertEqual(reversed_kpis['expenses'], Decimal('880.00'))
+        self.assertEqual(reversed_kpis['net_result'], Decimal('870.00'))
+        cache.clear()
+        reversed_charts = budget_charts(user, period='y')
+        self.assertEqual(reversed_charts['total_income'], 1750.0)
+        self.assertEqual(reversed_charts['total_expense'], 880.0)
 
     def test_close_rolls_back_when_final_event_storage_fails(self) -> None:
         user = cast('User', UserFactory())

@@ -54,6 +54,25 @@ def _parse_html5_date(token: str) -> date:
     raise ValidationError(message)
 
 
+class ReverseDepositEventForm(forms.Form):
+    reason = forms.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        label=_('Причина аннулирования'),
+        widget=forms.Textarea(attrs={'rows': 2}),
+    )
+    reversed_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата аннулирования'),
+    )
+
+    def clean_reason(self) -> str:
+        reason = cast('str', self.cleaned_data['reason']).strip()
+        if not reason:
+            raise ValidationError(_('Укажите причину аннулирования.'))
+        return reason
+
+
 class CreateDepositForm(forms.Form):
     early_closure_annual_rate = forms.DecimalField(
         required=False,

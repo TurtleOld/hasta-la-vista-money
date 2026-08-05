@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import FormView, ListView, TemplateView
@@ -23,6 +24,7 @@ from hasta_la_vista_money.deposits.commands import (
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
     RenewDepositCommand,
+    ReverseDepositEventCommand,
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
@@ -36,6 +38,7 @@ from hasta_la_vista_money.deposits.forms import (
     CreateDepositForm,
     ForecastEarlyClosureForm,
     RenewDepositForm,
+    ReverseDepositEventForm,
     TopUpDepositForm,
     WithdrawDepositForm,
 )
@@ -185,7 +188,23 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
             deposit.current_term.interest_forecasts.all()
         )
         context['capitalization_events'] = (
-            deposit.capitalization_events.select_related('destination_account')
+            deposit.capitalization_events.select_related(
+                'destination_account',
+                'reversal_of',
+            )
+        )
+        context['principal_events'] = deposit.principal_events.select_related(
+            'source_account',
+            'destination_account',
+            'reversal_of',
+        )
+        context['renewal_events'] = deposit.renewal_events.select_related(
+            'previous_term',
+            'renewed_term',
+            'reversal_of',
+        )
+        context['reverse_form'] = ReverseDepositEventForm(
+            initial={'reversed_on': timezone.localdate()},
         )
         context['closure_event'] = (
             deposit.principal_events.filter(
@@ -222,6 +241,39 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
 
     def get_success_url(self) -> str:
         return reverse('deposits:list')
+
+
+class DepositEventReverseView(LoginRequiredMixin, View):
+    def post(
+        self,
+        request: HttpRequest,
+        pk: int,
+        event_kind: str,
+        event_id: int,
+    ) -> HttpResponse:
+        form = ReverseDepositEventForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, _('Укажите причину и дату аннулирования.'))
+            return HttpResponseRedirect(
+                reverse('deposits:detail', kwargs={'pk': pk}),
+            )
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        try:
+            event = service.reverse_deposit_event(
+                ReverseDepositEventCommand(
+                    user=cast('User', request.user),
+                    deposit_id=pk,
+                    event_kind=event_kind,
+                    event_id=event_id,
+                    reason=form.cleaned_data['reason'],
+                    reversed_on=form.cleaned_data['reversed_on'],
+                ),
+            )
+        except ValidationError as error:
+            raise Http404 from error
+        messages.success(request, _('Событие вклада аннулировано.'))
+        return HttpResponseRedirect(event.deposit.get_absolute_url())
 
 
 class DepositRenewView(LoginRequiredMixin, FormView[RenewDepositForm]):

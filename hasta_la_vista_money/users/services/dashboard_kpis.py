@@ -11,6 +11,11 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
+from hasta_la_vista_money.deposits.reporting import (
+    signed_adjustment_expense,
+    signed_adjustment_income,
+    signed_interest,
+)
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -70,7 +75,7 @@ def _sum_interest_for_month(
         deposit__account__user__in=users,
         posting_on__gte=start,
         posting_on__lte=end,
-    ).aggregate(total=Sum(field))['total']
+    ).aggregate(total=Sum(signed_interest(field)))['total']
     return Decimal(total or constants.ZERO)
 
 
@@ -79,16 +84,18 @@ def _interest_adjustment_for_month(
     start: date,
     end: date,
 ) -> tuple[Decimal, Decimal]:
-    adjustments = list(
-        DepositCapitalizationEvent.objects.filter(
-            deposit__account__user__in=users,
-            posting_on__gte=start,
-            posting_on__lte=end,
-        ).values_list('prior_interest_adjustment', flat=True),
+    totals = DepositCapitalizationEvent.objects.filter(
+        deposit__account__user__in=users,
+        posting_on__gte=start,
+        posting_on__lte=end,
+    ).aggregate(
+        income=Sum(signed_adjustment_income()),
+        expenses=Sum(signed_adjustment_expense()),
     )
-    income = sum((value for value in adjustments if value > 0), Decimal())
-    expenses = -sum((value for value in adjustments if value < 0), Decimal())
-    return income, expenses
+    return (
+        Decimal(totals['income'] or constants.ZERO),
+        Decimal(totals['expenses'] or constants.ZERO),
+    )
 
 
 def get_dashboard_month_kpis(

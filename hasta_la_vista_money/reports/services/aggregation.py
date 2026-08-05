@@ -13,6 +13,11 @@ from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
+from hasta_la_vista_money.deposits.reporting import (
+    signed_adjustment_expense,
+    signed_adjustment_income,
+    signed_interest,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -368,9 +373,10 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         )
         .values('month')
         .annotate(
-            gross_total=Sum('gross'),
-            withholding_total=Sum('withholding'),
-            adjustment_total=Sum('prior_interest_adjustment'),
+            gross_total=Sum(signed_interest('gross')),
+            withholding_total=Sum(signed_interest('withholding')),
+            adjustment_income=Sum(signed_adjustment_income()),
+            adjustment_expense=Sum(signed_adjustment_expense()),
         )
     }
     all_months_set.update(interest_by_month)
@@ -407,13 +413,13 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         interest = interest_by_month.get(month)
         if interest is None:
             continue
-        adjustment = Decimal(interest['adjustment_total'] or 0)
         total_income[index] += float(
-            Decimal(interest['gross_total'] or 0) + max(adjustment, Decimal()),
+            Decimal(interest['gross_total'] or 0)
+            + Decimal(interest['adjustment_income'] or 0),
         )
         total_expense[index] += float(
             Decimal(interest['withholding_total'] or 0)
-            - min(adjustment, Decimal()),
+            + Decimal(interest['adjustment_expense'] or 0),
         )
 
     chart_balance = (

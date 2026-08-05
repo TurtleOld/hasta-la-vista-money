@@ -24,6 +24,56 @@
                 <div class="accounts-hero-change">{% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} <span class="cur">{{ deposit.account.currency }}</span></div>
             </div>
         </section>
+        {% if principal_events or renewal_events %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Подтверждённые события вклада' %}</h2></div>
+            <div class="accounts-list">
+                {% for event in principal_events %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {{ event.effective_on|date:'d.m.Y' }} · {{ event.get_type_display }}
+                                {% if event.reversal_of_id %}<span class="badge bg-warning text-dark">{% translate 'Аннулирование' %}</span>{% elif event.reversal %}<span class="badge bg-secondary">{% translate 'Аннулировано' %}</span>{% endif %}
+                            </div>
+                            <div class="accounts-row-name">
+                                {{ event.amount|comma }} <span class="cur">{{ deposit.account.currency }}</span>
+                                {% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}
+                            </div>
+                            {% if not event.reversal_of_id and not event.reversal %}
+                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='principal' event_id=event.pk %}">
+                                {% csrf_token %}
+                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% for event in renewal_events %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {{ event.effective_on|date:'d.m.Y' }} · {% translate 'Пролонгация' %}
+                                {% if event.reversal_of_id %}<span class="badge bg-warning text-dark">{% translate 'Аннулирование' %}</span>{% elif event.reversal %}<span class="badge bg-secondary">{% translate 'Аннулировано' %}</span>{% endif %}
+                            </div>
+                            <div class="accounts-row-name">{{ event.previous_term.matures_on|date:'d.m.Y' }} → {{ event.renewed_term.matures_on|date:'d.m.Y' }}{% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}</div>
+                            {% if not event.reversal_of_id and not event.reversal %}
+                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='renewal' event_id=event.pk %}">
+                                {% csrf_token %}
+                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
         {% if term.state == 'matured' %}
         {% if renewal_available %}
         <section class="accounts-panel">
@@ -262,6 +312,7 @@
                             <div class="accounts-row-kind">
                                 {% translate 'Проводка' %}: {{ event.posting_on|date:'d.m.Y' }}
                                 · {% translate 'Валютирование' %}: {{ event.value_on|date:'d.m.Y' }}
+                                {% if event.reversal_of_id %}<span class="badge bg-warning text-dark">{% translate 'Аннулирование' %}</span>{% elif event.reversal %}<span class="badge bg-secondary">{% translate 'Аннулировано' %}</span>{% endif %}
                             </div>
                             <div class="accounts-row-name">
                                 {{ event.get_destination_display }}
@@ -273,7 +324,15 @@
                                 {% if event.prior_interest_adjustment %} · {% translate 'Корректировка прежних процентов' %}: {{ event.prior_interest_adjustment|comma }}{% endif %}
                                 <span class="cur">{{ deposit.account.currency }}</span>
                                 {% if event.reason %} · {{ event.reason }}{% endif %}
+                                {% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}
                             </div>
+                            {% if not event.reversal_of_id and not event.reversal and not event.is_final %}
+                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='interest' event_id=event.pk %}">
+                                {% csrf_token %}
+                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
+                            </form>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

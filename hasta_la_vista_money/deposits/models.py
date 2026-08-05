@@ -328,6 +328,87 @@ class DepositRatePeriod(models.Model):
         ]
 
 
+class DepositRenewalEventQuerySet(
+    models.QuerySet['DepositRenewalEvent'],
+):
+    def update(self, **kwargs: Any) -> int:
+        raise ValidationError(
+            _('Подтверждённую пролонгацию нельзя изменить.'),
+        )
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        raise ValidationError(
+            _('Подтверждённую пролонгацию нельзя удалить.'),
+        )
+
+
+class DepositRenewalEvent(models.Model):
+    deposit = models.ForeignKey(
+        Deposit,
+        on_delete=models.PROTECT,
+        related_name='renewal_events',
+    )
+    previous_term = models.ForeignKey(
+        DepositTerm,
+        on_delete=models.PROTECT,
+        related_name='renewals_from',
+    )
+    renewed_term = models.ForeignKey(
+        DepositTerm,
+        on_delete=models.PROTECT,
+        related_name='renewal_events',
+    )
+    effective_on = models.DateField(verbose_name=_('Дата пролонгации'))
+    reversal_of = models.OneToOneField(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='reversal',
+        verbose_name=_('Аннулированная пролонгация'),
+    )
+    reversal_reason = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Причина аннулирования'),
+    )
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    objects = DepositRenewalEventQuerySet.as_manager()
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['effective_on', 'pk']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=(
+                    Q(reversal_of__isnull=True, reversal_reason='')
+                    | Q(
+                        reversal_of__isnull=False,
+                        reversal_reason__gt='',
+                    )
+                ),
+                name='deposit_renewal_reversal_reason_valid',
+            ),
+        ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValidationError(
+                _('Подтверждённую пролонгацию нельзя изменить.'),
+            )
+        super().save(*args, **kwargs)
+
+    def delete(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> tuple[int, dict[str, int]]:
+        raise ValidationError(
+            _('Подтверждённую пролонгацию нельзя удалить.'),
+        )
+
+
 class DepositPrincipalEventQuerySet(
     models.QuerySet['DepositPrincipalEvent'],
 ):
@@ -407,6 +488,20 @@ class DepositPrincipalEvent(models.Model):
         default='',
         verbose_name=_('Причина исключения'),
     )
+    reversal_of = models.OneToOneField(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='reversal',
+        verbose_name=_('Аннулированное событие'),
+    )
+    reversal_reason = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Причина аннулирования'),
+    )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 
     objects = DepositPrincipalEventQuerySet.as_manager()
@@ -469,12 +564,15 @@ class DepositPrincipalEvent(models.Model):
                 ),
                 name='deposit_principal_event_source_valid',
             ),
-            models.UniqueConstraint(
-                fields=['deposit'],
-                condition=Q(
-                    type__in=('planned_closure', 'early_closure'),
+            models.CheckConstraint(
+                condition=(
+                    Q(reversal_of__isnull=True, reversal_reason='')
+                    | Q(
+                        reversal_of__isnull=False,
+                        reversal_reason__gt='',
+                    )
                 ),
-                name='one_closure_per_deposit',
+                name='deposit_principal_reversal_reason_valid',
             ),
         ]
 
@@ -657,6 +755,20 @@ class DepositCapitalizationEvent(models.Model):
         default=0,
         verbose_name=_('Корректировка ранее выплаченных процентов'),
     )
+    reversal_of = models.OneToOneField(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='reversal',
+        verbose_name=_('Аннулированная выплата'),
+    )
+    reversal_reason = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Причина аннулирования'),
+    )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 
     objects = DepositCapitalizationEventQuerySet.as_manager()
@@ -699,10 +811,15 @@ class DepositCapitalizationEvent(models.Model):
                 condition=Q(forecast__isnull=False),
                 name='one_actual_interest_event_per_forecast',
             ),
-            models.UniqueConstraint(
-                fields=['deposit'],
-                condition=Q(is_final=True),
-                name='one_final_interest_event_per_deposit',
+            models.CheckConstraint(
+                condition=(
+                    Q(reversal_of__isnull=True, reversal_reason='')
+                    | Q(
+                        reversal_of__isnull=False,
+                        reversal_reason__gt='',
+                    )
+                ),
+                name='deposit_interest_reversal_reason_valid',
             ),
         ]
 
