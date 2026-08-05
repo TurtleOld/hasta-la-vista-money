@@ -3289,10 +3289,42 @@ class CloseDepositEarlyServiceTests(TestCase):
         )
 
 
+def _withdrawal_test_deposit(
+    user: 'User',
+    *,
+    name: str = 'Вклад с частичным снятием',
+    minimum_balance: Decimal = Decimal(),
+) -> Deposit:
+    service = ApplicationContainer().deposits.deposit_service()
+    deposit = cast(
+        'Deposit',
+        service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name=name,
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        ),
+    )
+    term = deposit.current_term
+    term.withdrawal_allowed = True
+    term.minimum_balance = minimum_balance
+    term.save(update_fields=['withdrawal_allowed', 'minimum_balance'])
+    return deposit
+
+
 class WithdrawDepositPrincipalServiceTests(TestCase):
     def test_exception_withdrawal_below_minimum_balance_succeeds(
         self,
     ) -> None:
+        """Снятие с указанной причиной обходит проверку неснижаемого
+        остатка и создаёт событие с exception_reason."""
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -3302,23 +3334,10 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
             balance=Decimal('0.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с неснижаемым остатком',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
+        deposit = _withdrawal_test_deposit(
+            user,
+            minimum_balance=Decimal('400.00'),
         )
-        term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.minimum_balance = Decimal('400.00')
-        term.save(update_fields=['withdrawal_allowed', 'minimum_balance'])
 
         command = WithdrawDepositCommand(
             user=user,
@@ -3348,6 +3367,8 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
     def test_withdrawal_below_minimum_balance_without_reason_fails(
         self,
     ) -> None:
+        """Без exception_reason проверка неснижаемого остатка остаётся
+        в силе и блокирует снятие."""
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -3357,23 +3378,10 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
             balance=Decimal('0.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с неснижаемым остатком',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
+        deposit = _withdrawal_test_deposit(
+            user,
+            minimum_balance=Decimal('400.00'),
         )
-        term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.minimum_balance = Decimal('400.00')
-        term.save(update_fields=['withdrawal_allowed', 'minimum_balance'])
 
         command = WithdrawDepositCommand(
             user=user,
@@ -3389,6 +3397,8 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
         self.assertEqual(deposit.account.balance, Decimal('500.00'))
 
     def test_exception_withdrawal_cannot_go_negative(self) -> None:
+        """Даже с exception_reason снятие не может увести баланс
+        счёта вклада в отрицательное значение."""
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -3398,23 +3408,10 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
             balance=Decimal('0.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с неснижаемым остатком',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
+        deposit = _withdrawal_test_deposit(
+            user,
+            minimum_balance=Decimal('400.00'),
         )
-        term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.minimum_balance = Decimal('400.00')
-        term.save(update_fields=['withdrawal_allowed', 'minimum_balance'])
 
         command = WithdrawDepositCommand(
             user=user,
@@ -3433,6 +3430,8 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
     def test_withdrawal_recalculates_future_unconfirmed_forecast(
         self,
     ) -> None:
+        """Снятие тела вклада пересчитывает будущий непотверждённый
+        прогноз выплат процентов в меньшую сторону."""
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -3442,22 +3441,11 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
             balance=Decimal('0.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с будущим прогнозом',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
+        deposit = _withdrawal_test_deposit(
+            user,
+            name='Вклад с будущим прогнозом',
         )
         term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.save(update_fields=['withdrawal_allowed'])
         service.recalculate_forecast(
             RecalculateInterestForecastCommand(user=user, term_id=term.pk),
         )
@@ -3477,75 +3465,14 @@ class WithdrawDepositPrincipalServiceTests(TestCase):
         self.assertLess(forecast_after.amount, forecast_before.amount)
         self.assertFalse(forecast_after.confirmed)
 
-    def test_withdrawal_rolls_back_on_event_storage_failure(
-        self,
-    ) -> None:
-        user = cast('User', UserFactory())
-        destination = Account.objects.create(
-            user=user,
-            name_account='Получатель',
-            type_account='Debit',
-            currency='RUB',
-            balance=Decimal('0.00'),
-        )
-        service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с проверкой rollback',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
-        )
-        term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.save(update_fields=['withdrawal_allowed'])
-        service.recalculate_forecast(
-            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
-        )
-        forecast_before = DepositInterestForecast.objects.get(term=term)
-
-        with (
-            patch.object(
-                service.deposit_repository,
-                'create_principal_event',
-                side_effect=RuntimeError('event storage failed'),
-            ),
-            self.assertRaises(RuntimeError),
-        ):
-            service.withdraw_deposit_principal(
-                WithdrawDepositCommand(
-                    user=user,
-                    deposit_id=deposit.pk,
-                    destination_account_id=destination.pk,
-                    amount=Decimal('100.00'),
-                    effective_on=date(2026, 6, 1),
-                ),
-            )
-
-        deposit.account.refresh_from_db()
-        destination.refresh_from_db()
-        self.assertEqual(deposit.account.balance, Decimal('500.00'))
-        self.assertEqual(destination.balance, Decimal('0.00'))
-        self.assertFalse(
-            DepositPrincipalEvent.objects.filter(
-                deposit=deposit,
-                type=DepositPrincipalEvent.Type.WITHDRAWAL,
-            ).exists(),
-        )
-        forecast_after = DepositInterestForecast.objects.get(term=term)
-        self.assertEqual(forecast_after.amount, forecast_before.amount)
-
 
 class WithdrawDepositPrincipalRollbackTransactionTests(TransactionTestCase):
     def test_withdrawal_rolls_back_on_failure_with_real_transactions(
         self,
     ) -> None:
+        """При сбое записи события снятия внутри атомарной операции
+        полностью откатываются баланс, событие и прогноз — без частичных
+        записей."""
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -3555,22 +3482,11 @@ class WithdrawDepositPrincipalRollbackTransactionTests(TransactionTestCase):
             balance=Decimal('0.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name='Вклад с rollback в реальной транзакции',
-                bank=_sberbank(),
-                currency='RUB',
-                balance=Decimal('500.00'),
-                opened_on=date(2026, 1, 1),
-                matures_on=date(2026, 12, 31),
-                annual_rate=Decimal('12.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
-            ),
+        deposit = _withdrawal_test_deposit(
+            user,
+            name='Вклад с rollback в реальной транзакции',
         )
         term = deposit.current_term
-        term.withdrawal_allowed = True
-        term.save(update_fields=['withdrawal_allowed'])
         service.recalculate_forecast(
             RecalculateInterestForecastCommand(user=user, term_id=term.pk),
         )
