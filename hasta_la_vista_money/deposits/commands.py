@@ -228,6 +228,16 @@ class TopUpDepositCommand:
 
 
 @dataclass(frozen=True)
+class ReverseDepositEventCommand:
+    user: User
+    deposit_id: int
+    event_kind: str
+    event_id: int
+    reason: str
+    reversed_on: date
+
+
+@dataclass(frozen=True)
 class ConfirmInterestPaymentCommand:
     user: User
     deposit_id: int

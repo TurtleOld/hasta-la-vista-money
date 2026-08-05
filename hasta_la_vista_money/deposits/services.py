@@ -25,6 +25,7 @@ from hasta_la_vista_money.deposits.commands import (
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
     RenewDepositCommand,
+    ReverseDepositEventCommand,
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
@@ -45,6 +46,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
+    DepositRenewalEvent,
     DepositTerm,
     InterestPayoutDestination,
 )
@@ -510,6 +512,12 @@ class DepositService:
         )
         self._create_custom_schedule_dates(new_term, command.forecast_terms)
         self._recalculate_forecast_for_term(new_term)
+        self.deposit_repository.create_renewal_event(
+            deposit=deposit,
+            previous_term=current_term,
+            renewed_term=new_term,
+            effective_on=command.opened_on,
+        )
         return new_term
 
     @staticmethod
@@ -635,6 +643,329 @@ class DepositService:
 
     def get_user_deposit(self, deposit_id: int, user: User) -> Deposit:
         return self.deposit_repository.get_by_id_and_user(deposit_id, user)
+
+    @transaction.atomic
+    def reverse_deposit_event(
+        self,
+        command: ReverseDepositEventCommand,
+    ) -> (
+        DepositPrincipalEvent | DepositCapitalizationEvent | DepositRenewalEvent
+    ):
+        reason = command.reason.strip()
+        if not reason:
+            raise ValidationError(_('Укажите причину аннулирования.'))
+        if command.event_kind == 'interest':
+            return self._reverse_interest_event(command, reason)
+        if command.event_kind == 'renewal':
+            return self._reverse_renewal_event(command, reason)
+        if command.event_kind != 'principal':
+            raise ValidationError(_('Неизвестный тип события вклада.'))
+        return self._reverse_principal_event(command, reason)
+
+    def _reverse_principal_event(
+        self,
+        command: ReverseDepositEventCommand,
+        reason: str,
+    ) -> DepositPrincipalEvent:
+        try:
+            event = self.deposit_repository.get_principal_event_for_update(
+                command.event_id,
+                command.user,
+            )
+        except DepositPrincipalEvent.DoesNotExist as error:
+            raise ValidationError(
+                _('Событие вклада не найдено или недоступно.'),
+            ) from error
+        self._validate_reversal_deposit(event.deposit_id, command.deposit_id)
+        self._validate_reversal_source(event)
+        if command.reversed_on < event.effective_on:
+            raise ValidationError(
+                _('Дата аннулирования не может быть раньше даты события.'),
+            )
+
+        if event.type in (
+            DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            DepositPrincipalEvent.Type.EARLY_CLOSURE,
+        ):
+            return self._reverse_closure_event(command, event, reason)
+
+        account_deltas: dict[int, Decimal] = {}
+        if event.type in (
+            DepositPrincipalEvent.Type.FUNDING,
+            DepositPrincipalEvent.Type.TOP_UP,
+        ):
+            if event.source_account_id is None:
+                raise ValidationError(_('Исходный счёт события не найден.'))
+            account_deltas = {
+                event.source_account_id: event.amount,
+                event.deposit.account_id: -event.amount,
+            }
+        elif event.type == DepositPrincipalEvent.Type.WITHDRAWAL:
+            if event.destination_account_id is None:
+                raise ValidationError(_('Счёт назначения события не найден.'))
+            account_deltas = {
+                event.deposit.account_id: event.amount,
+                event.destination_account_id: -event.amount,
+            }
+        if account_deltas:
+            locked_accounts = self.balance_service.apply_account_deltas(
+                account_deltas,
+            )
+            self._create_principal_reversal_log(
+                command,
+                event,
+                locked_accounts,
+            )
+
+        reversal = self.deposit_repository.create_principal_event(
+            deposit=event.deposit,
+            type=event.type,
+            amount=event.amount,
+            effective_on=command.reversed_on,
+            posting_on=command.reversed_on if event.posting_on else None,
+            destination=event.destination,
+            source_account=event.source_account,
+            destination_account=event.destination_account,
+            exception_reason='',
+            reversal_of=event,
+            reversal_reason=reason,
+        )
+        with contextlib.suppress(ValidationError):
+            self._recalculate_forecast_for_term(
+                event.deposit.current_term,
+                command.reversed_on,
+            )
+        return reversal
+
+    def _reverse_renewal_event(
+        self,
+        command: ReverseDepositEventCommand,
+        reason: str,
+    ) -> DepositRenewalEvent:
+        try:
+            event = self.deposit_repository.get_renewal_event_for_update(
+                command.event_id,
+                command.user,
+            )
+        except DepositRenewalEvent.DoesNotExist as error:
+            raise ValidationError(
+                _('Событие вклада не найдено или недоступно.'),
+            ) from error
+        self._validate_reversal_deposit(event.deposit_id, command.deposit_id)
+        self._validate_reversal_source(event)
+        if (
+            event.previous_term.deposit_id != event.deposit_id
+            or event.renewed_term.deposit_id != event.deposit_id
+            or event.previous_term_id == event.renewed_term_id
+        ):
+            raise ValidationError(_('История пролонгации вклада повреждена.'))
+        if command.reversed_on < event.effective_on:
+            raise ValidationError(
+                _('Дата аннулирования не может быть раньше даты события.'),
+            )
+        if not event.renewed_term.is_current:
+            raise ValidationError(
+                _('Сначала аннулируйте последующие события вклада.'),
+            )
+        self.deposit_repository.set_current_term(
+            event.renewed_term_id,
+            is_current=False,
+        )
+        self.deposit_repository.set_current_term(
+            event.previous_term_id,
+            is_current=True,
+        )
+        return self.deposit_repository.create_renewal_event(
+            deposit=event.deposit,
+            previous_term=event.previous_term,
+            renewed_term=event.renewed_term,
+            effective_on=command.reversed_on,
+            reversal_of=event,
+            reversal_reason=reason,
+        )
+
+    def _reverse_closure_event(
+        self,
+        command: ReverseDepositEventCommand,
+        event: DepositPrincipalEvent,
+        reason: str,
+    ) -> DepositPrincipalEvent:
+        try:
+            interest_event = (
+                self.deposit_repository.get_closure_interest_event_for_update(
+                    event,
+                )
+            )
+        except DepositCapitalizationEvent.DoesNotExist as error:
+            raise ValidationError(
+                _('Связанная финальная выплата не найдена.'),
+            ) from error
+        deposit = event.deposit
+        term = deposit.current_term
+        self.account_repository.unarchive(deposit.account_id)
+        account_deltas = {deposit.account_id: event.amount}
+        if event.destination_account_id is not None:
+            account_deltas[event.destination_account_id] = -(
+                event.amount + interest_event.net
+            )
+        self.balance_service.apply_account_deltas(account_deltas)
+        principal_reversal = self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=event.type,
+            amount=event.amount,
+            effective_on=command.reversed_on,
+            posting_on=command.reversed_on,
+            destination=event.destination,
+            source_account=None,
+            destination_account=event.destination_account,
+            exception_reason='',
+            reversal_of=event,
+            reversal_reason=reason,
+        )
+        self.deposit_repository.create_capitalization_event(
+            deposit=deposit,
+            forecast=None,
+            destination=interest_event.destination,
+            destination_account=interest_event.destination_account,
+            gross=interest_event.gross,
+            withholding=interest_event.withholding,
+            net=interest_event.net,
+            posting_on=command.reversed_on,
+            value_on=command.reversed_on,
+            reason=interest_event.reason,
+            is_final=True,
+            prior_interest_adjustment=(
+                interest_event.prior_interest_adjustment
+            ),
+            reversal_of=interest_event,
+            reversal_reason=reason,
+        )
+        self.deposit_repository.reopen_term(term.pk)
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        return principal_reversal
+
+    def _reverse_interest_event(
+        self,
+        command: ReverseDepositEventCommand,
+        reason: str,
+    ) -> DepositCapitalizationEvent:
+        try:
+            event = self.deposit_repository.get_interest_event_for_update(
+                command.event_id,
+                command.user,
+            )
+        except DepositCapitalizationEvent.DoesNotExist as error:
+            raise ValidationError(
+                _('Событие вклада не найдено или недоступно.'),
+            ) from error
+        self._validate_reversal_deposit(event.deposit_id, command.deposit_id)
+        self._validate_reversal_source(event)
+        if command.reversed_on < event.posting_on:
+            raise ValidationError(
+                _('Дата аннулирования не может быть раньше даты события.'),
+            )
+
+        account_id: int | None = None
+        if event.destination == event.Destination.CAPITALIZATION:
+            account_id = event.deposit.account_id
+        elif event.destination_account_id is not None:
+            account_id = event.destination_account_id
+        if account_id is not None and event.net:
+            self.balance_service.apply_account_deltas(
+                {account_id: -event.net},
+            )
+
+        reversal = self.deposit_repository.create_capitalization_event(
+            deposit=event.deposit,
+            forecast=None,
+            destination=event.destination,
+            destination_account=event.destination_account,
+            gross=event.gross,
+            withholding=event.withholding,
+            net=event.net,
+            posting_on=command.reversed_on,
+            value_on=command.reversed_on,
+            reason=event.reason,
+            is_final=event.is_final,
+            prior_interest_adjustment=event.prior_interest_adjustment,
+            reversal_of=event,
+            reversal_reason=reason,
+        )
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        return reversal
+
+    @staticmethod
+    def _validate_reversal_source(
+        event: (
+            DepositPrincipalEvent
+            | DepositCapitalizationEvent
+            | DepositRenewalEvent
+        ),
+    ) -> None:
+        if event.reversal_of_id is not None:
+            raise ValidationError(
+                _('Компенсирующее событие нельзя аннулировать.'),
+            )
+        if hasattr(event, 'reversal'):
+            raise ValidationError(_('Событие вклада уже аннулировано.'))
+
+    @staticmethod
+    def _validate_reversal_deposit(
+        event_deposit_id: int,
+        command_deposit_id: int,
+    ) -> None:
+        if event_deposit_id != command_deposit_id:
+            raise ValidationError(
+                _('Событие не принадлежит указанному вкладу.'),
+            )
+
+    def _create_principal_reversal_log(
+        self,
+        command: ReverseDepositEventCommand,
+        event: DepositPrincipalEvent,
+        accounts: dict[int, Account],
+    ) -> None:
+        from_account: Account | None = None
+        to_account: Account | None = None
+        if event.type in (
+            DepositPrincipalEvent.Type.FUNDING,
+            DepositPrincipalEvent.Type.TOP_UP,
+        ):
+            from_account = accounts[event.deposit.account_id]
+            if event.source_account_id is not None:
+                to_account = accounts[event.source_account_id]
+        elif event.type == DepositPrincipalEvent.Type.WITHDRAWAL:
+            if event.destination_account_id is not None:
+                from_account = accounts[event.destination_account_id]
+            to_account = accounts[event.deposit.account_id]
+        if from_account is None or to_account is None:
+            return
+        self.transfer_money_log_repository.create_log(
+            user=command.user,
+            from_account=from_account,
+            to_account=to_account,
+            amount=event.amount,
+            exchange_date=datetime.combine(
+                command.reversed_on,
+                datetime.min.time(),
+                tzinfo=UTC,
+            ),
+            notes=_('Аннулирование события тела вклада.'),
+        )
+
+    @staticmethod
+    def _signed_principal_amount(event: DepositPrincipalEvent) -> Decimal:
+        is_outflow = event.type in (
+            DepositPrincipalEvent.Type.WITHDRAWAL,
+            DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            DepositPrincipalEvent.Type.EARLY_CLOSURE,
+        )
+        amount = -event.amount if is_outflow else event.amount
+        return -amount if event.reversal_of_id else amount
 
     @transaction.atomic
     def withdraw_deposit_principal(
@@ -1526,18 +1857,14 @@ class DepositService:
         principal_changes: list[PrincipalChange] = [
             PrincipalChange(
                 effective_on=event.effective_on,
-                amount=(
-                    -event.amount
-                    if event.type == DepositPrincipalEvent.Type.WITHDRAWAL
-                    else event.amount
-                ),
+                amount=self._signed_principal_amount(event),
             )
             for event in term.deposit.principal_events.all()
         ]
         capitalization_changes = [
             PrincipalChange(
                 effective_on=ce.value_on,
-                amount=ce.net,
+                amount=-ce.net if ce.reversal_of_id else ce.net,
             )
             for ce in term.deposit.capitalization_events.filter(
                 destination=(

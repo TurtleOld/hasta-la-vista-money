@@ -7,6 +7,7 @@ from hasta_la_vista_money.deposits.views import (
     DepositCreateView,
     DepositDetailView,
     DepositEarlyClosureView,
+    DepositEventReverseView,
     DepositListView,
     DepositRecalculateForecastView,
     DepositRenewView,
@@ -29,6 +30,11 @@ urlpatterns = [
         name='early-close',
     ),
     path('<int:pk>/renew/', DepositRenewView.as_view(), name='renew'),
+    path(
+        '<int:pk>/events/<str:event_kind>/<int:event_id>/reverse/',
+        DepositEventReverseView.as_view(),
+        name='reverse-event',
+    ),
     path(
         '<int:pk>/capitalize/',
         DepositCapitalizeInterestView.as_view(),

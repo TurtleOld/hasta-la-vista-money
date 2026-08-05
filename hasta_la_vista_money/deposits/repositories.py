@@ -9,6 +9,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositPayoutScheduleDate,
     DepositPrincipalEvent,
     DepositRatePeriod,
+    DepositRenewalEvent,
     DepositTerm,
 )
 from hasta_la_vista_money.users.models import User
@@ -28,6 +29,9 @@ class DepositRepository:
 
     def create_rate_period(self, **kwargs: object) -> DepositRatePeriod:
         return DepositRatePeriod.objects.create(**kwargs)
+
+    def create_renewal_event(self, **kwargs: object) -> DepositRenewalEvent:
+        return DepositRenewalEvent.objects.create(**kwargs)
 
     def create_payout_schedule_date(
         self,
@@ -74,6 +78,57 @@ class DepositRepository:
             .prefetch_related('terms')
             .get(pk=deposit_id, account__user=user)
         )
+
+    def get_principal_event_for_update(
+        self,
+        event_id: int,
+        user: User,
+    ) -> DepositPrincipalEvent:
+        return (
+            DepositPrincipalEvent.objects.select_for_update()
+            .select_related(
+                'deposit__account',
+                'source_account',
+                'destination_account',
+                'reversal_of',
+            )
+            .get(pk=event_id, deposit__account__user=user)
+        )
+
+    def get_interest_event_for_update(
+        self,
+        event_id: int,
+        user: User,
+    ) -> DepositCapitalizationEvent:
+        return (
+            DepositCapitalizationEvent.objects.select_for_update()
+            .select_related(
+                'deposit__account',
+                'destination_account',
+                'forecast',
+                'reversal_of',
+            )
+            .get(pk=event_id, deposit__account__user=user)
+        )
+
+    def get_renewal_event_for_update(
+        self,
+        event_id: int,
+        user: User,
+    ) -> DepositRenewalEvent:
+        return (
+            DepositRenewalEvent.objects.select_for_update()
+            .select_related(
+                'deposit__account',
+                'previous_term',
+                'renewed_term',
+                'reversal_of',
+            )
+            .get(pk=event_id, deposit__account__user=user)
+        )
+
+    def set_current_term(self, term_id: int, *, is_current: bool) -> None:
+        DepositTerm.objects.filter(pk=term_id).update(is_current=is_current)
 
     def get_term_by_id_and_user(
         self,
@@ -170,6 +225,8 @@ class DepositRepository:
         return DepositPrincipalEvent.objects.filter(
             deposit_id=deposit_id,
             type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
         ).first()
 
     def get_final_interest_event(
@@ -179,10 +236,30 @@ class DepositRepository:
         return DepositCapitalizationEvent.objects.filter(
             deposit_id=deposit_id,
             is_final=True,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
         ).first()
+
+    def get_closure_interest_event_for_update(
+        self,
+        principal_event: DepositPrincipalEvent,
+    ) -> DepositCapitalizationEvent:
+        if principal_event.posting_on is None:
+            raise DepositCapitalizationEvent.DoesNotExist
+        return DepositCapitalizationEvent.objects.select_for_update().get(
+            deposit=principal_event.deposit,
+            is_final=True,
+            posting_on=principal_event.posting_on,
+            value_on=principal_event.effective_on,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
+        )
 
     def close_term(self, term_id: int, closed_on: 'date') -> None:
         DepositTerm.objects.filter(pk=term_id).update(closed_on=closed_on)
+
+    def reopen_term(self, term_id: int) -> None:
+        DepositTerm.objects.filter(pk=term_id).update(closed_on=None)
 
     def get_forecast_for_update(
         self,

@@ -32,6 +32,45 @@ def _sberbank() -> Bank:
 
 
 class DepositViewSmokeTests(TestCase):
+    def test_user_reverses_event_and_sees_reason_in_history(self) -> None:
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = timezone.localdate()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад с исправлением',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=opened_on,
+                matures_on=opened_on + timedelta(days=184),
+                annual_rate=Decimal('14.25'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        event = deposit.principal_events.get()
+
+        response = self.client.post(
+            reverse(
+                'deposits:reverse-event',
+                kwargs={
+                    'pk': deposit.pk,
+                    'event_kind': 'principal',
+                    'event_id': event.pk,
+                },
+            ),
+            {
+                'reason': 'Начальная позиция указана ошибочно.',
+                'reversed_on': opened_on.isoformat(),
+            },
+        )
+
+        self.assertRedirects(response, deposit.get_absolute_url())
+        detail = self.client.get(deposit.get_absolute_url())
+        self.assertContains(detail, 'Начальная позиция')
+        self.assertContains(detail, 'Аннулирование')
+        self.assertContains(detail, 'Начальная позиция указана ошибочно.')
+
     def setUp(self) -> None:
         self.user = cast('User', UserFactory())
         self.client.force_login(self.user)
