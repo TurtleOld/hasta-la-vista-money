@@ -189,6 +189,9 @@ known-first-party = ["hasta_la_vista_money"]
 "hasta_la_vista_money/authentication/authentication.py" = [
   "TRY300", # else block after return is unnecessary
 ]
+"hasta_la_vista_money/deposits/services.py" = [
+  "C901", # complex operations deserve focused attention
+]
 
 [tool.mypy]
 python_version = "3.12"

@@ -31,9 +31,11 @@ from hasta_la_vista_money.deposits.commands import (
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
+    WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositAuditEvent,
     DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
@@ -3284,4 +3286,497 @@ class CloseDepositEarlyServiceTests(TestCase):
                 deposit=deposit,
                 type=DepositPrincipalEvent.Type.EARLY_CLOSURE,
             ).exists(),
+        )
+
+
+class ExternalIdIdempotencyTests(TestCase):
+    def test_top_up_with_external_id_is_idempotent(self) -> None:
+        user = cast('User', UserFactory())
+        source = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с внешним ID',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+
+        command = TopUpDepositCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            source_account_id=source.pk,
+            amount=Decimal('100.00'),
+            effective_on=date(2026, 6, 1),
+            external_id='bank-txn-001',
+        )
+        first = service.top_up_deposit_principal(command)
+        second = service.top_up_deposit_principal(command)
+
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.TOP_UP,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(deposit=deposit).count(),
+            2,
+        )
+        source.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source.balance, Decimal('900.00'))
+        self.assertEqual(deposit.account.balance, Decimal('600.00'))
+        self.assertEqual(first.external_id, 'bank-txn-001')
+
+    def test_top_up_with_external_id_rejects_mismatch(self) -> None:
+        user = cast('User', UserFactory())
+        source = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с внешним ID',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+
+        service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source.pk,
+                amount=Decimal('100.00'),
+                effective_on=date(2026, 6, 1),
+                external_id='bank-txn-002',
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.top_up_deposit_principal(
+                TopUpDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    source_account_id=source.pk,
+                    amount=Decimal('200.00'),
+                    effective_on=date(2026, 6, 1),
+                    external_id='bank-txn-002',
+                ),
+            )
+
+    def test_withdrawal_with_external_id_is_idempotent(self) -> None:
+        user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Получатель',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('100.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с внешним ID',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.withdrawal_allowed = True
+        term.save(update_fields=['withdrawal_allowed'])
+
+        command = WithdrawDepositCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            destination_account_id=destination.pk,
+            amount=Decimal('100.00'),
+            effective_on=date(2026, 6, 1),
+            external_id='wdrw-001',
+        )
+        first = service.withdraw_deposit_principal(command)
+        second = service.withdraw_deposit_principal(command)
+
+        self.assertEqual(first.pk, second.pk)
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('400.00'))
+        self.assertEqual(destination.balance, Decimal('200.00'))
+
+    def test_interest_payment_with_external_id_is_idempotent(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с внешним ID',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        command = CapitalizeInterestCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            gross=Decimal('100.00'),
+            withholding=Decimal('10.00'),
+            net=Decimal('90.00'),
+            posting_on=date(2026, 7, 1),
+            value_on=date(2026, 7, 1),
+            reason='Выплата банка.',
+            external_id='int-001',
+        )
+        first = service.confirm_interest_payment(command)
+        second = service.confirm_interest_payment(command)
+
+        self.assertEqual(first.pk, second.pk)
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('590.00'))
+
+
+class ReconciliationTests(TestCase):
+    def test_reconcile_balance_matches_account(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Сверяемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        result = service.reconcile_deposit(deposit.pk, user)
+        self.assertEqual(
+            result['calculated_balance'],
+            Decimal('500.00'),
+        )
+        self.assertEqual(result['account_balance'], Decimal('500.00'))
+        self.assertEqual(result['discrepancy'], Decimal())
+        self.assertIsNotNone(result['last_reconciled_at'])
+
+    def test_reconcile_after_capitalization_matches(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Сверяемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.confirm_interest_payment(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Выплата.',
+            ),
+        )
+
+        result = service.reconcile_deposit(deposit.pk, user)
+        self.assertEqual(result['calculated_balance'], Decimal('590.00'))
+        self.assertEqual(result['account_balance'], Decimal('590.00'))
+        self.assertEqual(result['discrepancy'], Decimal())
+
+    def test_reconcile_after_reversal_matches(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Сверяемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        event = service.confirm_interest_payment(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Выплата.',
+            ),
+        )
+        service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='interest',
+                event_id=event.pk,
+                reason='Ошибка.',
+                reversed_on=date(2026, 7, 2),
+            ),
+        )
+
+        result = service.reconcile_deposit(deposit.pk, user)
+        self.assertEqual(result['calculated_balance'], Decimal('500.00'))
+        self.assertEqual(result['account_balance'], Decimal('500.00'))
+        self.assertEqual(result['discrepancy'], Decimal())
+
+
+class AuditEventTests(TestCase):
+    def test_conversion_creates_audit_event(self) -> None:
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank=_sberbank(),
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.convert_account_to_deposit(
+            ConvertAccountToDepositCommand(
+                user=user,
+                account_id=account.pk,
+                name='Production вклад',
+                bank=_sberbank(),
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+                converted_on=date(2026, 8, 1),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        audit = deposit.audit_events.get()
+        self.assertEqual(
+            audit.event_type,
+            DepositAuditEvent.Type.CONVERSION,
+        )
+
+    def test_renewal_creates_audit_event(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Пролонгируемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2025, 1, 1),
+                matures_on=date(2025, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.renew_matured_deposit(
+            RenewDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('11.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        audit = deposit.audit_events.get()
+        self.assertEqual(
+            audit.event_type,
+            DepositAuditEvent.Type.RENEWAL,
+        )
+
+    def test_closure_creates_audit_event(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Закрываемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2025, 1, 1),
+                matures_on=date(2025, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=(DepositCapitalizationEvent.Destination.EXTERNAL),
+                destination_account_id=None,
+                principal=Decimal('500.00'),
+                gross=Decimal(),
+                withholding=Decimal(),
+                net=Decimal(),
+                posting_on=date(2026, 1, 2),
+                value_on=date(2026, 1, 2),
+            ),
+        )
+
+        audit = deposit.audit_events.filter(
+            event_type=DepositAuditEvent.Type.CLOSURE,
+        ).first()
+        if audit is None:
+            self.fail('No closure audit event found')
+        self.assertEqual(
+            audit.event_type,
+            DepositAuditEvent.Type.CLOSURE,
+        )
+
+    def test_reversal_creates_audit_event(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Аннулируемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        event = service.confirm_interest_payment(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Выплата.',
+            ),
+        )
+        service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                event_kind='interest',
+                event_id=event.pk,
+                reason='Аннулирование.',
+                reversed_on=date(2026, 7, 2),
+            ),
+        )
+
+        audit = deposit.audit_events.filter(
+            event_type=DepositAuditEvent.Type.CANCELLATION,
+        ).first()
+        if audit is None:
+            self.fail('No cancellation audit event found')
+        self.assertEqual(
+            audit.event_type,
+            DepositAuditEvent.Type.CANCELLATION,
+        )
+
+    def test_exclusion_top_up_creates_audit_event(self) -> None:
+        user = cast('User', UserFactory())
+        source = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с исключением',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source.pk,
+                amount=Decimal('100.00'),
+                effective_on=date(2026, 6, 1),
+                exception_reason='Банк принял пополнение вне условий.',
+            ),
+        )
+
+        audit = deposit.audit_events.filter(
+            event_type=DepositAuditEvent.Type.EXCLUSION,
+        ).first()
+        if audit is None:
+            self.fail('No exclusion audit event found')
+        self.assertEqual(
+            audit.event_type,
+            DepositAuditEvent.Type.EXCLUSION,
         )

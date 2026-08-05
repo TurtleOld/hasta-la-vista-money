@@ -44,6 +44,7 @@ from hasta_la_vista_money.deposits.forms import (
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositPrincipalEvent,
 )
 
@@ -237,7 +238,36 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['early_closure_forecast_form'] = ForecastEarlyClosureForm(
             term=deposit.current_term,
         )
+        context['audit_events'] = deposit.audit_events.all()[:20]
+        context['reconciliation'] = self._compute_reconciliation(deposit)
         return context
+
+    @staticmethod
+    def _compute_reconciliation(
+        deposit: 'Deposit',
+    ) -> dict[str, Any] | None:
+        events = deposit.principal_events.all()
+        calculated = Decimal()
+        for event in events:
+            is_outflow = event.type in (
+                DepositPrincipalEvent.Type.WITHDRAWAL,
+                DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+                DepositPrincipalEvent.Type.EARLY_CLOSURE,
+            )
+            amount = -event.amount if is_outflow else event.amount
+            calculated += -amount if event.reversal_of_id else amount
+        for cap_event in deposit.capitalization_events.filter(
+            destination=(DepositCapitalizationEvent.Destination.CAPITALIZATION),
+        ):
+            net = cap_event.net
+            calculated += -net if cap_event.reversal_of_id else net
+        account = deposit.account
+        return {
+            'calculated_balance': calculated,
+            'account_balance': account.balance,
+            'discrepancy': account.balance - calculated,
+            'last_reconciled_at': account.last_reconciled_at,
+        }
 
     def get_success_url(self) -> str:
         return reverse('deposits:list')
@@ -274,6 +304,34 @@ class DepositEventReverseView(LoginRequiredMixin, View):
             raise Http404 from error
         messages.success(request, _('Событие вклада аннулировано.'))
         return HttpResponseRedirect(event.deposit.get_absolute_url())
+
+
+class DepositReconcileView(LoginRequiredMixin, View):
+    def post(
+        self,
+        request: HttpRequest,
+        pk: int,
+    ) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = get_object_or_404(service.get_user_deposits(user), pk=pk)
+        try:
+            result = service.reconcile_deposit(deposit.pk, user)
+        except ValidationError as error:
+            messages.error(request, error.message)
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        discrepancy = result['discrepancy']
+        if discrepancy == 0:
+            messages.success(request, _('Сверка выполнена. Расхождений нет.'))
+        else:
+            messages.warning(
+                request,
+                _(
+                    'Сверка завершена. Обнаружено расхождение: {amount}.',
+                ).format(amount=abs(discrepancy)),
+            )
+        return HttpResponseRedirect(deposit.get_absolute_url())
 
 
 class DepositRenewView(LoginRequiredMixin, FormView[RenewDepositForm]):

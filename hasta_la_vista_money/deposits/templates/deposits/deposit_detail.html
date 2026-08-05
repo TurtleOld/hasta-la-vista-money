@@ -22,6 +22,26 @@
                 <div class="accounts-hero-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
                 <div class="accounts-hero-change">{% translate 'Фактический остаток связанного счёта' %}</div>
                 <div class="accounts-hero-change">{% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} <span class="cur">{{ deposit.account.currency }}</span></div>
+                {% if reconciliation %}
+                <div class="accounts-hero-change">
+                    {% translate 'Рассчитанный остаток' %}: {{ reconciliation.calculated_balance|comma }} <span class="cur">{{ deposit.account.currency }}</span>
+                    ·
+                    {% if reconciliation.discrepancy == 0 %}
+                    <span class="text-success">{% translate 'Расхождений нет' %}</span>
+                    {% else %}
+                    <span class="text-danger">{% translate 'Расхождение' %}: {{ reconciliation.discrepancy|comma }} <span class="cur">{{ deposit.account.currency }}</span></span>
+                    {% endif %}
+                    {% if reconciliation.last_reconciled_at %}
+                    · {% translate 'Сверено' %}: {{ reconciliation.last_reconciled_at|date:'d.m.Y H:i' }}
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="accounts-hero-change">
+                    <form method="post" action="{% url 'deposits:reconcile' pk=deposit.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">{% translate 'Сверить остаток' %}</button>
+                    </form>
+                </div>
             </div>
         </section>
         {% if principal_events or renewal_events %}
@@ -266,7 +286,26 @@
                                     {% translate 'Ставка периода не определена' %}
                                 {% else %}
                                     {{ line.amount|comma }}<span class="cur">{{ deposit.account.currency }}</span>
-                                {% endif %}
+        {% endif %}
+        {% if audit_events %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Аудит операций' %}</h2></div>
+            <div class="accounts-list">
+                {% for audit in audit_events %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {{ audit.created_at|date:'d.m.Y H:i' }} · {{ audit.get_event_type_display }}
+                            </div>
+                            <div class="accounts-row-name">{{ audit.description }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
                                 {% if line.confirmed %} · {% translate 'подтверждено' %}{% endif %}
                             </div>
                         </div>
