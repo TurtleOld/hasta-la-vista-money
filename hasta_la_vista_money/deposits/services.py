@@ -1125,7 +1125,8 @@ class DepositService:
             if existing is not None:
                 return existing
 
-        if not command.exception_reason.strip():
+        exception_reason = command.exception_reason.strip()
+        if not exception_reason:
             self._validate_withdrawal_terms(
                 term,
                 command.amount,
@@ -1138,10 +1139,11 @@ class DepositService:
             },
         )
         source = locked_accounts[deposit.account.pk]
-        if source.balance < term.minimum_balance:
-            raise ValidationError(
-                _('Снятие нарушает неснижаемый остаток вклада.'),
-            )
+        self._validate_withdrawal_balance(
+            source.balance,
+            term,
+            exception_reason,
+        )
         event = self.deposit_repository.create_principal_event(
             deposit=deposit,
             type=DepositPrincipalEvent.Type.WITHDRAWAL,
@@ -1149,7 +1151,7 @@ class DepositService:
             effective_on=command.effective_on,
             source_account=None,
             destination_account=locked_accounts[destination.pk],
-            exception_reason=command.exception_reason.strip(),
+            exception_reason=exception_reason,
             external_id=command.external_id,
         )
         self.transfer_money_log_repository.create_log(
@@ -1164,11 +1166,12 @@ class DepositService:
             ),
             notes=_('Частичное снятие тела вклада.'),
         )
-        if command.exception_reason.strip():
+        self._recalculate_forecast_for_term(term, command.effective_on)
+        if exception_reason:
             self._create_audit(
                 deposit=deposit,
                 event_type=DepositAuditEvent.Type.EXCLUSION,
-                description=command.exception_reason.strip(),
+                description=exception_reason,
             )
         return event
 
@@ -1970,6 +1973,21 @@ class DepositService:
             and amount > term.maximum_withdrawal_amount
         ):
             raise ValidationError(_('Сумма больше максимально разрешённой.'))
+
+    @staticmethod
+    def _validate_withdrawal_balance(
+        balance: Decimal,
+        term: DepositTerm,
+        exception_reason: str,
+    ) -> None:
+        if balance < 0:
+            raise ValidationError(
+                _('Снятие не может привести к отрицательному остатку.'),
+            )
+        if not exception_reason and balance < term.minimum_balance:
+            raise ValidationError(
+                _('Снятие нарушает неснижаемый остаток вклада.'),
+            )
 
     @transaction.atomic
     def recalculate_forecast(
