@@ -140,6 +140,21 @@ class OpenExistingDepositCommand:
 
 
 @dataclass(frozen=True)
+class RenewDepositCommand:
+    """Command to start a new term for a matured deposit agreement."""
+
+    user: User
+    deposit_id: int
+    opened_on: date
+    matures_on: date
+    annual_rate: Decimal
+    rate_kind: str
+    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
+    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
+    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+
+
+@dataclass(frozen=True)
 class AddFloatingRatePeriodCommand:
     """Command to append a new effective-rate period to a floating-rate term.
 

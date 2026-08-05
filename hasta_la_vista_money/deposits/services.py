@@ -20,6 +20,7 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    RenewDepositCommand,
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
@@ -426,6 +427,97 @@ class DepositService:
                 term=term,
                 payout_on=payout_on,
             )
+
+    @transaction.atomic
+    def renew_matured_deposit(
+        self,
+        command: RenewDepositCommand,
+    ) -> DepositTerm:
+        """Start a new term without moving the deposit's principal."""
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user_for_update(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+
+        current_term = deposit.current_term
+        if not self.is_renewal_available(deposit):
+            raise ValidationError(
+                _(
+                    'Пролонгация доступна только для завершившегося '
+                    'вклада с ненулевым остатком.',
+                ),
+            )
+        self._validate_agreement(
+            opened_on=command.opened_on,
+            matures_on=command.matures_on,
+            annual_rate=command.annual_rate,
+            balance=deposit.account.balance,
+        )
+        if command.opened_on <= current_term.matures_on:
+            raise ValidationError(
+                _('Новый срок должен начинаться после завершённого срока.'),
+            )
+        if self.deposit_repository.get_overlapping_terms(
+            deposit.pk,
+            command.opened_on,
+            command.matures_on,
+        ).exists():
+            raise ValidationError(
+                _('Новый срок не должен пересекаться с историей вклада.'),
+            )
+        self._validate_renewal_terms(command)
+
+        self.deposit_repository.mark_term_not_current(current_term.pk)
+        new_term = self.deposit_repository.create_term(
+            deposit=deposit,
+            opened_on=command.opened_on,
+            matures_on=command.matures_on,
+            is_current=True,
+            rate_kind=command.rate_kind,
+            **self._forecast_term_kwargs(command.forecast_terms),
+            **self._withdrawal_term_kwargs(command.withdrawal_terms),
+            **self._top_up_term_kwargs(command.top_up_terms),
+        )
+        self.deposit_repository.create_rate_period(
+            term=new_term,
+            starts_on=command.opened_on,
+            ends_on=command.matures_on,
+            annual_rate=command.annual_rate,
+        )
+        self._create_custom_schedule_dates(new_term, command.forecast_terms)
+        self._recalculate_forecast_for_term(new_term)
+        return new_term
+
+    @staticmethod
+    def is_renewal_available(deposit: Deposit) -> bool:
+        return (
+            deposit.current_term.state == DepositTerm.State.MATURED
+            and deposit.account.balance > 0
+            and not deposit.account.is_archived
+        )
+
+    @staticmethod
+    def _validate_renewal_terms(command: RenewDepositCommand) -> None:
+        for payout_on in command.forecast_terms.custom_payout_dates:
+            if not command.opened_on <= payout_on <= command.matures_on:
+                raise ValidationError(
+                    _('Дата выплаты должна попадать в новый срок вклада.'),
+                )
+        for deadline in (
+            command.withdrawal_terms.withdrawal_deadline,
+            command.top_up_terms.top_up_deadline,
+        ):
+            if deadline is not None and not (
+                command.opened_on <= deadline <= command.matures_on
+            ):
+                raise ValidationError(
+                    _('Срок операции должен попадать в новый срок вклада.'),
+                )
 
     @transaction.atomic
     def add_floating_rate_period(

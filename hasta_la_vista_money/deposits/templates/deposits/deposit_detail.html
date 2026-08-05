@@ -25,6 +25,17 @@
             </div>
         </section>
         {% if term.state == 'matured' %}
+        {% if renewal_available %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Пролонгировать вклад' %}</h2></div>
+            <div class="accounts-composer-ft">
+                <div class="hint">{% translate 'Создайте новый срок с отдельными условиями и прогнозом выплат.' %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'deposits:renew' pk=deposit.pk %}" class="accounts-form-button accounts-form-button-primary">{% translate 'Пролонгировать вклад' %}</a>
+                </div>
+            </div>
+        </section>
+        {% endif %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Закрыть вклад' %}</h2></div>
             <form method="post" action="{% url 'deposits:close' pk=deposit.pk %}">
@@ -128,6 +139,30 @@
                 {% endwith %}
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Срок' %}</div><div class="accounts-row-name">{{ term.opened_on|date:'d.m.Y' }} — {{ term.matures_on|date:'d.m.Y' }}</div></div></div></div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Состояние' %}</div><div class="accounts-row-name">{{ term.state_label }}</div></div></div></div>
+            </div>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'История сроков' %}</h2></div>
+            <div class="accounts-list">
+                {% for historical_term in deposit.terms.all %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {{ historical_term.opened_on|date:'d.m.Y' }} — {{ historical_term.matures_on|date:'d.m.Y' }}
+                                {% if historical_term.is_current %}<span class="badge bg-primary">{% translate 'Текущий срок' %}</span>{% else %}<span class="badge bg-secondary">{% translate 'Завершённый срок' %}</span>{% endif %}
+                            </div>
+                            <div class="accounts-row-name">{{ historical_term.state_label }} · {{ historical_term.get_rate_kind_display }} · {{ historical_term.get_payout_schedule_kind_display }}</div>
+                            {% for historical_rate in historical_term.rate_periods.all %}
+                            <div class="accounts-row-kind">{{ historical_rate.starts_on|date:'d.m.Y' }} — {{ historical_rate.ends_on|date:'d.m.Y' }} · {{ historical_rate.annual_rate }}%</div>
+                            {% endfor %}
+                            {% for historical_forecast in historical_term.interest_forecasts.all %}
+                            <div class="accounts-row-kind">{% translate 'Ожидаемая выплата' %}: {{ historical_forecast.payout_on|date:'d.m.Y' }} · {{ historical_forecast.amount|comma }} {{ deposit.account.currency }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </section>
         {% if term.rate_kind == 'floating' %}

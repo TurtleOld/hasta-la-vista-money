@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load i18n static word_hash %}
+
+{% block title %}{% translate 'Пролонгировать вклад' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="accounts-app accounts-form-app">
+    <div class="accounts-composer-crumb">
+        <a href="{% url 'deposits:list' %}">{% translate 'Вклады' %}</a>
+        <span class="sep">·</span>
+        <a href="{{ deposit.get_absolute_url }}">{{ deposit.name }}</a>
+        <span class="sep">·</span>
+        <b>{% translate 'Пролонгация' %}</b>
+    </div>
+    <div class="accounts-composer-shell">
+        <form class="accounts-composer-card" method="post" novalidate>
+            {% csrf_token %}
+            <div class="accounts-composer-hd">
+                <h1>{% translate 'Новый срок вклада' %}</h1>
+                <span class="meta">{% translate 'даты, ставка и правила' %}</span>
+            </div>
+            <div class="accounts-cmp-body">
+                {% if form.non_field_errors %}<div class="accounts-form-errors">{{ form.non_field_errors }}</div>{% endif %}
+                {% for field in form %}
+                <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                    <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                    <div class="accounts-cmp-input">{% include 'forms/_field.html' with field=field %}</div>
+                </section>
+                {% endfor %}
+            </div>
+            <div class="accounts-composer-ft">
+                <div class="hint">{% translate 'Остаток продолжится без создания финансового движения.' %}</div>
+                <div class="ft-actions">
+                    <a href="{{ deposit.get_absolute_url }}" class="accounts-form-button accounts-form-button-secondary">{% translate 'Отмена' %}</a>
+                    <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Пролонгировать вклад' %}</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</main>
+{% endblock %}

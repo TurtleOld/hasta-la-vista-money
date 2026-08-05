@@ -53,7 +53,11 @@ class DepositRepository:
         return (
             Deposit.objects.filter(account__user=user)
             .select_related('account')
-            .prefetch_related('terms__rate_periods')
+            .prefetch_related(
+                'terms__rate_periods',
+                'terms__payout_schedule_dates',
+                'terms__interest_forecasts',
+            )
         )
 
     def get_by_id_and_user(self, deposit_id: int, user: User) -> Deposit:
@@ -80,6 +84,24 @@ class DepositRepository:
             pk=term_id,
             deposit__account__user=user,
         )
+
+    def get_overlapping_terms(
+        self,
+        deposit_id: int,
+        opened_on: 'date',
+        matures_on: 'date',
+    ) -> QuerySet[DepositTerm]:
+        return DepositTerm.objects.filter(
+            deposit_id=deposit_id,
+            opened_on__lte=matures_on,
+            matures_on__gte=opened_on,
+        )
+
+    def mark_term_not_current(self, term_id: int) -> DepositTerm:
+        term = DepositTerm.objects.get(pk=term_id)
+        term.is_current = False
+        term.save(update_fields=['is_current'])
+        return term
 
     def trim_rate_period_end(
         self,

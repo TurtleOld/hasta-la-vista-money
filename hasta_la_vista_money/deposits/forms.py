@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
@@ -365,6 +365,74 @@ class CreateDepositForm(forms.Form):
                 'maximum_top_up_amount',
                 _('Максимальная сумма не может быть меньше минимальной.'),
             )
+
+
+class RenewDepositForm(CreateDepositForm):
+    """Collect explicit contract terms for a deposit's next term."""
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        for field_name in (
+            'opening_method',
+            'name',
+            'bank',
+            'currency',
+            'balance',
+            'source_account',
+            'tracking_started_on',
+        ):
+            self.fields.pop(field_name)
+
+        next_opened_on = term.matures_on + timedelta(days=1)
+        duration = term.matures_on - term.opened_on
+        renewal_delta = next_opened_on - term.opened_on
+        latest_rate = term.rate_periods.order_by('-starts_on').first()
+        custom_dates = ', '.join(
+            (scheduled.payout_on + renewal_delta).strftime('%d/%m/%Y')
+            for scheduled in term.payout_schedule_dates.all()
+        )
+        self.initial.update(
+            {
+                'opened_on': next_opened_on,
+                'matures_on': next_opened_on + duration,
+                'annual_rate': (
+                    latest_rate.annual_rate if latest_rate is not None else None
+                ),
+                'rate_kind': term.rate_kind,
+                'day_count_convention': term.day_count_convention,
+                'accrual_start_included': term.accrual_start_included,
+                'accrual_end_included': term.accrual_end_included,
+                'payout_schedule_kind': term.payout_schedule_kind,
+                'custom_payout_dates': custom_dates,
+                'business_day_convention': term.business_day_convention,
+                'interest_payout_destination': (
+                    term.interest_payout_destination
+                ),
+                'withdrawal_allowed': term.withdrawal_allowed,
+                'minimum_withdrawal_amount': term.minimum_withdrawal_amount,
+                'maximum_withdrawal_amount': term.maximum_withdrawal_amount,
+                'withdrawal_deadline': (
+                    term.withdrawal_deadline + renewal_delta
+                    if term.withdrawal_deadline is not None
+                    else None
+                ),
+                'minimum_balance': term.minimum_balance,
+                'top_up_allowed': term.top_up_allowed,
+                'minimum_top_up_amount': term.minimum_top_up_amount,
+                'maximum_top_up_amount': term.maximum_top_up_amount,
+                'top_up_deadline': (
+                    term.top_up_deadline + renewal_delta
+                    if term.top_up_deadline is not None
+                    else None
+                ),
+                'maximum_balance': term.maximum_balance,
+            },
+        )
 
 
 class TopUpDepositForm(forms.Form):
