@@ -32,6 +32,7 @@ class ForecastTerms:
     interest_payout_destination: str = (
         DepositTerm.PayoutDestination.CAPITALIZATION
     )
+    interest_accrual_starts_on: date | None = None
 
 
 @dataclass(frozen=True)

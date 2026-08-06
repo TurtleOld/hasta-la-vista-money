@@ -8,7 +8,7 @@ Account.balance or any actual income/expense.
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
 
@@ -17,7 +17,7 @@ from django.utils.translation import gettext as _
 from hasta_la_vista_money.deposits.models import DepositTerm
 
 _ACCRUAL_PRECISION = Decimal('0.00000001')
-_MONEY_PRECISION = Decimal('0.01')
+_DEFAULT_MONEY_PRECISION = Decimal('0.01')
 _DAYS_IN_YEAR = Decimal(365)
 _WEEKEND_DAYS = frozenset({5, 6})
 _MAX_ACCRUAL_YEARS = 100
@@ -280,8 +280,12 @@ def compute_accrued_interest(
     return total.quantize(_ACCRUAL_PRECISION), False
 
 
-def round_to_money(amount: Decimal) -> Decimal:
-    return amount.quantize(_MONEY_PRECISION, rounding=ROUND_HALF_UP)
+def round_to_money(
+    amount: Decimal,
+    precision: Decimal = _DEFAULT_MONEY_PRECISION,
+    rounding: str = 'ROUND_HALF_UP',
+) -> Decimal:
+    return amount.quantize(precision, rounding=rounding)
 
 
 def roll_to_business_day(
@@ -374,6 +378,9 @@ def build_forecast(
     business_day_convention: DepositTerm.BusinessDayConvention,
     calendar: ProductionCalendar,
     principal_changes: list[PrincipalChange] | None = None,
+    money_precision: Decimal = _DEFAULT_MONEY_PRECISION,
+    rounding_rule: str = 'ROUND_HALF_UP',
+    accrual_starts_on: date | None = None,
 ) -> list[ForecastLine]:
     """Compute the full expected-payout schedule for a deposit term.
 
@@ -399,12 +406,21 @@ def build_forecast(
             since interest through maturity must always be projected.
         business_day_convention: The term's business-day roll convention.
         calendar: The working-day calendar consulted for rolls.
+        money_precision: Smallest currency unit for rounding final amounts.
+        rounding_rule: Decimal rounding strategy (e.g. 'ROUND_HALF_UP').
+        accrual_starts_on: Date from which interest starts accruing.
+            Defaults to opened_on when None.
 
     Returns:
         One ForecastLine per accrual period, in chronological order.
     """
+    if accrual_starts_on is None:
+        accrual_starts_on = opened_on
     if payout_schedule_kind == DepositTerm.PayoutScheduleKind.MONTHLY:
-        unadjusted_payout_dates = monthly_payout_dates(opened_on, matures_on)
+        unadjusted_payout_dates = monthly_payout_dates(
+            accrual_starts_on,
+            matures_on,
+        )
     elif payout_schedule_kind == DepositTerm.PayoutScheduleKind.CUSTOM:
         unadjusted_payout_dates = sorted(custom_payout_dates)
         if not unadjusted_payout_dates or unadjusted_payout_dates[-1] != (
@@ -415,7 +431,7 @@ def build_forecast(
         unadjusted_payout_dates = [matures_on]
 
     lines = []
-    period_start = opened_on
+    period_start = accrual_starts_on
     for unadjusted_payout_on in unadjusted_payout_dates:
         period_end = unadjusted_payout_on
         amount, is_rate_undefined = compute_accrued_interest(
@@ -438,7 +454,11 @@ def build_forecast(
                 payout_on=payout_on,
                 amount=Decimal(0)
                 if is_rate_undefined
-                else round_to_money(amount),
+                else round_to_money(
+                    amount,
+                    precision=money_precision,
+                    rounding=rounding_rule,
+                ),
                 period_starts_on=period_start,
                 period_ends_on=period_end,
                 is_rate_undefined=is_rate_undefined,

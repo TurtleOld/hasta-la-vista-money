@@ -298,6 +298,40 @@ class RoundToMoneyTests(SimpleTestCase):
             with self.subTest(case=case):
                 self.assertEqual(round_to_money(case.raw), case.expected)
 
+    def test_currency_precision_rounding(self) -> None:
+        cases = (
+            (
+                Decimal('0.01'),
+                Decimal('100.555'),
+                Decimal('100.56'),
+                'RUB-like precision (0.01)',
+            ),
+            (
+                Decimal(1),
+                Decimal('100.50'),
+                Decimal(101),
+                'JPY-like precision (1)',
+            ),
+            (
+                Decimal('0.001'),
+                Decimal('100.5555'),
+                Decimal('100.556'),
+                'BHD-like precision (0.001)',
+            ),
+        )
+        for precision, raw, expected, label in cases:
+            with self.subTest(label=label):
+                result = round_to_money(raw, precision=precision)
+                self.assertEqual(result, expected)
+
+    def test_round_to_money_respects_rounding_rule(self) -> None:
+        result = round_to_money(
+            Decimal('100.5'),
+            precision=Decimal(1),
+            rounding='ROUND_HALF_EVEN',
+        )
+        self.assertEqual(result, Decimal(100))
+
 
 class RollToBusinessDayTests(SimpleTestCase):
     def test_no_roll_convention_never_moves_the_date(self) -> None:
@@ -504,3 +538,77 @@ class BuildForecastTests(SimpleTestCase):
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0].payout_on, date(2026, 1, 5))
         self.assertTrue(lines[0].is_date_tentative)
+
+    def test_accrual_starts_on_differs_from_opened_on(self) -> None:
+        lines = build_forecast(
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 12, 31),
+            principal=Decimal(100000),
+            rate_segments=[
+                RateSegment(date(2026, 1, 1), date(2026, 12, 31), Decimal(12)),
+            ],
+            day_count_convention=DepositTerm.DayCountConvention.ACTUAL_365,
+            accrual_start_included=True,
+            accrual_end_included=False,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind.MATURITY,
+            custom_payout_dates=[],
+            business_day_convention=DepositTerm.BusinessDayConvention.NONE,
+            calendar=WeekendOnlyCalendar(),
+            accrual_starts_on=date(2026, 2, 1),
+        )
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].period_starts_on, date(2026, 2, 1))
+
+    def test_accrual_starts_on_none_falls_back_to_opened_on(self) -> None:
+        lines = build_forecast(
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 12, 31),
+            principal=Decimal(100000),
+            rate_segments=[
+                RateSegment(date(2026, 1, 1), date(2026, 12, 31), Decimal(12)),
+            ],
+            day_count_convention=DepositTerm.DayCountConvention.ACTUAL_365,
+            accrual_start_included=True,
+            accrual_end_included=False,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind.MATURITY,
+            custom_payout_dates=[],
+            business_day_convention=DepositTerm.BusinessDayConvention.NONE,
+            calendar=WeekendOnlyCalendar(),
+            accrual_starts_on=None,
+        )
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].period_starts_on, date(2026, 1, 1))
+
+    def test_accrual_starts_on_later_reduces_interest(self) -> None:
+        full_lines = build_forecast(
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 12, 31),
+            principal=Decimal(100000),
+            rate_segments=[
+                RateSegment(date(2026, 1, 1), date(2026, 12, 31), Decimal(12)),
+            ],
+            day_count_convention=DepositTerm.DayCountConvention.ACTUAL_365,
+            accrual_start_included=True,
+            accrual_end_included=False,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind.MATURITY,
+            custom_payout_dates=[],
+            business_day_convention=DepositTerm.BusinessDayConvention.NONE,
+            calendar=WeekendOnlyCalendar(),
+        )
+        delayed_lines = build_forecast(
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 12, 31),
+            principal=Decimal(100000),
+            rate_segments=[
+                RateSegment(date(2026, 1, 1), date(2026, 12, 31), Decimal(12)),
+            ],
+            day_count_convention=DepositTerm.DayCountConvention.ACTUAL_365,
+            accrual_start_included=True,
+            accrual_end_included=False,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind.MATURITY,
+            custom_payout_dates=[],
+            business_day_convention=DepositTerm.BusinessDayConvention.NONE,
+            calendar=WeekendOnlyCalendar(),
+            accrual_starts_on=date(2026, 6, 1),
+        )
+        self.assertGreater(full_lines[0].amount, delayed_lines[0].amount)

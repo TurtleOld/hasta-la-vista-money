@@ -159,6 +159,18 @@ class DepositRepository:
         term.save(update_fields=['is_current'])
         return term
 
+    def get_rate_periods_for_update(
+        self,
+        term_id: int,
+    ) -> list[DepositRatePeriod]:
+        return list(
+            DepositRatePeriod.objects.select_for_update()
+            .filter(
+                term_id=term_id,
+            )
+            .order_by('starts_on'),
+        )
+
     def trim_rate_period_end(
         self,
         period_id: int,
