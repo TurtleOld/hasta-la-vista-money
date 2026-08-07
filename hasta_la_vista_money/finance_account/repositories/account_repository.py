@@ -56,8 +56,16 @@ class AccountRepository:
         self,
         account_ids: set[int],
     ) -> dict[int, Account]:
-        accounts = Account.objects.select_for_update().filter(
-            pk__in=account_ids,
+        """Lock accounts for update in a stable order.
+
+        Ordering by pk before locking guarantees that concurrent calls
+        with differently-ordered `account_ids` acquire row locks in the
+        same sequence, avoiding deadlocks.
+        """
+        accounts = (
+            Account.objects.select_for_update()
+            .filter(pk__in=account_ids)
+            .order_by('pk')
         )
         return {account.pk: account for account in accounts}
 
