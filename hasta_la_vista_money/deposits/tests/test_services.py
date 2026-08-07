@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connections
 from django.db.models import Sum
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, TransactionTestCase
@@ -48,6 +49,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     Bank,
     TransferMoneyLog,
+)
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
 )
 from hasta_la_vista_money.reports.services.aggregation import budget_charts
 from hasta_la_vista_money.transactions.models import Transaction
@@ -4154,6 +4158,11 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
         if failures < 1:
             self.fail('Expected at least one failure due to contention.')
 
+        failing_errors = [error for error in errors if error is not None]
+        self.assertTrue(
+            all(isinstance(error, ValidationError) for error in failing_errors),
+        )
+
         term.refresh_from_db()
         periods = list(term.rate_periods.order_by('starts_on'))
         for i in range(len(periods) - 1):
@@ -4163,3 +4172,429 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
                     f'{periods[i].starts_on}–{periods[i].ends_on} and '
                     f'{periods[i + 1].starts_on}–{periods[i + 1].ends_on}',
                 )
+
+
+class ConcurrentTopUpTests(TransactionTestCase):
+    """Two simultaneous top-ups must both be applied — no lost updates."""
+
+    def test_concurrent_top_ups_sum_without_lost_updates(self) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        source = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('10000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Конкурентное пополнение',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def make_top_up(index: int) -> None:
+            svc = ApplicationContainer().deposits.deposit_service()
+            try:
+                barrier.wait(timeout=3)
+                svc.top_up_deposit_principal(
+                    TopUpDepositCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        source_account_id=source.pk,
+                        amount=Decimal('100.00'),
+                        effective_on=date(2026, 6, 1),
+                        external_id=f'concurrent-top-up-{index}',
+                    ),
+                )
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        t1 = Thread(target=make_top_up, args=(0,))
+        t2 = Thread(target=make_top_up, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        for error in errors:
+            if error is not None:
+                self.fail(f'Concurrent top-up failed unexpectedly: {error}')
+
+        deposit.account.refresh_from_db()
+        source.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('700.00'))
+        self.assertEqual(source.balance, Decimal('9800.00'))
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.TOP_UP,
+            ).count(),
+            2,
+        )
+
+
+class ConcurrentWithdrawalTests(TransactionTestCase):
+    """Only one of two concurrent withdrawals may pass the minimum-balance
+    check when both would drive the balance below it."""
+
+    def test_concurrent_withdrawals_only_one_passes_minimum_balance(
+        self,
+    ) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Получатель',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        deposit = _withdrawal_test_deposit(
+            user,
+            name='Вклад с конкурентным снятием',
+            minimum_balance=Decimal('400.00'),
+        )
+
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def withdraw(index: int) -> None:
+            svc = ApplicationContainer().deposits.deposit_service()
+            try:
+                barrier.wait(timeout=3)
+                svc.withdraw_deposit_principal(
+                    WithdrawDepositCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        destination_account_id=destination.pk,
+                        amount=Decimal('80.00'),
+                        effective_on=date(2026, 6, 1),
+                        external_id=f'concurrent-withdrawal-{index}',
+                    ),
+                )
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        t1 = Thread(target=withdraw, args=(0,))
+        t2 = Thread(target=withdraw, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        successes = sum(1 for e in errors if e is None)
+        failures = [e for e in errors if e is not None]
+
+        if successes != 1:
+            self.fail(
+                'Exactly one concurrent withdrawal must pass the '
+                f'minimum-balance check, got {successes} successes, '
+                f'errors: {errors}',
+            )
+        for error in failures:
+            if not isinstance(error, ValidationError):
+                self.fail(
+                    'Rejected withdrawal must fail with ValidationError, '
+                    f'got: {error!r}',
+                )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('420.00'))
+        self.assertGreaterEqual(
+            deposit.account.balance,
+            Decimal('400.00'),
+        )
+
+
+class ConcurrentInterestConfirmationTests(TransactionTestCase):
+    """Two concurrent confirmations of the same payout (same external_id)
+    must never create a duplicate capitalization event."""
+
+    def test_concurrent_duplicate_confirmation_creates_single_event(
+        self,
+    ) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с конкурентной выплатой',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def confirm(index: int) -> None:
+            svc = ApplicationContainer().deposits.deposit_service()
+            try:
+                barrier.wait(timeout=3)
+                svc.confirm_interest_payment(
+                    CapitalizeInterestCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        gross=Decimal('100.00'),
+                        withholding=Decimal('10.00'),
+                        net=Decimal('90.00'),
+                        posting_on=date(2026, 7, 1),
+                        value_on=date(2026, 7, 1),
+                        reason='Конкурентная выплата.',
+                        external_id='concurrent-payout-001',
+                    ),
+                )
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        t1 = Thread(target=confirm, args=(0,))
+        t2 = Thread(target=confirm, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        for error in errors:
+            if error is not None and not isinstance(
+                error,
+                ValidationError | IntegrityError,
+            ):
+                self.fail(
+                    'Duplicate confirmation must fail idempotently or '
+                    f'with a uniqueness violation, got: {error!r}',
+                )
+
+        self.assertEqual(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=deposit,
+                external_id='concurrent-payout-001',
+            ).count(),
+            1,
+        )
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('590.00'))
+
+
+class ConcurrentClosureTests(TransactionTestCase):
+    """Only one of two concurrent closure requests for the same matured
+    deposit may succeed; the other must fail without double-crediting the
+    destination account."""
+
+    def test_concurrent_closure_only_one_succeeds(self) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад к конкурентному закрытию',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=timezone.localdate() - timedelta(days=365),
+                matures_on=timezone.localdate(),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        destination = Account.objects.create(
+            user=user,
+            name_account='Счёт возврата',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+        # Two conflicting closure requests for the same matured deposit:
+        # different actual net figures, as would happen if two operators
+        # submitted the same closure with mismatched bank confirmations.
+        nets = (Decimal('10440.00'), Decimal('10500.00'))
+
+        def close(index: int) -> None:
+            svc = ApplicationContainer().deposits.deposit_service()
+            try:
+                barrier.wait(timeout=3)
+                svc.close_matured_deposit(
+                    CloseMaturedDepositCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        destination=(
+                            DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account_id=destination.pk,
+                        principal=Decimal('100000.00'),
+                        gross=Decimal('12000.00'),
+                        withholding=Decimal('1560.00'),
+                        net=nets[index],
+                        posting_on=timezone.localdate(),
+                        value_on=timezone.localdate(),
+                    ),
+                )
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        t1 = Thread(target=close, args=(0,))
+        t2 = Thread(target=close, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        successes = sum(1 for e in errors if e is None)
+        if successes != 1:
+            self.fail(
+                'Exactly one concurrent closure must succeed, got '
+                f'{successes} successes, errors: {errors}',
+            )
+        for error in errors:
+            if error is not None and not isinstance(error, ValidationError):
+                self.fail(
+                    'Rejected closure must fail with ValidationError, '
+                    f'got: {error!r}',
+                )
+
+        destination.refresh_from_db()
+        self.assertIn(
+            destination.balance,
+            (Decimal('111440.00'), Decimal('111500.00')),
+        )
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            ).count(),
+            1,
+        )
+
+
+class LockOrderingDeadlockTests(TransactionTestCase):
+    """Concurrent calls that touch the same two accounts in opposite
+    argument order must not deadlock, because BalanceService always
+    locks affected accounts in ascending pk order."""
+
+    def test_reversed_account_order_does_not_deadlock(self) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        account_a = Account.objects.create(
+            user=user,
+            name_account='Счёт A',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        account_b = Account.objects.create(
+            user=user,
+            name_account='Счёт B',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        assert account_a.pk < account_b.pk
+
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def transfer(deltas: dict[int, Decimal], index: int) -> None:
+            try:
+                barrier.wait(timeout=3)
+                balance_service = BalanceService()
+                balance_service.apply_account_deltas(deltas)
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        t1 = Thread(
+            target=transfer,
+            args=(
+                {
+                    account_a.pk: Decimal('-10.00'),
+                    account_b.pk: Decimal('10.00'),
+                },
+                0,
+            ),
+        )
+        t2 = Thread(
+            target=transfer,
+            args=(
+                {
+                    account_b.pk: Decimal('-5.00'),
+                    account_a.pk: Decimal('5.00'),
+                },
+                1,
+            ),
+        )
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        for error in errors:
+            if error is not None:
+                self.fail(f'Unexpected deadlock or error: {error}')
+
+        account_a.refresh_from_db()
+        account_b.refresh_from_db()
+        self.assertEqual(account_a.balance, Decimal('995.00'))
+        self.assertEqual(account_b.balance, Decimal('1005.00'))

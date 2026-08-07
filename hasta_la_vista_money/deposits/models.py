@@ -386,6 +386,12 @@ class DepositRatePeriod(models.Model):
 
     class Meta:
         ordering: ClassVar[list[str]] = ['starts_on']
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=['term', 'starts_on', 'ends_on'],
+                name='deposit_rate_period_range_idx',
+            ),
+        ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=Q(ends_on__gte=models.F('starts_on')),
