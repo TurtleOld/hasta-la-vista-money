@@ -4158,6 +4158,11 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
         if failures < 1:
             self.fail('Expected at least one failure due to contention.')
 
+        failing_errors = [error for error in errors if error is not None]
+        self.assertTrue(
+            all(isinstance(error, ValidationError) for error in failing_errors),
+        )
+
         term.refresh_from_db()
         periods = list(term.rate_periods.order_by('starts_on'))
         for i in range(len(periods) - 1):
