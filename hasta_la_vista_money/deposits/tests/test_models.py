@@ -218,3 +218,89 @@ class DepositTermLifecycleTests(TestCase):
         deposit.account.refresh_from_db()
         self.assertEqual(deposit.account.balance, Decimal('10000.00'))
         self.assertFalse(deposit.capitalization_events.exists())
+
+    def test_accrual_date_falls_back_to_opened_on_when_null(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+            interest_accrual_starts_on=None,
+        )
+        self.assertEqual(term.accrual_date, term.opened_on)
+
+    def test_accrual_date_differs_from_opened_on_when_set(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        accrual_start = today - timedelta(days=5)
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+            interest_accrual_starts_on=accrual_start,
+        )
+        self.assertNotEqual(term.accrual_date, term.opened_on)
+        self.assertEqual(term.accrual_date, accrual_start)
+
+
+class DepositTermMoneyPrecisionTests(TestCase):
+    def test_rub_has_kopek_precision(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        deposit.account.currency = 'RUB'
+        deposit.account.save()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+        )
+        self.assertEqual(term.money_precision, Decimal('0.01'))
+
+    def test_jpy_has_integer_precision(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        deposit.account.currency = 'JPY'
+        deposit.account.save()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+        )
+        self.assertEqual(term.money_precision, Decimal(1))
+
+    def test_bhd_has_milli_precision(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        deposit.account.currency = 'BHD'
+        deposit.account.save()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+        )
+        self.assertEqual(term.money_precision, Decimal('0.001'))
+
+    def test_unknown_currency_defaults_to_kopek_precision(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        deposit.account.currency = 'XYZ'
+        deposit.account.save()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=100),
+            is_current=True,
+        )
+        self.assertEqual(term.money_precision, Decimal('0.01'))

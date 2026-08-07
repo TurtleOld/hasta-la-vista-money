@@ -717,8 +717,9 @@ class DepositRecalculateForecastViewSmokeTests(TestCase):
         self.assertRedirects(recalculate_response, deposit.get_absolute_url())
         forecasts = DepositInterestForecast.objects.filter(term=term)
         self.assertEqual(forecasts.count(), 2)
-        payout_dates = sorted(line.payout_on for line in forecasts)
-        self.assertEqual(payout_dates[-1], matures_on)
+        self.assertTrue(
+            any(line.period_ends_on == matures_on for line in forecasts),
+        )
 
 
 class CapitalizeInterestSmokeTests(TestCase):

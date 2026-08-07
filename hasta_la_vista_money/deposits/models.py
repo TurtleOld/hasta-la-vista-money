@@ -1,6 +1,9 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 
+if TYPE_CHECKING:
+    from datetime import date
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -10,6 +13,9 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.currencies import (
+    get_currency_precision,
+)
 from hasta_la_vista_money.finance_account.models import Account, Bank
 
 
@@ -100,6 +106,14 @@ class DepositTerm(models.Model):
         related_name='terms',
     )
     opened_on = models.DateField(verbose_name=_('Дата открытия'))
+    interest_accrual_starts_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата начала начисления процентов'),
+        help_text=_(
+            'Если не указана, начисление начинается с даты открытия.',
+        ),
+    )
     matures_on = models.DateField(verbose_name=_('Дата окончания'))
     is_current = models.BooleanField(default=True)
     rate_kind = models.CharField(
@@ -139,6 +153,15 @@ class DepositTerm(models.Model):
         choices=BusinessDayConvention.choices,
         default=BusinessDayConvention.NONE,
         verbose_name=_('Перенос выплаты на рабочий день'),
+    )
+    rounding_rule = models.CharField(
+        max_length=20,
+        default='ROUND_HALF_UP',
+        verbose_name=_('Правило денежного округления'),
+        help_text=_(
+            'Константа округления из модуля decimal '
+            '(ROUND_HALF_UP, ROUND_HALF_EVEN и т.д.).',
+        ),
     )
     withdrawal_allowed = models.BooleanField(
         default=False,
@@ -249,6 +272,23 @@ class DepositTerm(models.Model):
         ]
 
     @property
+    def accrual_date(self) -> 'date':
+        """Date from which interest accrual begins.
+
+        Falls back to opened_on when interest_accrual_starts_on is not set.
+        """
+        return self.interest_accrual_starts_on or self.opened_on
+
+    @property
+    def money_precision(self) -> Decimal:
+        """Smallest currency unit for the deposit account's currency.
+
+        Derived from the account's currency code, e.g. 0.01 for RUB/USD,
+        1 for JPY/KRW, 0.001 for BHD/KWD/OMR.
+        """
+        return get_currency_precision(self.deposit.account.currency)
+
+    @property
     def state(self) -> str:
         if self.closed_on is not None:
             return self.State.CLOSED
@@ -273,10 +313,11 @@ class DepositTerm(models.Model):
         if rate is not None:
             return rate
         if self.rate_kind == self.RateKind.FIXED:
-            return self.rate_periods.get(
-                starts_on=self.opened_on,
+            accrual = self.accrual_date
+            return self.rate_periods.filter(
+                starts_on=accrual,
                 ends_on=self.matures_on,
-            )
+            ).first()
         return None
 
     def has_defined_current_rate(self) -> bool:

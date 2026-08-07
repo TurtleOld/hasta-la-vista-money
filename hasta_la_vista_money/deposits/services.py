@@ -310,6 +310,44 @@ class DepositService:
         )
         return deposit
 
+    @staticmethod
+    def _validate_no_rate_period_overlap(
+        existing_periods: list[DepositRatePeriod],
+        new_starts_on: 'date',
+        new_ends_on: 'date',
+    ) -> None:
+        """Ensure a new rate period does not overlap any existing one.
+
+        Two periods [a, b] and [c, d] overlap when a <= d and c <= b,
+        i.e. neither is completely before the other.
+
+        Args:
+            existing_periods: Already-persisted rate periods for the term.
+            new_starts_on: Start date of the proposed new period.
+            new_ends_on: End date of the proposed new period.
+
+        Raises:
+            ValidationError: If any existing period overlaps with the
+                proposed interval.
+        """
+        for period in existing_periods:
+            if (
+                period.starts_on <= new_ends_on
+                and new_starts_on <= period.ends_on
+            ):
+                raise ValidationError(
+                    _(
+                        'Новый период ставки ({new_starts} – {new_ends}) '
+                        'пересекается с существующим периодом '
+                        '({existing_starts} – {existing_ends}).',
+                    ).format(
+                        new_starts=new_starts_on,
+                        new_ends=new_ends_on,
+                        existing_starts=period.starts_on,
+                        existing_ends=period.ends_on,
+                    ),
+                )
+
     def _validate_agreement(
         self,
         *,
@@ -411,6 +449,9 @@ class DepositService:
             'business_day_convention': forecast_terms.business_day_convention,
             'interest_payout_destination': (
                 forecast_terms.interest_payout_destination
+            ),
+            'interest_accrual_starts_on': (
+                forecast_terms.interest_accrual_starts_on
             ),
         }
 
@@ -640,7 +681,11 @@ class DepositService:
                 _('Дата начала периода должна попадать в срок вклада.'),
             )
 
-        last_period = term.rate_periods.order_by('-starts_on').first()
+        existing_periods = self.deposit_repository.get_rate_periods_for_update(
+            term.pk,
+        )
+
+        last_period = existing_periods[-1] if existing_periods else None
         if (
             last_period is not None
             and command.starts_on <= last_period.starts_on
@@ -651,6 +696,17 @@ class DepositService:
                     'начала последнего периода.',
                 ),
             )
+
+        periods_to_check = (
+            existing_periods[:-1]
+            if last_period is not None
+            else existing_periods
+        )
+        self._validate_no_rate_period_overlap(
+            periods_to_check,
+            command.starts_on,
+            term.matures_on,
+        )
 
         if last_period is not None:
             self.deposit_repository.trim_rate_period_end(
@@ -1299,7 +1355,10 @@ class DepositService:
             if existing is not None:
                 return existing
 
-        self._validate_capitalization_amounts(command)
+        self._validate_capitalization_amounts(
+            command,
+            money_precision=deposit.current_term.money_precision,
+        )
         forecast = self._resolve_capitalization_forecast(
             deposit,
             command,
@@ -1458,8 +1517,11 @@ class DepositService:
             raise ValidationError(
                 _('Возвращаемое тело должно совпадать с остатком вклада.'),
             )
-        self._validate_closure_interest_amounts(command)
-        self._validate_early_closure_adjustment(command)
+        self._validate_closure_interest_amounts(
+            command,
+            money_precision=term.money_precision,
+        )
+        self._validate_early_closure_adjustment(command, term)
 
         account_deltas = {deposit.account.pk: -command.principal}
         if destination_account is not None:
@@ -1548,14 +1610,18 @@ class DepositService:
     @staticmethod
     def _validate_early_closure_adjustment(
         command: CloseDepositEarlyCommand,
+        term: DepositTerm,
     ) -> None:
         if command.prior_interest_adjustment != (
             command.prior_interest_adjustment.quantize(
-                constants.MIN_MONEY_AMOUNT,
+                term.money_precision,
             )
         ):
             raise ValidationError(
-                _('Корректировка должна иметь точность до копеек.'),
+                _(
+                    'Корректировка должна быть кратна минимальной '
+                    'единице валюты счёта.',
+                ),
             )
 
     @transaction.atomic
@@ -1597,7 +1663,10 @@ class DepositService:
                     _('Счёт назначения находится в архиве.'),
                 )
         self._validate_closure_lifecycle(deposit, term, command)
-        self._validate_closure_interest_amounts(command)
+        self._validate_closure_interest_amounts(
+            command,
+            money_precision=term.money_precision,
+        )
         forecast = self._resolve_closure_forecast(deposit, command.forecast_id)
 
         account_deltas = {deposit.account.pk: -command.principal}
@@ -1773,12 +1842,15 @@ class DepositService:
     def _validate_closure_interest_amounts(
         self,
         command: CloseMaturedDepositCommand | CloseDepositEarlyCommand,
+        *,
+        money_precision: Decimal = constants.MIN_MONEY_AMOUNT,
     ) -> None:
         self._validate_interest_amounts(
             command.gross,
             command.withholding,
             command.net,
             allow_zero_net=True,
+            money_precision=money_precision,
         )
 
     def _resolve_closure_forecast(
@@ -1857,12 +1929,15 @@ class DepositService:
     def _validate_capitalization_amounts(
         self,
         command: CapitalizeInterestCommand,
+        *,
+        money_precision: Decimal = constants.MIN_MONEY_AMOUNT,
     ) -> None:
         self._validate_interest_amounts(
             command.gross,
             command.withholding,
             command.net,
             allow_zero_net=False,
+            money_precision=money_precision,
         )
 
     @staticmethod
@@ -1872,6 +1947,7 @@ class DepositService:
         net: Decimal,
         *,
         allow_zero_net: bool,
+        money_precision: Decimal = constants.MIN_MONEY_AMOUNT,
     ) -> None:
         amounts = (gross, withholding, net)
         if min(amounts) < 0:
@@ -1881,11 +1957,13 @@ class DepositService:
         if not allow_zero_net and net == 0:
             raise ValidationError(_('Чистый доход должен быть больше нуля.'))
         if any(
-            amount != amount.quantize(constants.MIN_MONEY_AMOUNT)
-            for amount in amounts
+            amount != amount.quantize(money_precision) for amount in amounts
         ):
             raise ValidationError(
-                _('Суммы процентов должны иметь точность до копеек.'),
+                _(
+                    'Суммы процентов должны быть кратны минимальной '
+                    'единице валюты счёта.',
+                ),
             )
         if gross - withholding != net:
             raise ValidationError(
@@ -2100,6 +2178,9 @@ class DepositService:
             ),
             calendar=self.calendar,
             principal_changes=principal_changes,
+            money_precision=term.money_precision,
+            rounding_rule=term.rounding_rule,
+            accrual_starts_on=term.accrual_date,
         )
         if effective_on is None:
             self.deposit_repository.delete_unconfirmed_forecasts(term.pk)

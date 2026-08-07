@@ -1,9 +1,11 @@
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
+from threading import Barrier, Thread
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
@@ -1793,6 +1795,48 @@ class AddFloatingRatePeriodServiceTests(TestCase):
         self.assertEqual(
             DepositInterestForecast.objects.filter(term=term).count(),
             2,
+        )
+
+    def test_overlap_validation_rejects_direct_overlap(self) -> None:
+        """_validate_no_rate_period_overlap rejects a new period when it
+        overlaps with an existing (non-last) period."""
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        first_period = term.rate_periods.first()
+        if first_period is None:
+            self.fail('Term must have an initial rate period.')
+
+        overlapping_start = date(2026, 3, 1)
+        overlapping_end = date(2026, 5, 1)
+        with self.assertRaises(ValidationError) as ctx:
+            service._validate_no_rate_period_overlap(
+                [first_period],
+                overlapping_start,
+                overlapping_end,
+            )
+        self.assertIn('пересекается', str(ctx.exception.message))
+
+    def test_overlap_validation_allows_non_overlapping(self) -> None:
+        """_validate_no_rate_period_overlap accepts a period that does
+        not overlap with any existing one."""
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        past_period = term.rate_periods.first()
+        if past_period is None:
+            self.fail('Term must have an initial rate period.')
+        past_period.ends_on = date(2026, 1, 31)
+        past_period.save()
+
+        service._validate_no_rate_period_overlap(
+            [past_period],
+            date(2026, 2, 1),
+            date(2026, 12, 31),
         )
 
 
@@ -4019,3 +4063,103 @@ class AuditEventTests(TestCase):
             audit.event_type,
             DepositAuditEvent.Type.EXCLUSION,
         )
+
+
+class ConcurrentRatePeriodTests(TransactionTestCase):
+    """Ensure concurrent floating-rate period additions cannot produce
+    overlapping periods for the same term.
+
+    Requires a database backend that supports row-level locking
+    (PostgreSQL). Skipped on SQLite because it uses table-level locks
+    that prevent concurrent access entirely.
+    """
+
+    def test_concurrent_overlapping_periods_one_succeeds_one_fails(
+        self,
+    ) -> None:
+        engine = str(settings.DATABASES['default']['ENGINE'])
+        if 'sqlite3' in engine:
+            self.skipTest(
+                'SQLite uses table-level locking – '
+                'concurrent select_for_update is not supported.',
+            )
+
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Конкурентный вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('50000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FLOATING,
+            ),
+        )
+        term = deposit.current_term
+
+        errors: list[Exception | None] = [None, None]
+        barrier = Barrier(2, timeout=5)
+
+        def add_period(
+            starts_on: date,
+            rate: Decimal,
+            index: int,
+        ) -> None:
+            svc = ApplicationContainer().deposits.deposit_service()
+            try:
+                barrier.wait(timeout=3)
+                svc.add_floating_rate_period(
+                    AddFloatingRatePeriodCommand(
+                        user=user,
+                        term_id=term.pk,
+                        starts_on=starts_on,
+                        annual_rate=rate,
+                        note=f'конкурентная ставка {index}',
+                    ),
+                )
+            except Exception as exc:
+                errors[index] = exc
+
+        t1 = Thread(
+            target=add_period,
+            args=(date(2026, 4, 1), Decimal('12.00'), 0),
+        )
+        t2 = Thread(
+            target=add_period,
+            args=(date(2026, 4, 15), Decimal('13.00'), 1),
+        )
+
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        successes = sum(1 for e in errors if e is None)
+        failures = sum(1 for e in errors if e is not None)
+
+        if successes < 1:
+            self.fail(
+                'At least one concurrent addition must succeed, '
+                f'got errors: {errors}',
+            )
+        if successes > 1:
+            self.fail(
+                'Both concurrent additions succeeded but they '
+                'may produce overlapping periods.',
+            )
+        if failures < 1:
+            self.fail('Expected at least one failure due to contention.')
+
+        term.refresh_from_db()
+        periods = list(term.rate_periods.order_by('starts_on'))
+        for i in range(len(periods) - 1):
+            if periods[i].ends_on >= periods[i + 1].starts_on:
+                self.fail(
+                    f'Overlapping periods detected: '
+                    f'{periods[i].starts_on}–{periods[i].ends_on} and '
+                    f'{periods[i + 1].starts_on}–{periods[i + 1].ends_on}',
+                )
