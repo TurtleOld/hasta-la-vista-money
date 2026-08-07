@@ -1,5 +1,37 @@
 # История изменений
 
+## [2.12.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.11.0...v2.12.0) (2026-08-07)
+
+
+### Features
+
+* **deposits:** add interest accrual start date, flexible rounding, and rate period overlap protection ([#966](https://github.com/TurtleOld/hasta-la-vista-money/issues/966)) ([e0cf1b8](https://github.com/TurtleOld/hasta-la-vista-money/commit/e0cf1b8fd30c95434a4a3e64c5c54730425d285f))
+* **deposits:** add liquid principal withdrawals ([#944](https://github.com/TurtleOld/hasta-la-vista-money/issues/944)) ([c9a67bb](https://github.com/TurtleOld/hasta-la-vista-money/commit/c9a67bbccd3d84e1900779f47c86af30cb0b27a6))
+* **deposits:** add reconciliation, external idempotency, and audit trail ([#957](https://github.com/TurtleOld/hasta-la-vista-money/issues/957)) ([700f490](https://github.com/TurtleOld/hasta-la-vista-money/commit/700f490b280aa250a32696b1f9e42d8bb1f8a99d))
+* **deposits:** calculate expected interest payments ([#943](https://github.com/TurtleOld/hasta-la-vista-money/issues/943)) ([5521f1e](https://github.com/TurtleOld/hasta-la-vista-money/commit/5521f1ec9dc8f9cf15a63a91ebdc3751e964c45b))
+* **deposits:** support floating rate for deposits ([#941](https://github.com/TurtleOld/hasta-la-vista-money/issues/941)) ([d24778f](https://github.com/TurtleOld/hasta-la-vista-money/commit/d24778f54dbd3af70dad0a4f9ec83d7cd53e7193))
+* **deposits:** support term deposit top-ups ([#945](https://github.com/TurtleOld/hasta-la-vista-money/issues/945)) ([9f0f496](https://github.com/TurtleOld/hasta-la-vista-money/commit/9f0f496d803f323cf328176184d842fad1ad4261))
+* **finance_account:** add basic term deposits ([#938](https://github.com/TurtleOld/hasta-la-vista-money/issues/938)) ([b190946](https://github.com/TurtleOld/hasta-la-vista-money/commit/b19094688b0d26643811a83dc78412a268f33f31))
+* **finance_account:** capitalize actual interest payments ([#946](https://github.com/TurtleOld/hasta-la-vista-money/issues/946)) ([cd39f3a](https://github.com/TurtleOld/hasta-la-vista-money/commit/cd39f3a2f5e98eb9e96396695b3ba52a1e8824b3))
+* **finance_account:** close deposits at planned maturity ([#953](https://github.com/TurtleOld/hasta-la-vista-money/issues/953)) ([baa4deb](https://github.com/TurtleOld/hasta-la-vista-money/commit/baa4debcf365ac4260aa8348fa1e626e81f6425e))
+* **finance_account:** complete deposit overview metrics ([#958](https://github.com/TurtleOld/hasta-la-vista-money/issues/958)) ([35ac456](https://github.com/TurtleOld/hasta-la-vista-money/commit/35ac45606d147a46fefc9805fd5a004bfc8e8163))
+* **finance_account:** convert production account to deposit ([#940](https://github.com/TurtleOld/hasta-la-vista-money/issues/940)) ([d51fb16](https://github.com/TurtleOld/hasta-la-vista-money/commit/d51fb16ac549b1387536bdfa0b79f25d450cdbc2))
+* **finance_account:** implement bank directory for accounts and deposits ([#947](https://github.com/TurtleOld/hasta-la-vista-money/issues/947)) ([2384c1a](https://github.com/TurtleOld/hasta-la-vista-money/commit/2384c1a76763b7e100277bb66275fe3c6dd9ceb7))
+* **finance_account:** record deposit opening principal ([#939](https://github.com/TurtleOld/hasta-la-vista-money/issues/939)) ([631c0d8](https://github.com/TurtleOld/hasta-la-vista-money/commit/631c0d8a32d1d3850dded90083e7233a75a810df))
+* **finance_account:** redesign finances and improve search ([#920](https://github.com/TurtleOld/hasta-la-vista-money/issues/920)) ([b4d91ce](https://github.com/TurtleOld/hasta-la-vista-money/commit/b4d91ce1a469881074c49bf31d6f757e828ecb0e))
+* **finance_account:** renew matured deposit terms ([#954](https://github.com/TurtleOld/hasta-la-vista-money/issues/954)) ([c65d935](https://github.com/TurtleOld/hasta-la-vista-money/commit/c65d935d52319e18766e52720893efa7584fded6))
+* **finance_account:** reverse confirmed deposit events ([#956](https://github.com/TurtleOld/hasta-la-vista-money/issues/956)) ([a981d56](https://github.com/TurtleOld/hasta-la-vista-money/commit/a981d569f03fb75f9d8b19a6d2456c542e4c7614))
+* **finance_account:** support early deposit closure ([#955](https://github.com/TurtleOld/hasta-la-vista-money/issues/955)) ([a59a7e2](https://github.com/TurtleOld/hasta-la-vista-money/commit/a59a7e2857609e2a20a1371060497b52d4a78a80))
+* **finance_account:** support interest payout destinations ([#952](https://github.com/TurtleOld/hasta-la-vista-money/issues/952)) ([93dd055](https://github.com/TurtleOld/hasta-la-vista-money/commit/93dd0559a29ba478faade1933877551f7942fafb))
+* **users:** add statement reconciliation history ([#918](https://github.com/TurtleOld/hasta-la-vista-money/issues/918)) ([4daa2db](https://github.com/TurtleOld/hasta-la-vista-money/commit/4daa2db64adc7b2cfbb2a9284540829dc0cde145))
+
+
+### Bug Fixes
+
+* **deposits:** allow exceptional withdrawal and recalculate forecast ([#965](https://github.com/TurtleOld/hasta-la-vista-money/issues/965)) ([d72b210](https://github.com/TurtleOld/hasta-la-vista-money/commit/d72b2101dfdd7773c89235eeb01363c7f660fe46))
+* **deposits:** fix form field rendering and deposit card styling ([#951](https://github.com/TurtleOld/hasta-la-vista-money/issues/951)) ([6302a6a](https://github.com/TurtleOld/hasta-la-vista-money/commit/6302a6a14def5372847a334e5d09cdeb74226965))
+* **finance_account:** block deposit account bypass in transaction, transfer and receipt workflows ([#964](https://github.com/TurtleOld/hasta-la-vista-money/issues/964)) ([d845bb5](https://github.com/TurtleOld/hasta-la-vista-money/commit/d845bb59c60ebb65d544cc06a5e191e91161b3f5))
+
 ## [2.11.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.10.1...v2.11.0) (2026-08-01)
 
 
