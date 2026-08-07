@@ -85,8 +85,17 @@ class DepositRepository:
         event_id: int,
         user: User,
     ) -> DepositPrincipalEvent:
+        """Lock only the principal event row itself.
+
+        `source_account`, `destination_account`, and `reversal_of` are
+        nullable FKs; locking through a LEFT OUTER JOIN on them is
+        rejected by PostgreSQL ("FOR UPDATE cannot be applied to the
+        nullable side of an outer join"), so `of=('self',)` restricts
+        the row lock to this table while `select_related` still avoids
+        extra queries for the joined data.
+        """
         return (
-            DepositPrincipalEvent.objects.select_for_update()
+            DepositPrincipalEvent.objects.select_for_update(of=('self',))
             .select_related(
                 'deposit__account',
                 'source_account',
@@ -102,7 +111,9 @@ class DepositRepository:
         user: User,
     ) -> DepositCapitalizationEvent:
         return (
-            DepositCapitalizationEvent.objects.select_for_update()
+            DepositCapitalizationEvent.objects.select_for_update(
+                of=('self',),
+            )
             .select_related(
                 'deposit__account',
                 'destination_account',
@@ -118,7 +129,7 @@ class DepositRepository:
         user: User,
     ) -> DepositRenewalEvent:
         return (
-            DepositRenewalEvent.objects.select_for_update()
+            DepositRenewalEvent.objects.select_for_update(of=('self',))
             .select_related(
                 'deposit__account',
                 'previous_term',
@@ -259,7 +270,13 @@ class DepositRepository:
     ) -> DepositCapitalizationEvent:
         if principal_event.posting_on is None:
             raise DepositCapitalizationEvent.DoesNotExist
-        return DepositCapitalizationEvent.objects.select_for_update().get(
+        # `reversal__isnull` filters through the reverse OneToOne to
+        # `reversal_of`, which PostgreSQL implements as a LEFT OUTER
+        # JOIN; FOR UPDATE cannot lock the nullable side of that join,
+        # so the row lock is restricted to this table with of=('self',).
+        return DepositCapitalizationEvent.objects.select_for_update(
+            of=('self',),
+        ).get(
             deposit=principal_event.deposit,
             is_final=True,
             posting_on=principal_event.posting_on,
