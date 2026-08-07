@@ -4403,7 +4403,7 @@ class ConcurrentInterestConfirmationTests(TransactionTestCase):
         for error in errors:
             if error is not None and not isinstance(
                 error,
-                (ValidationError, IntegrityError),
+                ValidationError | IntegrityError,
             ):
                 self.fail(
                     'Duplicate confirmation must fail idempotently or '
