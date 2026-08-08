@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.12.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.0...v2.12.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **users:** compare bank by code instead of Bank instance in payment schedule ([#968](https://github.com/TurtleOld/hasta-la-vista-money/issues/968)) ([21f329d](https://github.com/TurtleOld/hasta-la-vista-money/commit/21f329df550e7036d3d5cb51de5210c00de5abda))
+
 ## [2.12.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.11.0...v2.12.0) (2026-08-07)
 
 
