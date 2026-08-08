@@ -467,7 +467,7 @@ def _calculate_grace_period_end(
     Returns:
         Grace period end datetime.
     """
-    bank = getattr(card, 'bank', None)
+    bank = getattr(card.bank, 'code', None)
     if bank == 'SBERBANK':
         grace_end_date = purchase_start_date + relativedelta(
             months=constants.GRACE_PERIOD_MONTHS_SBERBANK,
@@ -593,7 +593,7 @@ def _build_single_card_month(
 
     final_debt = debt
     if (
-        getattr(card, 'bank', None) == 'RAIFFAISENBANK'
+        getattr(card.bank, 'code', None) == 'RAIFFAISENBANK'
         and debt > constants.ZERO
     ):
         schedule = account_service.calculate_raiffeisenbank_payment_schedule(
@@ -783,7 +783,7 @@ def _build_payment_schedule(
         if m['debt_for_month'] <= constants.ZERO:
             continue
         due = m['grace_end'].strftime('%d.%m.%Y')
-        if getattr(card, 'bank', None) == 'RAIFFAISENBANK':
+        if getattr(card.bank, 'code', None) == 'RAIFFAISENBANK':
             for h in history:
                 if h['month'] == m['month']:
                     due = h['grace_end']
