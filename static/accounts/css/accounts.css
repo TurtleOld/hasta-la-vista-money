@@ -153,23 +153,39 @@
   font-family: var(--font-family-mono);
 }
 
-.accounts-hero-debt {
-  margin-top: 0.625rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  flex-wrap: wrap;
+.accounts-hero-breakdown {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
 }
 
-.accounts-hero-debt-label {
+.accounts-hero-summary {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.accounts-hero-summary-label {
   color: var(--acc-muted);
 }
 
-.accounts-hero-debt-value {
+.accounts-hero-summary-value {
   font-family: var(--font-family-mono);
   font-weight: 500;
+  color: var(--acc-text);
+}
+
+.accounts-hero-summary-value-negative {
   color: var(--acc-negative);
+}
+
+.accounts-hero-summary-value .cur {
+  color: var(--acc-muted);
+  font-size: 0.85em;
+  font-weight: 400;
+  margin-left: 0.25rem;
 }
 
 /* ── Page header (title + actions) ──────────────────────────────── */
