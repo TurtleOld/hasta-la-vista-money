@@ -10,7 +10,11 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+    ACCOUNT_TYPE_DEPOSIT,
+)
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -71,6 +75,49 @@ class TestAccountView(TestCase):
         self.assertIn('transfer_money_log', response.context)
         self.assertIn('sum_all_accounts', response.context)
         self.assertIn('sum_all_accounts_in_group', response.context)
+        self.assertIn('credit_balances_in_group', response.context)
+        self.assertIn('deposit_balances_in_group', response.context)
+
+    def test_account_view_separates_summary_balances_by_account_type(
+        self,
+    ) -> None:
+        AccountFactory(
+            user=self.user,
+            type_account=constants.ACCOUNT_TYPE_DEBIT,
+            balance=Decimal('101.00'),
+        )
+        AccountFactory(
+            user=self.user,
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('202.00'),
+        )
+        Account.objects.create_deposit(
+            user=self.user,
+            name_account='Test deposit',
+            bank=Bank.objects.get(pk=1),
+            balance=Decimal('303.00'),
+            currency='RUB',
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('finance_account:list'))
+
+        account_service = response.wsgi_request.container.core.account_service()
+        accounts = Account.objects.by_user(self.user)
+        self.assertEqual(
+            response.context['sum_all_accounts_in_group'],
+            account_service.get_balances_by_currency(accounts.debit()),
+        )
+        self.assertEqual(
+            response.context['credit_balances_in_group'],
+            account_service.get_balances_by_currency(accounts.credit()),
+        )
+        self.assertEqual(
+            response.context['deposit_balances_in_group'],
+            account_service.get_balances_by_currency(
+                accounts.filter(type_account=ACCOUNT_TYPE_DEPOSIT),
+            ),
+        )
 
     def test_account_view_unauthenticated(self) -> None:
         """Test AccountView for unauthenticated user."""
@@ -107,6 +154,8 @@ class TestAccountView(TestCase):
         self.assertIn('transfer_money_log', context)
         self.assertIn('sum_all_accounts', context)
         self.assertIn('sum_all_accounts_in_group', context)
+        self.assertIn('credit_balances_in_group', context)
+        self.assertIn('deposit_balances_in_group', context)
 
     def test_last_operations_include_transfers(self) -> None:
         from_account = Account.objects.get(pk=1)
