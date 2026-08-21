@@ -248,3 +248,7 @@ docs/superpowers/**
 kilo.jsonc
 
 .worktrees/
+
+.scratch/
+
+.agents/

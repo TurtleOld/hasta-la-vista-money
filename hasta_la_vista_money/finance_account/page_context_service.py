@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -175,9 +176,7 @@ class AccountPageContextService:
                 user,
                 'family',
             )
-            sum_all_accounts_in_group = (
-                self.account_service.get_balances_by_currency(accounts_in_group)
-            )
+            accounts_for_summary = accounts_in_group
             total_credit_debt = compute_total_payment_schedule_debt(
                 accounts_in_group,
                 self.account_service,
@@ -186,17 +185,33 @@ class AccountPageContextService:
             accounts_user = self.account_repository.get_by_user_with_related(
                 user,
             )
-            sum_all_accounts_in_group = (
-                self.account_service.get_balances_by_currency(accounts_user)
-            )
+            accounts_for_summary = accounts_user
             total_credit_debt = compute_total_payment_schedule_debt(
                 accounts_user,
                 self.account_service,
             )
 
+        debit_balances_in_group = self.account_service.get_balances_by_currency(
+            accounts_for_summary.debit(),
+        )
+        credit_balances_in_group = (
+            self.account_service.get_balances_by_currency(
+                accounts_for_summary.credit(),
+            )
+        )
+        deposit_balances_in_group = (
+            self.account_service.get_balances_by_currency(
+                accounts_for_summary.filter(
+                    type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+                ),
+            )
+        )
+
         return {
             'sum_all_accounts': sum_all_accounts,
-            'sum_all_accounts_in_group': sum_all_accounts_in_group,
+            'sum_all_accounts_in_group': debit_balances_in_group,
+            'credit_balances_in_group': credit_balances_in_group,
+            'deposit_balances_in_group': deposit_balances_in_group,
             'total_credit_debt': total_credit_debt,
         }
 
