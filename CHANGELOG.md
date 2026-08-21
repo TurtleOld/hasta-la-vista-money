@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.12.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.1...v2.12.2) (2026-08-21)
+
+
+### Bug Fixes
+
+* **finance_account:** separate family balance by account type ([#974](https://github.com/TurtleOld/hasta-la-vista-money/issues/974)) ([c511f4b](https://github.com/TurtleOld/hasta-la-vista-money/commit/c511f4b78af8110a343dbcf8b1a2d9f7130cc595))
+
 ## [2.12.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.0...v2.12.1) (2026-08-08)
 
 
