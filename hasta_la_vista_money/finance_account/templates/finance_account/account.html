@@ -47,9 +47,23 @@
                         <span>{% translate 'Недостаточно данных для расчёта динамики' %}</span>
                     {% endif %}
                 </div>
-                <div id="accounts-hero-debt" class="accounts-hero-debt{% if not total_credit_debt or total_credit_debt <= 0 %} is-hidden-icon{% endif %}">
-                    <span class="accounts-hero-debt-label">{% translate 'Задолженность:' %}</span>
-                    <span class="accounts-hero-debt-value hide-target">{{ total_credit_debt|comma }} ₽</span>
+                <div class="accounts-hero-breakdown">
+                    <div id="accounts-hero-credit" class="accounts-hero-summary{% if not credit_balances_in_group %} is-hidden-icon{% endif %}">
+                        <span class="accounts-hero-summary-label">{% translate 'Кредитные деньги:' %}</span>
+                        <span class="accounts-hero-summary-value accounts-hero-summary-value-negative hide-target">
+                            {% for currency, amount in credit_balances_in_group.items %}
+                                {{ amount|comma }}<span class="cur">{{ currency }}</span>{% if not forloop.last %} · {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                    <div id="accounts-hero-deposits" class="accounts-hero-summary{% if not deposit_balances_in_group %} is-hidden-icon{% endif %}">
+                        <span class="accounts-hero-summary-label">{% translate 'Вклады:' %}</span>
+                        <span class="accounts-hero-summary-value hide-target">
+                            {% for currency, amount in deposit_balances_in_group.items %}
+                                {{ amount|comma }}<span class="cur">{{ currency }}</span>{% if not forloop.last %} · {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
                 </div>
             </div>
             <div></div>
