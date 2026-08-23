@@ -414,7 +414,7 @@ class PendingReceiptService:
             ValueError: If receipt data is invalid.
         """
         pending_receipt = (
-            PendingReceipt.objects.select_for_update()
+            PendingReceipt.objects.select_for_update(of=('self',))
             .select_related('user', 'account', 'converted_receipt')
             .get(pk=pending_receipt.pk)
         )
