@@ -7,7 +7,7 @@ comprehensive error handling, user authentication, and AJAX support.
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
@@ -232,6 +232,19 @@ class FinancesFilter:
         )
 
     @property
+    def selected_date(self) -> date | None:
+        """Return the single calendar day selected via the date chip.
+
+        A specific day is encoded as equal ``date_from``/``date_to``
+        bounds, reusing the existing range contract instead of a new
+        parameter.
+        """
+
+        if self.date_from and self.date_to and self.date_from == self.date_to:
+            return self.date_from
+        return None
+
+    @property
     def is_active(self) -> bool:
         """Return whether at least one optional filter is active."""
 
@@ -292,10 +305,13 @@ class FinancesFilter:
     def period_label(self) -> str:
         """Return human readable selected period label."""
 
+        if self.selected_date:
+            return self.selected_date.strftime('%d.%m.%Y')
+
         labels = {
             'd': _('Сегодня'),
             'w': _('Неделя'),
-            'm': _('Этот месяц'),
+            'm': _('Текущий месяц'),
             'pm': _('Прошлый'),
             'q': _('Квартал'),
             'y': _('Год'),
@@ -307,7 +323,7 @@ class FinancesFilter:
     def period_choices(self) -> list[tuple[str, str, str]]:
         """Return available period presets for the toolbar."""
 
-        today = datetime.now(tz=UTC).date()
+        today = timezone.localdate()
         quarter = ((today.month - 1) // 3) + 1
         previous_month_start = _previous_month_range(today)[0]
         return [
@@ -334,7 +350,7 @@ class FinancesFilter:
         if self.date_from or self.date_to:
             return self.date_from or date.min, self.date_to or date.max
 
-        today = datetime.now(tz=UTC).date()
+        today = timezone.localdate()
         ranges = {
             'd': (today, today),
             'w': _week_range(today),
@@ -1176,7 +1192,7 @@ def _finances_summary(
 def _finances_spark(
     transactions: list[FinancesTransaction],
 ) -> list[FinancesSparkBar]:
-    today = datetime.now(tz=UTC).date()
+    today = timezone.localdate()
     days = [today - timedelta(days=offset) for offset in range(13, -1, -1)]
     buckets = {day: {'pos': Decimal(), 'neg': Decimal()} for day in days}
     for tx in transactions:
@@ -1261,7 +1277,7 @@ def _category_group_abs_total(items: list[FinancesTransaction]) -> Decimal:
 
 
 def _day_label(value: date) -> str:
-    today = datetime.now(tz=UTC).date()
+    today = timezone.localdate()
     if value == today:
         return str(_('Сегодня'))
     if value == today - timedelta(days=1):
@@ -1304,6 +1320,8 @@ def _recent_transactions(
 
 def _to_date(value: Any) -> date:
     if isinstance(value, datetime):
+        if timezone.is_aware(value):
+            return timezone.localtime(value).date()
         return value.date()
     if isinstance(value, date):
         return value
