@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.13.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.2...v2.13.0) (2026-08-23)
+
+
+### Features
+
+* **finance:** add daily date filter and per-user timezone ([#976](https://github.com/TurtleOld/hasta-la-vista-money/issues/976)) ([31d7d1b](https://github.com/TurtleOld/hasta-la-vista-money/commit/31d7d1bb11a2d91dbbab1969280817e5703e7841))
+
 ## [2.12.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.1...v2.12.2) (2026-08-21)
 
 
