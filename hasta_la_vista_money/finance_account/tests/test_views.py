@@ -1,10 +1,12 @@
 """Tests for finance account views."""
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
+from django.core.handlers.wsgi import WSGIRequest
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -31,8 +33,10 @@ from hasta_la_vista_money.finance_account.views import (
     DeleteAccountView,
     FinancesFilter,
     TransferMoneyAccountView,
+    _day_label,
     _finances_categories,
     _finances_transactions,
+    _group_finances_by_day,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.transactions.models import (
@@ -482,6 +486,340 @@ class TestFinancesView(TestCase):
         )
         self.assertIn('date_from=01%2F02%2F2026', finances_filter.query_string)
         self.assertIn('date_to=28%2F02%2F2026', finances_filter.query_string)
+
+    def test_finances_toolbar_renders_date_chip_with_date_only_flatpickr(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finances'),
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, 'data-finances-date-button')
+        self.assertContains(response, 'data-flatpickr-mode="day-filter"')
+        self.assertContains(response, 'Конкретная дата')
+
+    def test_selecting_day_shows_formatted_date_on_active_chip(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finances'),
+            {'date_from': '2026-03-15', 'date_to': '2026-03-15'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, '15.03.2026')
+
+    def test_selecting_day_does_not_mark_month_preset_active(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finances'),
+            {'date_from': '2026-03-15', 'date_to': '2026-03-15'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertNotContains(
+            response,
+            'finances-pop-option is-active" data-finances-set='
+            '"finances-period" data-finances-value="m"',
+        )
+
+    def test_general_reset_returns_to_current_month_label(self) -> None:
+        self.assertEqual(FinancesFilter().period_label, 'Текущий месяц')
+
+    def test_invalid_date_url_falls_back_to_default_period(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finances'),
+            {'date_from': 'not-a-date', 'date_to': 'also-bad'},
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'Текущий месяц')
+
+    def test_selecting_day_disables_period_and_keeps_facets(self) -> None:
+        request = self.factory.get(
+            '/finance/?date_from=2026-03-15&date_to=2026-03-15'
+            f'&period=m&type=expense&account={self.account.pk}',
+        )
+
+        finances_filter = FinancesFilter.from_request(request)
+
+        self.assertEqual(
+            finances_filter.selected_date,
+            date(2026, 3, 15),
+        )
+        self.assertNotIn('period=', finances_filter.query_string)
+        self.assertIn('type=expense', finances_filter.query_string)
+        self.assertIn(
+            f'account={self.account.pk}',
+            finances_filter.query_string,
+        )
+
+    def test_selecting_period_disables_day(self) -> None:
+        request = self.factory.get('/finance/?period=w')
+
+        finances_filter = FinancesFilter.from_request(request)
+
+        self.assertIsNone(finances_filter.selected_date)
+        self.assertIn('period=w', finances_filter.query_string)
+        self.assertNotIn('date_from', finances_filter.query_string)
+
+    def test_day_filter_includes_all_sources_and_excludes_neighboring_days(
+        self,
+    ) -> None:
+        target_day = date(2026, 3, 15)
+        target_moment = datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
+        neighbor_moment = datetime(2026, 3, 16, 12, 0, tzinfo=UTC)
+
+        target_tx = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('10.00'),
+            date=target_moment,
+        )
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('20.00'),
+            date=neighbor_moment,
+        )
+        self.receipt.receipt_date = target_moment
+        self.receipt.save(update_fields=['receipt_date'])
+        target_transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('30.00'),
+            exchange_date=target_moment,
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('40.00'),
+            exchange_date=neighbor_moment,
+        )
+
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(
+                date_from=target_day,
+                date_to=target_day,
+            ),
+        )
+
+        keys = {tx.key for tx in transactions}
+        self.assertEqual(
+            keys,
+            {
+                f'expense-{target_tx.pk}',
+                f'transfer-{target_transfer.pk}',
+                f'receipt-{self.receipt.pk}',
+            },
+        )
+
+    def test_day_filter_combines_with_facets_via_and(self) -> None:
+        target_day = date(2026, 3, 15)
+        target_moment = datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
+        matching = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('500.00'),
+            date=target_moment,
+        )
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.other_account,
+            category=self.expense_category,
+            amount=Decimal('500.00'),
+            date=target_moment,
+        )
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('10.00'),
+            date=target_moment,
+        )
+
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(
+                date_from=target_day,
+                date_to=target_day,
+                type='expense',
+                account_ids=[self.account.pk],
+                min_amount=Decimal('100.00'),
+            ),
+        )
+
+        self.assertEqual(
+            [tx.key for tx in transactions],
+            [f'expense-{matching.pk}'],
+        )
+
+    def test_day_filter_or_within_accounts_and_categories(self) -> None:
+        target_day = date(2026, 3, 15)
+        target_moment = datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
+        other_category = Category.objects.create(
+            user=self.user,
+            name='Transport',
+            type=TransactionType.EXPENSE,
+        )
+        first_tx = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('10.00'),
+            date=target_moment,
+        )
+        second_tx = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.other_account,
+            category=other_category,
+            amount=Decimal('10.00'),
+            date=target_moment,
+        )
+        self.receipt.receipt_date = target_moment
+        self.receipt.save(update_fields=['receipt_date'])
+
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(
+                date_from=target_day,
+                date_to=target_day,
+                account_ids=[self.account.pk, self.other_account.pk],
+                category_keys=[
+                    f'expense-{self.expense_category.pk}',
+                    f'expense-{other_category.pk}',
+                    'receipt',
+                ],
+            ),
+        )
+
+        keys = {tx.key for tx in transactions}
+        self.assertEqual(
+            keys,
+            {
+                f'expense-{first_tx.pk}',
+                f'expense-{second_tx.pk}',
+                f'receipt-{self.receipt.pk}',
+            },
+        )
+
+    def test_day_label_uses_active_timezone(self) -> None:
+        with timezone.override(ZoneInfo('Pacific/Kiritimati')):
+            today = timezone.localdate()
+            self.assertEqual(_day_label(today), 'Сегодня')
+            self.assertEqual(
+                _day_label(today - timedelta(days=1)),
+                'Вчера',
+            )
+
+    def test_transaction_near_utc_midnight_grouped_by_local_day(
+        self,
+    ) -> None:
+        moment = datetime(2026, 3, 10, 23, 0, tzinfo=UTC)
+        local_day = moment.astimezone(ZoneInfo('Pacific/Kiritimati')).date()
+        self.assertNotEqual(local_day, moment.date())
+
+        tx = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('15.00'),
+            date=moment,
+        )
+
+        with timezone.override(ZoneInfo('Pacific/Kiritimati')):
+            groups = _group_finances_by_day(
+                [
+                    tx_row
+                    for tx_row in _finances_transactions(
+                        request=self._authed_request(),
+                        users=[self.user],
+                        finances_filter=FinancesFilter(period='all'),
+                    )
+                    if tx_row.source_id == tx.pk
+                ],
+            )
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].date, local_day)
+
+    def test_dst_zone_sets_correct_local_day_boundary(self) -> None:
+        berlin = ZoneInfo('Europe/Berlin')
+        moment = datetime(2026, 3, 28, 23, 30, tzinfo=UTC)
+        local_day = moment.astimezone(berlin).date()
+        self.assertNotEqual(local_day, moment.date())
+
+        tx = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('15.00'),
+            date=moment,
+        )
+
+        with timezone.override(berlin):
+            request = self._authed_request()
+            same_day = _finances_transactions(
+                request=request,
+                users=[self.user],
+                finances_filter=FinancesFilter(
+                    date_from=local_day,
+                    date_to=local_day,
+                ),
+            )
+            previous_day = _finances_transactions(
+                request=request,
+                users=[self.user],
+                finances_filter=FinancesFilter(
+                    date_from=moment.date(),
+                    date_to=moment.date(),
+                ),
+            )
+
+        self.assertIn(f'expense-{tx.pk}', {t.key for t in same_day})
+        self.assertNotIn(f'expense-{tx.pk}', {t.key for t in previous_day})
+
+    def _authed_request(self) -> WSGIRequest:
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+        return request
 
 
 class TestAccountCreateView(TestCase):

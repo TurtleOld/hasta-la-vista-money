@@ -16,6 +16,7 @@ from hasta_la_vista_money.users.services.groups import (
     get_or_create_default_family_group,
     remove_user_from_group,
 )
+from hasta_la_vista_money.users.timezones import get_available_timezones
 
 FORM_CONTROL_CLASS = (
     'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm '
@@ -135,6 +136,15 @@ class RegisterByInviteForm(UserCreationForm[User]):
 class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
+    def clean_timezone_name(self) -> str:
+        """Reject any value outside the canonical IANA timezone list."""
+        timezone_name = str(self.cleaned_data.get('timezone_name', ''))
+        if timezone_name not in get_available_timezones():
+            raise forms.ValidationError(
+                _('Выберите часовой пояс из списка.'),
+            )
+        return timezone_name
+
     class Meta:
         model: ClassVar[type[User]] = User
         fields: ClassVar[list[str]] = [
@@ -142,12 +152,14 @@ class UpdateUserForm(ModelForm[User]):
             'email',
             'first_name',
             'last_name',
+            'timezone_name',
         ]
         labels: ClassVar[dict[str, Any]] = {
             'username': _('Имя пользователя'),
             'email': _('Email'),
             'first_name': _('Имя'),
             'last_name': _('Фамилия'),
+            'timezone_name': _('Часовой пояс'),
         }
         widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(
@@ -174,12 +186,24 @@ class UpdateUserForm(ModelForm[User]):
                     'placeholder': _('Фамилия'),
                 },
             ),
+            'timezone_name': forms.TextInput(
+                attrs={
+                    'class': FORM_CONTROL_CLASS,
+                    'placeholder': constants.DEFAULT_TIMEZONE_NAME,
+                    'list': 'timezone-list',
+                    'autocomplete': 'off',
+                },
+            ),
         }
         help_texts: ClassVar[dict[str, Any]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
             'first_name': _('Ваше имя.'),
             'last_name': _('Ваша фамилия.'),
+            'timezone_name': _(
+                'Определяет календарный день, группировку и фильтрацию '
+                'в вашей финансовой ленте.',
+            ),
         }
         error_messages: ClassVar[dict[str, dict[str, Any]]] = {
             'username': {
@@ -187,6 +211,9 @@ class UpdateUserForm(ModelForm[User]):
             },
             'email': {
                 'required': _('Пожалуйста, введите email.'),
+            },
+            'timezone_name': {
+                'required': _('Пожалуйста, укажите часовой пояс.'),
             },
         }
 
