@@ -1,10 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
+from config.containers import ApplicationContainer
+from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.users.services.category_classifier import (
+    ExternalModelCategoryClassifier,
     NoopClassifier,
-    OpenAICompatibleClassifier,
 )
 
 
@@ -24,16 +26,18 @@ class TestNoopClassifier(TestCase):
         self.assertEqual(result, 'ЗП')
 
 
-class TestOpenAICompatibleClassifier(TestCase):
+class TestExternalModelCategoryClassifier(TestCase):
     def _make_clf(self):
-        return OpenAICompatibleClassifier(
-            base_url='http://localhost:1234/v1',
-            api_key='',
-            model='llama3',
+        return ExternalModelCategoryClassifier(
+            transport=ExternalModelTransport(
+                base_url='http://localhost:1234/v1',
+                api_key='',
+                model='llama3',
+            ),
         )
 
     @patch(
-        'hasta_la_vista_money.users.services.category_classifier.httpx.Client',
+        'core.services.external_model.httpx.Client',
     )
     def test_returns_category_from_llm(self, mock_client_cls):
         mock_response = MagicMock()
@@ -53,7 +57,7 @@ class TestOpenAICompatibleClassifier(TestCase):
         self.assertEqual(result, 'Продукты')
 
     @patch(
-        'hasta_la_vista_money.users.services.category_classifier.httpx.Client',
+        'core.services.external_model.httpx.Client',
     )
     def test_falls_back_to_description_on_error(self, mock_client_cls):
         mock_client = MagicMock()
@@ -68,7 +72,7 @@ class TestOpenAICompatibleClassifier(TestCase):
         self.assertEqual(result, 'NETFLIX.COM')
 
     @patch(
-        'hasta_la_vista_money.users.services.category_classifier.httpx.Client',
+        'core.services.external_model.httpx.Client',
     )
     def test_strips_whitespace_from_llm_response(self, mock_client_cls):
         mock_response = MagicMock()
@@ -86,3 +90,42 @@ class TestOpenAICompatibleClassifier(TestCase):
         clf = self._make_clf()
         result = clf.classify('Яндекс Такси', 'expense', ['Транспорт'])
         self.assertEqual(result, 'Транспорт')
+
+
+@override_settings(
+    RECEIPT_CATEGORY_MODEL_BASE_URL='http://localhost:1234/v1',
+    RECEIPT_CATEGORY_MODEL_API_KEY='receipt-key',
+    RECEIPT_CATEGORY_MODEL_NAME='receipt-model',
+    BANK_STATEMENT_CATEGORY_MODEL_BASE_URL='',
+    BANK_STATEMENT_CATEGORY_MODEL_API_KEY='',
+    BANK_STATEMENT_CATEGORY_MODEL_NAME='',
+)
+class TestCategoryModelSettings(TestCase):
+    def test_receipt_model_does_not_enable_bank_statement_model(self) -> None:
+        container = ApplicationContainer()
+
+        self.assertIsInstance(
+            container.receipts.category_model_transport(),
+            ExternalModelTransport,
+        )
+        self.assertIsInstance(
+            container.users.category_classifier(),
+            NoopClassifier,
+        )
+
+    def test_bank_statement_model_does_not_enable_receipt_model(self) -> None:
+        with self.settings(
+            RECEIPT_CATEGORY_MODEL_BASE_URL='',
+            RECEIPT_CATEGORY_MODEL_API_KEY='',
+            RECEIPT_CATEGORY_MODEL_NAME='',
+            BANK_STATEMENT_CATEGORY_MODEL_BASE_URL=('http://localhost:1234/v1'),
+            BANK_STATEMENT_CATEGORY_MODEL_API_KEY='bank-key',
+            BANK_STATEMENT_CATEGORY_MODEL_NAME='bank-model',
+        ):
+            container = ApplicationContainer()
+
+            self.assertIsNone(container.receipts.category_model_transport())
+            self.assertIsInstance(
+                container.users.category_classifier(),
+                ExternalModelCategoryClassifier,
+            )

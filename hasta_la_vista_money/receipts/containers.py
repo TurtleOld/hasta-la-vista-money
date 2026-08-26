@@ -1,7 +1,9 @@
 from typing import TYPE_CHECKING, cast
 
 from dependency_injector import containers, providers
+from django.conf import settings
 
+from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
     ReceiptCreatorServiceProtocol,
@@ -30,6 +32,18 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+def _build_category_model_transport() -> ExternalModelTransport | None:
+    """Build the optional transport for receipt product categorization."""
+    base_url = getattr(settings, 'RECEIPT_CATEGORY_MODEL_BASE_URL', '')
+    if not base_url:
+        return None
+    return ExternalModelTransport(
+        base_url=base_url,
+        api_key=getattr(settings, 'RECEIPT_CATEGORY_MODEL_API_KEY', ''),
+        model=getattr(settings, 'RECEIPT_CATEGORY_MODEL_NAME', ''),
+    )
+
+
 class ReceiptsContainer(containers.DeclarativeContainer):
     core = providers.DependenciesContainer()
     finance_account = providers.DependenciesContainer()
@@ -37,6 +51,9 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     receipt_repository = providers.Singleton(ReceiptRepository)
     product_repository = providers.Singleton(ProductRepository)
     seller_repository = providers.Singleton(SellerRepository)
+    category_model_transport = providers.Singleton(
+        _build_category_model_transport,
+    )
 
     receipt_creator_service: providers.Factory[
         ReceiptCreatorServiceProtocol
