@@ -129,3 +129,21 @@ class TestCategoryModelSettings(TestCase):
                 container.users.category_classifier(),
                 ExternalModelCategoryClassifier,
             )
+
+    def test_legacy_bank_statement_settings_remain_supported(self) -> None:
+        with self.settings(
+            RECEIPT_CATEGORY_MODEL_BASE_URL='',
+            BANK_STATEMENT_CATEGORY_MODEL_BASE_URL='',
+            BANK_STATEMENT_CATEGORY_MODEL_API_KEY='',
+            BANK_STATEMENT_CATEGORY_MODEL_NAME='',
+            CATEGORY_CLASSIFIER_BASE_URL='http://localhost:1234/v1',
+            CATEGORY_CLASSIFIER_API_KEY='legacy-key',
+            CATEGORY_CLASSIFIER_MODEL='legacy-model',
+        ):
+            container = ApplicationContainer()
+
+            self.assertIsNone(container.receipts.category_model_transport())
+            self.assertIsInstance(
+                container.users.category_classifier(),
+                ExternalModelCategoryClassifier,
+            )
