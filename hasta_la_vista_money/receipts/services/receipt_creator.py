@@ -82,6 +82,9 @@ class ReceiptCreatorService:
         seller_id: int | None = None,
         products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
+        requires_attention: bool = False,
+        attention_reason: str = '',
+        allow_insufficient_funds: bool = False,
     ) -> Receipt:
         """Create receipt and related products from raw data.
 
@@ -107,14 +110,19 @@ class ReceiptCreatorService:
         account_balance = self.account_repository.get_by_id(account.pk)
         if account_balance.user_id != user.pk:
             raise ValueError('Account does not belong to user')
-        self.account_service.apply_account_deltas(
-            {
-                account_balance.pk: receipt_balance_delta(
-                    receipt_data.operation_type,
-                    receipt_data.total_sum,
-                ),
-            },
+        balance_delta = receipt_balance_delta(
+            receipt_data.operation_type,
+            receipt_data.total_sum,
         )
+        if allow_insufficient_funds:
+            self.account_repository.apply_unchecked_balance_delta(
+                account_id=account_balance.pk,
+                delta=balance_delta,
+            )
+        else:
+            self.account_service.apply_account_deltas(
+                {account_balance.pk: balance_delta},
+            )
 
         if seller_id is not None:
             try:
@@ -145,6 +153,8 @@ class ReceiptCreatorService:
             adjustment=receipt_data.adjustment,
             fiscal_key=receipt_data.fiscal_key,
             manual=manual,
+            requires_attention=requires_attention,
+            attention_reason=attention_reason,
         )
 
         if products:

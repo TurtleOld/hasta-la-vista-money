@@ -1,0 +1,31 @@
+{% load i18n %}
+
+<article class="pending-card pending-card-{{ processing_log.status }}">
+    <div class="pending-card-content">
+        <header class="pending-card-head">
+            <div class="pending-card-body">
+                {% if processing_log.status == 'processing' %}
+                    <h3 class="pending-card-title">{% translate 'Чек обрабатывается…' %}</h3>
+                    <p class="pending-card-text">{% translate 'После завершения чек появится в списке.' %}</p>
+                {% elif processing_log.status == 'failed' %}
+                    <h3 class="pending-card-title">{% translate 'Не удалось провести чек' %}</h3>
+                    <p class="pending-card-error">{{ processing_log.error_message }}</p>
+                {% else %}
+                    <h3 class="pending-card-title">{% translate 'Повторный чек' %}</h3>
+                    <p class="pending-card-text">{% translate 'Новая операция не создана.' %}</p>
+                {% endif %}
+            </div>
+        </header>
+        {% if processing_log.status == 'failed' %}
+            <footer class="pending-card-actions receipts-row-actions">
+                <form action="{% url 'receipts:processing_retry' processing_log.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="receipts-chip pending-card-retry">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        {% translate 'Повторить' %}
+                    </button>
+                </form>
+            </footer>
+        {% endif %}
+    </div>
+</article>

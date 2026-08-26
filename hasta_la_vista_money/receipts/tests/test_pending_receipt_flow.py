@@ -25,6 +25,8 @@ from hasta_la_vista_money.receipts.models import (
     Product,
     Receipt,
     ReceiptImageHash,
+    ReceiptProcessingLog,
+    ReceiptProcessingStatus,
     Seller,
 )
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
@@ -472,7 +474,7 @@ class UploadImageViewTests(TestCase):
             content_type='image/jpeg',
         )
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:upload'),
@@ -480,8 +482,8 @@ class UploadImageViewTests(TestCase):
             )
 
         self.assertRedirects(response, reverse('receipts:list'))
-        pending = PendingReceipt.objects.get(user=self.user)
-        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+        pending = ReceiptProcessingLog.objects.get(user=self.user)
+        self.assertEqual(pending.status, ReceiptProcessingStatus.PROCESSING)
         self.assertTrue(pending.task_id)
         task_mock.apply_async.assert_called_once_with(
             args=[pending.pk],
@@ -502,7 +504,7 @@ class UploadImageViewTests(TestCase):
             ),
         ]
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:upload'),
@@ -510,7 +512,7 @@ class UploadImageViewTests(TestCase):
             )
 
         self.assertRedirects(response, reverse('receipts:list'))
-        pending_receipts = PendingReceipt.objects.filter(user=self.user)
+        pending_receipts = ReceiptProcessingLog.objects.filter(user=self.user)
         self.assertEqual(pending_receipts.count(), 2)
         self.assertEqual(task_mock.apply_async.call_count, 2)
 
@@ -544,7 +546,7 @@ class UploadImageViewTests(TestCase):
             content_type='image/jpeg',
         )
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:upload'),
@@ -553,7 +555,7 @@ class UploadImageViewTests(TestCase):
 
         self.assertRedirects(response, reverse('receipts:list'))
         self.assertFalse(
-            PendingReceipt.objects.filter(user=self.user).exists(),
+            ReceiptProcessingLog.objects.filter(user=self.user).exists(),
         )
         task_mock.delay.assert_not_called()
 
@@ -564,7 +566,7 @@ class UploadImageViewTests(TestCase):
             content_type='image/jpeg',
         )
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:upload'),
@@ -573,7 +575,7 @@ class UploadImageViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(
-            PendingReceipt.objects.filter(user=self.user).exists(),
+            ReceiptProcessingLog.objects.filter(user=self.user).exists(),
         )
         task_mock.delay.assert_not_called()
 
@@ -599,26 +601,26 @@ class ScanQRReceiptViewTests(TestCase):
 
     def test_scan_creates_processing_pending_and_dispatches(self) -> None:
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:scan_qr'),
                 {'qr_raw': self.raw_qr, 'account': self.account.pk},
             )
 
-        self.assertRedirects(response, reverse('receipts:list'))
-        pending = PendingReceipt.objects.get(user=self.user)
-        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+        self.assertRedirects(response, reverse('receipts:upload'))
+        pending = ReceiptProcessingLog.objects.get(user=self.user)
+        self.assertEqual(pending.status, ReceiptProcessingStatus.PROCESSING)
         self.assertFalse(pending.image_file)
         self.assertTrue(pending.task_id)
         task_mock.apply_async.assert_called_once_with(
-            args=[pending.pk, self.raw_qr],
+            args=[pending.pk],
             task_id=pending.task_id,
         )
 
     def test_scan_rejects_invalid_qr_string(self) -> None:
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:scan_qr'),
@@ -627,32 +629,33 @@ class ScanQRReceiptViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(
-            PendingReceipt.objects.filter(user=self.user).exists(),
+            ReceiptProcessingLog.objects.filter(user=self.user).exists(),
         )
         task_mock.delay.assert_not_called()
 
     def test_scan_rejects_duplicate_qr(self) -> None:
         image_hash = hashlib.sha256(self.raw_qr.encode()).hexdigest()
-        PendingReceipt.objects.create(
+        ReceiptProcessingLog.objects.create(
             user=self.user,
             account=self.account,
-            status=PendingReceiptStatus.PROCESSING,
+            status=ReceiptProcessingStatus.PROCESSING,
             image_hash=image_hash,
         )
 
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
         ) as task_mock:
             response = self.client.post(
                 reverse('receipts:scan_qr'),
                 {'qr_raw': self.raw_qr, 'account': self.account.pk},
             )
 
-        self.assertRedirects(response, reverse('receipts:list'))
-        self.assertEqual(
-            PendingReceipt.objects.filter(user=self.user).count(),
-            1,
+        self.assertRedirects(response, reverse('receipts:upload'))
+        duplicate_log = ReceiptProcessingLog.objects.get(
+            user=self.user,
+            status=ReceiptProcessingStatus.DUPLICATE,
         )
+        self.assertTrue(duplicate_log.is_duplicate)
         task_mock.delay.assert_not_called()
 
     def test_scan_requires_login(self) -> None:
@@ -662,7 +665,7 @@ class ScanQRReceiptViewTests(TestCase):
             {'qr_raw': self.raw_qr, 'account': self.account.pk},
         )
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(PendingReceipt.objects.exists())
+        self.assertFalse(ReceiptProcessingLog.objects.exists())
 
 
 class PendingCounterViewTests(TestCase):

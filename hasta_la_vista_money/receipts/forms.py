@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import django_filters
 from django.contrib.auth import get_user_model
@@ -11,7 +11,6 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import connection
 from django.db.models import Min, Q, QuerySet
 from django.forms import (
-    BooleanField,
     CharField,
     ChoiceField,
     ClearableFileInput,
@@ -47,10 +46,6 @@ from hasta_la_vista_money.receipts.models import (
     Product,
     Receipt,
     Seller,
-)
-from hasta_la_vista_money.receipts.parsers.date_parser import (
-    ReceiptDateParseError,
-    ReceiptDateParser,
 )
 from hasta_la_vista_money.receipts.services.fns_qr import (
     QRCodeDecodeError,
@@ -620,212 +615,3 @@ class ScanQRForm(Form):
         except QRCodeDecodeError as exc:
             raise ValidationError(str(exc)) from exc
         return qr_raw
-
-
-class PendingReceiptReviewForm(Form):
-    """Form for reviewing and editing pending receipt data."""
-
-    account = ModelChoiceField(
-        queryset=Account.objects.none(),
-        label=_('Счёт списания'),
-        widget=Select(attrs={'class': _SELECT_CLASSES}),
-        required=True,
-    )
-    receipt_date = DateTimeField(
-        label=_('Дата и время чека'),
-        widget=DateTimeInput(
-            attrs={
-                'class': _INPUT_CLASSES,
-                'type': 'datetime-local',
-                'data-flatpickr': 'true',
-                'data-flatpickr-mode': 'datetime',
-            },
-            format='%Y-%m-%dT%H:%M',
-        ),
-        required=True,
-    )
-    name_seller = CharField(
-        label=_('Название продавца'),
-        max_length=255,
-        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
-        required=True,
-    )
-    retail_place = CharField(
-        label=_('Торговая точка'),
-        max_length=1000,
-        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
-        required=False,
-    )
-    retail_place_address = CharField(
-        label=_('Адрес торговой точки'),
-        max_length=1000,
-        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
-        required=False,
-    )
-    number_receipt = IntegerField(
-        label=_('Номер чека'),
-        widget=NumberInput(attrs={'class': _INPUT_CLASSES}),
-        required=False,
-    )
-    total_sum = DecimalField(
-        label=_('Общая сумма'),
-        max_digits=10,
-        decimal_places=2,
-        widget=NumberInput(
-            attrs={
-                'class': f'{_READONLY_CLASSES} total-sum',
-                'step': '0.01',
-                'readonly': True,
-            },
-        ),
-        required=True,
-    )
-    nds10 = DecimalField(
-        label=_('НДС 10%'),
-        max_digits=constants.SIXTY,
-        decimal_places=constants.TWO,
-        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
-        required=False,
-    )
-    nds20 = DecimalField(
-        label=_('НДС 22%'),
-        max_digits=constants.SIXTY,
-        decimal_places=constants.TWO,
-        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
-        required=False,
-    )
-    operation_type = ChoiceField(
-        label=_('Тип операции'),
-        choices=OPERATION_TYPES,
-        widget=Select(attrs={'class': _SELECT_CLASSES}),
-        required=False,
-    )
-    confirm_adjustment = BooleanField(
-        label=_('Подтверждаю расхождение итоговой суммы и позиций'),
-        required=False,
-    )
-
-    def __init__(
-        self,
-        receipt_data: dict[str, Any],
-        *args: Any,
-        user: User | None = None,
-        account: Account | None = None,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize form with receipt data.
-
-        Args:
-            receipt_data: Dictionary with receipt data.
-            *args: Positional arguments.
-            user: User whose accounts can be selected.
-            account: Currently selected account.
-            **kwargs: Keyword arguments.
-        """
-        super().__init__(*args, **kwargs)
-        account_field = cast(
-            'ModelChoiceField[Account]',
-            self.fields['account'],
-        )
-        if user is not None:
-            account_field.queryset = (
-                Account.objects.available_for_regular_operations().filter(
-                    user=user,
-                )
-            )
-        if account is not None:
-            account_field.initial = account
-        if receipt_data:
-            receipt_date_str = receipt_data.get('receipt_date', '')
-            if receipt_date_str:
-                try:
-                    self.fields[
-                        'receipt_date'
-                    ].initial = ReceiptDateParser.parse(receipt_date_str)
-                except ReceiptDateParseError:
-                    self.fields['receipt_date'].initial = receipt_date_str
-
-            self.fields['name_seller'].initial = receipt_data.get('name_seller')
-            self.fields['retail_place'].initial = receipt_data.get(
-                'retail_place',
-            )
-            self.fields['retail_place_address'].initial = receipt_data.get(
-                'retail_place_address',
-            )
-            self.fields['number_receipt'].initial = receipt_data.get(
-                'number_receipt',
-            )
-            self.fields['total_sum'].initial = receipt_data.get('total_sum')
-            self.fields['nds10'].initial = receipt_data.get('nds10')
-            self.fields['nds20'].initial = receipt_data.get('nds20')
-            self.fields['operation_type'].initial = receipt_data.get(
-                'operation_type',
-                0,
-            )
-
-
-class PendingReceiptProductForm(Form):
-    """Form for editing a single product in pending receipt."""
-
-    product_name = CharField(
-        label=_('Название товара'),
-        max_length=1000,
-        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
-        required=True,
-    )
-    category = CharField(
-        label=_('Категория'),
-        max_length=constants.TWO_HUNDRED_FIFTY,
-        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
-        required=False,
-    )
-    price = DecimalField(
-        label=_('Цена за единицу'),
-        max_digits=10,
-        decimal_places=2,
-        widget=NumberInput(
-            attrs={'class': f'{_INPUT_CLASSES} price', 'step': '0.01'},
-        ),
-        required=True,
-    )
-    quantity = DecimalField(
-        label=_('Количество'),
-        max_digits=10,
-        decimal_places=2,
-        widget=NumberInput(
-            attrs={'class': f'{_INPUT_CLASSES} quantity', 'step': '0.01'},
-        ),
-        required=True,
-    )
-    amount = DecimalField(
-        label=_('Сумма'),
-        max_digits=10,
-        decimal_places=2,
-        widget=NumberInput(
-            attrs={
-                'class': f'{_READONLY_CLASSES} amount',
-                'step': '0.01',
-                'readonly': True,
-            },
-        ),
-        required=True,
-    )
-    nds_type = IntegerField(
-        label=_('Тип НДС'),
-        widget=NumberInput(attrs={'class': _INPUT_CLASSES}),
-        required=False,
-    )
-    nds_sum = DecimalField(
-        label=_('Сумма НДС'),
-        max_digits=10,
-        decimal_places=2,
-        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
-        required=False,
-    )
-
-
-PendingReceiptProductFormSet = formset_factory(
-    PendingReceiptProductForm,
-    extra=0,
-    can_delete=True,
-)
