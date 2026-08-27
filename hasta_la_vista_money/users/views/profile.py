@@ -44,6 +44,7 @@ from hasta_la_vista_money.users.services.theme import (
     VALID_THEMES,
     set_user_theme,
 )
+from hasta_la_vista_money.users.timezones import get_available_timezones
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -76,6 +77,7 @@ class ListUsers(
         context['user_statistics'] = user_statistics
         context['user'] = user
         context['family_groups'] = get_family_groups(user, self.request)
+        context['timezone_choices'] = get_available_timezones()
         return context
 
 

@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
 import factory as _factory
 from django.contrib.auth import get_user_model
 
+from hasta_la_vista_money.constants import DEFAULT_TIMEZONE_NAME
+
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserModel
 else:
@@ -33,6 +35,7 @@ class UserFactory(_factory.django.DjangoModelFactory[UserModel]):
     is_staff = False
     is_superuser = False
     theme = 'dark'
+    timezone_name = DEFAULT_TIMEZONE_NAME
     password = factory.PostGenerationMethodCall('set_password', 'testpass123')
 
 

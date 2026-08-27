@@ -129,8 +129,25 @@ document.addEventListener('alpine:init', () => {
       if (target) {
         target.value = setter.dataset.financesValue || '';
       }
+      (setter.dataset.financesClear || '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((id) => {
+          const clearTarget = document.getElementById(id);
+          if (clearTarget) clearTarget.value = '';
+        });
       closePops();
       submitForm();
+      return;
+    }
+
+    const dateButton = event.target.closest('[data-finances-date-button]');
+    if (dateButton) {
+      closePops();
+      const trigger = dateButton
+        .closest('.finances-pop-wrap')
+        ?.querySelector('[data-flatpickr]');
+      trigger?._flatpickr?.open();
       return;
     }
 
