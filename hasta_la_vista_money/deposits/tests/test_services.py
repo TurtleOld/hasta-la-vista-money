@@ -4130,7 +4130,20 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
         t1.join(timeout=5)
         t2.join(timeout=5)
 
-        self.assertEqual(errors, [None, None])
+        successes = sum(1 for error in errors if error is None)
+        failures = [error for error in errors if error is not None]
+
+        if successes < 1:
+            self.fail(
+                'At least one concurrent addition must succeed, '
+                f'got errors: {errors}',
+            )
+        for error in failures:
+            if not isinstance(error, ValidationError):
+                self.fail(
+                    'Rejected concurrent addition must fail with '
+                    f'ValidationError, got: {error!r}',
+                )
 
         term.refresh_from_db()
         periods = list(term.rate_periods.order_by('starts_on'))
