@@ -1,5 +1,7 @@
 """Django repository for pinned product-name-to-category mappings."""
 
+from django.core.exceptions import ValidationError
+
 from hasta_la_vista_money.receipts.models import (
     ProductCategory,
     ProductNameCategoryMapping,
@@ -26,7 +28,14 @@ class ProductNameCategoryMappingRepository:
 
         Returns:
             The created or updated mapping.
+
+        Raises:
+            ValidationError: If the category belongs to another user.
         """
+        if user.pk != category.user_id:
+            raise ValidationError(
+                'Mapping category must belong to the mapping owner.',
+            )
         mapping, _ = ProductNameCategoryMapping.objects.update_or_create(
             user=user,
             normalized_product_name=normalized_product_name,

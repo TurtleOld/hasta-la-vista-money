@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,9 @@ from hasta_la_vista_money.receipts.models import (
     ProductCategorySource,
     Receipt,
 )
+from hasta_la_vista_money.receipts.product_category_constants import (
+    normalize_product_name,
+)
 from hasta_la_vista_money.receipts.protocols.services import (
     ProductCategoryCorrectionServiceProtocol,
 )
@@ -29,6 +33,14 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
         AccountRepository,
     )
+
+
+@dataclass(frozen=True)
+class _PreviousProductsSnapshot:
+    """Categories and ids of a receipt's rows before an update."""
+
+    categories: dict[str, int | None]
+    ids: set[int]
 
 
 class ReceiptUpdaterService:
@@ -92,11 +104,15 @@ class ReceiptUpdaterService:
         old_account_id = receipt.account_id
         old_operation_type = receipt.operation_type
         previous_products = list(receipt.product.all())
-        previous_categories = {
-            product.product_name: product.category_id
-            for product in previous_products
-        }
-        previous_product_ids = {product.pk for product in previous_products}
+        previous = _PreviousProductsSnapshot(
+            categories={
+                normalize_product_name(product.product_name): (
+                    product.category_id
+                )
+                for product in previous_products
+            },
+            ids={product.pk for product in previous_products},
+        )
         form.instance = receipt
         for field_name in (
             'seller',
@@ -145,8 +161,7 @@ class ReceiptUpdaterService:
                         user=user,
                         product_name=product_data['product_name'],
                         category=product_data['category'],
-                        previous_categories=previous_categories,
-                        previous_product_ids=previous_product_ids,
+                        previous=previous,
                     )
 
         if receipt.manual:
@@ -178,22 +193,23 @@ class ReceiptUpdaterService:
         user: User,
         product_name: str,
         category: ProductCategory | None,
-        previous_categories: dict[str, int | None],
-        previous_product_ids: set[int],
+        previous: _PreviousProductsSnapshot,
     ) -> None:
         """Pin a category that the human actually changed or newly set.
 
         Only a real correction is remembered: if the submitted category
-        matches the one the product already had, nothing is pinned, so the
-        automatic stages keep working for names the human never corrected.
+        matches the one the product already had (by normalized name), nothing
+        is pinned, so the automatic stages keep working for names the human
+        never corrected.
         """
         if category is None:
             return
-        if previous_categories.get(product_name) == category.pk:
+        normalized_name = normalize_product_name(product_name)
+        if previous.categories.get(normalized_name) == category.pk:
             return
         self.category_correction_service.apply_correction(
             user=user,
             product_name=product_name,
             category=category,
-            exclude_product_ids=previous_product_ids,
+            exclude_product_ids=previous.ids,
         )

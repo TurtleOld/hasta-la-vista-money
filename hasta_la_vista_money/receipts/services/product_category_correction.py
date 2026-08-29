@@ -10,11 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from hasta_la_vista_money.receipts.models import (
-    Product,
-    ProductCategorySource,
-)
-from hasta_la_vista_money.receipts.services.category_classifier import (
+from hasta_la_vista_money.receipts.models import ProductCategorySource
+from hasta_la_vista_money.receipts.product_category_constants import (
     normalize_product_name,
 )
 
@@ -25,6 +22,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.receipts.repositories.product_name_category_mapping_repository import (  # noqa: E501
         ProductNameCategoryMappingRepository,
     )
+    from hasta_la_vista_money.receipts.repositories.product_repository import (
+        ProductRepository,
+    )
     from hasta_la_vista_money.users.models import User
 
 
@@ -34,13 +34,16 @@ class ProductCategoryCorrectionService:
     def __init__(
         self,
         mapping_repository: ProductNameCategoryMappingRepository,
+        product_repository: ProductRepository,
     ) -> None:
         """Initialize the service.
 
         Args:
             mapping_repository: Repository for pinned name mappings.
+            product_repository: Repository for product data access.
         """
         self.mapping_repository = mapping_repository
+        self.product_repository = product_repository
 
     def apply_correction(
         self,
@@ -76,20 +79,13 @@ class ProductCategoryCorrectionService:
             normalized_product_name=normalized_name,
             category=category,
         )
-
-        products = Product.objects.filter(user=user).exclude(
-            category_source=ProductCategorySource.MANUAL,
+        self.product_repository.reclassify_by_normalized_name(
+            user=user,
+            normalized_product_name=normalized_name,
+            category=category,
+            source=ProductCategorySource.NAME_MATCH,
+            exclude_ids=exclude_product_ids,
         )
-        excluded = set(exclude_product_ids)
-        if excluded:
-            products = products.exclude(pk__in=excluded)
-
-        for product in products.iterator():
-            if normalize_product_name(product.product_name) != normalized_name:
-                continue
-            product.category = category
-            product.category_source = ProductCategorySource.NAME_MATCH
-            product.save(update_fields=['category', 'category_source'])
 
 
 __all__ = ['ProductCategoryCorrectionService']

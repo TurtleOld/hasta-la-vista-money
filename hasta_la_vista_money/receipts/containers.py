@@ -93,6 +93,7 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         ProductCategoryCorrectionService,
         mapping_repository=product_name_category_mapping_repository,
+        product_repository=product_repository,
     )
     external_product_category_service: providers.Factory[
         ExternalProductCategoryServiceProtocol

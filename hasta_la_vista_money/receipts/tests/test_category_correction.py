@@ -20,6 +20,7 @@ from hasta_la_vista_money.receipts.models import (
 from hasta_la_vista_money.receipts.repositories import (
     ProductCategoryRepository,
     ProductNameCategoryMappingRepository,
+    ProductRepository,
 )
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
@@ -44,6 +45,7 @@ class ProductCategoryCorrectionServiceTests(TestCase):
         self.category_repo = ProductCategoryRepository()
         self.service = ProductCategoryCorrectionService(
             ProductNameCategoryMappingRepository(),
+            ProductRepository(),
         )
 
     def test_correction_pins_name_mapping(self) -> None:
@@ -294,8 +296,8 @@ class ReceiptUpdateCategoryCorrectionTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def test_correction_pins_mapping_and_reclassifies_history(self) -> None:
-        update_data = {
+    def _update_data(self, category_pk: int) -> dict[str, object]:
+        return {
             'seller': self.seller.pk,
             'account': self.account.pk,
             'receipt_date': '2024-01-15 12:00:00',
@@ -307,11 +309,14 @@ class ReceiptUpdateCategoryCorrectionTests(TestCase):
             'form-MIN_NUM_FORMS': '0',
             'form-MAX_NUM_FORMS': '1000',
             'form-0-product_name': 'Кефир Здравушка',
-            'form-0-category': self.dairy.pk,
+            'form-0-category': category_pk,
             'form-0-price': '100.00',
             'form-0-quantity': '2.00',
             'form-0-amount': '200.00',
         }
+
+    def test_correction_pins_mapping_and_reclassifies_history(self) -> None:
+        update_data = self._update_data(self.dairy.pk)
 
         response = self.client.post(
             reverse('receipts:update', kwargs={'pk': self.receipt.pk}),
@@ -340,23 +345,7 @@ class ReceiptUpdateCategoryCorrectionTests(TestCase):
         )
 
     def test_unchanged_category_is_not_pinned(self) -> None:
-        update_data = {
-            'seller': self.seller.pk,
-            'account': self.account.pk,
-            'receipt_date': '2024-01-15 12:00:00',
-            'number_receipt': 12345,
-            'operation_type': 1,
-            'total_sum': '200.00',
-            'form-TOTAL_FORMS': '1',
-            'form-INITIAL_FORMS': '0',
-            'form-MIN_NUM_FORMS': '0',
-            'form-MAX_NUM_FORMS': '1000',
-            'form-0-product_name': 'Кефир Здравушка',
-            'form-0-category': self.drinks.pk,
-            'form-0-price': '100.00',
-            'form-0-quantity': '2.00',
-            'form-0-amount': '200.00',
-        }
+        update_data = self._update_data(self.drinks.pk)
 
         self.client.post(
             reverse('receipts:update', kwargs={'pk': self.receipt.pk}),
