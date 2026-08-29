@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from django.db.models import QuerySet
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+    from hasta_la_vista_money.receipts.models import (
+        Product,
+        ProductCategory,
+        Receipt,
+        Seller,
+    )
     from hasta_la_vista_money.transactions.models import Category, Transaction
     from hasta_la_vista_money.users.models import User
 
@@ -253,6 +258,24 @@ class ProductRepositoryProtocol(Protocol):
         Returns:
             QuerySet of matching products.
         """
+        ...
+
+
+@runtime_checkable
+class ProductCategoryRepositoryProtocol(Protocol):
+    """Protocol for product category directory persistence."""
+
+    def get_or_create_category(
+        self,
+        *,
+        user: 'User',
+        name: str,
+    ) -> 'ProductCategory':
+        """Get or create a normalized product category for a user."""
+        ...
+
+    def seed_starter_categories(self, user: 'User') -> None:
+        """Create missing starter categories for a user."""
         ...
 
 

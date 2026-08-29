@@ -10,12 +10,19 @@ from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
 from core.repositories.protocols import (
+    ProductCategoryRepositoryProtocol,
     ProductRepositoryProtocol,
     ReceiptRepositoryProtocol,
     SellerRepositoryProtocol,
 )
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.forms import ReceiptForm
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import (
+    Product,
+    ProductCategorySource,
+    Receipt,
+    Seller,
+)
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -23,6 +30,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
         AccountRepository,
     )
+    from hasta_la_vista_money.receipts.models import ProductCategory
 
 
 def receipt_balance_delta(
@@ -52,6 +60,7 @@ class ReceiptCreatorService:
         self,
         account_service: AccountServiceProtocol,
         account_repository: 'AccountRepository',
+        product_category_repository: ProductCategoryRepositoryProtocol,
         product_repository: ProductRepositoryProtocol,
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
@@ -67,6 +76,7 @@ class ReceiptCreatorService:
         """
         self.account_service = account_service
         self.account_repository = account_repository
+        self.product_category_repository = product_category_repository
         self.product_repository = product_repository
         self.receipt_repository = receipt_repository
         self.seller_repository = seller_repository
@@ -222,7 +232,8 @@ class ReceiptCreatorService:
                     product = self.product_repository.create_product(
                         user=user,
                         product_name=product_data['product_name'],
-                        category=product_data.get('category', ''),
+                        category=product_data['category'],
+                        category_source=ProductCategorySource.MANUAL,
                         price=product_data['price'],
                         quantity=product_data['quantity'],
                         amount=product_data['amount'],
@@ -290,11 +301,19 @@ class ReceiptCreatorService:
             if product_name is None or price is None or quantity is None:
                 continue
 
+            category = self._get_or_create_product_category(
+                user=user,
+                name=str(
+                    raw_product.get('category')
+                    or constants.DEFAULT_PRODUCT_CATEGORY,
+                ),
+            )
             products.append(
                 Product(
                     user=user,
                     product_name=str(product_name),
-                    category=str(raw_product.get('category', '')),
+                    category=category,
+                    category_source=ProductCategorySource.WRITING_MATCH,
                     price=Decimal(str(price)),
                     quantity=Decimal(str(quantity)),
                     amount=Decimal(str(amount or 0)),
@@ -304,6 +323,17 @@ class ReceiptCreatorService:
             )
 
         return products
+
+    def _get_or_create_product_category(
+        self,
+        *,
+        user: User,
+        name: str,
+    ) -> 'ProductCategory':
+        return self.product_category_repository.get_or_create_category(
+            user=user,
+            name=name,
+        )
 
     @staticmethod
     def _validate_receipt_amounts(

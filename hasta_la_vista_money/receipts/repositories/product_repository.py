@@ -4,9 +4,11 @@ This module provides data access layer for Product model,
 including filtering and CRUD operations.
 """
 
+from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.receipts.models import Product
+from hasta_la_vista_money.receipts.models import Product, ProductCategory
+from hasta_la_vista_money.users.models import User
 
 
 class ProductRepository:
@@ -25,6 +27,16 @@ class ProductRepository:
         Returns:
             Product: Created product instance.
         """
+        user = kwargs.get('user')
+        category = kwargs.get('category')
+        if (
+            isinstance(user, User)
+            and isinstance(category, ProductCategory)
+            and user.pk != category.user_id
+        ):
+            raise ValidationError(
+                'Product category must belong to the product owner.',
+            )
         return Product.objects.create(**kwargs)
 
     def bulk_create_products(

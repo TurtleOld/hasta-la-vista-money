@@ -15,14 +15,15 @@ from django.utils import timezone
 from PIL import Image
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import DEFAULT_PRODUCT_CATEGORY
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
     Product,
 )
+from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.receipts.services.category_classifier import (
-    DEFAULT_PRODUCT_CATEGORY,
     ReceiptItemCategoryService,
     normalize_product_name,
 )
@@ -226,7 +227,10 @@ class ReceiptItemCategoryServiceTests(TestCase):
         Product.objects.create(
             user=self.user,
             product_name='Кефир Здравушка',
-            category='Завтраки',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Завтраки',
+            ),
         )
 
         category = self.service.categorize(
@@ -239,7 +243,7 @@ class ReceiptItemCategoryServiceTests(TestCase):
     def test_uses_rules_when_history_missing(self) -> None:
         self.assertEqual(
             self.service.categorize(user=self.user, product_name='Томаты'),
-            'Овощи',
+            'Овощи и фрукты',
         )
 
     def test_falls_back_to_default_category(self) -> None:
@@ -616,7 +620,10 @@ class ProcessPendingReceiptFNSTests(TestCase):
         Product.objects.create(
             user=self.user,
             product_name='Товар',
-            category='История',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='История',
+            ),
         )
         pending = self._create_pending()
         with (
