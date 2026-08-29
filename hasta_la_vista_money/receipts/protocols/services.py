@@ -25,6 +25,22 @@ from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
+class ReceiptCategoryModelTransportProtocol(Protocol):
+    """Transport boundary for structured product-category requests."""
+
+    def complete(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        response_format: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return an external chat-completion response."""
+        ...
+
+
+@runtime_checkable
 class ReceiptCreatorServiceProtocol(Protocol):
     """Protocol for receipt creation service interface.
 

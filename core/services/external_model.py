@@ -29,6 +29,7 @@ class ExternalModelTransport:
         messages: list[dict[str, str]],
         max_tokens: int,
         temperature: float,
+        response_format: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return a chat-completion response from the configured model."""
         headers = {'Content-Type': 'application/json'}
@@ -41,6 +42,8 @@ class ExternalModelTransport:
             'max_tokens': max_tokens,
             'temperature': temperature,
         }
+        if response_format is not None:
+            payload['response_format'] = response_format
         with httpx.Client(timeout=self._timeout_seconds) as client:
             response = client.post(
                 f'{self._base_url}/chat/completions',

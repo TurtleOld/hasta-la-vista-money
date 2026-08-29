@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, cast
 
+import httpx
 import structlog
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
@@ -18,11 +19,17 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
+    ProductCategorySource,
+    Receipt,
     ReceiptProcessingLog,
     ReceiptProcessingStatus,
+)
+from hasta_la_vista_money.receipts.product_category_constants import (
+    normalize_product_category_name,
 )
 from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
@@ -36,6 +43,10 @@ from hasta_la_vista_money.receipts.services.ai_providers import (
 )
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
+)
+from hasta_la_vista_money.receipts.services.external_category import (
+    ExternalCategoryResponseError,
+    ExternalProductCategoryService,
 )
 from hasta_la_vista_money.receipts.services.fns_client import (
     FNSAuthenticationError,
@@ -170,6 +181,14 @@ def _get_receipt_item_category_service() -> ReceiptItemCategoryService:
     return cast(
         'ReceiptItemCategoryService',
         ApplicationContainer().receipts.receipt_item_category_service(),
+    )
+
+
+def _get_external_product_category_service() -> ExternalProductCategoryService:
+    """Resolve the optional external product-category fallback."""
+    return cast(
+        'ExternalProductCategoryService',
+        ApplicationContainer().receipts.external_product_category_service(),
     )
 
 
@@ -460,6 +479,68 @@ def process_receipt_processing_log(
             processing_log_id=processing_log_id,
             error=str(exc),
         )
+
+
+@shared_task(  # type: ignore[untyped-decorator]
+    name='receipts.categorize_receipt_products',
+    autoretry_for=(ExternalCategoryResponseError, httpx.HTTPError),
+    max_retries=2,
+    retry_backoff=True,
+    acks_late=True,
+)
+def categorize_receipt_products(receipt_id: int) -> None:
+    """Run the optional external fallback after a receipt is committed."""
+    try:
+        receipt = Receipt.objects.get(pk=receipt_id)
+    except Receipt.DoesNotExist:
+        logger.warning(
+            'receipt_external_category_skipped',
+            receipt_id=receipt_id,
+            reason='receipt_missing',
+        )
+        return
+
+    products = list(
+        receipt.product.filter(
+            category__normalized_name=(
+                normalize_product_category_name(
+                    constants.DEFAULT_PRODUCT_CATEGORY,
+                )
+            ),
+            category_source=ProductCategorySource.WRITING_MATCH,
+        ).select_related('user', 'category'),
+    )
+    service = _get_external_product_category_service()
+    if not service.enabled:
+        logger.info(
+            'receipt_external_category_skipped',
+            receipt_id=receipt_id,
+            reason='disabled',
+            product_count=len(products),
+        )
+        return
+
+    for product in products:
+        try:
+            service.categorize_product(product)
+        except ExternalCategoryResponseError as error:
+            logger.warning(
+                'receipt_external_category_failed',
+                receipt_id=receipt_id,
+                product_id=product.pk,
+                reason='invalid_response',
+                error=str(error),
+            )
+            raise
+        except httpx.HTTPError as error:
+            logger.warning(
+                'receipt_external_category_failed',
+                receipt_id=receipt_id,
+                product_id=product.pk,
+                reason='model_unavailable',
+                error=str(error),
+            )
+            raise
 
 
 @shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]

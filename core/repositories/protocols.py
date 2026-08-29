@@ -274,6 +274,29 @@ class ProductCategoryRepositoryProtocol(Protocol):
         """Get or create a normalized product category for a user."""
         ...
 
+    def get_by_name(
+        self,
+        *,
+        user: 'User',
+        name: str,
+    ) -> 'ProductCategory | None':
+        """Return a user's category by normalized name."""
+        ...
+
+    def list_for_user(self, user: 'User') -> QuerySet['ProductCategory']:
+        """Return the user's category directory."""
+        ...
+
+    def find_similar_by_name(
+        self,
+        *,
+        user: 'User',
+        name: str,
+        minimum_similarity: float,
+    ) -> 'ProductCategory | None':
+        """Return the closest sufficiently similar category name."""
+        ...
+
     def seed_starter_categories(self, user: 'User') -> None:
         """Create missing starter categories for a user."""
         ...

@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+from celery import current_app
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
 from django.utils.translation import gettext_lazy as _
@@ -173,6 +174,13 @@ class ReceiptCreatorService:
             )
             for product in created_products:
                 self.receipt_repository.add_product_to_receipt(receipt, product)
+            if not manual:
+                transaction.on_commit(
+                    lambda: current_app.send_task(
+                        'receipts.categorize_receipt_products',
+                        args=[receipt.pk],
+                    ),
+                )
 
         return receipt
 
