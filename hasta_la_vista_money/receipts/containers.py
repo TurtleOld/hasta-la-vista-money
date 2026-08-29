@@ -18,6 +18,10 @@ from hasta_la_vista_money.receipts.repositories import (
     ReceiptRepository,
     SellerRepository,
 )
+from hasta_la_vista_money.receipts.services.category_classifier import (
+    ReceiptItemCategoryService,
+    build_embedding_provider,
+)
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
 )
@@ -66,6 +70,11 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     )
     category_model_transport = providers.Singleton(
         _build_category_model_transport,
+    )
+    embedding_provider = providers.Singleton(build_embedding_provider)
+    receipt_item_category_service = providers.Factory(
+        ReceiptItemCategoryService,
+        embedding_provider=embedding_provider,
     )
 
     receipt_creator_service: providers.Factory[
