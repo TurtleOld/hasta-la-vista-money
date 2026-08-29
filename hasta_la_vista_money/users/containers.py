@@ -40,7 +40,7 @@ def _build_classifier() -> CategoryClassifier:
         settings,
         'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
         '',
-    )
+    ) or getattr(settings, 'CATEGORY_CLASSIFIER_BASE_URL', '')
     if not base_url:
         return NoopClassifier()
     transport = ExternalModelTransport(
@@ -49,12 +49,14 @@ def _build_classifier() -> CategoryClassifier:
             settings,
             'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
             '',
-        ),
+        )
+        or getattr(settings, 'CATEGORY_CLASSIFIER_API_KEY', ''),
         model=getattr(
             settings,
             'BANK_STATEMENT_CATEGORY_MODEL_NAME',
             '',
-        ),
+        )
+        or getattr(settings, 'CATEGORY_CLASSIFIER_MODEL', ''),
     )
     return ExternalModelCategoryClassifier(
         transport=transport,

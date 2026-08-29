@@ -603,15 +603,15 @@ RECEIPT_CATEGORY_MODEL_NAME: str = config(
 )
 BANK_STATEMENT_CATEGORY_MODEL_BASE_URL: str = config(
     'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
-    default='',
+    default=config('CATEGORY_CLASSIFIER_BASE_URL', default=''),
 )
 BANK_STATEMENT_CATEGORY_MODEL_API_KEY: str = config(
     'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
-    default='',
+    default=config('CATEGORY_CLASSIFIER_API_KEY', default=''),
 )
 BANK_STATEMENT_CATEGORY_MODEL_NAME: str = config(
     'BANK_STATEMENT_CATEGORY_MODEL_NAME',
-    default='',
+    default=config('CATEGORY_CLASSIFIER_MODEL', default=''),
 )
 FNS_PASSWORD: str = config('FNS_PASSWORD', default='')
 FNS_TIMEOUT_SECONDS: float = config(
