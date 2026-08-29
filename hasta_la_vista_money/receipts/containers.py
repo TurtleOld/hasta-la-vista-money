@@ -5,6 +5,7 @@ from django.conf import settings
 
 from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.receipts.protocols.services import (
+    ExternalProductCategoryServiceProtocol,
     PendingReceiptServiceProtocol,
     ReceiptCreatorServiceProtocol,
     ReceiptDeleterServiceProtocol,
@@ -79,7 +80,9 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ReceiptItemCategoryService,
         embedding_provider=embedding_provider,
     )
-    external_product_category_service = providers.Factory(
+    external_product_category_service: providers.Factory[
+        ExternalProductCategoryServiceProtocol
+    ] = providers.Factory(
         ExternalProductCategoryService,
         transport=category_model_transport,
         product_category_repository=product_category_repository,

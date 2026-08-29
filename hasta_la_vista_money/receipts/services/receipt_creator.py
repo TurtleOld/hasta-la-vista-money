@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from celery import current_app
@@ -175,14 +176,29 @@ class ReceiptCreatorService:
             for product in created_products:
                 self.receipt_repository.add_product_to_receipt(receipt, product)
             if not manual:
-                transaction.on_commit(
-                    lambda: current_app.send_task(
-                        'receipts.categorize_receipt_products',
-                        args=[receipt.pk],
-                    ),
-                )
+                self._enqueue_external_category_tasks(created_products)
 
         return receipt
+
+    @staticmethod
+    def _enqueue_external_category_tasks(products: list[Product]) -> None:
+        """Enqueue one independent fallback task per unresolved product."""
+        default_name = constants.DEFAULT_PRODUCT_CATEGORY.casefold()
+        for product in products:
+            if (
+                product.category is None
+                or product.category.name.casefold() != default_name
+                or product.category_source
+                != ProductCategorySource.WRITING_MATCH
+            ):
+                continue
+            transaction.on_commit(
+                partial(
+                    current_app.send_task,
+                    constants.RECEIPT_EXTERNAL_CATEGORY_TASK_NAME,
+                    args=[product.pk],
+                ),
+            )
 
     @transaction.atomic
     def create_manual_receipt(

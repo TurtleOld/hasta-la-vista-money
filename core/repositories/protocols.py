@@ -260,6 +260,13 @@ class ProductRepositoryProtocol(Protocol):
         """
         ...
 
+    def get_external_category_candidate(
+        self,
+        product_id: int,
+    ) -> 'Product | None':
+        """Return a product that still qualifies for external fallback."""
+        ...
+
 
 @runtime_checkable
 class ProductCategoryRepositoryProtocol(Protocol):

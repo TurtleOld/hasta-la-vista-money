@@ -1,7 +1,8 @@
 """External fallback for receipt product categorization."""
 
 import json
-from typing import Any, Final
+from enum import StrEnum
+from typing import Any
 
 from django.conf import settings
 
@@ -9,6 +10,7 @@ from core.repositories.protocols import ProductCategoryRepositoryProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
     Product,
+    ProductCategory,
     ProductCategorySource,
 )
 from hasta_la_vista_money.receipts.product_category_constants import (
@@ -18,30 +20,16 @@ from hasta_la_vista_money.receipts.protocols.services import (
     ReceiptCategoryModelTransportProtocol,
 )
 
-_MAX_RESPONSE_TOKENS: Final = 100
-_RESPONSE_FORMAT: Final[dict[str, Any]] = {
-    'type': 'json_schema',
-    'json_schema': {
-        'name': 'receipt_product_category',
-        'strict': True,
-        'schema': {
-            'type': 'object',
-            'properties': {
-                'action': {
-                    'type': 'string',
-                    'enum': ['existing', 'new'],
-                },
-                'category': {'type': 'string'},
-            },
-            'required': ['action', 'category'],
-            'additionalProperties': False,
-        },
-    },
-}
-
 
 class ExternalCategoryResponseError(ValueError):
     """Raised when an external category response is invalid."""
+
+
+class ExternalCategoryAction(StrEnum):
+    """Allowed structured-response actions."""
+
+    EXISTING = 'existing'
+    NEW = 'new'
 
 
 class ExternalProductCategoryService:
@@ -53,6 +41,12 @@ class ExternalProductCategoryService:
         transport: ReceiptCategoryModelTransportProtocol | None,
         product_category_repository: ProductCategoryRepositoryProtocol,
     ) -> None:
+        """Initialize the fallback service.
+
+        Args:
+            transport: Optional structured completion transport.
+            product_category_repository: Owner category directory gateway.
+        """
         self._transport = transport
         self._product_category_repository = product_category_repository
 
@@ -65,37 +59,72 @@ class ExternalProductCategoryService:
         """Choose an existing category for a product left uncategorized."""
         if self._transport is None:
             return False
-
         categories = list(
             self._product_category_repository.list_for_user(product.user),
         )
-        category_names = [category.name for category in categories]
-        response = self._transport.complete(
-            messages=[
-                {
-                    'role': 'system',
-                    'content': (
-                        'Выбери категорию товара из справочника владельца. '
-                        'Не выбирай категорию «Прочее». Если подходящей '
-                        'категории нет, предложи новую.'
-                    ),
-                },
-                {
-                    'role': 'user',
-                    'content': json.dumps(
-                        {
-                            'product_name': product.product_name,
-                            'categories': category_names,
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
-            max_tokens=_MAX_RESPONSE_TOKENS,
-            temperature=0,
-            response_format=_RESPONSE_FORMAT,
+        action, category_name = self._request_decision(
+            product=product,
+            category_names=[category.name for category in categories],
         )
-        action, category_name = self._parse_response(response)
+        category = self._resolve_category(
+            product=product,
+            action=action,
+            category_name=category_name,
+        )
+        product.category = category
+        product.category_source = ProductCategorySource.EXTERNAL_MODEL
+        product.save(update_fields=['category', 'category_source'])
+        return True
+
+    def _request_decision(
+        self,
+        *,
+        product: Product,
+        category_names: list[str],
+    ) -> tuple['ExternalCategoryAction', str]:
+        """Request and validate one structured category decision."""
+        if self._transport is None:
+            raise RuntimeError('External category transport is disabled')
+        try:
+            response = self._transport.complete(
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            'Выбери категорию товара из справочника владельца. '
+                            'Не выбирай категорию «Прочее». Если подходящей '
+                            'категории нет, предложи новую.'
+                        ),
+                    },
+                    {
+                        'role': 'user',
+                        'content': json.dumps(
+                            {
+                                'product_name': product.product_name,
+                                'categories': category_names,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+                max_tokens=constants.RECEIPT_CATEGORY_MAX_RESPONSE_TOKENS,
+                temperature=0,
+                response_format=constants.RECEIPT_CATEGORY_RESPONSE_FORMAT,
+            )
+        except ValueError as error:
+            raise ExternalCategoryResponseError(
+                'External model returned a non-object response',
+            ) from error
+        return self._parse_response(response)
+
+    def _resolve_category(
+        self,
+        *,
+        product: Product,
+        action: 'ExternalCategoryAction',
+        category_name: str,
+    ) -> ProductCategory:
+        """Resolve a validated decision against the owner directory."""
         if normalize_product_category_name(category_name) == (
             normalize_product_category_name(
                 constants.DEFAULT_PRODUCT_CATEGORY,
@@ -104,7 +133,7 @@ class ExternalProductCategoryService:
             raise ExternalCategoryResponseError(
                 'External model selected the default category',
             )
-        if action == 'new':
+        if action is ExternalCategoryAction.NEW:
             category = self._product_category_repository.find_similar_by_name(
                 user=product.user,
                 name=category_name,
@@ -129,13 +158,12 @@ class ExternalProductCategoryService:
                 'External model selected a category outside the directory',
             )
 
-        product.category = category
-        product.category_source = ProductCategorySource.EXTERNAL_MODEL
-        product.save(update_fields=['category', 'category_source'])
-        return True
+        return category
 
     @staticmethod
-    def _parse_response(response: dict[str, Any]) -> tuple[str, str]:
+    def _parse_response(
+        response: dict[str, Any],
+    ) -> tuple['ExternalCategoryAction', str]:
         try:
             content = response['choices'][0]['message']['content']
             decision = json.loads(content)
@@ -152,10 +180,14 @@ class ExternalProductCategoryService:
             raise ExternalCategoryResponseError(
                 'External model returned an invalid structured response',
             ) from error
-        if action not in {'existing', 'new'}:
-            raise ExternalCategoryResponseError('Unknown category action')
+        try:
+            parsed_action = ExternalCategoryAction(action)
+        except (TypeError, ValueError) as error:
+            raise ExternalCategoryResponseError(
+                'Unknown category action',
+            ) from error
         if not isinstance(category, str) or not category.strip():
             raise ExternalCategoryResponseError('Category must be non-empty')
         if len(category) > constants.TWO_HUNDRED_FIFTY:
             raise ExternalCategoryResponseError('Category is too long')
-        return action, category.strip()
+        return parsed_action, category.strip()

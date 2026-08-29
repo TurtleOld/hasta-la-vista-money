@@ -1,21 +1,21 @@
+"""Tests for the optional external receipt-category fallback."""
+
 import json
 from decimal import Decimal
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from celery.exceptions import Retry
-from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     Product,
     ProductCategory,
     ProductCategorySource,
-    Receipt,
-    Seller,
 )
 from hasta_la_vista_money.receipts.repositories import (
     ProductCategoryRepository,
@@ -28,45 +28,62 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     SellerCreateData,
 )
-from hasta_la_vista_money.receipts.tasks import categorize_receipt_products
-
-User = get_user_model()
+from hasta_la_vista_money.receipts.tasks import categorize_receipt_product
+from hasta_la_vista_money.users.models import User
 
 
 class RecordingTransport:
-    def __init__(self, response: dict[str, Any]) -> None:
+    """Record structured requests and return a configured response."""
+
+    def __init__(
+        self,
+        response: dict[str, Any] | ValueError,
+    ) -> None:
+        """Store the response or transport validation error."""
         self.response = response
         self.request: dict[str, Any] | None = None
 
     def complete(self, **kwargs: Any) -> dict[str, Any]:
+        """Record a completion request and return its configured result."""
         self.request = kwargs
+        if isinstance(self.response, ValueError):
+            raise self.response
         return self.response
 
 
 class ExternalProductCategoryServiceTests(TestCase):
-    def setUp(self) -> None:
-        self.user = User.objects.create_user(
+    """Verify decisions, validation, and category resolution."""
+
+    user: User
+    other: ProductCategory
+    product: Product
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        """Create a reusable owner directory and unresolved product."""
+        cls.user = User.objects.create_user(
             username='external-category-user',
             password='pass',  # nosec B106: test-only password
         )
-        self.other = ProductCategory.objects.get(
-            user=self.user,
+        cls.other = ProductCategory.objects.get(
+            user=cls.user,
             name='Прочее',
         )
         ProductCategoryRepository().get_or_create_category(
-            user=self.user,
+            user=cls.user,
             name='Сладости и снеки',
         )
-        self.product = Product.objects.create(
-            user=self.user,
+        cls.product = Product.objects.create(
+            user=cls.user,
             product_name='Батончик мюсли с клюквой',
-            category=self.other,
+            category=cls.other,
             price=1,
             quantity=1,
             amount=1,
         )
 
     def test_selects_existing_category_with_structured_request(self) -> None:
+        """Use an owner category and request strict JSON schema output."""
         transport = RecordingTransport(
             {
                 'choices': [
@@ -110,6 +127,7 @@ class ExternalProductCategoryServiceTests(TestCase):
         self.assertIn('Сладости и снеки', messages[-1]['content'])
 
     def test_rejects_response_that_only_claims_schema_compliance(self) -> None:
+        """Reject unexpected fields even when the provider returns JSON."""
         transport = RecordingTransport(
             {
                 'choices': [
@@ -139,6 +157,7 @@ class ExternalProductCategoryServiceTests(TestCase):
         self.assertEqual(self.product.category, self.other)
 
     def test_rejects_default_category_as_external_decision(self) -> None:
+        """Keep the product unresolved when the model chooses Other."""
         transport = RecordingTransport(
             {
                 'choices': [
@@ -170,6 +189,7 @@ class ExternalProductCategoryServiceTests(TestCase):
         RECEIPT_CATEGORY_NEW_CATEGORY_SIMILARITY_THRESHOLD=0.3,
     )
     def test_reuses_similar_category_instead_of_creating_proposal(self) -> None:
+        """Reuse a sufficiently similar owner category for new proposals."""
         repository = ProductCategoryRepository()
         existing = repository.get_or_create_category(
             user=self.user,
@@ -212,6 +232,7 @@ class ExternalProductCategoryServiceTests(TestCase):
         RECEIPT_CATEGORY_NEW_CATEGORY_SIMILARITY_THRESHOLD=0.99,
     )
     def test_creates_sufficiently_distinct_category(self) -> None:
+        """Create a genuinely distinct category in the owner directory."""
         transport = RecordingTransport(
             {
                 'choices': [
@@ -245,9 +266,47 @@ class ExternalProductCategoryServiceTests(TestCase):
             ProductCategorySource.EXTERNAL_MODEL,
         )
 
+    def test_normalizes_transport_value_error_for_task_retry(self) -> None:
+        """Convert a malformed top-level response into a domain error."""
+        service = ExternalProductCategoryService(
+            transport=RecordingTransport(ValueError('non-object response')),
+            product_category_repository=ProductCategoryRepository(),
+        )
 
-class CategorizeReceiptProductsTaskTests(TestCase):
+        with self.assertRaises(ExternalCategoryResponseError):
+            service.categorize_product(self.product)
+
+
+class CategorizeReceiptProductTaskTests(TestCase):
+    """Verify post-commit dispatch and isolated product task behavior."""
+
+    user: User
+    category: ProductCategory
+    product: Product
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        """Create one unresolved product shared by task tests."""
+        cls.user = User.objects.create_user(
+            username='external-category-task-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        cls.category = ProductCategory.objects.get(
+            user=cls.user,
+            name=constants.DEFAULT_PRODUCT_CATEGORY,
+        )
+        cls.product = Product.objects.create(
+            user=cls.user,
+            product_name='Неизвестный товар',
+            category=cls.category,
+            category_source=ProductCategorySource.WRITING_MATCH,
+            price=1,
+            quantity=1,
+            amount=1,
+        )
+
     def test_receipt_creation_enqueues_fallback_after_commit(self) -> None:
+        """Dispatch a separate post-commit task for each fallback product."""
         user = User.objects.create_user(
             username='enqueue-external-category-user',
             password='pass',  # nosec B106: test-only password
@@ -272,13 +331,20 @@ class CategorizeReceiptProductsTaskTests(TestCase):
                 account=account,
                 receipt_data=ReceiptCreateData(
                     receipt_date=timezone.now(),
-                    total_sum=Decimal('1.00'),
+                    total_sum=Decimal('2.00'),
                     operation_type=1,
                 ),
                 seller_data=SellerCreateData(name_seller='Shop'),
                 products_data=[
                     {
-                        'product_name': 'Неизвестный товар',
+                        'product_name': 'Неизвестный товар 1',
+                        'category': 'Прочее',
+                        'price': '1.00',
+                        'quantity': '1',
+                        'amount': '1.00',
+                    },
+                    {
+                        'product_name': 'Неизвестный товар 2',
                         'category': 'Прочее',
                         'price': '1.00',
                         'quantity': '1',
@@ -288,41 +354,22 @@ class CategorizeReceiptProductsTaskTests(TestCase):
                 allow_insufficient_funds=True,
             )
 
-        send_task.assert_called_once_with(
-            'receipts.categorize_receipt_products',
-            args=[receipt.pk],
+        product_ids = list(
+            receipt.product.order_by('pk').values_list('pk', flat=True),
+        )
+        self.assertEqual(send_task.call_count, 2)
+        send_task.assert_has_calls(
+            [
+                call(
+                    constants.RECEIPT_EXTERNAL_CATEGORY_TASK_NAME,
+                    args=[product_id],
+                )
+                for product_id in product_ids
+            ],
         )
 
     def test_disabled_model_does_not_make_external_call(self) -> None:
-        user = User.objects.create_user(
-            username='disabled-external-category-user',
-            password='pass',  # nosec B106: test-only password
-        )
-        category = ProductCategory.objects.get(user=user, name='Прочее')
-        product = Product.objects.create(
-            user=user,
-            product_name='Неизвестный товар',
-            category=category,
-            price=1,
-            quantity=1,
-            amount=1,
-        )
-        account = Account.objects.create(
-            user=user,
-            name_account='Wallet',
-            balance=Decimal('100.00'),
-            currency='RU',
-        )
-        seller = Seller.objects.create(user=user, name_seller='Shop')
-        receipt = Receipt.objects.create(
-            receipt_date=timezone.now(),
-            total_sum=Decimal('1.00'),
-            operation_type=1,
-            user=user,
-            account=account,
-            seller=seller,
-        )
-        receipt.product.add(product)
+        """Skip without contacting a transport when configuration is absent."""
         service = Mock(enabled=False)
 
         with (
@@ -333,48 +380,19 @@ class CategorizeReceiptProductsTaskTests(TestCase):
             ),
             patch('hasta_la_vista_money.receipts.tasks.logger.info') as log,
         ):
-            categorize_receipt_products(receipt.pk)
+            categorize_receipt_product(self.product.pk)
 
         service.categorize_product.assert_not_called()
-        product.refresh_from_db()
-        self.assertEqual(product.category, category)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.category, self.category)
         log.assert_called_once_with(
             'receipt_external_category_skipped',
-            receipt_id=receipt.pk,
+            product_id=self.product.pk,
             reason='disabled',
-            product_count=1,
         )
 
     def test_invalid_response_is_logged_and_retried(self) -> None:
-        user = User.objects.create_user(
-            username='retry-external-category-user',
-            password='pass',  # nosec B106: test-only password
-        )
-        category = ProductCategory.objects.get(user=user, name='Прочее')
-        product = Product.objects.create(
-            user=user,
-            product_name='Неизвестный товар',
-            category=category,
-            price=1,
-            quantity=1,
-            amount=1,
-        )
-        account = Account.objects.create(
-            user=user,
-            name_account='Wallet',
-            balance=Decimal('100.00'),
-            currency='RU',
-        )
-        seller = Seller.objects.create(user=user, name_seller='Shop')
-        receipt = Receipt.objects.create(
-            receipt_date=timezone.now(),
-            total_sum=Decimal('1.00'),
-            operation_type=1,
-            user=user,
-            account=account,
-            seller=seller,
-        )
-        receipt.product.add(product)
+        """Log invalid structured responses and request Celery retry."""
         service = Mock(enabled=True)
         service.categorize_product.side_effect = ExternalCategoryResponseError(
             'invalid response',
@@ -388,20 +406,19 @@ class CategorizeReceiptProductsTaskTests(TestCase):
             ),
             patch('hasta_la_vista_money.receipts.tasks.logger.warning') as log,
             patch.object(
-                categorize_receipt_products,
+                categorize_receipt_product,
                 'retry',
                 side_effect=Retry(),
             ) as retry,
             self.assertRaises(Retry),
         ):
-            categorize_receipt_products(receipt.pk)
+            categorize_receipt_product(self.product.pk)
 
-        self.assertEqual(categorize_receipt_products.max_retries, 2)
+        self.assertEqual(categorize_receipt_product.max_retries, 2)
         retry.assert_called_once()
         log.assert_called_once_with(
             'receipt_external_category_failed',
-            receipt_id=receipt.pk,
-            product_id=product.pk,
+            product_id=self.product.pk,
             reason='invalid_response',
             error='invalid response',
         )
