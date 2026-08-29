@@ -408,6 +408,9 @@ HTML5_DATETIME_LOCAL_INPUT_FORMATS: Final[tuple[str, ...]] = (
     '%Y-%m-%dT%H:%M:%S',
 )
 
+# Default IANA timezone for new/existing users and the application itself.
+DEFAULT_TIMEZONE_NAME: Final = 'Europe/Moscow'
+
 # ============================================================================
 # Runtime Date Values
 # ============================================================================

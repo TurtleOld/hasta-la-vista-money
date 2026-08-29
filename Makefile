@@ -85,10 +85,10 @@ from django.core.management.utils import get_random_secret_key as g; \
 print('SECRET_KEY already present, skipping') if re.search(r'^SECRET_KEY=',content, re.M) else open(p,'a',encoding='utf-8').write(('' if content.endswith('\n') or not content else '\n')+'SECRET_KEY='+g()+'\n') or print('SECRET_KEY added')"
 
 test:
-	@uv run python manage.py test -v 2
+	@if [ -n "$$CI" ]; then uv run python manage.py test -v 2; else docker compose up --wait db && docker compose run --build --rm --no-deps hlvm-server python manage.py test -v 2; fi
 
 coverage:
-	@uv run python -m coverage run manage.py test -v 2 && uv run python -m coverage xml && uv run python -m coverage report
+	@if [ -n "$$CI" ]; then uv run python -m coverage run manage.py test -v 2 && uv run python -m coverage xml && uv run python -m coverage report; else docker compose up --wait db && docker compose run --build --rm --no-deps hlvm-server python -m coverage run manage.py test -v 2 && docker compose run --build --rm --no-deps hlvm-server python -m coverage xml && docker compose run --build --rm --no-deps hlvm-server python -m coverage report; fi
 
 rabbitmq:
 	@docker run -d --name hlvm_rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management-alpine

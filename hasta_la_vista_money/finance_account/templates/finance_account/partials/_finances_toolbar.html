@@ -37,7 +37,7 @@
             <div class="finances-pop-title">{% translate 'Период' %}</div>
             <div class="finances-pop-body">
                 {% for value, label, sublabel in finances_filter.period_choices %}
-                    <button type="button" class="finances-pop-option {% if finances_filter.period == value %}is-active{% endif %}" data-finances-set="finances-period" data-finances-value="{{ value }}">
+                    <button type="button" class="finances-pop-option {% if finances_filter.period == value and not finances_filter.selected_date %}is-active{% endif %}" data-finances-set="finances-period" data-finances-value="{{ value }}" data-finances-clear="finances-date-from finances-date-to">
                         <span>{{ label }}</span>
                         <span class="finances-muted ml-auto">{{ sublabel }}</span>
                     </button>
@@ -46,6 +46,22 @@
         </div>
         <input id="finances-period" type="hidden" name="period" value="{{ finances_filter.period }}">
     </div>
+
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if finances_filter.selected_date %}is-active{% endif %}" data-finances-date-button aria-haspopup="dialog">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>{% if finances_filter.selected_date %}{{ finances_filter.selected_date|date:'d.m.Y' }}{% else %}{% translate 'Конкретная дата' %}{% endif %}</span>
+        </button>
+        <input type="text" class="finances-date-trigger" tabindex="-1" aria-hidden="true"
+               data-flatpickr data-flatpickr-mode="day-filter"
+               data-flatpickr-from="finances-date-from" data-flatpickr-to="finances-date-to"
+               data-flatpickr-clear-id="finances-period" data-flatpickr-clear-value="m"
+               value="{{ finances_filter.selected_date|date:'Y-m-d'|default:'' }}">
+    </div>
+    <input id="finances-date-from" type="hidden" name="date_from" value="{{ finances_filter.date_from|date:'Y-m-d'|default:'' }}">
+    <input id="finances-date-to" type="hidden" name="date_to" value="{{ finances_filter.date_to|date:'Y-m-d'|default:'' }}">
 
     <div class="finances-pop-wrap">
         <button type="button" class="finances-chip {% if finances_filter.account_ids %}is-active{% endif %}" data-finances-pop-button="account" aria-haspopup="true" aria-expanded="false">

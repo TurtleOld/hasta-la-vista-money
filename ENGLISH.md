@@ -250,6 +250,9 @@ make test
 
 ### Useful Commands (Makefile)
 
+Local `make test` and `make coverage` start PostgreSQL and run tests in the
+application container through Docker Compose.
+
 ```bash
 make install             # install dependencies (uv)
 make test                # run tests
