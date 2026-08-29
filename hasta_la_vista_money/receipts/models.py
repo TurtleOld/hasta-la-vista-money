@@ -217,6 +217,41 @@ class SellerQuerySet(models.QuerySet[Seller]):
         return self.filter(pk__in=seller_ids).select_related('user')
 
 
+class ProductCategory(models.Model):
+    """A flat product category directory belonging to one user."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='product_categories',
+    )
+    name = models.CharField(max_length=constants.TWO_HUNDRED_FIFTY)
+    normalized_name = models.CharField(max_length=constants.TWO_HUNDRED_FIFTY)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'normalized_name'],
+                name='unique_user_normalized_product_category',
+            ),
+        ]
+        ordering: ClassVar[list[str]] = ['name']
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ProductCategorySource(models.TextChoices):
+    """How a product row received its category."""
+
+    MIGRATED = 'migrated', _('Перенесено')
+    NAME_MATCH = 'name_match', _('Закреплённое сопоставление')
+    WRITING_MATCH = 'writing_match', _('Подбор по написанию')
+    SEMANTIC_MATCH = 'semantic_match', _('Подбор по смыслу')
+    EXTERNAL_MODEL = 'external_model', _('Внешняя модель')
+    MANUAL = 'manual', _('Поставлено человеком')
+
+
 class Product(models.Model):
     """Model representing a product from a receipt.
 
@@ -226,7 +261,8 @@ class Product(models.Model):
     Attributes:
         user: Foreign key to the User who owns this product.
         product_name: Name of the product.
-        category: Product category.
+        category: Product category directory entry.
+        category_source: How the category was assigned.
         price: Price per unit of the product.
         quantity: Quantity purchased.
         amount: Total amount for this product.
@@ -241,9 +277,17 @@ class Product(models.Model):
         related_name='product_users',
     )
     product_name = models.CharField(default='', max_length=1000)
-    category = models.CharField(
+    category = models.ForeignKey(
+        ProductCategory,
         blank=True,
-        max_length=constants.TWO_HUNDRED_FIFTY,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='products',
+    )
+    category_source = models.CharField(
+        choices=ProductCategorySource.choices,
+        default=ProductCategorySource.WRITING_MATCH,
+        max_length=constants.TWENTY,
     )
     price = models.DecimalField(default=0, max_digits=10, decimal_places=2)
     quantity = models.DecimalField(
@@ -272,7 +316,6 @@ class Product(models.Model):
             GinIndex(
                 SearchVector(
                     'product_name',
-                    'category',
                     config='russian',
                 ),
                 name='receipts_product_search_gin',

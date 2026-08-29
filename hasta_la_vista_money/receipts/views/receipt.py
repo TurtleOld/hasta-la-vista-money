@@ -144,12 +144,17 @@ class ReceiptCreateView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
         context['receipt_form'] = self.get_form()
-        context['product_formset'] = ProductFormSet()
+        context['product_formset'] = ProductFormSet(
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         return context
 
     def form_valid(self, form: ReceiptForm) -> HttpResponse:  # type: ignore[override]
         seller = cast('Seller', form.cleaned_data.get('seller'))
-        product_formset = ProductFormSet(self.request.POST)
+        product_formset = ProductFormSet(
+            self.request.POST,
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
 
         valid_form = form.is_valid() and product_formset.is_valid()
         if valid_form:
@@ -164,7 +169,10 @@ class ReceiptCreateView(
         return self.form_invalid(form)
 
     def form_invalid(self, form: ReceiptForm) -> HttpResponse:
-        product_formset = ProductFormSet(self.request.POST)
+        product_formset = ProductFormSet(
+            self.request.POST,
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         context: dict[str, Any] = self.get_context_data(form=form)
         context['product_formset'] = product_formset
         return self.render_to_response(context)
@@ -232,14 +240,17 @@ class ReceiptUpdateView(
         initial_data: list[dict[str, Any]] = [
             {
                 'product_name': product.product_name,
-                'category': product.category,
+                'category': product.category_id,
                 'price': product.price,
                 'quantity': product.quantity,
                 'amount': product.amount,
             }
             for product in existing_products
         ]
-        context['product_formset'] = ProductFormSet(initial=initial_data)
+        context['product_formset'] = ProductFormSet(
+            initial=initial_data,
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         return context
 
     def get_form(
@@ -252,7 +263,10 @@ class ReceiptUpdateView(
 
     def form_valid(self, form: ReceiptForm) -> HttpResponse:  # type: ignore[override]
         receipt = self.get_object()
-        product_formset = ProductFormSet(self.request.POST)
+        product_formset = ProductFormSet(
+            self.request.POST,
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         request = cast('RequestWithContainer', self.request)
         current_user = cast('User', request.user)
 
@@ -280,7 +294,10 @@ class ReceiptUpdateView(
         return self.form_invalid(form)
 
     def form_invalid(self, form: ReceiptForm) -> HttpResponse:
-        product_formset = ProductFormSet(self.request.POST)
+        product_formset = ProductFormSet(
+            self.request.POST,
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         context: dict[str, Any] = self.get_context_data(form=form)
         context['product_formset'] = product_formset
 

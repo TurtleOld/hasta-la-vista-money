@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import django_filters
 from django.contrib.auth import get_user_model
@@ -44,6 +44,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
     Product,
+    ProductCategory,
     Receipt,
     Seller,
 )
@@ -239,13 +240,14 @@ class ReceiptFilter(django_filters.FilterSet):
             needle = search_value.casefold()
             matching_ids = []
             for receipt in queryset.select_related('seller').prefetch_related(
-                'product',
+                'product__category',
             ):
                 seller_name = ''
                 if receipt.seller is not None:
                     seller_name = receipt.seller.name_seller
                 product_values = [
-                    f'{product.product_name} {product.category}'
+                    f'{product.product_name} '
+                    f'{product.category.name if product.category else ""}'
                     for product in receipt.product.all()
                 ]
                 haystack = f'{seller_name} {" ".join(product_values)}'
@@ -264,7 +266,7 @@ class ReceiptFilter(django_filters.FilterSet):
         matching_products = Product.objects.annotate(
             search=SearchVector(
                 'product_name',
-                'category',
+                'category__name',
                 config='russian',
             ),
         ).filter(search=search_query)
@@ -340,10 +342,12 @@ class ProductForm(ModelForm[Product]):
         ),
         widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
     )
-    category = CharField(
+    category = ModelChoiceField(
+        queryset=ProductCategory.objects.none(),
         label=_('Категория'),
-        help_text=_('Укажите категорию продукта'),
+        help_text=_('Выберите категорию продукта'),
         required=False,
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
 
     class Meta:
@@ -355,6 +359,22 @@ class ProductForm(ModelForm[Product]):
             'quantity',
             'amount',
         ]
+
+    def __init__(
+        self,
+        *args: Any,
+        user: User | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            category_field = cast(
+                'ModelChoiceField[ProductCategory]',
+                self.fields['category'],
+            )
+            category_field.queryset = ProductCategory.objects.filter(
+                user=user,
+            ).order_by('name')
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()

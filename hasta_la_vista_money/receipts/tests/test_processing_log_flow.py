@@ -16,6 +16,7 @@ from hasta_la_vista_money.receipts.models import (
     ReceiptProcessingStatus,
     Seller,
 )
+from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.receipts.tasks import process_receipt_processing_log
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -264,6 +265,10 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             ),
             manual=False,
         )
+        category = ProductCategoryRepository().get_or_create_category(
+            user=self.user,
+            name='Misc',
+        )
         response = self.client.post(
             reverse('receipts:update', args=[receipt.pk]),
             {
@@ -283,7 +288,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
                 'form-MIN_NUM_FORMS': '0',
                 'form-MAX_NUM_FORMS': '1000',
                 'form-0-product_name': 'Item',
-                'form-0-category': 'Misc',
+                'form-0-category': category.pk,
                 'form-0-price': '120.00',
                 'form-0-quantity': '1.00',
                 'form-0-amount': '120.00',
