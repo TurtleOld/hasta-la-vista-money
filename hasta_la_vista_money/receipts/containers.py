@@ -7,6 +7,7 @@ from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.receipts.protocols.services import (
     ExternalProductCategoryServiceProtocol,
     PendingReceiptServiceProtocol,
+    ProductCategoryCorrectionServiceProtocol,
     ReceiptCreatorServiceProtocol,
     ReceiptDeleterServiceProtocol,
     ReceiptProcessingServiceProtocol,
@@ -14,6 +15,7 @@ from hasta_la_vista_money.receipts.protocols.services import (
 )
 from hasta_la_vista_money.receipts.repositories import (
     ProductCategoryRepository,
+    ProductNameCategoryMappingRepository,
     ProductRepository,
     ReceiptProcessingLogRepository,
     ReceiptRepository,
@@ -31,6 +33,9 @@ from hasta_la_vista_money.receipts.services.pending_receipt_service import (
 )
 from hasta_la_vista_money.receipts.services.product_categories import (
     ProductCategoryService,
+)
+from hasta_la_vista_money.receipts.services.product_category_correction import (
+    ProductCategoryCorrectionService,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreatorService,
@@ -67,6 +72,9 @@ class ReceiptsContainer(containers.DeclarativeContainer):
 
     receipt_repository = providers.Singleton(ReceiptRepository)
     product_category_repository = providers.Singleton(ProductCategoryRepository)
+    product_name_category_mapping_repository = providers.Singleton(
+        ProductNameCategoryMappingRepository,
+    )
     product_repository = providers.Singleton(ProductRepository)
     seller_repository = providers.Singleton(SellerRepository)
     receipt_processing_log_repository = providers.Singleton(
@@ -79,6 +87,12 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     receipt_item_category_service = providers.Factory(
         ReceiptItemCategoryService,
         embedding_provider=embedding_provider,
+    )
+    product_category_correction_service: providers.Factory[
+        ProductCategoryCorrectionServiceProtocol
+    ] = providers.Factory(
+        ProductCategoryCorrectionService,
+        mapping_repository=product_name_category_mapping_repository,
     )
     external_product_category_service: providers.Factory[
         ExternalProductCategoryServiceProtocol
@@ -112,6 +126,7 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         product_repository=product_repository,
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
+        category_correction_service=product_category_correction_service,
     )
     receipt_deleter_service: providers.Factory[
         ReceiptDeleterServiceProtocol

@@ -1,0 +1,35 @@
+"""Django repository for pinned product-name-to-category mappings."""
+
+from hasta_la_vista_money.receipts.models import (
+    ProductCategory,
+    ProductNameCategoryMapping,
+)
+from hasta_la_vista_money.users.models import User
+
+
+class ProductNameCategoryMappingRepository:
+    """Persist pinned product-name-to-category mappings for one user."""
+
+    def upsert(
+        self,
+        *,
+        user: User,
+        normalized_product_name: str,
+        category: ProductCategory,
+    ) -> ProductNameCategoryMapping:
+        """Create or update the pinned mapping for a normalized name.
+
+        Args:
+            user: Owner of the mapping.
+            normalized_product_name: Canonical form of the product name.
+            category: Category the name is pinned to.
+
+        Returns:
+            The created or updated mapping.
+        """
+        mapping, _ = ProductNameCategoryMapping.objects.update_or_create(
+            user=user,
+            normalized_product_name=normalized_product_name,
+            defaults={'category': category},
+        )
+        return mapping
