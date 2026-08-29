@@ -241,6 +241,42 @@ class ProductCategory(models.Model):
         return self.name
 
 
+class ProductNameCategoryMapping(models.Model):
+    """A pinned product-name-to-category mapping for one user.
+
+    Wins over every other categorization stage: once a name is pinned here,
+    subsequent occurrences of the same normalized name always get this
+    category and the writing/semantic/external-model stages are skipped.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='product_name_category_mappings',
+    )
+    normalized_product_name = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+    )
+    category = models.ForeignKey(
+        ProductCategory,
+        on_delete=models.CASCADE,
+        related_name='name_mappings',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'normalized_product_name'],
+                name='unique_user_normalized_product_name_mapping',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.normalized_product_name} -> {self.category.name}'
+
+
 class ProductCategorySource(models.TextChoices):
     """How a product row received its category."""
 
@@ -319,6 +355,11 @@ class Product(models.Model):
                     config='russian',
                 ),
                 name='receipts_product_search_gin',
+            ),
+            GinIndex(
+                fields=['product_name'],
+                name='receipts_product_name_trgm_gin',
+                opclasses=['gin_trgm_ops'],
             ),
         ]
 

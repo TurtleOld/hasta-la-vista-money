@@ -313,7 +313,9 @@ class ReceiptCreatorService:
                     user=user,
                     product_name=str(product_name),
                     category=category,
-                    category_source=ProductCategorySource.WRITING_MATCH,
+                    category_source=self._parse_category_source(
+                        raw_product.get('category_source'),
+                    ),
                     price=Decimal(str(price)),
                     quantity=Decimal(str(quantity)),
                     amount=Decimal(str(amount or 0)),
@@ -323,6 +325,13 @@ class ReceiptCreatorService:
             )
 
         return products
+
+    @staticmethod
+    def _parse_category_source(value: Any) -> ProductCategorySource:
+        try:
+            return ProductCategorySource(value)
+        except ValueError:
+            return ProductCategorySource.WRITING_MATCH
 
     def _get_or_create_product_category(
         self,

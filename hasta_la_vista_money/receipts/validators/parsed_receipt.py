@@ -78,7 +78,14 @@ REQUIRED_TOP_LEVEL_FIELDS: Final[frozenset[str]] = frozenset(
     },
 )
 ITEM_FIELDS: Final[frozenset[str]] = frozenset(
-    {'product_name', 'category', 'price', 'quantity', 'amount'},
+    {
+        'product_name',
+        'category',
+        'category_source',
+        'price',
+        'quantity',
+        'amount',
+    },
 )
 REQUIRED_ITEM_FIELDS: Final[frozenset[str]] = frozenset(
     {'product_name', 'price', 'quantity', 'amount'},
@@ -113,6 +120,7 @@ RECEIPT_PARSE_SCHEMA: Final[dict[str, Any]] = {
                 'properties': {
                     'product_name': {'type': 'string', 'minLength': 1},
                     'category': {'type': 'string'},
+                    'category_source': {'type': ['string', 'null']},
                     'price': {'type': ['number', 'string'], 'minimum': 0},
                     'quantity': {
                         'type': ['number', 'string'],
@@ -135,16 +143,20 @@ class ReceiptParseItem:
     price: Decimal
     quantity: Decimal
     amount: Decimal
+    category_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return JSON-serializable item data."""
-        return {
+        data: dict[str, Any] = {
             'product_name': self.product_name,
             'category': self.category,
             'price': _format_decimal(self.price),
             'quantity': _format_decimal(self.quantity),
             'amount': _format_decimal(self.amount),
         }
+        if self.category_source is not None:
+            data['category_source'] = self.category_source
+        return data
 
 
 @dataclass(frozen=True)
@@ -308,6 +320,7 @@ def _validate_item(value: Any, *, index: int) -> ReceiptParseItem:
             user_message=_USER_MSG_BAD_ITEM,
         ),
         category=_parse_optional_text(value.get('category')) or 'Прочее',
+        category_source=_parse_optional_text(value.get('category_source')),
         price=price,
         quantity=quantity,
         amount=amount,

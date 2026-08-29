@@ -1,10 +1,15 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models.signals import post_save
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
+from config.containers import ApplicationContainer
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     Product,
     ProductCategory,
@@ -13,6 +18,10 @@ from hasta_la_vista_money.receipts.models import (
 from hasta_la_vista_money.receipts.repositories import (
     ProductCategoryRepository,
     ProductRepository,
+)
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreateData,
+    SellerCreateData,
 )
 from hasta_la_vista_money.receipts.services.signals import (
     seed_product_categories_for_new_user,
@@ -119,6 +128,91 @@ class ProductCategoryTest(TestCase):
                 quantity=1,
                 amount=1,
             )
+
+
+class ReceiptCreatorCategorySourceTest(TestCase):
+    """Product rows keep the categorization stage that produced them."""
+
+    def test_uses_category_source_reported_by_the_classifier(self) -> None:
+        user = User.objects.create_user(
+            username='creator-category-source-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        account = Account.objects.create(
+            user=user,
+            name_account='Wallet',
+            balance=Decimal('1000.00'),
+            currency='RU',
+        )
+        service = ApplicationContainer().receipts.receipt_creator_service()
+
+        receipt = service.create_receipt_with_products(
+            user=user,
+            account=account,
+            receipt_data=ReceiptCreateData(
+                receipt_date=timezone.now(),
+                total_sum=Decimal('10.00'),
+                operation_type=1,
+            ),
+            seller_data=SellerCreateData(name_seller='Shop'),
+            products_data=[
+                {
+                    'product_name': 'Кефир',
+                    'category': 'Молочные продукты и яйца',
+                    'category_source': 'name_match',
+                    'price': '10.00',
+                    'quantity': '1',
+                    'amount': '10.00',
+                },
+            ],
+            allow_insufficient_funds=True,
+        )
+
+        product = receipt.product.get()
+        self.assertEqual(
+            product.category_source,
+            ProductCategorySource.NAME_MATCH,
+        )
+
+    def test_falls_back_to_writing_match_for_unknown_source(self) -> None:
+        user = User.objects.create_user(
+            username='creator-unknown-source-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        account = Account.objects.create(
+            user=user,
+            name_account='Wallet',
+            balance=Decimal('1000.00'),
+            currency='RU',
+        )
+        service = ApplicationContainer().receipts.receipt_creator_service()
+
+        receipt = service.create_receipt_with_products(
+            user=user,
+            account=account,
+            receipt_data=ReceiptCreateData(
+                receipt_date=timezone.now(),
+                total_sum=Decimal('10.00'),
+                operation_type=1,
+            ),
+            seller_data=SellerCreateData(name_seller='Shop'),
+            products_data=[
+                {
+                    'product_name': 'Кефир',
+                    'category': 'Прочее',
+                    'price': '10.00',
+                    'quantity': '1',
+                    'amount': '10.00',
+                },
+            ],
+            allow_insufficient_funds=True,
+        )
+
+        product = receipt.product.get()
+        self.assertEqual(
+            product.category_source,
+            ProductCategorySource.WRITING_MATCH,
+        )
 
 
 class ProductCategoryMigrationTest(TransactionTestCase):
