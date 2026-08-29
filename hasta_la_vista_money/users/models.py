@@ -31,7 +31,10 @@ from django.db.models import (
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from hasta_la_vista_money.constants import STATEMENT_RETENTION_DAYS
+from hasta_la_vista_money.constants import (
+    DEFAULT_TIMEZONE_NAME,
+    STATEMENT_RETENTION_DAYS,
+)
 
 
 def bank_statement_expires_at() -> datetime:
@@ -50,6 +53,10 @@ class User(AbstractUser):
     """
 
     theme: CharField[Any, Any] = CharField(max_length=10, default='auto')
+    timezone_name: CharField[Any, Any] = CharField(
+        max_length=64,
+        default=DEFAULT_TIMEZONE_NAME,
+    )
 
     def __str__(self) -> str:
         """Return string representation of the user.

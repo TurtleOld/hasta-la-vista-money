@@ -122,6 +122,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'csp.middleware.CSPMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'hasta_la_vista_money.users.middleware.UserTimezoneMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'hasta_la_vista_money.users.middleware.CheckAdminMiddleware',
@@ -248,51 +249,46 @@ if not DEBUG:
     SESSION_CACHE_ALIAS = 'default'
 
 # Database
-if IS_TESTING and not config(
-    'USE_DB_FOR_TESTS',
-    default=False,
-    cast=bool,
+database_url = config('DATABASE_URL', default='')
+
+if database_url:
+    DATABASES: dict[str, Any] = {
+        'default': dict(
+            dj_database_url.parse(
+                str(database_url),
+                conn_max_age=CONN_MAX_AGE,
+            ),
+        ),
+    }
+elif config('POSTGRES_PASSWORD', default='') or config(
+    'POSTGRES_USER',
+    default='',
 ):
+    DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('POSTGRES_DB', default='hlvm'),
+            'USER': config('POSTGRES_USER', default='postgres'),
+            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
+            'HOST': config('POSTGRES_HOST', default='localhost'),
+            'PORT': config('POSTGRES_PORT', default='5432'),
+            'CONN_MAX_AGE': CONN_MAX_AGE,
+        },
+    }
+else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         },
     }
-else:
-    database_url = config('DATABASE_URL', default='')
 
-    if database_url:
-        DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
-            'default': dict(
-                dj_database_url.parse(
-                    str(database_url),
-                    conn_max_age=CONN_MAX_AGE,
-                ),
-            ),
-        }
-    elif config('POSTGRES_PASSWORD', default='') or config(
-        'POSTGRES_USER',
-        default='',
-    ):
-        DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': config('POSTGRES_DB', default='hlvm'),
-                'USER': config('POSTGRES_USER', default='postgres'),
-                'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
-                'HOST': config('POSTGRES_HOST', default='localhost'),
-                'PORT': config('POSTGRES_PORT', default='5432'),
-                'CONN_MAX_AGE': CONN_MAX_AGE,
-            },
-        }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            },
-        }
+if IS_TESTING and (
+    DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql'
+):
+    raise ImproperlyConfigured(
+        'PostgreSQL configuration is required to run tests.',
+    )
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -593,16 +589,28 @@ FNS_BASE_URL: str = config(
 FNS_CLIENT_SECRET: str = config('FNS_CLIENT_SECRET', default='')
 FNS_INN: str = config('FNS_INN', default='')
 
-CATEGORY_CLASSIFIER_BASE_URL: str = config(
-    'CATEGORY_CLASSIFIER_BASE_URL',
+RECEIPT_CATEGORY_MODEL_BASE_URL: str = config(
+    'RECEIPT_CATEGORY_MODEL_BASE_URL',
     default='',
 )
-CATEGORY_CLASSIFIER_API_KEY: str = config(
-    'CATEGORY_CLASSIFIER_API_KEY',
+RECEIPT_CATEGORY_MODEL_API_KEY: str = config(
+    'RECEIPT_CATEGORY_MODEL_API_KEY',
     default='',
 )
-CATEGORY_CLASSIFIER_MODEL: str = config(
-    'CATEGORY_CLASSIFIER_MODEL',
+RECEIPT_CATEGORY_MODEL_NAME: str = config(
+    'RECEIPT_CATEGORY_MODEL_NAME',
+    default='',
+)
+BANK_STATEMENT_CATEGORY_MODEL_BASE_URL: str = config(
+    'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
+    default='',
+)
+BANK_STATEMENT_CATEGORY_MODEL_API_KEY: str = config(
+    'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
+    default='',
+)
+BANK_STATEMENT_CATEGORY_MODEL_NAME: str = config(
+    'BANK_STATEMENT_CATEGORY_MODEL_NAME',
     default='',
 )
 FNS_PASSWORD: str = config('FNS_PASSWORD', default='')

@@ -5,8 +5,10 @@ from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.timezones import get_available_timezones
 
 
 class CheckAdminMiddleware:
@@ -39,3 +41,31 @@ class CheckAdminMiddleware:
             ):
                 return redirect('users:registration')
         return self.get_response(request)
+
+
+class UserTimezoneMiddleware:
+    """Activate the viewing user's IANA timezone for the request.
+
+    Anonymous users and users with a corrupted stored value fall back to
+    the global application timezone (``settings.TIME_ZONE``), so a bad
+    saved value never breaks a request.
+    """
+
+    def __init__(
+        self,
+        get_response: Callable[[HttpRequest], HttpResponse],
+    ) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        tz_name = settings.TIME_ZONE
+        user = getattr(request, 'user', None)
+        if user is not None and user.is_authenticated:
+            candidate = getattr(user, 'timezone_name', '') or ''
+            if candidate in get_available_timezones():
+                tz_name = candidate
+        timezone.activate(tz_name)
+        try:
+            return self.get_response(request)
+        finally:
+            timezone.deactivate()

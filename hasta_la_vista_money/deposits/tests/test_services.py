@@ -5,7 +5,6 @@ from threading import Barrier, Thread
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
-from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections
@@ -4070,24 +4069,11 @@ class AuditEventTests(TestCase):
 
 
 class ConcurrentRatePeriodTests(TransactionTestCase):
-    """Ensure concurrent floating-rate period additions cannot produce
-    overlapping periods for the same term.
+    """Concurrent floating-rate period additions are serialized by term."""
 
-    Requires a database backend that supports row-level locking
-    (PostgreSQL). Skipped on SQLite because it uses table-level locks
-    that prevent concurrent access entirely.
-    """
-
-    def test_concurrent_overlapping_periods_one_succeeds_one_fails(
+    def test_concurrent_rate_period_additions_are_serialized(
         self,
     ) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         service = ApplicationContainer().deposits.deposit_service()
         deposit = service.create_term_deposit(
@@ -4127,6 +4113,8 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
                 )
             except Exception as exc:
                 errors[index] = exc
+            finally:
+                connections.close_all()
 
         t1 = Thread(
             target=add_period,
@@ -4142,26 +4130,20 @@ class ConcurrentRatePeriodTests(TransactionTestCase):
         t1.join(timeout=5)
         t2.join(timeout=5)
 
-        successes = sum(1 for e in errors if e is None)
-        failures = sum(1 for e in errors if e is not None)
+        successes = sum(1 for error in errors if error is None)
+        failures = [error for error in errors if error is not None]
 
         if successes < 1:
             self.fail(
                 'At least one concurrent addition must succeed, '
                 f'got errors: {errors}',
             )
-        if successes > 1:
-            self.fail(
-                'Both concurrent additions succeeded but they '
-                'may produce overlapping periods.',
-            )
-        if failures < 1:
-            self.fail('Expected at least one failure due to contention.')
-
-        failing_errors = [error for error in errors if error is not None]
-        self.assertTrue(
-            all(isinstance(error, ValidationError) for error in failing_errors),
-        )
+        for error in failures:
+            if not isinstance(error, ValidationError):
+                self.fail(
+                    'Rejected concurrent addition must fail with '
+                    f'ValidationError, got: {error!r}',
+                )
 
         term.refresh_from_db()
         periods = list(term.rate_periods.order_by('starts_on'))
@@ -4178,13 +4160,6 @@ class ConcurrentTopUpTests(TransactionTestCase):
     """Two simultaneous top-ups must both be applied — no lost updates."""
 
     def test_concurrent_top_ups_sum_without_lost_updates(self) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         source = Account.objects.create(
             user=user,
@@ -4264,13 +4239,6 @@ class ConcurrentWithdrawalTests(TransactionTestCase):
     def test_concurrent_withdrawals_only_one_passes_minimum_balance(
         self,
     ) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         destination = Account.objects.create(
             user=user,
@@ -4345,13 +4313,6 @@ class ConcurrentInterestConfirmationTests(TransactionTestCase):
     def test_concurrent_duplicate_confirmation_creates_single_event(
         self,
     ) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         service = ApplicationContainer().deposits.deposit_service()
         deposit = service.create_term_deposit(
@@ -4427,13 +4388,6 @@ class ConcurrentClosureTests(TransactionTestCase):
     destination account."""
 
     def test_concurrent_closure_only_one_succeeds(self) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         service = ApplicationContainer().deposits.deposit_service()
         deposit = service.create_term_deposit(
@@ -4528,13 +4482,6 @@ class LockOrderingDeadlockTests(TransactionTestCase):
     locks affected accounts in ascending pk order."""
 
     def test_reversed_account_order_does_not_deadlock(self) -> None:
-        engine = str(settings.DATABASES['default']['ENGINE'])
-        if 'sqlite3' in engine:
-            self.skipTest(
-                'SQLite uses table-level locking – '
-                'concurrent select_for_update is not supported.',
-            )
-
         user = cast('User', UserFactory())
         account_a = Account.objects.create(
             user=user,
