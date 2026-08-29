@@ -37,6 +37,21 @@ services:
       timeout: 5s
       retries: 5
 
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
+    command: ["--model-id", "${RECEIPT_CATEGORY_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}"]
+    volumes:
+      - embeddings_data:/data
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   migrator:
     image: ghcr.io/turtleold/hasta-la-vista-money:main
     entrypoint: []
@@ -80,6 +95,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
+      RECEIPT_CATEGORY_EMBEDDING_BASE_URL: ${RECEIPT_CATEGORY_EMBEDDING_BASE_URL:-http://embeddings/v1}
     depends_on:
       db:
         condition: service_healthy
@@ -89,6 +105,8 @@ services:
         condition: service_completed_successfully
       volume-permissions:
         condition: service_completed_successfully
+      embeddings:
+        condition: service_started
     networks:
       - default
     healthcheck:
@@ -110,6 +128,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
+      RECEIPT_CATEGORY_EMBEDDING_BASE_URL: ${RECEIPT_CATEGORY_EMBEDDING_BASE_URL:-http://embeddings/v1}
     depends_on:
       db:
         condition: service_healthy
@@ -119,6 +138,8 @@ services:
         condition: service_completed_successfully
       volume-permissions:
         condition: service_completed_successfully
+      embeddings:
+        condition: service_started
     networks:
       - default
     restart: unless-stopped
@@ -173,6 +194,7 @@ volumes:
   redis_data:
   media_data:
   nginx_config_data:
+  embeddings_data:
 
 networks:
   default:
