@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy as _
@@ -12,6 +13,9 @@ from hasta_la_vista_money.receipts.models import CategoryMergeProposal
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.receipts.protocols.services import (
+        CategoryMergeProposalServiceProtocol,
+    )
 
 
 class CategoryMergeProposalView(
@@ -22,9 +26,12 @@ class CategoryMergeProposalView(
     template_name = 'receipts/category_twins.html'
     context_object_name = 'proposals'
 
-    def get_queryset(self) -> Any:
+    def get_queryset(self) -> QuerySet[CategoryMergeProposal]:
         request = cast('RequestWithContainer', self.request)
-        service = request.container.receipts.category_merge_proposal_service()
+        service = cast(
+            'CategoryMergeProposalServiceProtocol',
+            request.container.receipts.category_merge_proposal_service(),
+        )
         return service.list_pending(user=self.get_authenticated_user())
 
 

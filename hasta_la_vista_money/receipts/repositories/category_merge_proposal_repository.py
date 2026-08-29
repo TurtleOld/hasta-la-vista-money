@@ -14,6 +14,15 @@ from hasta_la_vista_money.users.models import User
 class CategoryMergeProposalRepository:
     """Persist and query twin-category merge proposals."""
 
+    @staticmethod
+    def _ordered_pair(
+        category_a: ProductCategory,
+        category_b: ProductCategory,
+    ) -> tuple[ProductCategory, ProductCategory]:
+        if category_a.pk > category_b.pk:
+            return category_b, category_a
+        return category_a, category_b
+
     def list_pending_for_user(
         self,
         user: User,
@@ -48,9 +57,7 @@ class CategoryMergeProposalRepository:
         category_b: ProductCategory,
     ) -> bool:
         """Return whether a proposal already exists for the pair."""
-        first, second = (category_a, category_b)
-        if first.pk > second.pk:
-            first, second = second, first
+        first, second = self._ordered_pair(category_a, category_b)
         return CategoryMergeProposal.objects.filter(
             user=user,
             category_a=first,
@@ -65,9 +72,7 @@ class CategoryMergeProposalRepository:
         category_b: ProductCategory,
     ) -> CategoryMergeProposal:
         """Create a pending proposal with the pair ordered by primary key."""
-        first, second = (category_a, category_b)
-        if first.pk > second.pk:
-            first, second = second, first
+        first, second = self._ordered_pair(category_a, category_b)
         return CategoryMergeProposal.objects.create(
             user=user,
             category_a=first,

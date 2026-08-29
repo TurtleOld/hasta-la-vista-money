@@ -79,7 +79,7 @@ class CategoryTwinDetectionService:
                         ),
                     },
                 ],
-                max_tokens=constants.RECEIPT_CATEGORY_MAX_RESPONSE_TOKENS,
+                max_tokens=constants.RECEIPT_CATEGORY_TWIN_MAX_RESPONSE_TOKENS,
                 temperature=0,
                 response_format=constants.RECEIPT_CATEGORY_TWIN_RESPONSE_FORMAT,
             )

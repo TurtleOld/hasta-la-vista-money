@@ -7,11 +7,13 @@ enabling dependency injection and type checking.
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
+from django.db.models import QuerySet
 from django.forms import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import (
+    CategoryMergeProposal,
     PendingReceipt,
     Product,
     ProductCategory,
@@ -242,7 +244,11 @@ class CategoryMergeProposalServiceProtocol(Protocol):
         category_b: ProductCategory,
     ) -> bool: ...
 
-    def list_pending(self, *, user: User) -> Any: ...
+    def list_pending(
+        self,
+        *,
+        user: User,
+    ) -> QuerySet[CategoryMergeProposal]: ...
 
     def merge(
         self,

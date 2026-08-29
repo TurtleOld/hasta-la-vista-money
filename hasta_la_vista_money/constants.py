@@ -120,6 +120,7 @@ RECEIPT_CATEGORY_RESPONSE_FORMAT: Final[dict[str, Any]] = {
 RECEIPT_CATEGORY_TWIN_TASK_NAME: Final = (
     'receipts.find_category_merge_proposals'
 )
+RECEIPT_CATEGORY_TWIN_MAX_RESPONSE_TOKENS: Final = 1000
 RECEIPT_CATEGORY_TWIN_RESPONSE_FORMAT: Final[dict[str, Any]] = {
     'type': 'json_schema',
     'json_schema': {
