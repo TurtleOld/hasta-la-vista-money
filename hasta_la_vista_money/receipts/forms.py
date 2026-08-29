@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import django_filters
 from django.contrib.auth import get_user_model
