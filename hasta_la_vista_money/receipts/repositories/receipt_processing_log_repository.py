@@ -191,7 +191,7 @@ class ReceiptProcessingLogRepository:
 
     def get_for_completion(self, *, log_id: int) -> ReceiptProcessingLog:
         return (
-            ReceiptProcessingLog.objects.select_for_update()
+            ReceiptProcessingLog.objects.select_for_update(of=('self',))
             .select_related('user', 'account', 'receipt')
             .get(pk=log_id)
         )
