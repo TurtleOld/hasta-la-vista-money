@@ -1,16 +1,20 @@
 from typing import TYPE_CHECKING, cast
 
 from dependency_injector import containers, providers
+from django.conf import settings
 
+from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
     ReceiptCreatorServiceProtocol,
     ReceiptDeleterServiceProtocol,
+    ReceiptProcessingServiceProtocol,
     ReceiptUpdaterServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories import (
     ProductCategoryRepository,
     ProductRepository,
+    ReceiptProcessingLogRepository,
     ReceiptRepository,
     SellerRepository,
 )
@@ -26,12 +30,27 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.receipts.services.receipt_deleter import (
     ReceiptDeleterService,
 )
+from hasta_la_vista_money.receipts.services.receipt_processing_service import (
+    ReceiptProcessingService,
+)
 from hasta_la_vista_money.receipts.services.receipt_updater import (
     ReceiptUpdaterService,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+def _build_category_model_transport() -> ExternalModelTransport | None:
+    """Build the optional transport for receipt product categorization."""
+    base_url = getattr(settings, 'RECEIPT_CATEGORY_MODEL_BASE_URL', '')
+    if not base_url:
+        return None
+    return ExternalModelTransport(
+        base_url=base_url,
+        api_key=getattr(settings, 'RECEIPT_CATEGORY_MODEL_API_KEY', ''),
+        model=getattr(settings, 'RECEIPT_CATEGORY_MODEL_NAME', ''),
+    )
 
 
 class ReceiptsContainer(containers.DeclarativeContainer):
@@ -42,6 +61,12 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     product_category_repository = providers.Singleton(ProductCategoryRepository)
     product_repository = providers.Singleton(ProductRepository)
     seller_repository = providers.Singleton(SellerRepository)
+    receipt_processing_log_repository = providers.Singleton(
+        ReceiptProcessingLogRepository,
+    )
+    category_model_transport = providers.Singleton(
+        _build_category_model_transport,
+    )
 
     receipt_creator_service: providers.Factory[
         ReceiptCreatorServiceProtocol
@@ -73,6 +98,16 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         ReceiptDeleterService,
         account_service=core.account_service,
+    )
+    receipt_processing_service: providers.Factory[
+        ReceiptProcessingServiceProtocol
+    ] = providers.Factory(
+        cast(
+            'Callable[..., ReceiptProcessingServiceProtocol]',
+            ReceiptProcessingService,
+        ),
+        receipt_creator_service=receipt_creator_service,
+        processing_log_repository=receipt_processing_log_repository,
     )
     pending_receipt_service: providers.Factory[
         PendingReceiptServiceProtocol

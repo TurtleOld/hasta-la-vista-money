@@ -647,7 +647,7 @@ class DepositService:
                 recorded period's start date.
         """
         try:
-            term = self.deposit_repository.get_term_by_id_and_user(
+            term = self.deposit_repository.get_term_by_id_and_user_for_update(
                 command.term_id,
                 command.user,
             )

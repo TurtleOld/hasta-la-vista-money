@@ -10,6 +10,7 @@ from core.repositories.protocols import (
     ReceiptRepositoryProtocol,
     SellerRepositoryProtocol,
 )
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import (
     ProductCategorySource,
@@ -126,13 +127,21 @@ class ReceiptUpdaterService:
                     )
                     new_total_sum += product_data['amount']
 
-        receipt.total_sum = new_total_sum
+        if receipt.manual:
+            receipt.total_sum = new_total_sum
+        receipt.adjustment = receipt.total_sum - new_total_sum
+        receipt.requires_attention = receipt.adjustment != 0
+        receipt.attention_reason = (
+            str(constants.RECEIPT_ATTENTION_REASON_TOTAL_MISMATCH)
+            if receipt.requires_attention
+            else ''
+        )
         receipt.save()
 
         old_delta = receipt_balance_delta(old_operation_type, old_total_sum)
         new_delta = receipt_balance_delta(
             receipt.operation_type,
-            new_total_sum,
+            receipt.total_sum,
         )
         deltas = {old_account_id: -old_delta}
         deltas[receipt.account_id] = (

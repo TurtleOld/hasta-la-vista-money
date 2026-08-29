@@ -1,7 +1,7 @@
 import logging
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-import httpx
+from core.services.external_model import ExternalModelTransport
 
 logger = logging.getLogger(__name__)
 
@@ -65,25 +65,16 @@ class NoopClassifier:
         return description
 
 
-class OpenAICompatibleClassifier:
-    """Категоризатор через OpenAI-совместимый API.
+class ExternalModelCategoryClassifier:
+    """Категоризатор финансовых операций через внешнюю модель."""
 
-    Работает с LM Studio, Ollama, Claude (через прокси), OpenAI и любым
-    другим провайдером, поддерживающим ``/chat/completions``.
-    """
-
-    def __init__(self, base_url: str, api_key: str, model: str) -> None:
+    def __init__(self, *, transport: ExternalModelTransport) -> None:
         """Инициализировать классификатор.
 
         Args:
-            base_url: Базовый URL API, например ``http://localhost:1234/v1``.
-            api_key: API-ключ провайдера. Может быть пустой строкой для
-                локальных моделей (LM Studio, Ollama).
-            model: Идентификатор модели, например ``llama-3-8b-instruct``.
+            transport: Общий транспорт внешней модели.
         """
-        self._base_url = base_url.rstrip('/')
-        self._api_key = api_key
-        self._model = model
+        self._transport = transport
 
     def classify(
         self,
@@ -91,7 +82,7 @@ class OpenAICompatibleClassifier:
         transaction_type: str,
         existing_categories: list[str],
     ) -> str:
-        """Определить категорию через LLM.
+        """Определить категорию через внешнюю модель.
 
         Отправляет только очищенное описание, тип операции и список категорий —
         никаких персональных данных (номера карт, счетов, имена).
@@ -112,30 +103,17 @@ class OpenAICompatibleClassifier:
             f'Тип: {type_label}\n'
             f'Существующие категории: {cats}'
         )
-        headers = {'Content-Type': 'application/json'}
-        if self._api_key:
-            headers['Authorization'] = f'Bearer {self._api_key}'
-
-        payload = {
-            'model': self._model,
-            'messages': [
-                {'role': 'system', 'content': _SYSTEM_PROMPT},
-                {'role': 'user', 'content': user_message},
-            ],
-            'max_tokens': 20,
-            'temperature': 0,
-        }
         try:
-            with httpx.Client(timeout=10) as client:
-                response = client.post(
-                    f'{self._base_url}/chat/completions',
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = cast('dict[str, Any]', response.json())
-                content = data['choices'][0]['message']['content']
-                return str(content).strip()
+            data = self._transport.complete(
+                messages=[
+                    {'role': 'system', 'content': _SYSTEM_PROMPT},
+                    {'role': 'user', 'content': user_message},
+                ],
+                max_tokens=20,
+                temperature=0,
+            )
+            content = data['choices'][0]['message']['content']
+            return str(content).strip()
         except Exception:
             logger.warning(
                 'category_classifier_failed',

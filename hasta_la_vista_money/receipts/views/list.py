@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.finance_account.models import Account
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.views.generic import (
     ListView,
 )
@@ -31,7 +30,6 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
 )
 from hasta_la_vista_money.receipts.models import (
-    PendingReceipt,
     Receipt,
     Seller,
 )
@@ -241,13 +239,11 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['selected_group_id'] = group_id
         context['pagination_querystring'] = pagination_querystring
         context['group_querystring'] = group_querystring
-        context['pending_receipts'] = (
-            PendingReceipt.objects.filter(
-                user=user,
-                expires_at__gt=timezone.now(),
-            )
-            .select_related('account')
-            .order_by('-created_at')
+        processing_service = (
+            request.container.receipts.receipt_processing_service()
+        )
+        context['processing_logs'] = processing_service.get_visible_for_user(
+            user=user,
         )
 
         return context

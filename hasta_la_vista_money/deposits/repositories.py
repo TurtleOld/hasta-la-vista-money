@@ -152,6 +152,20 @@ class DepositRepository:
             deposit__account__user=user,
         )
 
+    def get_term_by_id_and_user_for_update(
+        self,
+        term_id: int,
+        user: User,
+    ) -> DepositTerm:
+        return (
+            DepositTerm.objects.select_for_update(of=('self',))
+            .select_related('deposit__account')
+            .get(
+                pk=term_id,
+                deposit__account__user=user,
+            )
+        )
+
     def get_overlapping_terms(
         self,
         deposit_id: int,

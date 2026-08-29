@@ -6,12 +6,16 @@ products, sellers, and receipts.
 
 from .product_category_repository import ProductCategoryRepository
 from .product_repository import ProductRepository
+from .receipt_processing_log_repository import (
+    ReceiptProcessingLogRepository,
+)
 from .receipt_repository import ReceiptRepository
 from .seller_repository import SellerRepository
 
 __all__ = [
     'ProductCategoryRepository',
     'ProductRepository',
+    'ReceiptProcessingLogRepository',
     'ReceiptRepository',
     'SellerRepository',
 ]
