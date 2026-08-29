@@ -9,10 +9,11 @@ from datetime import datetime, timedelta
 from typing import Any, ClassVar
 
 from django.conf import settings
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.db.models import Min
+from django.db.models.functions import Lower
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -357,9 +358,8 @@ class Product(models.Model):
                 name='receipts_product_search_gin',
             ),
             GinIndex(
-                fields=['product_name'],
+                OpClass(Lower('product_name'), name='gin_trgm_ops'),
                 name='receipts_product_name_trgm_gin',
-                opclasses=['gin_trgm_ops'],
             ),
         ]
 
