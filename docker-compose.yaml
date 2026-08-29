@@ -2,7 +2,7 @@ name: hlvm-dev
 
 services:
   db:
-    image: postgres:18.0
+    image: pgvector/pgvector:pg18
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
@@ -32,6 +32,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
+    command: ["--model-id", "${RECEIPT_CATEGORY_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}"]
+    volumes:
+      - embeddings_data:/data
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   migrator:
     build:
@@ -87,6 +102,7 @@ services:
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       ERROR_TRACKING_ENVIRONMENT: ${ERROR_TRACKING_ENVIRONMENT:-development}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
+      RECEIPT_CATEGORY_EMBEDDING_BASE_URL: ${RECEIPT_CATEGORY_EMBEDDING_BASE_URL:-http://embeddings/v1}
     depends_on:
       redis:
         condition: service_started
@@ -94,6 +110,8 @@ services:
         condition: service_completed_successfully
       volume-permissions:
         condition: service_completed_successfully
+      embeddings:
+        condition: service_started
     networks:
       - default
     healthcheck:
@@ -118,6 +136,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change_me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
+      RECEIPT_CATEGORY_EMBEDDING_BASE_URL: ${RECEIPT_CATEGORY_EMBEDDING_BASE_URL:-http://embeddings/v1}
     depends_on:
       redis:
         condition: service_started
@@ -125,6 +144,8 @@ services:
         condition: service_completed_successfully
       volume-permissions:
         condition: service_completed_successfully
+      embeddings:
+        condition: service_started
     networks:
       - default
     healthcheck:
@@ -179,6 +200,7 @@ volumes:
   staticfiles_data:
   redis_data:
   media_data:
+  embeddings_data:
 
 networks:
   default:

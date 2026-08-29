@@ -165,6 +165,14 @@ def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
     )
 
 
+def _get_receipt_item_category_service() -> ReceiptItemCategoryService:
+    """Resolve ReceiptItemCategoryService through the DI container."""
+    return cast(
+        'ReceiptItemCategoryService',
+        ApplicationContainer().receipts.receipt_item_category_service(),
+    )
+
+
 def _run_fns_pipeline_from_raw(
     pending: PendingReceipt | ReceiptProcessingLog,
     raw_qr: str,
@@ -177,9 +185,11 @@ def _run_fns_pipeline_from_raw(
     """
     fns_payload = FNSClient().fetch_receipt(raw_qr)
     receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
-    receipt_data['items'] = ReceiptItemCategoryService().categorize_items(
-        user=pending.user,
-        items=receipt_data.get('items', []),
+    receipt_data['items'] = (
+        _get_receipt_item_category_service().categorize_items(
+            user=pending.user,
+            items=receipt_data.get('items', []),
+        )
     )
 
     inn = receipt_data.get('inn')

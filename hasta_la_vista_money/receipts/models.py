@@ -17,6 +17,7 @@ from django.db.models.functions import Lower
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from pgvector.django import HnswIndex, VectorField
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -347,6 +348,12 @@ class Product(models.Model):
         blank=True,
         verbose_name='Date created',
     )
+    name_embedding = VectorField(
+        dimensions=constants.PRODUCT_NAME_EMBEDDING_DIMENSIONS,
+        null=True,
+        blank=True,
+        editable=False,
+    )
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [
@@ -360,6 +367,13 @@ class Product(models.Model):
             GinIndex(
                 OpClass(Lower('product_name'), name='gin_trgm_ops'),
                 name='receipts_product_name_trgm_gin',
+            ),
+            HnswIndex(
+                name='receipts_product_embedding_hnsw',
+                fields=['name_embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops'],
             ),
         ]
 

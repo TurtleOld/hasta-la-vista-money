@@ -93,6 +93,7 @@ RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
 RECEIPT_ADJUSTMENT_WARNING_AMOUNT: Final = Decimal('1.00')
 RECEIPT_ADJUSTMENT_WARNING_RATIO: Final = Decimal('0.01')
 DEFAULT_PRODUCT_CATEGORY: Final = 'Прочее'
+PRODUCT_NAME_EMBEDDING_DIMENSIONS: Final = 384
 STARTER_PRODUCT_CATEGORIES: Final = (
     'Молочные продукты и яйца',
     'Мясо и птица',
