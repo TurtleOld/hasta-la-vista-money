@@ -14,6 +14,7 @@ from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     Product,
+    ProductCategory,
     Receipt,
     ReceiptProcessingLog,
     Seller,
@@ -200,6 +201,20 @@ class ReceiptUpdaterServiceProtocol(Protocol):
         form: ReceiptForm,
         product_formset: BaseFormSet[Any],
     ) -> Receipt: ...
+
+
+@runtime_checkable
+class ProductCategoryCorrectionServiceProtocol(Protocol):
+    """Contract for remembering human product-category corrections."""
+
+    def apply_correction(
+        self,
+        *,
+        user: User,
+        product_name: str,
+        category: ProductCategory | None,
+        exclude_product_ids: Iterable[int] = (),
+    ) -> None: ...
 
 
 @runtime_checkable

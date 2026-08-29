@@ -4,6 +4,8 @@ This module provides data access layer for Product model,
 including filtering and CRUD operations.
 """
 
+from collections.abc import Iterable
+
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 
@@ -15,6 +17,7 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.product_category_constants import (
     normalize_product_category_name,
+    normalize_product_name,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -90,3 +93,48 @@ class ProductRepository:
             .select_related('user', 'category')
             .first()
         )
+
+    def reclassify_by_normalized_name(
+        self,
+        *,
+        user: User,
+        normalized_product_name: str,
+        category: ProductCategory,
+        source: ProductCategorySource,
+        exclude_ids: Iterable[int] = (),
+    ) -> int:
+        """Reclassify the owner's non-manual rows with a normalized name.
+
+        Applies the given category and source to every product row of the
+        owner whose normalized name matches, leaving manual rows and the
+        supplied ids untouched.
+
+        Args:
+            user: Owner of the products.
+            normalized_product_name: Canonical form to match against.
+            category: Category to assign to matching rows.
+            source: Category source to assign to matching rows.
+            exclude_ids: Product primary keys to leave untouched.
+
+        Returns:
+            Number of product rows updated.
+        """
+        products = Product.objects.filter(user=user).exclude(
+            category_source=ProductCategorySource.MANUAL,
+        )
+        excluded = list(exclude_ids)
+        if excluded:
+            products = products.exclude(pk__in=excluded)
+
+        updated = 0
+        for product in products.iterator():
+            if (
+                normalize_product_name(product.product_name)
+                != normalized_product_name
+            ):
+                continue
+            product.category = category
+            product.category_source = source
+            product.save(update_fields=['category', 'category_source'])
+            updated += 1
+        return updated

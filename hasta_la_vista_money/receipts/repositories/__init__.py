@@ -5,6 +5,9 @@ products, sellers, and receipts.
 """
 
 from .product_category_repository import ProductCategoryRepository
+from .product_name_category_mapping_repository import (
+    ProductNameCategoryMappingRepository,
+)
 from .product_repository import ProductRepository
 from .receipt_processing_log_repository import (
     ReceiptProcessingLogRepository,
@@ -14,6 +17,7 @@ from .seller_repository import SellerRepository
 
 __all__ = [
     'ProductCategoryRepository',
+    'ProductNameCategoryMappingRepository',
     'ProductRepository',
     'ReceiptProcessingLogRepository',
     'ReceiptRepository',

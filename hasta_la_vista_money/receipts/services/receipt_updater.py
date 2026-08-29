@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,15 @@ from core.repositories.protocols import (
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import (
+    ProductCategory,
     ProductCategorySource,
     Receipt,
+)
+from hasta_la_vista_money.receipts.product_category_constants import (
+    normalize_product_name,
+)
+from hasta_la_vista_money.receipts.protocols.services import (
+    ProductCategoryCorrectionServiceProtocol,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
@@ -25,6 +33,14 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
         AccountRepository,
     )
+
+
+@dataclass(frozen=True)
+class _PreviousProductsSnapshot:
+    """Categories and ids of a receipt's rows before an update."""
+
+    categories: dict[str, int | None]
+    ids: set[int]
 
 
 class ReceiptUpdaterService:
@@ -41,6 +57,7 @@ class ReceiptUpdaterService:
         product_repository: ProductRepositoryProtocol,
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
+        category_correction_service: ProductCategoryCorrectionServiceProtocol,
     ) -> None:
         """Initialize ReceiptUpdaterService.
 
@@ -50,12 +67,15 @@ class ReceiptUpdaterService:
             product_repository: Repository for product data access.
             receipt_repository: Repository for receipt data access.
             seller_repository: Repository for seller data access.
+            category_correction_service: Service that remembers human
+                category corrections.
         """
         self.account_service = account_service
         self.account_repository = account_repository
         self.product_repository = product_repository
         self.receipt_repository = receipt_repository
         self.seller_repository = seller_repository
+        self.category_correction_service = category_correction_service
 
     @transaction.atomic
     def update_receipt(
@@ -83,6 +103,16 @@ class ReceiptUpdaterService:
         old_total_sum = receipt.total_sum
         old_account_id = receipt.account_id
         old_operation_type = receipt.operation_type
+        previous_products = list(receipt.product.all())
+        previous = _PreviousProductsSnapshot(
+            categories={
+                normalize_product_name(product.product_name): (
+                    product.category_id
+                )
+                for product in previous_products
+            },
+            ids={product.pk for product in previous_products},
+        )
         form.instance = receipt
         for field_name in (
             'seller',
@@ -127,6 +157,13 @@ class ReceiptUpdaterService:
                     )
                     new_total_sum += product_data['amount']
 
+                    self._remember_category_correction(
+                        user=user,
+                        product_name=product_data['product_name'],
+                        category=product_data['category'],
+                        previous=previous,
+                    )
+
         if receipt.manual:
             receipt.total_sum = new_total_sum
         receipt.adjustment = receipt.total_sum - new_total_sum
@@ -149,3 +186,30 @@ class ReceiptUpdaterService:
         )
         self.account_service.apply_account_deltas(deltas)
         return receipt
+
+    def _remember_category_correction(
+        self,
+        *,
+        user: User,
+        product_name: str,
+        category: ProductCategory | None,
+        previous: _PreviousProductsSnapshot,
+    ) -> None:
+        """Pin a category that the human actually changed or newly set.
+
+        Only a real correction is remembered: if the submitted category
+        matches the one the product already had (by normalized name), nothing
+        is pinned, so the automatic stages keep working for names the human
+        never corrected.
+        """
+        if category is None:
+            return
+        normalized_name = normalize_product_name(product_name)
+        if previous.categories.get(normalized_name) == category.pk:
+            return
+        self.category_correction_service.apply_correction(
+            user=user,
+            product_name=product_name,
+            category=category,
+            exclude_product_ids=previous.ids,
+        )

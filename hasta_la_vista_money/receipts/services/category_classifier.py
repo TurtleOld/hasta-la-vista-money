@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING, Any, Final
 
 from django.conf import settings
@@ -23,6 +22,9 @@ from hasta_la_vista_money.receipts.models import (
     ProductCategorySource,
     ProductNameCategoryMapping,
 )
+from hasta_la_vista_money.receipts.product_category_constants import (
+    normalize_product_name,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -31,16 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_WORD_RE: Final[re.Pattern[str]] = re.compile(r'[^0-9a-zа-яё]+')
-_SPACE_RE: Final[re.Pattern[str]] = re.compile(r'\s+')
 _EMBEDDING_BACKFILL_BATCH_SIZE: Final = 200
-
-
-def normalize_product_name(value: str) -> str:
-    """Normalize product name for pinned-mapping lookups."""
-    normalized = value.lower().replace('ё', 'е')
-    normalized = _WORD_RE.sub(' ', normalized)
-    return _SPACE_RE.sub(' ', normalized).strip()
 
 
 def build_embedding_provider() -> EmbeddingProvider:
