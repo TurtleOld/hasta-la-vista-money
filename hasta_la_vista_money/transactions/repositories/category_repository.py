@@ -1,6 +1,6 @@
 """Django repository for the unified Category model."""
 
-from django.db.models import QuerySet
+from django.db.models import F, QuerySet
 
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
@@ -43,7 +43,10 @@ class CategoryRepository:
         """Return categories ordered for form rendering."""
         qs = (
             user.categories.select_related('user', 'parent_category')
-            .order_by('parent_category__name', 'name')
+            .order_by(
+                F('parent_category__name').asc(nulls_first=True),
+                'name',
+            )
             .all()
         )
         if type_value is not None:

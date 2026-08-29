@@ -338,6 +338,23 @@ class PendingReceiptConversionTests(TestCase):
             ],
         )
 
+    def test_convert_locks_only_pending_receipt_row(self) -> None:
+        pending = PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            status=PendingReceiptStatus.READY,
+            receipt_data=_fake_payload(),
+        )
+
+        with mock.patch.object(
+            PendingReceipt.objects,
+            'select_for_update',
+            wraps=PendingReceipt.objects.select_for_update,
+        ) as select_for_update:
+            self.service.convert_to_receipt(pending_receipt=pending)
+
+        select_for_update.assert_called_once_with(of=('self',))
+
     def test_repeated_conversion_returns_same_receipt(self) -> None:
         payload = _fake_payload()
         pending = PendingReceipt.objects.create(

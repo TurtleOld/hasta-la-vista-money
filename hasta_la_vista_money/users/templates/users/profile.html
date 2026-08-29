@@ -68,6 +68,11 @@
                                             {% endif %}
                                         </div>
                                     {% endfor %}
+                                    <datalist id="timezone-list">
+                                        {% for tz in timezone_choices %}
+                                            <option value="{{ tz }}"></option>
+                                        {% endfor %}
+                                    </datalist>
                                 </div>
 
                                 <div class="profile-section">

@@ -1,13 +1,19 @@
 from typing import cast
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.users.middleware import CheckAdminMiddleware
+from hasta_la_vista_money.users.middleware import (
+    CheckAdminMiddleware,
+    UserTimezoneMiddleware,
+)
 
 User = get_user_model()
 
@@ -293,3 +299,67 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                     redirect_response.url,
                     reverse('users:registration'),
                 )
+
+
+class UserTimezoneMiddlewareTest(TestCase):
+    """Tests for UserTimezoneMiddleware activation and safe fallback."""
+
+    def setUp(self) -> None:
+        self.factory: RequestFactory = RequestFactory()
+        self.observed: list[str] = []
+
+        def get_response(_request: HttpRequest) -> HttpResponse:
+            self.observed.append(timezone.get_current_timezone_name())
+            return HttpResponse()
+
+        self.middleware = UserTimezoneMiddleware(get_response=get_response)
+
+    def test_activates_authenticated_users_valid_timezone(self) -> None:
+        user = User.objects.create_user(
+            username='tokyo-user',
+            password='testpass123',  # nosec B106: test-only password
+            timezone_name='Asia/Tokyo',
+        )
+        request = self.factory.get('/')
+        request.user = user
+
+        self.middleware(request)
+
+        self.assertEqual(self.observed, ['Asia/Tokyo'])
+
+    def test_falls_back_to_global_zone_for_anonymous_user(self) -> None:
+        request = self.factory.get('/')
+        request.user = AnonymousUser()
+
+        self.middleware(request)
+
+        self.assertEqual(self.observed, [settings.TIME_ZONE])
+
+    def test_falls_back_to_global_zone_for_corrupted_value(self) -> None:
+        user = User.objects.create_user(
+            username='broken-tz-user',
+            password='testpass123',  # nosec B106: test-only password
+            timezone_name='Not/AZone',
+        )
+        request = self.factory.get('/')
+        request.user = user
+
+        self.middleware(request)
+
+        self.assertEqual(self.observed, [settings.TIME_ZONE])
+
+    def test_deactivates_timezone_after_response(self) -> None:
+        user = User.objects.create_user(
+            username='tokyo-user-2',
+            password='testpass123',  # nosec B106: test-only password
+            timezone_name='Asia/Tokyo',
+        )
+        request = self.factory.get('/')
+        request.user = user
+
+        self.middleware(request)
+
+        self.assertEqual(
+            timezone.get_current_timezone_name(),
+            settings.TIME_ZONE,
+        )
