@@ -59,6 +59,20 @@
             </div>
         </section>
 
+        {% if receipt.operation_type == 1 and insufficient_at_conducting %}
+            <div class="receipts-card">
+                <p class="pending-card-warning">
+                    {% translate 'На счёте недостаточно средств для этого чека.' %}
+                </p>
+            </div>
+        {% endif %}
+
+        {% if receipt.requires_attention %}
+            <div class="receipts-card">
+                <p class="pending-card-warning">{{ receipt.attention_reason }}</p>
+            </div>
+        {% endif %}
+
         <div class="receipts-card">
             <header class="receipts-card-hd">
                 <h2><i class="bi bi-list-ul"></i> {% translate 'Товары' %}</h2>

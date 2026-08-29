@@ -320,6 +320,19 @@ class ReceiptDetailView(
             raise Http404('Receipt not found')
         return cast('Receipt', receipt)
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        request = cast('RequestWithContainer', self.request)
+        processing_service = (
+            request.container.receipts.receipt_processing_service()
+        )
+        context['insufficient_at_conducting'] = (
+            processing_service.is_insufficient_at_conducting(
+                receipt=cast('Receipt', context['receipt']),
+            )
+        )
+        return context
+
 
 class ReceiptDeleteView(
     LoginRequiredMixin,

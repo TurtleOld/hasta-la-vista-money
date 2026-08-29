@@ -7,6 +7,9 @@ products, sellers, and receipts.
 from hasta_la_vista_money.receipts.repositories.product_repository import (
     ProductRepository,
 )
+from hasta_la_vista_money.receipts.repositories.receipt_processing_log_repository import (  # noqa: E501
+    ReceiptProcessingLogRepository,
+)
 from hasta_la_vista_money.receipts.repositories.receipt_repository import (
     ReceiptRepository,
 )
@@ -16,6 +19,7 @@ from hasta_la_vista_money.receipts.repositories.seller_repository import (
 
 __all__ = [
     'ProductRepository',
+    'ReceiptProcessingLogRepository',
     'ReceiptRepository',
     'SellerRepository',
 ]

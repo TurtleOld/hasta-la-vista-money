@@ -34,6 +34,7 @@ from hasta_la_vista_money.receipts.models import (
     PendingReceiptStatus,
     Product,
     Receipt,
+    ReceiptProcessingLog,
     Seller,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -1001,7 +1002,9 @@ class TestUploadImageView(TestCase):
         response = self.client.get(url)
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
-    @patch('hasta_la_vista_money.receipts.views.process_pending_receipt')
+    @patch(
+        'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
+    )
     def test_upload_image_view_post(
         self,
         mock_task: Mock,
@@ -1010,8 +1013,7 @@ class TestUploadImageView(TestCase):
             user=self.user,
             number_receipt=12345,
         ).delete()
-        PendingReceipt.objects.filter(user=self.user).delete()
-        mock_task.delay.return_value = MagicMock(id='task-id')
+        ReceiptProcessingLog.objects.filter(user=self.user).delete()
 
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:upload')
@@ -1032,17 +1034,17 @@ class TestUploadImageView(TestCase):
 
         self.mock_account_service.apply_receipt_spend.assert_not_called()
 
-        pending_receipt = PendingReceipt.objects.filter(
+        processing_log = ReceiptProcessingLog.objects.filter(
             user=self.user,
         ).first()
-        self.assertIsNotNone(pending_receipt)
-        if pending_receipt is not None:
-            self.assertEqual(pending_receipt.account.pk, self.account.pk)
-            self.assertEqual(pending_receipt.status, 'processing')
-            self.assertTrue(pending_receipt.task_id)
+        self.assertIsNotNone(processing_log)
+        if processing_log is not None:
+            self.assertEqual(processing_log.account.pk, self.account.pk)
+            self.assertEqual(processing_log.status, 'processing')
+            self.assertTrue(processing_log.task_id)
             mock_task.apply_async.assert_called_once_with(
-                args=[pending_receipt.pk],
-                task_id=pending_receipt.task_id,
+                args=[processing_log.pk],
+                task_id=processing_log.task_id,
             )
 
         redirect_location = response.get('Location', '')
@@ -1438,6 +1440,11 @@ class TestReviewPendingReceiptView(TestCase):
                 number_receipt=54321,
             ).exists(),
         )
+
+
+# The receipt review endpoint was removed; its replacement is covered by
+# test_processing_log_flow.py through the automatic processing public seams.
+del TestReviewPendingReceiptView
 
 
 class TestProductByMonthView(TestCase):
