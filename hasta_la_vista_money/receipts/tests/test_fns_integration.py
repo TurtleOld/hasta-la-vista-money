@@ -21,6 +21,8 @@ from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
     Product,
+    ProductCategorySource,
+    ProductNameCategoryMapping,
 )
 from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.receipts.services.category_classifier import (
@@ -223,7 +225,7 @@ class ReceiptItemCategoryServiceTests(TestCase):
             'кефир здравушка 1',
         )
 
-    def test_uses_user_history_before_rules(self) -> None:
+    def test_uses_writing_match_from_history(self) -> None:
         Product.objects.create(
             user=self.user,
             product_name='Кефир Здравушка',
@@ -240,10 +242,129 @@ class ReceiptItemCategoryServiceTests(TestCase):
 
         self.assertEqual(category, 'Завтраки')
 
-    def test_uses_rules_when_history_missing(self) -> None:
+    def test_pinned_name_match_wins_over_writing_match(self) -> None:
+        Product.objects.create(
+            user=self.user,
+            product_name='Кефир Здравушка',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Завтраки',
+            ),
+        )
+        ProductNameCategoryMapping.objects.create(
+            user=self.user,
+            normalized_product_name='кефир здравушка',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Молочные продукты и яйца',
+            ),
+        )
+
+        category = self.service.categorize(
+            user=self.user,
+            product_name='Кефир Здравушка',
+        )
+
+        self.assertEqual(category, 'Молочные продукты и яйца')
+
+    def test_categorize_items_reports_pinned_source(self) -> None:
+        ProductNameCategoryMapping.objects.create(
+            user=self.user,
+            normalized_product_name='кефир здравушка',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Молочные продукты и яйца',
+            ),
+        )
+
+        items = self.service.categorize_items(
+            user=self.user,
+            items=[{'product_name': 'Кефир Здравушка'}],
+        )
+
         self.assertEqual(
-            self.service.categorize(user=self.user, product_name='Томаты'),
-            'Овощи и фрукты',
+            items[0]['category_source'],
+            ProductCategorySource.NAME_MATCH,
+        )
+
+    def test_categorize_items_reports_writing_match_source(self) -> None:
+        Product.objects.create(
+            user=self.user,
+            product_name='Кефир Здравушка',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Завтраки',
+            ),
+        )
+
+        items = self.service.categorize_items(
+            user=self.user,
+            items=[{'product_name': 'кефир здравушка'}],
+        )
+
+        self.assertEqual(
+            items[0]['category_source'],
+            ProductCategorySource.WRITING_MATCH,
+        )
+
+    def test_writing_match_respects_configured_threshold(self) -> None:
+        Product.objects.create(
+            user=self.user,
+            product_name='Кефир детский',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Завтраки',
+            ),
+        )
+
+        with override_settings(
+            RECEIPT_CATEGORY_WRITING_SIMILARITY_THRESHOLD=0.99,
+        ):
+            self.assertEqual(
+                self.service.categorize(
+                    user=self.user,
+                    product_name='Кефир здравушка',
+                ),
+                DEFAULT_PRODUCT_CATEGORY,
+            )
+
+        with override_settings(
+            RECEIPT_CATEGORY_WRITING_SIMILARITY_THRESHOLD=0.01,
+        ):
+            self.assertEqual(
+                self.service.categorize(
+                    user=self.user,
+                    product_name='Кефир здравушка',
+                ),
+                'Завтраки',
+            )
+
+    def test_manual_product_row_is_untouched_when_used_as_training_data(
+        self,
+    ) -> None:
+        manual_product = Product.objects.create(
+            user=self.user,
+            product_name='Кефир Здравушка',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Завтраки',
+            ),
+            category_source=ProductCategorySource.MANUAL,
+            price=1,
+            quantity=1,
+            amount=1,
+        )
+
+        category = self.service.categorize(
+            user=self.user,
+            product_name='кефир здравушка',
+        )
+
+        manual_product.refresh_from_db()
+        self.assertEqual(category, 'Завтраки')
+        self.assertEqual(
+            manual_product.category_source,
+            ProductCategorySource.MANUAL,
         )
 
     def test_falls_back_to_default_category(self) -> None:
