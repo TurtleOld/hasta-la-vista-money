@@ -13,6 +13,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
+    Product,
     Receipt,
     ReceiptProcessingLog,
     Seller,
@@ -22,6 +23,36 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+
+@runtime_checkable
+class ReceiptCategoryModelTransportProtocol(Protocol):
+    """Transport boundary for structured product-category requests."""
+
+    def complete(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        response_format: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return an external chat-completion response."""
+        ...
+
+
+@runtime_checkable
+class ExternalProductCategoryServiceProtocol(Protocol):
+    """Contract for the optional external product-category fallback."""
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether the external transport is configured."""
+        ...
+
+    def categorize_product(self, product: Product) -> bool:
+        """Try to replace the default category for one product."""
+        ...
 
 
 @runtime_checkable

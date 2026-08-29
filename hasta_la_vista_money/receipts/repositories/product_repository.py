@@ -7,7 +7,15 @@ including filtering and CRUD operations.
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.receipts.models import Product, ProductCategory
+from hasta_la_vista_money import constants
+from hasta_la_vista_money.receipts.models import (
+    Product,
+    ProductCategory,
+    ProductCategorySource,
+)
+from hasta_la_vista_money.receipts.product_category_constants import (
+    normalize_product_category_name,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -63,3 +71,22 @@ class ProductRepository:
             QuerySet[Product]: Filtered QuerySet.
         """
         return Product.objects.filter(**kwargs)
+
+    def get_external_category_candidate(
+        self,
+        product_id: int,
+    ) -> Product | None:
+        """Return an unresolved automatically categorized product."""
+        return (
+            Product.objects.filter(
+                pk=product_id,
+                category__normalized_name=(
+                    normalize_product_category_name(
+                        constants.DEFAULT_PRODUCT_CATEGORY,
+                    )
+                ),
+                category_source=ProductCategorySource.WRITING_MATCH,
+            )
+            .select_related('user', 'category')
+            .first()
+        )

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, cast
 
+import httpx
 import structlog
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
@@ -18,6 +19,8 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from config.containers import ApplicationContainer
+from core.repositories.protocols import ProductRepositoryProtocol
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
@@ -25,6 +28,7 @@ from hasta_la_vista_money.receipts.models import (
     ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.receipts.protocols.services import (
+    ExternalProductCategoryServiceProtocol,
     PendingReceiptServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories.seller_repository import (
@@ -36,6 +40,9 @@ from hasta_la_vista_money.receipts.services.ai_providers import (
 )
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
+)
+from hasta_la_vista_money.receipts.services.external_category import (
+    ExternalCategoryResponseError,
 )
 from hasta_la_vista_money.receipts.services.fns_client import (
     FNSAuthenticationError,
@@ -170,6 +177,24 @@ def _get_receipt_item_category_service() -> ReceiptItemCategoryService:
     return cast(
         'ReceiptItemCategoryService',
         ApplicationContainer().receipts.receipt_item_category_service(),
+    )
+
+
+def _get_external_product_category_service() -> (
+    ExternalProductCategoryServiceProtocol
+):
+    """Resolve the optional external product-category fallback."""
+    return cast(
+        'ExternalProductCategoryServiceProtocol',
+        ApplicationContainer().receipts.external_product_category_service(),
+    )
+
+
+def _get_product_repository() -> ProductRepositoryProtocol:
+    """Resolve the product repository through the DI container."""
+    return cast(
+        'ProductRepositoryProtocol',
+        ApplicationContainer().receipts.product_repository(),
     )
 
 
@@ -460,6 +485,50 @@ def process_receipt_processing_log(
             processing_log_id=processing_log_id,
             error=str(exc),
         )
+
+
+@shared_task(  # type: ignore[untyped-decorator]
+    name=constants.RECEIPT_EXTERNAL_CATEGORY_TASK_NAME,
+    autoretry_for=(ExternalCategoryResponseError, httpx.HTTPError),
+    max_retries=2,
+    retry_backoff=True,
+    acks_late=True,
+)
+def categorize_receipt_product(product_id: int) -> None:
+    """Run an isolated optional external fallback for one product."""
+    product = _get_product_repository().get_external_category_candidate(
+        product_id,
+    )
+    if product is None:
+        logger.info(
+            'receipt_external_category_skipped',
+            product_id=product_id,
+            reason='not_eligible',
+        )
+        return
+    service = _get_external_product_category_service()
+    if not service.enabled:
+        logger.info(
+            'receipt_external_category_skipped',
+            product_id=product_id,
+            reason='disabled',
+        )
+        return
+    try:
+        service.categorize_product(product)
+    except (ExternalCategoryResponseError, httpx.HTTPError) as error:
+        reason = (
+            'invalid_response'
+            if isinstance(error, ExternalCategoryResponseError)
+            else 'model_unavailable'
+        )
+        logger.warning(
+            'receipt_external_category_failed',
+            product_id=product_id,
+            reason=reason,
+            error=str(error),
+        )
+        raise
 
 
 @shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]

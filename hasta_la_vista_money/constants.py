@@ -16,7 +16,7 @@ Constants are organized by domain for better maintainability:
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Final
+from typing import Any, Final
 
 from django.utils.translation import gettext_lazy as _
 
@@ -94,6 +94,29 @@ RECEIPT_ADJUSTMENT_WARNING_AMOUNT: Final = Decimal('1.00')
 RECEIPT_ADJUSTMENT_WARNING_RATIO: Final = Decimal('0.01')
 DEFAULT_PRODUCT_CATEGORY: Final = 'Прочее'
 PRODUCT_NAME_EMBEDDING_DIMENSIONS: Final = 384
+RECEIPT_EXTERNAL_CATEGORY_TASK_NAME: Final = (
+    'receipts.categorize_receipt_product'
+)
+RECEIPT_CATEGORY_MAX_RESPONSE_TOKENS: Final = 100
+RECEIPT_CATEGORY_RESPONSE_FORMAT: Final[dict[str, Any]] = {
+    'type': 'json_schema',
+    'json_schema': {
+        'name': 'receipt_product_category',
+        'strict': True,
+        'schema': {
+            'type': 'object',
+            'properties': {
+                'action': {
+                    'type': 'string',
+                    'enum': ['existing', 'new'],
+                },
+                'category': {'type': 'string'},
+            },
+            'required': ['action', 'category'],
+            'additionalProperties': False,
+        },
+    },
+}
 STARTER_PRODUCT_CATEGORIES: Final = (
     'Молочные продукты и яйца',
     'Мясо и птица',
