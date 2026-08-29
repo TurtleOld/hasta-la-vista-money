@@ -4,6 +4,9 @@ This module provides repositories for working with receipt data including
 products, sellers, and receipts.
 """
 
+from .category_merge_proposal_repository import (
+    CategoryMergeProposalRepository,
+)
 from .product_category_repository import ProductCategoryRepository
 from .product_name_category_mapping_repository import (
     ProductNameCategoryMappingRepository,
@@ -16,6 +19,7 @@ from .receipt_repository import ReceiptRepository
 from .seller_repository import SellerRepository
 
 __all__ = [
+    'CategoryMergeProposalRepository',
     'ProductCategoryRepository',
     'ProductNameCategoryMappingRepository',
     'ProductRepository',

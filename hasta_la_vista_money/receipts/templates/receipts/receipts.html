@@ -19,6 +19,10 @@
                 <h1 class="receipts-title">{% translate 'Мои чеки' %}</h1>
             </div>
             <div class="receipts-actions">
+                <a href="{% url 'receipts:category_twins' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-diagram-3"></i>
+                    {% translate 'Категории' %}
+                </a>
                 <a href="{% url 'users:statistics' %}" class="receipts-button receipts-button-secondary">
                     <i class="bi bi-bar-chart"></i>
                     {% translate 'Детальная статистика' %}

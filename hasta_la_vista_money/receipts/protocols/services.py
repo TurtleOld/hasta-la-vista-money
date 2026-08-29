@@ -7,11 +7,13 @@ enabling dependency injection and type checking.
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
+from django.db.models import QuerySet
 from django.forms import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import (
+    CategoryMergeProposal,
     PendingReceipt,
     Product,
     ProductCategory,
@@ -215,6 +217,47 @@ class ProductCategoryCorrectionServiceProtocol(Protocol):
         category: ProductCategory | None,
         exclude_product_ids: Iterable[int] = (),
     ) -> None: ...
+
+
+@runtime_checkable
+class CategoryTwinDetectionServiceProtocol(Protocol):
+    """Contract for finding twin categories via the external model."""
+
+    @property
+    def enabled(self) -> bool: ...
+
+    def find_duplicate_pairs(
+        self,
+        user: User,
+    ) -> list[tuple[ProductCategory, ProductCategory]]: ...
+
+
+@runtime_checkable
+class CategoryMergeProposalServiceProtocol(Protocol):
+    """Contract for creating and resolving twin-category proposals."""
+
+    def create_if_absent(
+        self,
+        *,
+        user: User,
+        category_a: ProductCategory,
+        category_b: ProductCategory,
+    ) -> bool: ...
+
+    def list_pending(
+        self,
+        *,
+        user: User,
+    ) -> QuerySet[CategoryMergeProposal]: ...
+
+    def merge(
+        self,
+        *,
+        user: User,
+        proposal_id: int,
+    ) -> ProductCategory | None: ...
+
+    def keep(self, *, user: User, proposal_id: int) -> bool: ...
 
 
 @runtime_checkable

@@ -42,3 +42,31 @@ class ProductNameCategoryMappingRepository:
             defaults={'category': category},
         )
         return mapping
+
+    def repoint_category(
+        self,
+        *,
+        user: User,
+        from_category: ProductCategory,
+        to_category: ProductCategory,
+    ) -> None:
+        """Move mappings to another category, dropping name collisions."""
+        mappings = ProductNameCategoryMapping.objects.filter(
+            user=user,
+            category=from_category,
+        )
+        for mapping in mappings:
+            collision = (
+                ProductNameCategoryMapping.objects.filter(
+                    user=user,
+                    normalized_product_name=mapping.normalized_product_name,
+                    category=to_category,
+                )
+                .exclude(pk=mapping.pk)
+                .exists()
+            )
+            if collision:
+                mapping.delete()
+            else:
+                mapping.category = to_category
+                mapping.save(update_fields=['category'])

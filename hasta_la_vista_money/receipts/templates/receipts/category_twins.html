@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Категории-близнецы' %}{% endblock %}
+
+{% block content %}
+<div class="receipts-app">
+    <div class="receipts-wrap">
+        <header class="receipts-header">
+            <div>
+                <div class="receipts-kicker">{% translate 'Справочник категорий' %}</div>
+                <h1 class="receipts-title">{% translate 'Категории-близнецы' %}</h1>
+                <p class="receipts-upload-lead">
+                    {% translate 'Пары категорий, которые могут обозначать один и тот же вид покупки. Решите по каждой паре — объединить или оставить.' %}
+                </p>
+            </div>
+            <div class="receipts-actions">
+                <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    {% translate 'К списку' %}
+                </a>
+            </div>
+        </header>
+
+        {% if proposals %}
+            <div class="receipts-cards">
+                {% for proposal in proposals %}
+                    <article class="receipt-card">
+                        <div class="receipt-card-content">
+                            <div class="receipt-card-products">
+                                <div class="receipts-label">{% translate 'Предполагаемые дубликаты' %}</div>
+                                <div class="receipt-card-tags">
+                                    <span class="receipts-cat-chip">{{ proposal.category_a.name }}</span>
+                                    <span class="receipts-muted"><i class="bi bi-arrow-left-right"></i></span>
+                                    <span class="receipts-cat-chip">{{ proposal.category_b.name }}</span>
+                                </div>
+                            </div>
+                            <footer class="receipt-card-actions receipts-row-actions swipe-hide-mobile">
+                                <form action="{% url 'receipts:category_twins_merge' proposal.id %}" method="post">
+                                    {% csrf_token %}
+                                    <button class="receipts-chip" type="submit">
+                                        <i class="bi bi-intersect"></i>
+                                        {% translate 'Объединить' %}
+                                    </button>
+                                </form>
+                                <form action="{% url 'receipts:category_twins_keep' proposal.id %}" method="post">
+                                    {% csrf_token %}
+                                    <button class="receipts-chip" type="submit">
+                                        <i class="bi bi-x-lg"></i>
+                                        {% translate 'Оставить' %}
+                                    </button>
+                                </form>
+                            </footer>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="receipts-empty">
+                {% translate 'Предложений нет. Система периодически ищет похожие категории и покажет их здесь.' %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

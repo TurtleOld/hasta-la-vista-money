@@ -7,7 +7,7 @@ including filtering and CRUD operations.
 from collections.abc import Iterable
 
 from django.core.exceptions import ValidationError
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
@@ -138,3 +138,30 @@ class ProductRepository:
             product.save(update_fields=['category', 'category_source'])
             updated += 1
         return updated
+
+    def move_category(
+        self,
+        *,
+        user: User,
+        from_category: ProductCategory,
+        to_category: ProductCategory,
+    ) -> int:
+        """Reassign the owner's product rows from one category to another."""
+        return Product.objects.filter(
+            user=user,
+            category=from_category,
+        ).update(category=to_category)
+
+    def count_by_categories(
+        self,
+        *,
+        user: User,
+        categories: Iterable[ProductCategory],
+    ) -> dict[int, int]:
+        """Return product counts keyed by category primary key."""
+        rows = (
+            Product.objects.filter(user=user, category__in=list(categories))
+            .values('category')
+            .annotate(count=Count('id'))
+        )
+        return {row['category']: row['count'] for row in rows}

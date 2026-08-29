@@ -81,3 +81,7 @@ class ProductCategoryRepository:
         """Create any missing standard product categories for a user."""
         for name in constants.STARTER_PRODUCT_CATEGORIES:
             self.get_or_create_category(user=user, name=name)
+
+    def delete(self, category: ProductCategory) -> None:
+        """Delete a category that no longer has products or mappings."""
+        category.delete()
