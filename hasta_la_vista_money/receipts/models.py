@@ -290,6 +290,58 @@ class ProductCategorySource(models.TextChoices):
     MANUAL = 'manual', _('Поставлено человеком')
 
 
+class CategoryMergeProposalStatus(models.TextChoices):
+    """Lifecycle states for a twin-category merge proposal."""
+
+    PENDING = 'pending', _('Ожидает решения')
+    MERGED = 'merged', _('Объединено')
+    KEPT = 'kept', _('Оставлено')
+
+
+class CategoryMergeProposal(models.Model):
+    """A pair of categories that may denote the same kind of purchase."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='category_merge_proposals',
+    )
+    category_a = models.ForeignKey(
+        ProductCategory,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='merge_proposals_as_a',
+    )
+    category_b = models.ForeignKey(
+        ProductCategory,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='merge_proposals_as_b',
+    )
+    status = models.CharField(
+        choices=CategoryMergeProposalStatus.choices,
+        default=CategoryMergeProposalStatus.PENDING,
+        max_length=constants.TWENTY,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['-created_at']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'category_a', 'category_b'],
+                name='uniq_user_category_merge_pair',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f'{self.category_a} ↔ {self.category_b} '
+            f'({self.get_status_display()})'
+        )
+
+
 class Product(models.Model):
     """Model representing a product from a receipt.
 

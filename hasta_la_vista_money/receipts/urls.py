@@ -12,6 +12,9 @@ from hasta_la_vista_money.receipts.apis import (
     SellerDetailAPIView,
 )
 from hasta_la_vista_money.receipts.views import (
+    CategoryMergeProposalKeepView,
+    CategoryMergeProposalMergeView,
+    CategoryMergeProposalView,
     PendingReceiptCounterView,
     PendingReceiptDeleteView,
     PendingReceiptRetryView,
@@ -130,5 +133,20 @@ urlpatterns = [
         'by-group/',
         ReceiptsByGroupAPIView.as_view(),
         name='by_group',
+    ),
+    path(
+        'category-twins/',
+        CategoryMergeProposalView.as_view(),
+        name='category_twins',
+    ),
+    path(
+        'category-twins/<int:pk>/merge/',
+        CategoryMergeProposalMergeView.as_view(),
+        name='category_twins_merge',
+    ),
+    path(
+        'category-twins/<int:pk>/keep/',
+        CategoryMergeProposalKeepView.as_view(),
+        name='category_twins_keep',
     ),
 ]

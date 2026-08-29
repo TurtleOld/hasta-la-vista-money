@@ -117,6 +117,35 @@ RECEIPT_CATEGORY_RESPONSE_FORMAT: Final[dict[str, Any]] = {
         },
     },
 }
+RECEIPT_CATEGORY_TWIN_TASK_NAME: Final = (
+    'receipts.find_category_merge_proposals'
+)
+RECEIPT_CATEGORY_TWIN_RESPONSE_FORMAT: Final[dict[str, Any]] = {
+    'type': 'json_schema',
+    'json_schema': {
+        'name': 'category_merge_pairs',
+        'strict': True,
+        'schema': {
+            'type': 'object',
+            'properties': {
+                'pairs': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'first': {'type': 'string'},
+                            'second': {'type': 'string'},
+                        },
+                        'required': ['first', 'second'],
+                        'additionalProperties': False,
+                    },
+                },
+            },
+            'required': ['pairs'],
+            'additionalProperties': False,
+        },
+    },
+}
 STARTER_PRODUCT_CATEGORIES: Final = (
     'Молочные продукты и яйца',
     'Мясо и птица',

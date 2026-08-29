@@ -5,6 +5,8 @@ from django.conf import settings
 
 from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.receipts.protocols.services import (
+    CategoryMergeProposalServiceProtocol,
+    CategoryTwinDetectionServiceProtocol,
     ExternalProductCategoryServiceProtocol,
     PendingReceiptServiceProtocol,
     ProductCategoryCorrectionServiceProtocol,
@@ -14,6 +16,7 @@ from hasta_la_vista_money.receipts.protocols.services import (
     ReceiptUpdaterServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories import (
+    CategoryMergeProposalRepository,
     ProductCategoryRepository,
     ProductNameCategoryMappingRepository,
     ProductRepository,
@@ -24,6 +27,12 @@ from hasta_la_vista_money.receipts.repositories import (
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
     build_embedding_provider,
+)
+from hasta_la_vista_money.receipts.services.category_merge_proposal import (
+    CategoryMergeProposalService,
+)
+from hasta_la_vista_money.receipts.services.category_twin_detection import (
+    CategoryTwinDetectionService,
 )
 from hasta_la_vista_money.receipts.services.external_category import (
     ExternalProductCategoryService,
@@ -75,6 +84,9 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     product_name_category_mapping_repository = providers.Singleton(
         ProductNameCategoryMappingRepository,
     )
+    category_merge_proposal_repository = providers.Singleton(
+        CategoryMergeProposalRepository,
+    )
     product_repository = providers.Singleton(ProductRepository)
     seller_repository = providers.Singleton(SellerRepository)
     receipt_processing_log_repository = providers.Singleton(
@@ -101,6 +113,22 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ExternalProductCategoryService,
         transport=category_model_transport,
         product_category_repository=product_category_repository,
+    )
+    category_twin_detection_service: providers.Factory[
+        CategoryTwinDetectionServiceProtocol
+    ] = providers.Factory(
+        CategoryTwinDetectionService,
+        transport=category_model_transport,
+        product_category_repository=product_category_repository,
+    )
+    category_merge_proposal_service: providers.Factory[
+        CategoryMergeProposalServiceProtocol
+    ] = providers.Factory(
+        CategoryMergeProposalService,
+        proposal_repository=category_merge_proposal_repository,
+        product_category_repository=product_category_repository,
+        product_repository=product_repository,
+        mapping_repository=product_name_category_mapping_repository,
     )
 
     receipt_creator_service: providers.Factory[

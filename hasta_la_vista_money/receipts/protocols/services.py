@@ -218,6 +218,43 @@ class ProductCategoryCorrectionServiceProtocol(Protocol):
 
 
 @runtime_checkable
+class CategoryTwinDetectionServiceProtocol(Protocol):
+    """Contract for finding twin categories via the external model."""
+
+    @property
+    def enabled(self) -> bool: ...
+
+    def find_duplicate_pairs(
+        self,
+        user: User,
+    ) -> list[tuple[ProductCategory, ProductCategory]]: ...
+
+
+@runtime_checkable
+class CategoryMergeProposalServiceProtocol(Protocol):
+    """Contract for creating and resolving twin-category proposals."""
+
+    def create_if_absent(
+        self,
+        *,
+        user: User,
+        category_a: ProductCategory,
+        category_b: ProductCategory,
+    ) -> bool: ...
+
+    def list_pending(self, *, user: User) -> Any: ...
+
+    def merge(
+        self,
+        *,
+        user: User,
+        proposal_id: int,
+    ) -> ProductCategory | None: ...
+
+    def keep(self, *, user: User, proposal_id: int) -> bool: ...
+
+
+@runtime_checkable
 class ReceiptDeleterServiceProtocol(Protocol):
     """Protocol for receipt deletion service interface."""
 

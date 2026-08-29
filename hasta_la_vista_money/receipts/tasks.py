@@ -24,10 +24,13 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
+    ProductCategory,
     ReceiptProcessingLog,
     ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.receipts.protocols.services import (
+    CategoryMergeProposalServiceProtocol,
+    CategoryTwinDetectionServiceProtocol,
     ExternalProductCategoryServiceProtocol,
     PendingReceiptServiceProtocol,
 )
@@ -40,6 +43,9 @@ from hasta_la_vista_money.receipts.services.ai_providers import (
 )
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
+)
+from hasta_la_vista_money.receipts.services.category_twin_detection import (
+    CategoryTwinDetectionError,
 )
 from hasta_la_vista_money.receipts.services.external_category import (
     ExternalCategoryResponseError,
@@ -71,6 +77,7 @@ from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
     validate_receipt_parse_payload,
 )
+from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
 
@@ -187,6 +194,26 @@ def _get_external_product_category_service() -> (
     return cast(
         'ExternalProductCategoryServiceProtocol',
         ApplicationContainer().receipts.external_product_category_service(),
+    )
+
+
+def _get_category_twin_detection_service() -> (
+    CategoryTwinDetectionServiceProtocol
+):
+    """Resolve the optional twin-category detection service."""
+    return cast(
+        'CategoryTwinDetectionServiceProtocol',
+        ApplicationContainer().receipts.category_twin_detection_service(),
+    )
+
+
+def _get_category_merge_proposal_service() -> (
+    CategoryMergeProposalServiceProtocol
+):
+    """Resolve the twin-category merge proposal service."""
+    return cast(
+        'CategoryMergeProposalServiceProtocol',
+        ApplicationContainer().receipts.category_merge_proposal_service(),
     )
 
 
@@ -529,6 +556,50 @@ def categorize_receipt_product(product_id: int) -> None:
             error=str(error),
         )
         raise
+
+
+@shared_task(name=constants.RECEIPT_CATEGORY_TWIN_TASK_NAME)  # type: ignore[untyped-decorator]
+def find_category_merge_proposals() -> dict[str, int]:
+    """Find twin-category pairs across users and save pending proposals."""
+    detection = _get_category_twin_detection_service()
+    if not detection.enabled:
+        logger.info(
+            'receipt_category_twin_detection_skipped',
+            reason='disabled',
+        )
+        return {'users': 0, 'proposals': 0}
+
+    proposal_service = _get_category_merge_proposal_service()
+    user_ids = ProductCategory.objects.values_list('user', flat=True).distinct()
+    users = User.objects.filter(pk__in=user_ids)
+
+    processed = 0
+    proposals = 0
+    for user in users.iterator():
+        try:
+            pairs = detection.find_duplicate_pairs(user)
+        except (CategoryTwinDetectionError, httpx.HTTPError) as error:
+            logger.warning(
+                'receipt_category_twin_detection_failed',
+                user_id=user.pk,
+                error=str(error),
+            )
+            continue
+        processed += 1
+        for category_a, category_b in pairs:
+            if proposal_service.create_if_absent(
+                user=user,
+                category_a=category_a,
+                category_b=category_b,
+            ):
+                proposals += 1
+
+    logger.info(
+        'receipt_category_twin_detection_done',
+        users=processed,
+        proposals=proposals,
+    )
+    return {'users': processed, 'proposals': proposals}
 
 
 @shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]
