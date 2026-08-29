@@ -33,9 +33,11 @@ from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
     Product,
+    ProductCategory,
     Receipt,
     Seller,
 )
+from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreatorService,
 )
@@ -45,6 +47,10 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
 else:
     UserType = get_user_model()
+
+
+def _seed_starter_product_categories(user: UserType) -> None:
+    ProductCategoryRepository().seed_starter_categories(user)
 
 
 def _image_bytes(image_format: str) -> bytes:
@@ -72,6 +78,8 @@ class TestReceipt(TestCase):
     def setUp(self) -> None:
         self.user = UserType.objects.get(pk=1)
         self.user2 = UserType.objects.get(pk=2)
+        _seed_starter_product_categories(self.user)
+        _seed_starter_product_categories(self.user2)
         self.account = Account.objects.get(pk=1)
         self.receipt = Receipt.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
@@ -113,6 +121,7 @@ class TestReceipt(TestCase):
             'name_seller': 'ООО Рога и Копыта',
         }
         new_seller = Seller.objects.create(**new_seller_data)
+        category = ProductCategory.objects.get(user=self.user, name='Прочее')
 
         form_data = {
             'seller': new_seller.pk,
@@ -126,6 +135,7 @@ class TestReceipt(TestCase):
             'form-MIN_NUM_FORMS': 0,
             'form-MAX_NUM_FORMS': 1000,
             'form-0-product_name': 'Яблоко',
+            'form-0-category': category.pk,
             'form-0-price': 10,
             'form-0-quantity': 1,
             'form-0-amount': 10,
@@ -147,10 +157,14 @@ class TestReceipt(TestCase):
             operation_type=1,
             total_sum=Decimal('10.00'),
         )
+        category = ProductCategory.objects.get(
+            user=self.user,
+            name='Овощи и фрукты',
+        )
         product = Product.objects.create(
             user=self.user,
             product_name='Яблоко',
-            category='Фрукты',
+            category=category,
             price=Decimal('10.00'),
             quantity=Decimal('1.00'),
             amount=Decimal('10.00'),
@@ -162,7 +176,10 @@ class TestReceipt(TestCase):
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         product_formset = response.context['product_formset']
-        self.assertEqual(product_formset.forms[0].initial['category'], 'Фрукты')
+        self.assertEqual(
+            product_formset.forms[0].initial['category'],
+            category.pk,
+        )
 
         data = {
             'seller': self.seller.pk,
@@ -178,7 +195,7 @@ class TestReceipt(TestCase):
             'form-MIN_NUM_FORMS': '0',
             'form-MAX_NUM_FORMS': '1000',
             'form-0-product_name': 'Яблоко',
-            'form-0-category': 'Фрукты',
+            'form-0-category': str(category.pk),
             'form-0-price': '10.00',
             'form-0-quantity': '1',
             'form-0-amount': '10.00',
@@ -191,7 +208,7 @@ class TestReceipt(TestCase):
         updated_product = receipt.product.first()
         self.assertIsNotNone(updated_product)
         if updated_product is not None:
-            self.assertEqual(updated_product.category, 'Фрукты')
+            self.assertEqual(updated_product.category, category)
 
     def test_receipt_delete(self) -> None:
         self.client.force_login(self.user)
@@ -261,6 +278,7 @@ class TestSeller(TestCase):
 
     def setUp(self) -> None:
         self.user = UserType.objects.get(pk=1)
+        _seed_starter_product_categories(self.user)
 
     def test_seller_creation(self) -> None:
         seller_data = {
@@ -315,7 +333,10 @@ class TestProduct(TestCase):
         product_data = {
             'user': self.user,
             'product_name': 'Тестовый продукт',
-            'category': 'Тестовая категория',
+            'category': ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Тестовая категория',
+            ),
             'price': Decimal('100.50'),
             'quantity': Decimal(2),
             'amount': Decimal('201.00'),
@@ -368,6 +389,7 @@ class TestReceiptModel(TestCase):
 
     def setUp(self) -> None:
         self.user = UserType.objects.get(pk=1)
+        _seed_starter_product_categories(self.user)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
@@ -461,11 +483,15 @@ class TestForms(TestCase):
     def test_product_form_valid(self) -> None:
         form_data = {
             'product_name': 'Тестовый продукт',
+            'category': ProductCategory.objects.get(
+                user=self.user,
+                name='Прочее',
+            ).pk,
             'price': '100.50',
             'quantity': '2',
             'amount': '201.00',
         }
-        form = ProductForm(data=form_data)
+        form = ProductForm(data=form_data, user=self.user)
         self.assertTrue(form.is_valid())
 
     def test_product_form_invalid_quantity(self) -> None:
@@ -525,15 +551,26 @@ class TestForms(TestCase):
             'form-INITIAL_FORMS': '0',
             'form-MAX_NUM_FORMS': '10',
             'form-0-product_name': 'Продукт 1',
+            'form-0-category': ProductCategory.objects.get(
+                user=self.user,
+                name='Прочее',
+            ).pk,
             'form-0-price': '100.00',
             'form-0-quantity': '1',
             'form-0-amount': '100.00',
             'form-1-product_name': 'Продукт 2',
+            'form-1-category': ProductCategory.objects.get(
+                user=self.user,
+                name='Прочее',
+            ).pk,
             'form-1-price': '200.00',
             'form-1-quantity': '2',
             'form-1-amount': '400.00',
         }
-        formset = ProductFormSet(data=formset_data)
+        formset = ProductFormSet(
+            data=formset_data,
+            form_kwargs={'user': self.user},
+        )
         self.assertTrue(formset.is_valid())
 
     def test_upload_image_form_valid(self) -> None:
@@ -614,6 +651,7 @@ class TestReceiptFilter(TestCase):
 
     def setUp(self) -> None:
         self.user = UserType.objects.get(pk=1)
+        _seed_starter_product_categories(self.user)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
@@ -642,10 +680,18 @@ class TestReceiptFilter(TestCase):
             user=self.user,
             name_seller=seller_name,
         )
+        category_object = None
+        if category:
+            category_object = (
+                ProductCategoryRepository().get_or_create_category(
+                    user=self.user,
+                    name=category,
+                )
+            )
         product = Product.objects.create(
             user=self.user,
             product_name=product_name,
-            category=category,
+            category=category_object,
             price=Decimal('10.00'),
             quantity=Decimal('1.00'),
             amount=Decimal('10.00'),
@@ -946,6 +992,9 @@ class TestUploadImageView(TestCase):
                 ReceiptCreatorService,
                 account_service=providers.Object(self.mock_account_service),
                 account_repository=providers.Object(mock_account_repository),
+                product_category_repository=(
+                    self.container.receipts.product_category_repository
+                ),
                 product_repository=self.container.receipts.product_repository,
                 receipt_repository=self.container.receipts.receipt_repository,
                 seller_repository=self.container.receipts.seller_repository,
@@ -1083,6 +1132,9 @@ class TestReviewPendingReceiptView(TestCase):
                 ReceiptCreatorService,
                 account_service=providers.Object(self.mock_account_service),
                 account_repository=providers.Object(mock_account_repository),
+                product_category_repository=(
+                    self.container.receipts.product_category_repository
+                ),
                 product_repository=self.container.receipts.product_repository,
                 receipt_repository=self.container.receipts.receipt_repository,
                 seller_repository=self.container.receipts.seller_repository,

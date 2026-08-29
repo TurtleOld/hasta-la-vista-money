@@ -11,7 +11,10 @@ from core.repositories.protocols import (
     SellerRepositoryProtocol,
 )
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
-from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.models import (
+    ProductCategorySource,
+    Receipt,
+)
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
@@ -111,7 +114,8 @@ class ReceiptUpdaterService:
                     product = self.product_repository.create_product(
                         user=user,
                         product_name=product_data['product_name'],
-                        category=product_data.get('category', ''),
+                        category=product_data['category'],
+                        category_source=ProductCategorySource.MANUAL,
                         price=product_data['price'],
                         quantity=product_data['quantity'],
                         amount=product_data['amount'],

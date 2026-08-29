@@ -9,12 +9,16 @@ from hasta_la_vista_money.receipts.protocols.services import (
     ReceiptUpdaterServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories import (
+    ProductCategoryRepository,
     ProductRepository,
     ReceiptRepository,
     SellerRepository,
 )
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
+)
+from hasta_la_vista_money.receipts.services.product_categories import (
+    ProductCategoryService,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreatorService,
@@ -35,6 +39,7 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     finance_account = providers.DependenciesContainer()
 
     receipt_repository = providers.Singleton(ReceiptRepository)
+    product_category_repository = providers.Singleton(ProductCategoryRepository)
     product_repository = providers.Singleton(ProductRepository)
     seller_repository = providers.Singleton(SellerRepository)
 
@@ -44,9 +49,14 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ReceiptCreatorService,
         account_service=core.account_service,
         account_repository=finance_account.account_repository,
+        product_category_repository=product_category_repository,
         product_repository=product_repository,
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
+    )
+    product_category_service = providers.Factory(
+        ProductCategoryService,
+        product_category_repository=product_category_repository,
     )
     receipt_updater_service: providers.Factory[
         ReceiptUpdaterServiceProtocol

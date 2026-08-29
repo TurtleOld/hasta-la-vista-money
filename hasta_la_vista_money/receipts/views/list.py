@@ -204,7 +204,9 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             account_queryset=account_queryset,
             seller_queryset=seller_queryset,
         )
-        product_formset = ProductFormSet()
+        product_formset = ProductFormSet(
+            form_kwargs={'user': cast('User', self.request.user)},
+        )
         total_sum_receipts = self.calculate_total_amount(
             receipt_filter.qs,
             amount_field='total_sum',

@@ -39,6 +39,7 @@ from hasta_la_vista_money.finance_account.views import (
     _group_finances_by_day,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -242,7 +243,10 @@ class TestFinancesView(TestCase):
         product = Product.objects.create(
             user=self.user,
             product_name='Milk',
-            category='Groceries',
+            category=ProductCategoryRepository().get_or_create_category(
+                user=self.user,
+                name='Groceries',
+            ),
             price=Decimal('120.00'),
             quantity=Decimal('1.00'),
             amount=Decimal('120.00'),
