@@ -455,6 +455,8 @@ class Receipt(models.Model):
         max_digits=10,
         decimal_places=2,
     )
+    requires_attention = models.BooleanField(default=False)
+    attention_reason = models.TextField(blank=True, default='')
     fiscal_key = models.CharField(
         max_length=255,
         null=True,
@@ -522,6 +524,76 @@ class Receipt(models.Model):
             str: URL for updating this receipt.
         """
         return str(reverse_lazy('receipts:update', args=[self.pk]))
+
+
+class ReceiptProcessingStatus(models.TextChoices):
+    """Lifecycle states for automatic receipt processing."""
+
+    PROCESSING = 'processing', _('В обработке')
+    COMPLETED = 'completed', _('Проведён')
+    FAILED = 'failed', _('Ошибка обработки')
+    DUPLICATE = 'duplicate', _('Повторный чек')
+
+
+class ReceiptProcessingLog(models.Model):
+    """Audit log for a receipt processing attempt, without receipt payload."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='receipt_processing_logs',
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.PROTECT,
+        related_name='receipt_processing_logs',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ReceiptProcessingStatus.choices,
+        default=ReceiptProcessingStatus.PROCESSING,
+    )
+    image_file = models.FileField(
+        upload_to='receipt_processing_logs/',
+        null=True,
+        blank=True,
+    )
+    qr_raw = models.CharField(max_length=1024, blank=True, default='')
+    image_hash = models.CharField(max_length=64, blank=True, default='')
+    fiscal_key = models.CharField(max_length=255, null=True, blank=True)
+    is_duplicate = models.BooleanField(default=False)
+    error_message = models.TextField(blank=True, default='')
+    task_id = models.CharField(max_length=64, blank=True, default='')
+    receipt = models.OneToOneField(
+        Receipt,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='processing_log',
+    )
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['-created_at']
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'image_hash']),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'fiscal_key'],
+                condition=models.Q(
+                    fiscal_key__isnull=False,
+                    status=ReceiptProcessingStatus.PROCESSING,
+                ),
+                name='uniq_active_processing_log_user_fiscal_key',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.get_status_display()} — {self.created_at:%d.%m.%Y %H:%M}'
 
 
 class PendingReceiptStatus(models.TextChoices):
@@ -715,11 +787,3 @@ class ReceiptImageHash(models.Model):
 
     def __str__(self) -> str:
         return f'{self.image_hash} → receipt #{self.receipt_id}'
-
-    def get_absolute_url(self) -> str:
-        """Get absolute URL for pending receipt review.
-
-        Returns:
-            str: URL for reviewing this pending receipt.
-        """
-        return str(reverse_lazy('receipts:review', args=[self.pk]))

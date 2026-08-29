@@ -21,6 +21,8 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
+    ReceiptProcessingLog,
+    ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
@@ -53,6 +55,10 @@ from hasta_la_vista_money.receipts.services.fns_qr import (
     QRCodeDecodeError,
     QRCodeExtractor,
     QRCodeNotFoundError,
+    parse_fns_qr,
+)
+from hasta_la_vista_money.receipts.services.receipt_processing_service import (
+    ReceiptProcessingService,
 )
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
@@ -160,7 +166,7 @@ def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
 
 
 def _run_fns_pipeline_from_raw(
-    pending: PendingReceipt,
+    pending: PendingReceipt | ReceiptProcessingLog,
     raw_qr: str,
 ) -> dict[str, Any]:
     """Run the FNS lookup -> mapper -> validate tail from a decoded QR string.
@@ -187,7 +193,9 @@ def _run_fns_pipeline_from_raw(
     return validated
 
 
-def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+def _run_fns_pipeline(
+    pending: PendingReceipt | ReceiptProcessingLog,
+) -> dict[str, Any]:
     """Process a pending receipt through QR -> FNS -> mapper pipeline."""
     with pending.image_file.open('rb') as image_fp:
         qr_data = QRCodeExtractor().extract(image_fp)
@@ -197,6 +205,38 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
 def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
     """Run the FNS receipt processing pipeline."""
     return _run_fns_pipeline(pending)
+
+
+def _get_receipt_processing_service() -> ReceiptProcessingService:
+    return cast(
+        'ReceiptProcessingService',
+        ApplicationContainer().receipts.receipt_processing_service(),
+    )
+
+
+def _run_processing_log_pipeline(
+    log: ReceiptProcessingLog,
+    service: ReceiptProcessingService,
+    task_id: str,
+) -> dict[str, Any] | None:
+    """Fetch and validate FNS data after claiming the fiscal identity."""
+    raw_qr = log.qr_raw
+    if not raw_qr:
+        if not log.image_file:
+            raise ValueError(str(_MISSING_FILE_MESSAGE))
+        with log.image_file.open('rb') as image_fp:
+            qr_data = QRCodeExtractor().extract(image_fp)
+        raw_qr = qr_data.raw
+        fiscal_key = qr_data.fiscal_key
+    else:
+        fiscal_key = log.fiscal_key or parse_fns_qr(raw_qr).fiscal_key
+    if not service.claim_fiscal_key(
+        log=log,
+        fiscal_key=fiscal_key,
+        task_id=task_id,
+    ):
+        return None
+    return _run_fns_pipeline_from_raw(log, raw_qr)
 
 
 def _run_claimed_photo_pipeline(
@@ -360,6 +400,56 @@ def process_pending_receipt_from_qr(
         lambda: _run_fns_pipeline_from_raw(pending, raw_qr),
         task_id,
     )
+
+
+@shared_task(  # type: ignore[untyped-decorator]
+    bind=True,
+    name='receipts.process_receipt_processing_log',
+    autoretry_for=(ConnectionError,),
+    max_retries=2,
+    retry_backoff=True,
+    acks_late=True,
+)
+def process_receipt_processing_log(
+    self: Any,
+    processing_log_id: int,
+) -> None:
+    """Create a final receipt directly after a successful FNS lookup."""
+    try:
+        log = ReceiptProcessingLog.objects.select_related(
+            'user',
+            'account',
+        ).get(
+            pk=processing_log_id,
+        )
+    except ReceiptProcessingLog.DoesNotExist:
+        logger.warning(
+            'receipt_processing_log_missing',
+            log_id=processing_log_id,
+        )
+        return
+    if log.status != ReceiptProcessingStatus.PROCESSING:
+        return
+
+    service = _get_receipt_processing_service()
+    task_id = str(self.request.id)
+    try:
+        receipt_data = _run_processing_log_pipeline(log, service, task_id)
+        if receipt_data is None:
+            return
+        service.complete(
+            log=log,
+            receipt_data=receipt_data,
+            task_id=task_id,
+        )
+    except Exception as exc:
+        event, message = _classify_failure(exc)
+        service.mark_failed(log=log, error_message=message, task_id=task_id)
+        logger.warning(
+            event,
+            processing_log_id=processing_log_id,
+            error=str(exc),
+        )
 
 
 @shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]
