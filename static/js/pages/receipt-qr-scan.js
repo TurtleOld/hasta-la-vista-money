@@ -74,6 +74,7 @@ function registerReceiptQRScanPage(Alpine) {
     return {
       errorMessage: '',
       noticeMessage: '',
+      noticeLink: '',
       statusMessage: '',
       stream: null,
       worker: null,
@@ -90,6 +91,8 @@ function registerReceiptQRScanPage(Alpine) {
 
       init() {
         this.messages = messagesFrom(this.$el);
+        this.pollNotifications();
+        window.setInterval(() => this.pollNotifications(), 5000);
         document.addEventListener(
           'receipt-scan:activate',
           this.start.bind(this),
@@ -101,9 +104,31 @@ function registerReceiptQRScanPage(Alpine) {
         window.addEventListener('beforeunload', this.stop.bind(this));
       },
 
+      async pollNotifications() {
+        const notificationsUrl = this.$el.dataset.notificationsUrl;
+        if (!notificationsUrl) {
+          return;
+        }
+        try {
+          const response = await fetch(notificationsUrl, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          });
+          const payload = await response.json();
+          const notification = payload.notifications?.[0];
+          if (notification) {
+            this.noticeMessage = notification.message;
+            this.noticeLink = notification.url;
+          }
+        } catch (error) {
+          console.warn('receipt QR scan: notification polling failed', error);
+        }
+      },
+
       async start() {
         this.errorMessage = '';
         this.noticeMessage = '';
+        this.noticeLink = '';
         if (this.stream) {
           return;
         }

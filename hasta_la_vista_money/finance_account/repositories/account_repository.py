@@ -4,6 +4,8 @@ This module provides data access layer for Account model,
 including filtering by user, group, type, and currency.
 """
 
+from decimal import Decimal
+
 from django.db.models import QuerySet
 from django.utils import timezone
 
@@ -68,6 +70,18 @@ class AccountRepository:
             .order_by('pk')
         )
         return {account.pk: account for account in accounts}
+
+    def apply_unchecked_balance_delta(
+        self,
+        *,
+        account_id: int,
+        delta: Decimal,
+    ) -> Account:
+        """Apply a balance delta while an automatic receipt is conducted."""
+        account = Account.objects.select_for_update().get(pk=account_id)
+        account.balance += delta
+        account.save(update_fields=['balance', 'updated_at'])
+        return account
 
     def archive(self, account_id: int) -> None:
         Account.objects.filter(pk=account_id).update(

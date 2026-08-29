@@ -2,8 +2,8 @@
 {% load i18n %}
 
 <div class="receipts-cards">
-    {% for pending in pending_receipts %}
-        {% include 'receipts/_pending_card.html' with pending=pending %}
+    {% for processing_log in processing_logs %}
+        {% include 'receipts/_processing_log_card.html' with processing_log=processing_log %}
     {% endfor %}
 
     {% for receipt in receipts %}
@@ -155,7 +155,7 @@
 </nav>
 {% endif %}
 
-{% if not receipts and not pending_receipts %}
+{% if not receipts and not processing_logs %}
     <div class="receipts-empty">
         {% translate 'Чеков пока нет. Добавьте первый чек или загрузите фото.' %}
     </div>

@@ -81,8 +81,8 @@ class UploadImageView(
             messages.error(request, constants.INVALID_FILE_FORMAT)
             return super().form_invalid(form)
 
-        pending_receipt_service = (
-            request.container.receipts.pending_receipt_service()
+        processing_service = (
+            request.container.receipts.receipt_processing_service()
         )
 
         queued_count = 0
@@ -92,7 +92,7 @@ class UploadImageView(
             image_hash = compute_image_hash(uploaded_file)
             uploaded_file.seek(0)
 
-            duplicate = pending_receipt_service.find_duplicate(
+            duplicate = processing_service.find_duplicate(
                 user=user,
                 image_hash=image_hash,
             )
@@ -101,7 +101,7 @@ class UploadImageView(
                 continue
 
             try:
-                pending_receipt = pending_receipt_service.create_processing_job(
+                processing_log = processing_service.create_image_job(
                     user=user,
                     account=account,
                     image_file=uploaded_file,
@@ -119,12 +119,12 @@ class UploadImageView(
                 )
 
             task_id = str(uuid.uuid4())
-            pending_receipt_service.attach_task_id(
-                pending_receipt=pending_receipt,
+            processing_service.attach_task_id(
+                log=processing_log,
                 task_id=task_id,
             )
-            _views_module().process_pending_receipt.apply_async(
-                args=[pending_receipt.pk],
+            _views_module().process_receipt_processing_log.apply_async(
+                args=[processing_log.pk],
                 task_id=task_id,
             )
             queued_count += 1
@@ -191,27 +191,33 @@ class ScanQRReceiptView(
         fiscal_key = parse_fns_qr(qr_raw).fiscal_key
         image_hash = hashlib.sha256(qr_raw.encode()).hexdigest()
 
-        pending_receipt_service = (
-            request.container.receipts.pending_receipt_service()
+        processing_service = (
+            request.container.receipts.receipt_processing_service()
         )
 
-        duplicate = pending_receipt_service.find_duplicate(
+        duplicate = processing_service.find_duplicate(
             user=user,
             image_hash=image_hash,
             fiscal_key=fiscal_key,
         )
         if duplicate is not None:
+            processing_service.create_duplicate_qr_job(
+                user=user,
+                account=account,
+                qr_raw=qr_raw,
+                image_hash=image_hash,
+                fiscal_key=fiscal_key,
+            )
             messages.warning(request, _('Этот чек уже загружен.'))
-            return redirect('receipts:list')
+            return redirect('receipts:upload')
 
         try:
-            pending_receipt = (
-                pending_receipt_service.create_processing_job_from_qr(
-                    user=user,
-                    account=account,
-                    image_hash=image_hash,
-                    fiscal_key=fiscal_key,
-                )
+            processing_log = processing_service.create_qr_job(
+                user=user,
+                account=account,
+                qr_raw=qr_raw,
+                image_hash=image_hash,
+                fiscal_key=fiscal_key,
             )
         except Exception as exc:
             logger.exception(
@@ -225,19 +231,19 @@ class ScanQRReceiptView(
             )
 
         task_id = str(uuid.uuid4())
-        pending_receipt_service.attach_task_id(
-            pending_receipt=pending_receipt,
+        processing_service.attach_task_id(
+            log=processing_log,
             task_id=task_id,
         )
-        _views_module().process_pending_receipt_from_qr.apply_async(
-            args=[pending_receipt.pk, qr_raw],
+        _views_module().process_receipt_processing_log.apply_async(
+            args=[processing_log.pk],
             task_id=task_id,
         )
         messages.success(
             request,
             _(
-                'Чек поставлен в обработку. Когда распознавание '
-                'завершится, он появится в списке.',
+                'Чек поставлен в обработку. Сканер сообщит, когда '
+                'проведение завершится.',
             ),
         )
-        return redirect('receipts:list')
+        return redirect('receipts:upload')

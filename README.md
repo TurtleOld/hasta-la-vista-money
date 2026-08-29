@@ -251,6 +251,9 @@ make test
 
 ### Полезные команды (Makefile)
 
+Локальные `make test` и `make coverage` поднимают PostgreSQL и запускают
+тесты в контейнере приложения через Docker Compose.
+
 ```bash
 make install             # установка зависимостей (uv)
 make test                # запуск тестов

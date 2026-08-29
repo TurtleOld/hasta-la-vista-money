@@ -122,6 +122,7 @@
                  x-data="receiptQRScanPage"
                  data-worker-url="{% static 'js/dist/pages/receipt-qr-worker.js' %}"
                  data-wasm-url="{% static 'js/dist/vendor/zxing_reader.wasm' %}"
+                 data-notifications-url="{% url 'receipts:processing_notifications' %}"
                  data-message-camera-unavailable="{% translate 'Камера или распознавание QR недоступны в этом браузере. Используйте вкладку «Файл».' %}"
                  data-message-camera-policy-blocked="{% translate 'Доступ к камере заблокирован настройками сайта. Используйте вкладку «Файл».' %}"
                  data-message-camera-denied="{% translate 'Доступ к камере запрещён. Разрешите его в настройках браузера или используйте вкладку «Файл».' %}"
@@ -177,6 +178,10 @@
 
                     <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                     <div class="receipts-upload-error" x-show="noticeMessage" x-text="noticeMessage" x-cloak></div>
+                    <a class="receipts-button receipts-button-primary"
+                       x-show="noticeLink"
+                       x-bind:href="noticeLink"
+                       x-cloak>{% translate 'Открыть проведённый чек' %}</a>
                     <p class="hint" x-show="statusMessage && !errorMessage">
                         <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
                         <span x-text="statusMessage"></span>

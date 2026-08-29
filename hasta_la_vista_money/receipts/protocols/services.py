@@ -11,7 +11,12 @@ from django.forms import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
-from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt, Seller
+from hasta_la_vista_money.receipts.models import (
+    PendingReceipt,
+    Receipt,
+    ReceiptProcessingLog,
+    Seller,
+)
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     SellerCreateData,
@@ -46,7 +51,106 @@ class ReceiptCreatorServiceProtocol(Protocol):
         seller_id: int | None = None,
         products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
+        requires_attention: bool = False,
+        attention_reason: str = '',
+        allow_insufficient_funds: bool = False,
     ) -> Receipt: ...
+
+
+@runtime_checkable
+class ReceiptProcessingServiceProtocol(Protocol):
+    """Protocol for automatic receipt processing journal operations."""
+
+    def find_duplicate(
+        self,
+        *,
+        user: User,
+        image_hash: str | None = None,
+        fiscal_key: str | None = None,
+    ) -> Receipt | ReceiptProcessingLog | None: ...
+
+    def create_image_job(
+        self,
+        *,
+        user: User,
+        account: Account,
+        image_file: Any,
+        image_hash: str,
+    ) -> ReceiptProcessingLog: ...
+
+    def create_qr_job(
+        self,
+        *,
+        user: User,
+        account: Account,
+        qr_raw: str,
+        image_hash: str,
+        fiscal_key: str,
+    ) -> ReceiptProcessingLog: ...
+
+    def create_duplicate_qr_job(
+        self,
+        *,
+        user: User,
+        account: Account,
+        qr_raw: str,
+        image_hash: str,
+        fiscal_key: str,
+    ) -> ReceiptProcessingLog: ...
+
+    def attach_task_id(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        task_id: str,
+    ) -> None: ...
+
+    def claim_fiscal_key(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        fiscal_key: str,
+        task_id: str,
+    ) -> bool: ...
+
+    def mark_failed(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        error_message: str,
+        task_id: str,
+    ) -> None: ...
+
+    def complete(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        receipt_data: dict[str, Any],
+        task_id: str,
+    ) -> Receipt: ...
+
+    def reset_for_retry(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+    ) -> ReceiptProcessingLog: ...
+
+    def get_for_user(
+        self,
+        *,
+        user: User,
+        log_id: int,
+    ) -> ReceiptProcessingLog | None: ...
+
+    def get_visible_for_user(self, *, user: User) -> Any: ...
+
+    def get_unnotified_completed(
+        self,
+        *,
+        user: User,
+    ) -> list[ReceiptProcessingLog]: ...
+
+    def is_insufficient_at_conducting(self, *, receipt: Receipt) -> bool: ...
 
 
 @runtime_checkable
