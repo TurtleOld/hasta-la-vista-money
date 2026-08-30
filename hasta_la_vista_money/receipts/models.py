@@ -450,7 +450,12 @@ class ReceiptQuerySet(models.QuerySet['Receipt']):
             'user',
             'account',
             'seller',
-        ).prefetch_related('product')
+        ).prefetch_related(
+            models.Prefetch(
+                'product',
+                queryset=Product.objects.select_related('category'),
+            ),
+        )
 
     def for_user(self, user: User) -> 'ReceiptQuerySet':
         """Filter receipts by user.
