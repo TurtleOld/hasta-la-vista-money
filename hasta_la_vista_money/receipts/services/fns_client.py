@@ -382,7 +382,7 @@ class FNSClient:
             ]
         if isinstance(value, str):
             return self._redact_text(value, session=session)
-        if value is None or isinstance(value, (bool, int, float)):
+        if value is None or isinstance(value, bool | int | float):
             return value
         return self._redact_text(
             json.dumps(value, ensure_ascii=False, default=str),
