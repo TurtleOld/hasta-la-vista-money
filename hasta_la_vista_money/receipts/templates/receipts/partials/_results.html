@@ -1,7 +1,13 @@
 {% load i18n %}
 {% load comma %}
 
-<section id="receipts-results">
+<section id="receipts-results"
+         {% if has_active_processing_logs %}
+         hx-get="{{ request.get_full_path }}"
+         hx-trigger="every {{ receipt_processing_poll_interval }}"
+         hx-target="this"
+         hx-swap="outerHTML"
+         {% endif %}>
     <section class="receipts-summary" aria-label="{% translate 'Сводка по чекам' %}">
         <div class="receipts-summary-cell">
             <div class="receipts-label">{% translate 'Количество чеков' %}</div>
