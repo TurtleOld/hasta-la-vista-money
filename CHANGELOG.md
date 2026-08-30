@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.15.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.14.0...v2.15.0) (2026-08-30)
+
+
+### Features
+
+* **receipts:** show product categories in receipt details ([#992](https://github.com/TurtleOld/hasta-la-vista-money/issues/992)) ([ad00526](https://github.com/TurtleOld/hasta-la-vista-money/commit/ad005264c76923eb90e2f1761166ad5edb7f74ef))
+
 ## [2.14.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.13.0...v2.14.0) (2026-08-30)
 
 
