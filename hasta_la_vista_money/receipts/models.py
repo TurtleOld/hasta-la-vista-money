@@ -5,17 +5,15 @@ including relationships with users and accounts.
 """
 
 from collections.abc import Iterable
-from datetime import datetime, timedelta
-from typing import Any, ClassVar
+from datetime import datetime
+from typing import ClassVar
 
-from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.db.models import Min
 from django.db.models.functions import Lower
 from django.urls import reverse_lazy
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from pgvector.django import HnswIndex, VectorField
 
@@ -744,156 +742,6 @@ class ReceiptProcessingLog(models.Model):
 
     def __str__(self) -> str:
         return f'{self.get_status_display()} — {self.created_at:%d.%m.%Y %H:%M}'
-
-
-class PendingReceiptStatus(models.TextChoices):
-    """Lifecycle states for a pending receipt processed in background."""
-
-    PROCESSING = 'processing', _('В обработке')
-    READY = 'ready', _('Готов к проверке')
-    READY_WITH_WARNING = 'ready_with_warning', _('Готов с предупреждением')
-    FAILED = 'failed', _('Ошибка обработки')
-    CONVERTED = 'converted', _('Сохранён')
-
-
-class PendingReceipt(models.Model):
-    """Model for receipts being processed in background or awaiting review.
-
-    Holds the uploaded image and lifecycle state while a Celery worker
-    extracts data via the receipt inference service. After successful
-    recognition the parsed data lives in ``receipt_data`` until the user
-    confirms and converts the entry into a final Receipt.
-
-    Attributes:
-        user: Foreign key to the User who uploaded the receipt.
-        account: Foreign key to the Account used for this receipt.
-        status: Lifecycle status.
-        image_file: Source image stored in MEDIA_ROOT for background processing
-            and retries; deleted on conversion or manual removal.
-        image_hash: SHA-256 hex digest of the source image for deduplication.
-        receipt_data: JSON with parsed receipt data, populated on success.
-        error_message: Human-readable error reason when status is ``failed``.
-        task_id: Celery task identifier for the latest processing attempt.
-        created_at: Timestamp of the original upload.
-        expires_at: Timestamp after which the entry is purged by Celery Beat.
-    """
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='pending_receipts',
-    )
-    account = models.ForeignKey(
-        Account,
-        on_delete=models.CASCADE,
-        related_name='pending_receipts',
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=PendingReceiptStatus.choices,
-        default=PendingReceiptStatus.PROCESSING,
-        verbose_name=_('Статус'),
-    )
-    image_file = models.FileField(
-        upload_to='pending_receipts/',
-        null=True,
-        blank=True,
-        verbose_name=_('Файл изображения'),
-    )
-    image_hash = models.CharField(
-        max_length=64,
-        blank=True,
-        default='',
-        verbose_name=_('Хеш файла изображения'),
-        help_text=_('SHA-256 hex digest для дедупликации загрузок'),
-    )
-    receipt_data = models.JSONField(
-        null=True,
-        blank=True,
-        verbose_name=_('Данные чека'),
-        help_text=_('JSON данные чека для редактирования'),
-    )
-    error_message = models.TextField(
-        blank=True,
-        default='',
-        verbose_name=_('Сообщение об ошибке'),
-    )
-    task_id = models.CharField(
-        max_length=64,
-        blank=True,
-        default='',
-        verbose_name=_('Идентификатор задачи Celery'),
-    )
-    fiscal_key = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-    )
-    converted_receipt = models.OneToOneField(
-        Receipt,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='source_pending_receipt',
-    )
-    processing_started_at = models.DateTimeField(
-        null=True,
-        blank=True,
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_('Дата создания'),
-    )
-    expires_at = models.DateTimeField(
-        verbose_name=_('Дата истечения'),
-        help_text=_('Время, после которого запись будет удалена'),
-    )
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to set expires_at if not provided."""
-        if getattr(self, 'expires_at', None) is None:
-            self.expires_at = timezone.now() + timedelta(
-                hours=settings.PENDING_RECEIPT_EXPIRY_HOURS,
-            )
-        super().save(*args, **kwargs)
-
-    class Meta:
-        ordering: ClassVar[list[str]] = ['-created_at']
-        indexes: ClassVar[list[models.Index]] = [
-            models.Index(fields=['user', '-created_at']),
-            models.Index(fields=['user', 'status']),
-            models.Index(fields=['user', 'image_hash']),
-            models.Index(fields=['expires_at']),
-        ]
-        constraints: ClassVar[list[models.BaseConstraint]] = [
-            models.UniqueConstraint(
-                fields=['user', 'fiscal_key'],
-                condition=(
-                    models.Q(fiscal_key__isnull=False)
-                    & models.Q(
-                        status__in=[
-                            PendingReceiptStatus.PROCESSING,
-                            PendingReceiptStatus.READY,
-                            PendingReceiptStatus.READY_WITH_WARNING,
-                        ],
-                    )
-                ),
-                name='uniq_active_pending_user_fiscal_key',
-            ),
-        ]
-        verbose_name = _('Временный чек')
-        verbose_name_plural = _('Временные чеки')
-
-    def __str__(self) -> str:
-        """Return string representation of the pending receipt."""
-        if self.receipt_data:
-            seller_name = self.receipt_data.get(
-                'name_seller',
-                'Неизвестный продавец',
-            )
-        else:
-            seller_name = str(self.get_status_display())
-        return f'{seller_name} - {self.created_at.strftime("%d.%m.%Y %H:%M")}'
 
 
 class ReceiptImageHash(models.Model):

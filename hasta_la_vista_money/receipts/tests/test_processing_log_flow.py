@@ -17,7 +17,10 @@ from hasta_la_vista_money.receipts.models import (
     Seller,
 )
 from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
-from hasta_la_vista_money.receipts.tasks import process_receipt_processing_log
+from hasta_la_vista_money.receipts.tasks import (
+    cleanup_stale_receipt_processing_logs,
+    process_receipt_processing_log,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -133,6 +136,37 @@ class ReceiptProcessingLogTaskTests(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(log.status, ReceiptProcessingStatus.COMPLETED)
         self.assertEqual(self.account.balance, Decimal('-110.00'))
+
+
+class ReceiptProcessingLogCleanupTaskTests(TestCase):
+    """Stalled processing attempts remain retryable through the journal."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='processing-log-cleanup-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=Decimal('1000.00'),
+            currency='RU',
+        )
+
+    def test_cleanup_marks_stalled_log_as_failed(self) -> None:
+        log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            task_id='stalled-task',
+            processing_started_at=timezone.now() - timedelta(hours=1),
+        )
+
+        result = cleanup_stale_receipt_processing_logs()
+
+        log.refresh_from_db()
+        self.assertEqual(result['recovered'], 1)
+        self.assertEqual(log.status, ReceiptProcessingStatus.FAILED)
+        self.assertNotEqual(log.error_message, '')
 
 
 class ReceiptProcessingLogScanViewTests(TestCase):

@@ -1,8 +1,4 @@
-from hasta_la_vista_money.receipts.tasks import (
-    process_pending_receipt,
-    process_pending_receipt_from_qr,
-    process_receipt_processing_log,
-)
+from hasta_la_vista_money.receipts.tasks import process_receipt_processing_log
 from hasta_la_vista_money.receipts.views.category_merge_proposal import (
     CategoryMergeProposalKeepView,
     CategoryMergeProposalMergeView,
@@ -12,10 +8,7 @@ from hasta_la_vista_money.receipts.views.list import (
     ProductByMonthView,
     ReceiptView,
 )
-from hasta_la_vista_money.receipts.views.pending import (
-    PendingReceiptCounterView,
-    PendingReceiptDeleteView,
-    PendingReceiptRetryView,
+from hasta_la_vista_money.receipts.views.processing import (
     ReceiptProcessingLogRetryView,
     ReceiptProcessingNotificationView,
 )
@@ -38,9 +31,6 @@ __all__ = [
     'CategoryMergeProposalKeepView',
     'CategoryMergeProposalMergeView',
     'CategoryMergeProposalView',
-    'PendingReceiptCounterView',
-    'PendingReceiptDeleteView',
-    'PendingReceiptRetryView',
     'ProductByMonthView',
     'ReceiptCreateView',
     'ReceiptDeleteView',
@@ -53,7 +43,5 @@ __all__ = [
     'SellerCreateView',
     'SellerUpdateView',
     'UploadImageView',
-    'process_pending_receipt',
-    'process_pending_receipt_from_qr',
     'process_receipt_processing_log',
 ]

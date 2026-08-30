@@ -49,7 +49,7 @@ from hasta_la_vista_money.receipts.serializers import (
     ReceiptSerializer,
     SellerSerializer,
 )
-from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+from hasta_la_vista_money.receipts.services.receipt_adjustment import (
     calculate_receipt_adjustment,
     requires_adjustment_confirmation,
 )

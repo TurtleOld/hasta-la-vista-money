@@ -1,12 +1,11 @@
 """Celery tasks for background receipt processing.
 
-The view layer only enqueues ``process_pending_receipt`` after persisting the
-PendingReceipt + uploaded image. All inference, parsing and state transitions
-live here so the work survives the user closing the page.
+The view layer enqueues processing-log jobs after persisting their source
+data. All inference, parsing and state transitions live here so the work
+survives the user closing the page.
 """
 
 import json
-from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, cast
 
@@ -22,8 +21,6 @@ from config.containers import ApplicationContainer
 from core.repositories.protocols import ProductRepositoryProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
-    PendingReceipt,
-    PendingReceiptStatus,
     ProductCategory,
     ReceiptProcessingLog,
     ReceiptProcessingStatus,
@@ -32,7 +29,6 @@ from hasta_la_vista_money.receipts.protocols.services import (
     CategoryMergeProposalServiceProtocol,
     CategoryTwinDetectionServiceProtocol,
     ExternalProductCategoryServiceProtocol,
-    PendingReceiptServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories.seller_repository import (
     SellerRepository,
@@ -128,55 +124,47 @@ _TIMEOUT_RECOVERY_MESSAGE = _(
 _FAILURE_RULES = (
     (
         RateLimitExceededError,
-        'pending_receipt_rate_limited',
+        'receipt_processing_rate_limited',
         _RATE_LIMIT_MESSAGE,
     ),
     (
         (ModelUnavailableError, ConnectionError),
-        'pending_receipt_model_unavailable',
+        'receipt_processing_model_unavailable',
         _MODEL_UNAVAILABLE_MESSAGE,
     ),
-    (QRCodeNotFoundError, 'pending_receipt_qr_not_found', _NO_QR_MESSAGE),
-    (QRCodeDecodeError, 'pending_receipt_qr_decode_failed', _BAD_QR_MESSAGE),
+    (QRCodeNotFoundError, 'receipt_processing_qr_not_found', _NO_QR_MESSAGE),
+    (QRCodeDecodeError, 'receipt_processing_qr_decode_failed', _BAD_QR_MESSAGE),
     (
         FNSRateLimitError,
-        'pending_receipt_fns_rate_limited',
+        'receipt_processing_fns_rate_limited',
         _FNS_RATE_LIMIT_MESSAGE,
     ),
     (
         (FNSAuthenticationError, FNSConfigurationError),
-        'pending_receipt_fns_auth_failed',
+        'receipt_processing_fns_auth_failed',
         _FNS_AUTH_MESSAGE,
     ),
     (
         (FNSTemporaryUnavailableError, FNSTimeoutError),
-        'pending_receipt_fns_unavailable',
+        'receipt_processing_fns_unavailable',
         _FNS_UNAVAILABLE_MESSAGE,
     ),
     (
         (FNSMalformedResponseError, FNSReceiptMappingError),
-        'pending_receipt_fns_parse_failed',
+        'receipt_processing_fns_parse_failed',
         _PARSE_FAILED_MESSAGE,
     ),
     (
         FNSIntegrationError,
-        'pending_receipt_fns_failed',
+        'receipt_processing_fns_failed',
         _FNS_UNAVAILABLE_MESSAGE,
     ),
     (
         (SoftTimeLimitExceeded, TimeoutError),
-        'pending_receipt_timed_out',
+        'receipt_processing_timed_out',
         _TIMEOUT_MESSAGE,
     ),
 )
-
-
-def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
-    """Resolve PendingReceiptService through the application DI container."""
-    return cast(
-        'PendingReceiptServiceProtocol',
-        ApplicationContainer().receipts.pending_receipt_service(),
-    )
 
 
 def _get_receipt_item_category_service() -> ReceiptItemCategoryService:
@@ -226,7 +214,7 @@ def _get_product_repository() -> ProductRepositoryProtocol:
 
 
 def _run_fns_pipeline_from_raw(
-    pending: PendingReceipt | ReceiptProcessingLog,
+    log: ReceiptProcessingLog,
     raw_qr: str,
 ) -> dict[str, Any]:
     """Run the FNS lookup -> mapper -> validate tail from a decoded QR string.
@@ -239,34 +227,20 @@ def _run_fns_pipeline_from_raw(
     receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
     receipt_data['items'] = (
         _get_receipt_item_category_service().categorize_items(
-            user=pending.user,
+            user=log.user,
             items=receipt_data.get('items', []),
         )
     )
 
     inn = receipt_data.get('inn')
     if inn and not receipt_data.get('retail_place'):
-        seller = SellerRepository().find_by_inn(user=pending.user, inn=inn)
+        seller = SellerRepository().find_by_inn(user=log.user, inn=inn)
         if seller and seller.retail_place not in (None, '', 'Нет данных'):
             receipt_data['retail_place'] = seller.retail_place
 
     validated = validate_receipt_parse_payload(receipt_data).to_dict()
     validated['_fns_raw'] = fns_payload
     return validated
-
-
-def _run_fns_pipeline(
-    pending: PendingReceipt | ReceiptProcessingLog,
-) -> dict[str, Any]:
-    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
-    with pending.image_file.open('rb') as image_fp:
-        qr_data = QRCodeExtractor().extract(image_fp)
-    return _run_fns_pipeline_from_raw(pending, qr_data.raw)
-
-
-def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
-    """Run the FNS receipt processing pipeline."""
-    return _run_fns_pipeline(pending)
 
 
 def _get_receipt_processing_service() -> ReceiptProcessingService:
@@ -301,22 +275,6 @@ def _run_processing_log_pipeline(
     return _run_fns_pipeline_from_raw(log, raw_qr)
 
 
-def _run_claimed_photo_pipeline(
-    pending: PendingReceipt,
-    service: PendingReceiptServiceProtocol,
-    task_id: str,
-) -> dict[str, Any]:
-    with pending.image_file.open('rb') as image_fp:
-        qr_data = QRCodeExtractor().extract(image_fp)
-    if not service.claim_fiscal_key(
-        pending_receipt=pending,
-        fiscal_key=qr_data.fiscal_key,
-        task_id=task_id,
-    ):
-        raise ValueError('Receipt fiscal key already exists')
-    return _run_fns_pipeline_from_raw(pending, qr_data.raw)
-
-
 def _classify_failure(exc: Exception) -> tuple[str, str]:
     """Map an exception to a (log_event, user-facing message) pair.
 
@@ -328,140 +286,10 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
         if isinstance(exc, exception_types):
             return event, str(message)
     if isinstance(exc, ReceiptParseValidationError) and exc.user_message:
-        return 'pending_receipt_parse_failed', exc.user_message
+        return 'receipt_processing_parse_failed', exc.user_message
     if isinstance(exc, json.JSONDecodeError | ValueError | TypeError):
-        return 'pending_receipt_parse_failed', str(_PARSE_FAILED_MESSAGE)
-    return 'pending_receipt_failed', str(_UNEXPECTED_MESSAGE)
-
-
-def _finalize_pipeline(
-    pending: PendingReceipt,
-    pending_receipt_id: int,
-    service: PendingReceiptServiceProtocol,
-    run_pipeline: Callable[[], dict[str, Any]],
-    task_id: str,
-) -> None:
-    """Run a pipeline callable and transition the pending receipt.
-
-    Shared tail for both processing tasks: catches pipeline failures,
-    classifies them, and marks the pending receipt failed or ready.
-    """
-    try:
-        receipt_data = run_pipeline()
-    except Exception as exc:
-        event, message = _classify_failure(exc)
-        service.mark_failed(
-            pending_receipt=pending,
-            error_message=message,
-            task_id=task_id,
-        )
-        logger.warning(
-            event,
-            pending_receipt_id=pending_receipt_id,
-            error=str(exc),
-        )
-        return
-    service.mark_ready(
-        pending_receipt=pending,
-        receipt_data=receipt_data,
-        task_id=task_id,
-    )
-
-
-@shared_task(  # type: ignore[untyped-decorator]
-    bind=True,
-    name='receipts.process_pending_receipt',
-    autoretry_for=(ConnectionError,),
-    max_retries=2,
-    retry_backoff=True,
-    acks_late=True,
-)
-def process_pending_receipt(self: Any, pending_receipt_id: int) -> None:
-    """Run inference for a pending receipt and update its state.
-
-    Loads the persisted image, calls ``analyze_image_with_ai`` (which uses the
-    local receipt inference service), parses the result and transitions the
-    PendingReceipt to ``ready`` or ``failed``.
-
-    Args:
-        _self: Bound Celery task instance (unused, present for ``bind=True``).
-        pending_receipt_id: Primary key of the PendingReceipt to process.
-    """
-    try:
-        pending = PendingReceipt.objects.select_related('user').get(
-            pk=pending_receipt_id,
-        )
-    except PendingReceipt.DoesNotExist:
-        logger.warning(
-            'pending_receipt_missing',
-            pending_receipt_id=pending_receipt_id,
-        )
-        return
-
-    service = _get_pending_receipt_service()
-    task_id = str(self.request.id)
-
-    if not pending.image_file:
-        service.mark_failed(
-            pending_receipt=pending,
-            error_message=str(_MISSING_FILE_MESSAGE),
-            task_id=task_id,
-        )
-        return
-
-    _finalize_pipeline(
-        pending,
-        pending_receipt_id,
-        service,
-        lambda: _run_claimed_photo_pipeline(pending, service, task_id),
-        task_id,
-    )
-
-
-@shared_task(  # type: ignore[untyped-decorator]
-    bind=True,
-    name='receipts.process_pending_receipt_from_qr',
-    autoretry_for=(ConnectionError,),
-    max_retries=2,
-    retry_backoff=True,
-    acks_late=True,
-)
-def process_pending_receipt_from_qr(
-    self: Any,
-    pending_receipt_id: int,
-    raw_qr: str,
-) -> None:
-    """Run the FNS lookup for a pending receipt scanned via browser camera.
-
-    The QR was already decoded client-side, so this task starts straight
-    from the FNS lookup — no image, no ``QRCodeExtractor`` step.
-
-    Args:
-        _self: Bound Celery task instance (unused, present for ``bind=True``).
-        pending_receipt_id: Primary key of the PendingReceipt to process.
-        raw_qr: Raw FNS QR string decoded in the browser.
-    """
-    try:
-        pending = PendingReceipt.objects.select_related('user').get(
-            pk=pending_receipt_id,
-        )
-    except PendingReceipt.DoesNotExist:
-        logger.warning(
-            'pending_receipt_missing',
-            pending_receipt_id=pending_receipt_id,
-        )
-        return
-
-    service = _get_pending_receipt_service()
-    task_id = str(self.request.id)
-
-    _finalize_pipeline(
-        pending,
-        pending_receipt_id,
-        service,
-        lambda: _run_fns_pipeline_from_raw(pending, raw_qr),
-        task_id,
-    )
+        return 'receipt_processing_parse_failed', str(_PARSE_FAILED_MESSAGE)
+    return 'receipt_processing_failed', str(_UNEXPECTED_MESSAGE)
 
 
 @shared_task(  # type: ignore[untyped-decorator]
@@ -602,18 +430,10 @@ def find_category_merge_proposals() -> dict[str, int]:
     return {'users': processed, 'proposals': proposals}
 
 
-@shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]
-def cleanup_stale_pending_receipts() -> dict[str, int]:
-    """Recover stuck processing rows and purge expired pending receipts.
-
-    Marks ``processing`` rows older than the Celery hard time limit (with a
-    safety margin) as ``failed`` so the user can retry. Deletes all rows past
-    their ``expires_at``, removing the on-disk image alongside the row.
-
-    Returns:
-        Dict with counts of recovered and purged rows for logging.
-    """
-    service = _get_pending_receipt_service()
+@shared_task(name='receipts.cleanup_stale_receipt_processing_logs')  # type: ignore[untyped-decorator]
+def cleanup_stale_receipt_processing_logs() -> dict[str, int]:
+    """Recover stalled receipt-processing journal entries for retry."""
+    service = _get_receipt_processing_service()
     now = timezone.now()
     hard_limit_seconds = int(
         getattr(settings, 'CELERY_TASK_TIME_LIMIT', 30 * 60),
@@ -623,26 +443,19 @@ def cleanup_stale_pending_receipts() -> dict[str, int]:
     )
 
     recovered = 0
-    stuck = PendingReceipt.objects.filter(
-        status=PendingReceiptStatus.PROCESSING,
+    stuck = ReceiptProcessingLog.objects.filter(
+        status=ReceiptProcessingStatus.PROCESSING,
         processing_started_at__lt=stuck_threshold,
     )
-    for pending in stuck:
+    for log in stuck:
         service.mark_failed(
-            pending_receipt=pending,
+            log=log,
             error_message=str(_TIMEOUT_RECOVERY_MESSAGE),
+            task_id=log.task_id,
         )
         recovered += 1
-
-    purged = 0
-    expired = PendingReceipt.objects.filter(expires_at__lt=now)
-    for pending in expired:
-        service.delete_with_file(pending_receipt=pending)
-        purged += 1
-
     logger.info(
-        'pending_receipt_cleanup',
+        'receipt_processing_log_cleanup',
         recovered=recovered,
-        purged=purged,
     )
-    return {'recovered': recovered, 'purged': purged}
+    return {'recovered': recovered}

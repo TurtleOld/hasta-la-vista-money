@@ -161,7 +161,7 @@ class ReceiptParseItem:
 
 @dataclass(frozen=True)
 class ReceiptParseResult:
-    """Normalized receipt payload accepted by PendingReceiptService."""
+    """Normalized receipt payload accepted by automatic processing."""
 
     name_seller: str
     total_sum: Decimal
