@@ -1,5 +1,6 @@
 """Automatic receipt processing backed by an audit log."""
 
+import hashlib
 from decimal import Decimal
 from typing import Any
 
@@ -20,7 +21,7 @@ from hasta_la_vista_money.receipts.protocols.services import (
 from hasta_la_vista_money.receipts.repositories.receipt_processing_log_repository import (  # noqa: E501
     ReceiptProcessingLogRepository,
 )
-from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+from hasta_la_vista_money.receipts.services.receipt_adjustment import (
     calculate_receipt_adjustment,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -28,6 +29,22 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+_HASH_CHUNK_SIZE = 64 * 1024
+
+
+def compute_image_hash(file_obj: Any) -> str:
+    """Return the SHA-256 digest of an uploaded image without consuming it."""
+    digest = hashlib.sha256()
+    if hasattr(file_obj, 'chunks'):
+        for chunk in file_obj.chunks(chunk_size=_HASH_CHUNK_SIZE):
+            digest.update(chunk)
+    else:
+        while chunk := file_obj.read(_HASH_CHUNK_SIZE):
+            digest.update(chunk)
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    return digest.hexdigest()
 
 
 class ReceiptProcessingService:

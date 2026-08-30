@@ -15,9 +15,6 @@ from hasta_la_vista_money.receipts.views import (
     CategoryMergeProposalKeepView,
     CategoryMergeProposalMergeView,
     CategoryMergeProposalView,
-    PendingReceiptCounterView,
-    PendingReceiptDeleteView,
-    PendingReceiptRetryView,
     ProductByMonthView,
     ReceiptCreateView,
     ReceiptDeleteView,
@@ -103,21 +100,6 @@ urlpatterns = [
         'processing/notifications/',
         ReceiptProcessingNotificationView.as_view(),
         name='processing_notifications',
-    ),
-    path(
-        'pending/counter/',
-        PendingReceiptCounterView.as_view(),
-        name='pending_counter',
-    ),
-    path(
-        'pending/<int:pk>/retry/',
-        PendingReceiptRetryView.as_view(),
-        name='pending_retry',
-    ),
-    path(
-        'pending/<int:pk>/delete/',
-        PendingReceiptDeleteView.as_view(),
-        name='pending_delete',
     ),
     path(
         'seller-autocomplete/',

@@ -260,6 +260,8 @@ class ProductCategoryMigrationTest(TransactionTestCase):
         )
 
     def tearDown(self) -> None:
+        self.executor = MigrationExecutor(transaction.get_connection())
+        self.executor.migrate(self.executor.loader.graph.leaf_nodes())
         post_save.connect(seed_product_categories_for_new_user, sender=User)
 
     def test_migration_moves_rows_to_approved_categories(self) -> None:

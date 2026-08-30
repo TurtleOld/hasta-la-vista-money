@@ -8,7 +8,6 @@ from hasta_la_vista_money.receipts.protocols.services import (
     CategoryMergeProposalServiceProtocol,
     CategoryTwinDetectionServiceProtocol,
     ExternalProductCategoryServiceProtocol,
-    PendingReceiptServiceProtocol,
     ProductCategoryCorrectionServiceProtocol,
     ReceiptCreatorServiceProtocol,
     ReceiptDeleterServiceProtocol,
@@ -36,9 +35,6 @@ from hasta_la_vista_money.receipts.services.category_twin_detection import (
 )
 from hasta_la_vista_money.receipts.services.external_category import (
     ExternalProductCategoryService,
-)
-from hasta_la_vista_money.receipts.services.pending_receipt_service import (
-    PendingReceiptService,
 )
 from hasta_la_vista_money.receipts.services.product_categories import (
     ProductCategoryService,
@@ -172,14 +168,4 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ),
         receipt_creator_service=receipt_creator_service,
         processing_log_repository=receipt_processing_log_repository,
-    )
-    pending_receipt_service: providers.Factory[
-        PendingReceiptServiceProtocol
-    ] = providers.Factory(
-        cast(
-            'Callable[..., PendingReceiptServiceProtocol]',
-            PendingReceiptService,
-        ),
-        receipt_creator_service=receipt_creator_service,
-        receipt_repository=receipt_repository,
     )

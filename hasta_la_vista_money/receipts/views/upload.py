@@ -21,7 +21,7 @@ from hasta_la_vista_money.receipts.forms import (
     UploadImageForm,
 )
 from hasta_la_vista_money.receipts.services.fns_qr import parse_fns_qr
-from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+from hasta_la_vista_money.receipts.services.receipt_processing_service import (
     compute_image_hash,
 )
 
@@ -45,9 +45,8 @@ class UploadImageView(
     """Accept a receipt image and enqueue background processing.
 
     The view does not block on inference: it computes the file hash, rejects
-    duplicates, persists a PendingReceipt + the image, dispatches the Celery
-    task and redirects the user back to the receipts list. The background
-    worker transitions the row to ``ready`` (or ``failed``) on its own.
+    duplicates, persists a processing-log entry with the image, dispatches
+    the Celery task and redirects the user back to the receipts list.
     """
 
     template_name = 'receipts/upload_image.html'
