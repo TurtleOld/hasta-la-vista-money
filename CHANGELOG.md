@@ -1,5 +1,24 @@
 # История изменений
 
+## [2.14.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.13.0...v2.14.0) (2026-08-30)
+
+
+### Features
+
+* **receipts:** add external category fallback ([#988](https://github.com/TurtleOld/hasta-la-vista-money/issues/988)) ([65235cd](https://github.com/TurtleOld/hasta-la-vista-money/commit/65235cd6453724f7a48562e765637a2c3d8307d9))
+* **receipts:** add product category directory ([#985](https://github.com/TurtleOld/hasta-la-vista-money/issues/985)) ([26db95d](https://github.com/TurtleOld/hasta-la-vista-money/commit/26db95d4bc8e226b4c4db6211b6bc3848f27177e))
+* **receipts:** add semantic product category matching ([#987](https://github.com/TurtleOld/hasta-la-vista-money/issues/987)) ([d3ee44a](https://github.com/TurtleOld/hasta-la-vista-money/commit/d3ee44a4035031a73ee5b31d78c7293fb8f8dc9c))
+* **receipts:** conduct scanned receipts automatically ([#983](https://github.com/TurtleOld/hasta-la-vista-money/issues/983)) ([f0145dc](https://github.com/TurtleOld/hasta-la-vista-money/commit/f0145dce0ca32f18314624056d51ed08d3a98959))
+* **receipts:** pin name matches and add writing-match categorization ([#986](https://github.com/TurtleOld/hasta-la-vista-money/issues/986)) ([ffaccd9](https://github.com/TurtleOld/hasta-la-vista-money/commit/ffaccd9cc18efe52d67ee8ae4019fd9fa0de9ff7))
+* **receipts:** propose and merge twin product categories ([#990](https://github.com/TurtleOld/hasta-la-vista-money/issues/990)) ([99d0ee0](https://github.com/TurtleOld/hasta-la-vista-money/commit/99d0ee0370703cbaeac0d145a6966e71212726e9))
+* **receipts:** remember human category corrections ([#989](https://github.com/TurtleOld/hasta-la-vista-money/issues/989)) ([edfd8b2](https://github.com/TurtleOld/hasta-la-vista-money/commit/edfd8b22dfc0a4965eeee3a466a6542c4904f40a))
+
+
+### Bug Fixes
+
+* **config:** run tests on postgres ([#980](https://github.com/TurtleOld/hasta-la-vista-money/issues/980)) ([b2d91a2](https://github.com/TurtleOld/hasta-la-vista-money/commit/b2d91a257cb16ad5fe1d96a4e610faca4bb18598))
+* **users:** preserve legacy category model settings ([#982](https://github.com/TurtleOld/hasta-la-vista-money/issues/982)) ([c6dd577](https://github.com/TurtleOld/hasta-la-vista-money/commit/c6dd577cc5715edfd093ddf04cdca2973964cff2))
+
 ## [2.13.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.12.2...v2.13.0) (2026-08-23)
 
 
