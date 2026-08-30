@@ -82,19 +82,27 @@
                 <table class="receipt-review-table">
                     <thead>
                         <tr>
-                            <th>{% translate 'Товар' %}</th>
-                            <th class="ta-right">{% translate 'Цена' %}</th>
-                            <th class="ta-center">{% translate 'Кол-во' %}</th>
-                            <th class="ta-right">{% translate 'Сумма' %}</th>
+                            <th scope="col">{% translate 'Товар' %}</th>
+                            <th scope="col">{% translate 'Категория' %}</th>
+                            <th scope="col" class="ta-right">{% translate 'Цена' %}</th>
+                            <th scope="col" class="ta-center">{% translate 'Кол-во' %}</th>
+                            <th scope="col" class="ta-right">{% translate 'Сумма' %}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for product in receipt.product.all %}
-                            <tr>
-                                <td>{{ product.product_name }}</td>
-                                <td class="ta-right">{{ product.price|comma }} ₽</td>
-                                <td class="ta-center">{{ product.quantity }}</td>
-                                <td class="ta-right"><strong>{{ product.amount|comma }} ₽</strong></td>
+                            <tr class="product-row">
+                                <td data-label="{% translate 'Товар' %}">{{ product.product_name }}</td>
+                                <td data-label="{% translate 'Категория' %}">
+                                    {% if product.category %}
+                                        <span class="receipts-cat-chip">{{ product.category.name }}</span>
+                                    {% else %}
+                                        <span class="receipts-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="ta-right" data-label="{% translate 'Цена' %}">{{ product.price|comma }} ₽</td>
+                                <td class="ta-center" data-label="{% translate 'Кол-во' %}">{{ product.quantity }}</td>
+                                <td class="ta-right" data-label="{% translate 'Сумма' %}"><strong>{{ product.amount|comma }} ₽</strong></td>
                             </tr>
                         {% endfor %}
                     </tbody>
