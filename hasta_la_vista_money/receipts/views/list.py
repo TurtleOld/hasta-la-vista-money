@@ -31,6 +31,7 @@ from hasta_la_vista_money.receipts.forms import (
 )
 from hasta_la_vista_money.receipts.models import (
     Receipt,
+    ReceiptProcessingStatus,
     Seller,
 )
 from hasta_la_vista_money.receipts.views.base import BaseView
@@ -242,8 +243,16 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         processing_service = (
             request.container.receipts.receipt_processing_service()
         )
-        context['processing_logs'] = processing_service.get_visible_for_user(
-            user=user,
+        processing_logs = list(
+            processing_service.get_visible_for_user(user=user),
+        )
+        context['processing_logs'] = processing_logs
+        context['has_active_processing_logs'] = any(
+            log.status == ReceiptProcessingStatus.PROCESSING
+            for log in processing_logs
+        )
+        context['receipt_processing_poll_interval'] = (
+            constants.RECEIPT_PROCESSING_POLL_INTERVAL
         )
 
         return context
