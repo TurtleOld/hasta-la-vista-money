@@ -93,6 +93,31 @@ RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
 RECEIPT_ADJUSTMENT_WARNING_AMOUNT: Final = Decimal('1.00')
 RECEIPT_ADJUSTMENT_WARNING_RATIO: Final = Decimal('0.01')
 RECEIPT_PROCESSING_POLL_INTERVAL: Final = '5s'
+FNS_DIAGNOSTIC_BODY_MAX_LENGTH: Final = 1000
+FNS_DIAGNOSTIC_LIST_ITEM_LIMIT: Final = 10
+FNS_DIAGNOSTIC_FIELDS: Final = frozenset(
+    {
+        'code',
+        'detail',
+        'error',
+        'errorcode',
+        'errormessage',
+        'message',
+        'path',
+        'reason',
+        'requestid',
+        'status',
+        'timestamp',
+        'traceid',
+    },
+)
+FNS_DIAGNOSTIC_RESPONSE_HEADERS: Final = (
+    'retry-after',
+    'x-correlation-id',
+    'x-request-id',
+    'x-trace-id',
+)
+FNS_REDACTED_VALUE: Final = '[REDACTED]'
 DEFAULT_PRODUCT_CATEGORY: Final = 'Прочее'
 PRODUCT_NAME_EMBEDDING_DIMENSIONS: Final = 384
 RECEIPT_EXTERNAL_CATEGORY_TASK_NAME: Final = (
