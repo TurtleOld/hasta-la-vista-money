@@ -21,11 +21,11 @@
             </svg>
         </a>
 
-        <a href="{% url 'reports:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'reports' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+        <a href="{% url 'users:statistics' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'statistics' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
             </svg>
-            <span class="leading-none">{% translate 'Отчёты' %}</span>
+            <span class="leading-none">{% translate 'Статистика' %}</span>
         </a>
 
         <a href="{% url 'receipts:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'receipts' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">

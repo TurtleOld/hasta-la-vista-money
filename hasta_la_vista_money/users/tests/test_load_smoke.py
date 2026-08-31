@@ -43,7 +43,7 @@ class CoreLoadSmokeTest(StaticLiveServerTestCase):
                 f'{self.live_server_url}'
                 f'{reverse("users:dashboard_comparison")}?period=month'
             ),
-            f'{self.live_server_url}{reverse("reports:list")}',
+            f'{self.live_server_url}{reverse("users:statistics")}',
         ]
 
         with httpx.Client(cookies=cookies, follow_redirects=True) as client:

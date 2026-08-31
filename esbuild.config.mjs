@@ -9,7 +9,6 @@ const options = {
     'pages/dashboard': 'static/js/pages/dashboard.js',
     'pages/budget': 'static/js/pages/budget.js',
     'pages/receipts': 'static/js/pages/receipts.js',
-    'pages/reports': 'static/js/pages/reports.js',
     'pages/receipt-update': 'static/js/pages/receipt-update.js',
     'pages/receipt-qr-scan': 'static/js/pages/receipt-qr-scan.js',
     'pages/receipt-qr-worker': 'static/js/pages/receipt-qr-worker.js',
