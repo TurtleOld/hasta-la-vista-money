@@ -146,13 +146,21 @@
             </div>
 
             <div id="statistics-results" class="statistics-panel statistics-section">
+                {{ chart_combined|json_script:'statistics-chart-data' }}
                 <div class="statistics-panel-head">
-                    <h5 class="statistics-panel-title">{% translate 'Динамика доходов и расходов' %}</h5>
+                    <h5 class="statistics-panel-title">{% translate 'Доходы и расходы' %}</h5>
                 </div>
                 <div class="statistics-panel-body">
-                    {{ chart_combined|json_script:'statistics-chart-data' }}
                     <div class="statistics-chart-box">
                         <canvas id="incomeExpenseChart" height="300"></canvas>
+                    </div>
+                </div>
+                <div class="statistics-panel-head">
+                    <h5 class="statistics-panel-title">{% translate 'Баланс и прогноз' %}</h5>
+                </div>
+                <div class="statistics-panel-body">
+                    <div class="statistics-chart-box">
+                        <canvas id="balanceForecastChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -889,77 +897,97 @@
         }
     }
 
-    function renderStatisticsCharts() {
-        const chartData = readStatisticsChartData();
+    function showChartEmptyState(ctx) {
+        ctx.parentElement.innerHTML = '<div class="statistics-empty"><svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 4 4 5-7"></path></svg><p>Нет данных для отображения графика</p></div>';
+    }
+
+    function hasNonNullValue(values) {
+        return Array.isArray(values) && values.some(function(value) { return value !== null && value !== undefined; });
+    }
+
+    function formatRuble(value) {
+        return value.toLocaleString('ru-RU') + ' ₽';
+    }
+
+    function chartTooltipOptions(themeColors) {
+        return {
+            backgroundColor: themeColors.isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: themeColors.textColor,
+            bodyColor: themeColors.textColor,
+            borderColor: themeColors.isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
+            borderWidth: 1,
+            callbacks: {
+                label: function(context) {
+                    return context.dataset.label + ': ' + formatRuble(context.parsed.y);
+                },
+            },
+        };
+    }
+
+    function chartAxisOptions(themeColors, yTitle) {
+        return {
+            y: {
+                title: {
+                    display: true,
+                    text: yTitle,
+                    color: themeColors.textColor,
+                },
+                ticks: {
+                    color: themeColors.mutedColor,
+                    callback: formatRuble,
+                },
+                grid: {
+                    color: themeColors.gridColor,
+                },
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Дата',
+                    color: themeColors.textColor,
+                },
+                ticks: {
+                    color: themeColors.mutedColor,
+                },
+                grid: {
+                    color: themeColors.gridColor,
+                },
+            },
+        };
+    }
+
+    function renderIncomeExpenseChart(chartData, themeColors) {
         const ctx = document.getElementById('incomeExpenseChart');
-        if (!ctx || typeof Chart === 'undefined' || !chartData) {
+        if (!ctx || typeof Chart === 'undefined') {
             return;
         }
         if (ctx._statisticsChart && typeof ctx._statisticsChart.destroy === 'function') {
             ctx._statisticsChart.destroy();
         }
-        if (!chartData.labels || chartData.labels.length === 0) {
-            ctx.parentElement.innerHTML = '<div class="statistics-empty"><svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 4 4 5-7"></path></svg><p>Нет данных для отображения графика</p></div>';
+        if (!chartData || !chartData.labels || chartData.labels.length === 0) {
+            showChartEmptyState(ctx);
             return;
         }
 
-        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' || document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const textColor = isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)';
-        const mutedColor = isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)';
-        const gridColor = isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)';
+        const { textColor } = themeColors;
 
         ctx._statisticsChart = new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: chartData.labels || [],
                 datasets: [
                     {
-                        label: 'Расходы',
-                        data: chartData.expense_data || [],
-                        borderColor: 'rgb(220, 38, 38)',
-                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
-                        tension: 0.1,
-                        borderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                    },
-                    {
                         label: 'Доходы',
                         data: chartData.income_data || [],
+                        backgroundColor: 'rgba(22, 163, 74, 0.7)',
                         borderColor: 'rgb(22, 163, 74)',
-                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                        tension: 0.1,
-                        borderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                    },
-                    {
-                        label: 'Прогноз баланса',
-                        data: chartData.forecast_balance || [],
-                        borderColor: 'rgb(14, 165, 233)',
-                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                        borderDash: [6, 6],
-                        tension: 0.25,
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                    },
-                    {
-                        label: 'Нижняя граница прогноза',
-                        data: chartData.forecast_lower || [],
-                        borderColor: 'rgba(14, 165, 233, 0.25)',
-                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
-                        borderDash: [2, 6],
-                        pointRadius: 0,
                         borderWidth: 1,
                     },
                     {
-                        label: 'Верхняя граница прогноза',
-                        data: chartData.forecast_upper || [],
-                        borderColor: 'rgba(14, 165, 233, 0.25)',
-                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
-                        borderDash: [2, 6],
-                        pointRadius: 0,
+                        label: 'Расходы',
+                        data: chartData.expense_data || [],
+                        backgroundColor: 'rgba(220, 38, 38, 0.7)',
+                        borderColor: 'rgb(220, 38, 38)',
                         borderWidth: 1,
                     },
                 ],
@@ -978,53 +1006,116 @@
                             color: textColor,
                         },
                     },
-                    tooltip: {
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                        titleColor: textColor,
-                        bodyColor: textColor,
-                        borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
-                        borderWidth: 1,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                    },
+                    tooltip: chartTooltipOptions(themeColors),
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Сумма (₽)',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                            callback: function(value) {
-                                return value.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Дата',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                },
+                scales: (function() {
+                    const axisOptions = chartAxisOptions(themeColors, 'Сумма (₽)');
+                    axisOptions.y.beginAtZero = true;
+                    return axisOptions;
+                })(),
             },
         });
+    }
+
+    function renderBalanceForecastChart(chartData, themeColors) {
+        const ctx = document.getElementById('balanceForecastChart');
+        if (!ctx || typeof Chart === 'undefined') {
+            return;
+        }
+        if (ctx._statisticsChart && typeof ctx._statisticsChart.destroy === 'function') {
+            ctx._statisticsChart.destroy();
+        }
+        const hasForecast = chartData && (
+            hasNonNullValue(chartData.forecast_balance)
+            || hasNonNullValue(chartData.forecast_lower)
+            || hasNonNullValue(chartData.forecast_upper)
+        );
+        if (!hasForecast) {
+            showChartEmptyState(ctx);
+            return;
+        }
+
+        const { textColor } = themeColors;
+
+        ctx._statisticsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels || [],
+                datasets: [
+                    {
+                        label: 'Нижняя граница прогноза',
+                        data: chartData.forecast_lower || [],
+                        borderColor: 'rgba(14, 165, 233, 0)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                        pointRadius: 0,
+                        borderWidth: 0,
+                        fill: false,
+                        tension: 0.25,
+                    },
+                    {
+                        label: 'Верхняя граница прогноза',
+                        data: chartData.forecast_upper || [],
+                        borderColor: 'rgba(14, 165, 233, 0)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                        pointRadius: 0,
+                        borderWidth: 0,
+                        fill: '-1',
+                        tension: 0.25,
+                    },
+                    {
+                        label: 'Баланс и прогноз',
+                        data: chartData.forecast_balance || [],
+                        borderColor: 'rgb(14, 165, 233)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                        borderDash: [6, 6],
+                        tension: 0.25,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            color: textColor,
+                            filter: function(legendItem) {
+                                return legendItem.text === 'Баланс и прогноз';
+                            },
+                        },
+                    },
+                    tooltip: chartTooltipOptions(themeColors),
+                },
+                scales: chartAxisOptions(themeColors, 'Баланс (₽)'),
+            },
+        });
+    }
+
+    function renderStatisticsCharts() {
+        const chartData = readStatisticsChartData();
+        if (typeof Chart === 'undefined') {
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' || document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const themeColors = {
+            isDark: isDark,
+            textColor: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+            mutedColor: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+            gridColor: isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)',
+        };
+
+        renderIncomeExpenseChart(chartData, themeColors);
+        renderBalanceForecastChart(chartData, themeColors);
 
         document.querySelectorAll('.credit-utilization-chart').forEach(function(canvas) {
             const source = document.getElementById(canvas.dataset.chartSource);

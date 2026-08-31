@@ -78,6 +78,36 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertIn('statistics_filter', stats)
         self.assertIn('statistics_members', stats)
 
+    def test_chart_combined_keeps_shape_for_split_dynamics_charts(
+        self,
+    ) -> None:
+        """chart_combined keeps its existing fields for the split charts.
+
+        The dynamics tab renders a bar chart (income/expense) and a
+        separate area chart (balance forecast band) from the same
+        aggregate — this test pins the field shapes so the frontend
+        split does not require any change to this service function.
+        """
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters()
+        stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+        chart_combined = stats['chart_combined']
+        for key in (
+            'labels',
+            'income_data',
+            'expense_data',
+            'forecast_balance',
+            'forecast_lower',
+            'forecast_upper',
+        ):
+            if key not in chart_combined:
+                self.fail(f'chart_combined is missing key {key!r}')
+            self.assertIsInstance(chart_combined[key], list)
+
     def test_get_user_detailed_statistics_uses_cached_value(self) -> None:
         container = ApplicationContainer()
         stats_filter = StatisticsFilters()
@@ -225,6 +255,8 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertContains(response, 'name="transfers_search"')
         self.assertContains(response, 'name="receipts_search"')
         self.assertContains(response, 'hx-target="#statistics-results"')
+        self.assertContains(response, 'id="incomeExpenseChart"')
+        self.assertContains(response, 'id="balanceForecastChart"')
 
 
 class CreditCardPaymentScheduleTest(TestCase):
