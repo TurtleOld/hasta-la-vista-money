@@ -280,6 +280,42 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         log.refresh_from_db()
         self.assertIsNotNone(log.notified_at)
 
+    def test_list_polls_until_processed_receipt_appears(self) -> None:
+        log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+        )
+
+        response = self.client.get(reverse('receipts:list'))
+
+        self.assertContains(response, 'hx-trigger="every 5s"')
+
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Finished receipt shop',
+        )
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('10.00'),
+        )
+        log.status = ReceiptProcessingStatus.COMPLETED
+        log.receipt = receipt
+        log.save(update_fields=['status', 'receipt'])
+
+        response = self.client.get(
+            reverse('receipts:list'),
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertNotContains(response, 'hx-trigger="every 5s"')
+        self.assertContains(
+            response,
+            reverse('receipts:view', args=[receipt.pk]),
+        )
+
     def test_editing_automatic_receipt_clears_attention_when_fixed(
         self,
     ) -> None:

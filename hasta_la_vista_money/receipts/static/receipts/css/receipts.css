@@ -125,11 +125,8 @@
 }
 
 .receipts-row-actions button {
-  background: transparent;
-  border: 0;
   cursor: pointer;
   font: inherit;
-  padding: 0;
 }
 
 /* Кнопки */
@@ -184,6 +181,9 @@
   font-size: 0.8rem;
   font-weight: 700;
   gap: 0.4rem;
+  justify-content: center;
+  line-height: 1;
+  min-height: 2.5rem;
   padding: 0.62rem 0.9rem;
   text-decoration: none;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
