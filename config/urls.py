@@ -153,10 +153,6 @@ urlpatterns = [
         ),
     ),
     path(
-        'reports/',
-        include('hasta_la_vista_money.reports.urls', namespace='reports'),
-    ),
-    path(
         'loan/',
         include('hasta_la_vista_money.loan.urls', namespace='loan'),
     ),
