@@ -905,6 +905,57 @@
         return Array.isArray(values) && values.some(function(value) { return value !== null && value !== undefined; });
     }
 
+    function formatRuble(value) {
+        return value.toLocaleString('ru-RU') + ' ₽';
+    }
+
+    function chartTooltipOptions(themeColors) {
+        return {
+            backgroundColor: themeColors.isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: themeColors.textColor,
+            bodyColor: themeColors.textColor,
+            borderColor: themeColors.isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
+            borderWidth: 1,
+            callbacks: {
+                label: function(context) {
+                    return context.dataset.label + ': ' + formatRuble(context.parsed.y);
+                },
+            },
+        };
+    }
+
+    function chartAxisOptions(themeColors, yTitle) {
+        return {
+            y: {
+                title: {
+                    display: true,
+                    text: yTitle,
+                    color: themeColors.textColor,
+                },
+                ticks: {
+                    color: themeColors.mutedColor,
+                    callback: formatRuble,
+                },
+                grid: {
+                    color: themeColors.gridColor,
+                },
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Дата',
+                    color: themeColors.textColor,
+                },
+                ticks: {
+                    color: themeColors.mutedColor,
+                },
+                grid: {
+                    color: themeColors.gridColor,
+                },
+            },
+        };
+    }
+
     function renderIncomeExpenseChart(chartData, themeColors) {
         const ctx = document.getElementById('incomeExpenseChart');
         if (!ctx || typeof Chart === 'undefined') {
@@ -918,7 +969,7 @@
             return;
         }
 
-        const { textColor, mutedColor, gridColor, isDark } = themeColors;
+        const { textColor } = themeColors;
 
         ctx._statisticsChart = new Chart(ctx, {
             type: 'bar',
@@ -955,51 +1006,13 @@
                             color: textColor,
                         },
                     },
-                    tooltip: {
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                        titleColor: textColor,
-                        bodyColor: textColor,
-                        borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
-                        borderWidth: 1,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                    },
+                    tooltip: chartTooltipOptions(themeColors),
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Сумма (₽)',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                            callback: function(value) {
-                                return value.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Дата',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                },
+                scales: (function() {
+                    const axisOptions = chartAxisOptions(themeColors, 'Сумма (₽)');
+                    axisOptions.y.beginAtZero = true;
+                    return axisOptions;
+                })(),
             },
         });
     }
@@ -1022,7 +1035,7 @@
             return;
         }
 
-        const { textColor, mutedColor, gridColor, isDark } = themeColors;
+        const { textColor } = themeColors;
 
         ctx._statisticsChart = new Chart(ctx, {
             type: 'line',
@@ -1080,50 +1093,9 @@
                             },
                         },
                     },
-                    tooltip: {
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                        titleColor: textColor,
-                        bodyColor: textColor,
-                        borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
-                        borderWidth: 1,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                    },
+                    tooltip: chartTooltipOptions(themeColors),
                 },
-                scales: {
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Баланс (₽)',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                            callback: function(value) {
-                                return value.toLocaleString('ru-RU') + ' ₽';
-                            },
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Дата',
-                            color: textColor,
-                        },
-                        ticks: {
-                            color: mutedColor,
-                        },
-                        grid: {
-                            color: gridColor,
-                        },
-                    },
-                },
+                scales: chartAxisOptions(themeColors, 'Баланс (₽)'),
             },
         });
     }
