@@ -16,7 +16,7 @@
             <div class="budget-actions">
                 <a id="budget-expense-table-btn" href="{% url 'budget:expense_table' %}?scope={{ budget_scope }}" class="budget-button budget-button-secondary budget-button-expense">{% translate 'Таблица расходов' %}</a>
                 <a id="budget-income-table-btn" href="{% url 'budget:income_table' %}?scope={{ budget_scope }}" class="budget-button budget-button-secondary budget-button-income">{% translate 'Таблица доходов' %}</a>
-                <a id="budget-reports-btn" href="{% url 'reports:list' %}" class="budget-button budget-button-secondary">{% translate 'Отчёты' %}</a>
+                <a id="budget-reports-btn" href="{% url 'users:statistics' %}?tab=budgets" class="budget-button budget-button-secondary">{% translate 'Статистика' %}</a>
             </div>
         </header>
 
