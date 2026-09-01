@@ -1,7 +1,7 @@
 from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth import get_user_model
@@ -25,6 +25,7 @@ from hasta_la_vista_money.users.services.cache import (
 from hasta_la_vista_money.users.services.detailed_statistics import (
     CardMonthDict,
     PaymentItemDict,
+    PlanFactEngagementDict,
     StatisticsFilters,
     UserDetailedStatisticsDict,
     _apply_payments_to_months,
@@ -346,7 +347,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         category_amounts: list[tuple[Decimal, Decimal]],
         period_start: date,
         period_end: date,
-    ) -> dict[str, Any]:
+    ) -> PlanFactEngagementDict:
         """Create expense categories with the given (plan, fact) pairs."""
         for index, (plan_amount, fact_amount) in enumerate(category_amounts):
             category = Category.objects.create(
@@ -386,7 +387,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             container=container,
             stats_filter=stats_filter,
         )
-        return cast('dict[str, Any]', stats['plan_fact_engagement'])
+        return stats['plan_fact_engagement']
 
     def test_plan_fact_engagement_savings(self) -> None:
         """Fact under plan in every category shows up as savings."""
