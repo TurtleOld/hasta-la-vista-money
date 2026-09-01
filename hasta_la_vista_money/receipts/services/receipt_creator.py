@@ -385,7 +385,7 @@ class ReceiptCreatorService:
             expected_amount = (product.price * product.quantity).quantize(
                 Decimal('0.01'),
             )
-            if product.amount != expected_amount:
+            if abs(product.amount - expected_amount) > Decimal('0.01'):
                 raise ValueError(
                     'Product amount must match price multiplied by quantity',
                 )
