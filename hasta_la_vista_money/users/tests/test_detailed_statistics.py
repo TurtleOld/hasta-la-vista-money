@@ -8,9 +8,11 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.http import QueryDict
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -245,6 +247,98 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
                 str(operation['category__name']).lower(),
             )
 
+    def test_plan_fact_summary_and_top_deviations(self) -> None:
+        """Plan/Fact summary totals and top-5 deviations match fixtures."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        expense_category = Category.objects.create(
+            user=self.user,
+            name='Plan/Fact expense category',
+            type=TransactionType.EXPENSE,
+        )
+        income_category = Category.objects.create(
+            user=self.user,
+            name='Plan/Fact income category',
+            type=TransactionType.INCOME,
+        )
+
+        Planning.objects.create(
+            user=self.user,
+            category=expense_category,
+            date=date(2026, 1, 1),
+            amount=Decimal('1000.00'),
+            planning_type=TransactionType.EXPENSE,
+        )
+        Planning.objects.create(
+            user=self.user,
+            category=income_category,
+            date=date(2026, 1, 1),
+            amount=Decimal('500.00'),
+            planning_type=TransactionType.INCOME,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=expense_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('700.00'),
+            date=datetime(2026, 1, 10, 12, 0, tzinfo=UTC),
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=income_category,
+            type=TransactionType.INCOME,
+            amount=Decimal('800.00'),
+            date=datetime(2026, 1, 15, 12, 0, tzinfo=UTC),
+        )
+
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+
+        self.assertIn('plan_fact_summary', stats)
+        self.assertIn('plan_fact_top_deviations', stats)
+
+        summary = stats['plan_fact_summary']
+        self.assertEqual(summary['expense']['fact'], 700.0)
+        self.assertEqual(summary['expense']['plan'], 1000.0)
+        self.assertEqual(summary['expense']['diff'], -300.0)
+        self.assertEqual(summary['income']['fact'], 800.0)
+        self.assertEqual(summary['income']['plan'], 500.0)
+        self.assertEqual(summary['income']['diff'], 300.0)
+
+        deviations = stats['plan_fact_top_deviations']
+        self.assertEqual(len(deviations), 2)
+        category_names = {item['category_name'] for item in deviations}
+        self.assertEqual(
+            category_names,
+            {expense_category.name, income_category.name},
+        )
+        for item in deviations:
+            if item['category_id'] == expense_category.pk:
+                self.assertEqual(item['fact'], 700.0)
+                self.assertEqual(item['plan'], 1000.0)
+                self.assertEqual(item['diff'], -300.0)
+                self.assertEqual(item['abs_diff'], 300.0)
+            else:
+                self.assertEqual(item['category_id'], income_category.pk)
+                self.assertEqual(item['fact'], 800.0)
+                self.assertEqual(item['plan'], 500.0)
+                self.assertEqual(item['diff'], 300.0)
+                self.assertEqual(item['abs_diff'], 300.0)
+
     def test_statistics_template_contains_htmx_server_side_controls(
         self,
     ) -> None:
@@ -265,6 +359,20 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertContains(response, 'hx-target="#statistics-results"')
         self.assertContains(response, 'id="incomeExpenseChart"')
         self.assertContains(response, 'id="balanceForecastChart"')
+
+    def test_statistics_template_renders_plan_fact_tab(self) -> None:
+        """The renamed Plan/Fact tab renders its sections and budget link."""
+        self.client.force_login(self.user)
+        response = self.client.get('/users/statistics/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'План/Факт')
+        self.assertNotContains(response, '>Бюджеты<')
+        self.assertContains(response, 'data-panel="budgets"')
+        self.assertContains(response, 'Топ-5 отклонений факт/план')
+        self.assertContains(response, 'Лимиты')
+        self.assertContains(response, 'Открыть полную таблицу')
+        self.assertContains(response, reverse('budget:list'))
 
 
 class CreditCardPaymentScheduleTest(TestCase):

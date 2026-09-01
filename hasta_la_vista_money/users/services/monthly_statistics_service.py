@@ -80,6 +80,49 @@ class BudgetDataDict(TypedDict):
     near_limit: bool
 
 
+class PlanFactTotalsDict(TypedDict):
+    """Aggregated plan vs fact totals for a single transaction type.
+
+    Attributes:
+        fact: Actual total amount for the period.
+        plan: Total planned amount (from Planning) for the period.
+        diff: fact minus plan.
+    """
+
+    fact: float
+    plan: float
+    diff: float
+
+
+class PlanFactSummaryDict(TypedDict):
+    """Plan vs fact summary for the period, split by transaction type."""
+
+    expense: PlanFactTotalsDict
+    income: PlanFactTotalsDict
+
+
+class PlanFactDeviationDict(TypedDict):
+    """A single category's plan vs fact deviation.
+
+    Attributes:
+        category_id: Category primary key.
+        category_name: Category name.
+        planning_type: 'expense' or 'income'.
+        fact: Actual amount for the category in the period.
+        plan: Planned amount for the category in the period.
+        diff: fact minus plan (signed).
+        abs_diff: Absolute value of diff, used for ranking.
+    """
+
+    category_id: int
+    category_name: str
+    planning_type: str
+    fact: float
+    plan: float
+    diff: float
+    abs_diff: float
+
+
 class StatisticsChoiceDict(TypedDict):
     """Generic select option for the statistics filter form."""
 
@@ -437,7 +480,7 @@ def _planning_amounts_by_month(
     income_by_month: dict[date, float] = {}
     expense_by_month: dict[date, float] = {}
     for row in qs:
-        month_date = row['month'].date().replace(day=1)
+        month_date = row['month'].replace(day=1)
         value = float(row['total'] or 0)
         if row['planning_type'] == TransactionType.INCOME:
             income_by_month[month_date] = value
@@ -672,6 +715,127 @@ def _budgets_data(
     return result
 
 
+def _aware_period_bounds(
+    period_start: date,
+    period_end: date,
+) -> tuple[datetime, datetime]:
+    return (
+        _date_to_aware(period_start),
+        _date_to_aware(period_end, end_of_day=True),
+    )
+
+
+def _plan_fact_summary(
+    users: Iterable[User],
+    period_start: date,
+    period_end: date,
+) -> PlanFactSummaryDict:
+    """Aggregate Planning vs actual totals for the period, by type."""
+    users_list = list(users)
+    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
+
+    plan_totals = (
+        Planning.objects.filter(
+            user__in=users_list,
+            date__range=(period_start, period_end),
+        )
+        .values('planning_type')
+        .annotate(total=Sum('amount'))
+    )
+    plan_by_type = {
+        row['planning_type']: float(row['total'] or 0) for row in plan_totals
+    }
+
+    fact_totals = (
+        Transaction.objects.filter(
+            user__in=users_list,
+            type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
+            date__gte=start_dt,
+            date__lte=end_dt,
+        )
+        .values('type')
+        .annotate(total=Sum('amount'))
+    )
+    fact_by_type = {
+        row['type']: float(row['total'] or 0) for row in fact_totals
+    }
+
+    def _totals(type_value: str) -> PlanFactTotalsDict:
+        fact = fact_by_type.get(type_value, 0.0)
+        plan = plan_by_type.get(type_value, 0.0)
+        return {'fact': fact, 'plan': plan, 'diff': fact - plan}
+
+    return {
+        'expense': _totals(TransactionType.EXPENSE),
+        'income': _totals(TransactionType.INCOME),
+    }
+
+
+def _plan_fact_top_deviations(
+    users: Iterable[User],
+    period_start: date,
+    period_end: date,
+    limit: int = 5,
+) -> list[PlanFactDeviationDict]:
+    """Top categories by absolute |fact - plan| deviation in the period."""
+    users_list = list(users)
+    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
+
+    plan_rows = (
+        Planning.objects.filter(
+            user__in=users_list,
+            date__range=(period_start, period_end),
+        )
+        .values('category_id', 'category__name', 'planning_type')
+        .annotate(total=Sum('amount'))
+    )
+    plan_by_category: dict[tuple[int, str], tuple[str, float]] = {
+        (row['category_id'], row['planning_type']): (
+            row['category__name'],
+            float(row['total'] or 0),
+        )
+        for row in plan_rows
+    }
+
+    fact_rows = (
+        Transaction.objects.filter(
+            user__in=users_list,
+            type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
+            category_id__in=[key[0] for key in plan_by_category],
+            date__gte=start_dt,
+            date__lte=end_dt,
+        )
+        .values('category_id', 'type')
+        .annotate(total=Sum('amount'))
+    )
+    fact_by_category = {
+        (row['category_id'], row['type']): float(row['total'] or 0)
+        for row in fact_rows
+    }
+
+    result: list[PlanFactDeviationDict] = []
+    for (category_id, planning_type), (
+        category_name,
+        plan_amount,
+    ) in plan_by_category.items():
+        fact_amount = fact_by_category.get((category_id, planning_type), 0.0)
+        diff = fact_amount - plan_amount
+        result.append(
+            {
+                'category_id': category_id,
+                'category_name': category_name,
+                'planning_type': planning_type,
+                'fact': fact_amount,
+                'plan': plan_amount,
+                'diff': diff,
+                'abs_diff': abs(diff),
+            },
+        )
+
+    result.sort(key=lambda item: item['abs_diff'], reverse=True)
+    return result[:limit]
+
+
 class DashboardSummaryStatisticsDict(TypedDict):
     """Lean dashboard payload for the SPA widgets."""
 
@@ -731,10 +895,14 @@ __all__ = [
     'BudgetDataDict',
     'DashboardSummaryStatisticsDict',
     'MonthDataDict',
+    'PlanFactDeviationDict',
+    'PlanFactSummaryDict',
+    'PlanFactTotalsDict',
     'StatisticsChoiceDict',
     'StatisticsFilters',
     '_aggregate_amounts_by_month',
     '_allowed_sort',
+    '_aware_period_bounds',
     '_budgets_data',
     '_date_to_aware',
     '_family_users_for_statistics',
@@ -744,6 +912,8 @@ __all__ = [
     '_owned_family_group_ids',
     '_parse_filter_date',
     '_period_choices',
+    '_plan_fact_summary',
+    '_plan_fact_top_deviations',
     '_planning_amounts_by_month',
     '_positive_int',
     '_resolve_statistics_members',

@@ -197,7 +197,7 @@
                 <button class="statistics-tab-btn" data-tab="transfers" x-on:click="activateTab" type="button" role="tab">{% translate 'Переводы' %}</button>
                 <button class="statistics-tab-btn" data-tab="categories" x-on:click="activateTab" type="button" role="tab">{% translate 'Топ категорий' %}</button>
                 <button class="statistics-tab-btn" data-tab="creditcards" x-on:click="activateTab" type="button" role="tab">{% translate 'Кредитные карты' %}</button>
-                <button class="statistics-tab-btn" data-tab="budgets" x-on:click="activateTab" type="button" role="tab">{% translate 'Бюджеты' %}</button>
+                <button class="statistics-tab-btn" data-tab="budgets" x-on:click="activateTab" type="button" role="tab">{% translate 'План/Факт' %}</button>
                 <button class="statistics-tab-btn" data-tab="calendar" x-on:click="activateTab" type="button" role="tab">{% translate 'Календарь' %}</button>
             </div>
 
@@ -823,39 +823,86 @@
                 </div>
 
                 <div class="statistics-pane" data-panel="budgets" role="tabpanel">
-                    {% if budgets_data %}
-                        <div class="statistics-budget-list">
-                            {% for budget in budgets_data %}
-                                <div class="statistics-budget-item">
-                                    <div class="statistics-budget-header">
-                                        <span class="statistics-budget-name">{{ budget.category_name }}</span>
-                                        <span class="statistics-budget-period">{{ budget.period }}</span>
-                                        <span class="statistics-budget-amounts">
-                                            {{ budget.actual_expenses|comma }} ₽ / {{ budget.amount_limit|comma }} ₽
-                                        </span>
-                                        <span class="statistics-badge {% if budget.over_limit %}statistics-badge-negative{% elif budget.near_limit %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
-                                            {{ budget.usage_percent|floatformat:1 }}%
+                    <div class="statistics-summary-grid">
+                        <div class="statistics-summary-card {% if plan_fact_summary.expense.diff > 0 %}statistics-summary-danger{% elif plan_fact_summary.expense.diff < 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
+                            <p class="statistics-summary-label">{% translate 'Расходы: факт / план' %}</p>
+                            <p class="statistics-summary-value">{{ plan_fact_summary.expense.fact|comma }} ₽ / {{ plan_fact_summary.expense.plan|comma }} ₽</p>
+                            <p class="statistics-summary-label">
+                                {% if plan_fact_summary.expense.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_summary.expense.diff|comma }} ₽
+                                {% elif plan_fact_summary.expense.diff < 0 %}{% translate 'Экономия' %} {{ plan_fact_summary.expense.diff|comma }} ₽
+                                {% else %}{% translate 'Точно по плану' %}{% endif %}
+                            </p>
+                        </div>
+                        <div class="statistics-summary-card {% if plan_fact_summary.income.diff < 0 %}statistics-summary-danger{% elif plan_fact_summary.income.diff > 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
+                            <p class="statistics-summary-label">{% translate 'Доходы: факт / план' %}</p>
+                            <p class="statistics-summary-value">{{ plan_fact_summary.income.fact|comma }} ₽ / {{ plan_fact_summary.income.plan|comma }} ₽</p>
+                            <p class="statistics-summary-label">
+                                {% if plan_fact_summary.income.diff < 0 %}{% translate 'Недобор' %} {{ plan_fact_summary.income.diff|comma }} ₽
+                                {% elif plan_fact_summary.income.diff > 0 %}{% translate 'Перевыполнение' %} {{ plan_fact_summary.income.diff|comma }} ₽
+                                {% else %}{% translate 'Точно по плану' %}{% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="statistics-section">
+                        <h6 class="statistics-category-title">{% translate 'Топ-5 отклонений факт/план' %}</h6>
+                        {% if plan_fact_top_deviations %}
+                            <div class="statistics-list">
+                                {% for deviation in plan_fact_top_deviations %}
+                                    <div class="statistics-list-row">
+                                        <span>{{ deviation.category_name }}</span>
+                                        <span class="statistics-badge {% if deviation.diff > 0 %}statistics-badge-negative{% elif deviation.diff < 0 %}statistics-badge-positive{% else %}statistics-badge-warning{% endif %}">
+                                            {{ deviation.fact|comma }} ₽ / {{ deviation.plan|comma }} ₽ · {% if deviation.diff >= 0 %}+{% endif %}{{ deviation.diff|comma }} ₽
                                         </span>
                                     </div>
-                                    <div class="statistics-progress-track">
-                                        <div class="statistics-progress-fill {% if budget.over_limit %}statistics-progress-over{% elif budget.near_limit %}statistics-progress-warn{% else %}statistics-progress-ok{% endif %}"
-                                             style="width: {% if budget.usage_percent > 100 %}100{% else %}{{ budget.usage_percent|floatformat:0 }}{% endif %}%;">
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="statistics-empty">{% translate 'Нет данных Плана за выбранный период' %}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="statistics-section">
+                        <h6 class="statistics-category-title">{% translate 'Лимиты' %}</h6>
+                        {% if budgets_data %}
+                            <div class="statistics-budget-list">
+                                {% for budget in budgets_data %}
+                                    <div class="statistics-budget-item">
+                                        <div class="statistics-budget-header">
+                                            <span class="statistics-budget-name">{{ budget.category_name }}</span>
+                                            <span class="statistics-budget-period">{{ budget.period }}</span>
+                                            <span class="statistics-budget-amounts">
+                                                {{ budget.actual_expenses|comma }} ₽ / {{ budget.amount_limit|comma }} ₽
+                                            </span>
+                                            <span class="statistics-badge {% if budget.over_limit %}statistics-badge-negative{% elif budget.near_limit %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
+                                                {{ budget.usage_percent|floatformat:1 }}%
+                                            </span>
                                         </div>
-                                        {% if not budget.over_limit %}
-                                            <div class="statistics-progress-threshold" style="left: {{ budget.alert_threshold }}%;"></div>
-                                        {% endif %}
+                                        <div class="statistics-progress-track">
+                                            <div class="statistics-progress-fill {% if budget.over_limit %}statistics-progress-over{% elif budget.near_limit %}statistics-progress-warn{% else %}statistics-progress-ok{% endif %}"
+                                                 style="width: {% if budget.usage_percent > 100 %}100{% else %}{{ budget.usage_percent|floatformat:0 }}{% endif %}%;">
+                                            </div>
+                                            {% if not budget.over_limit %}
+                                                <div class="statistics-progress-threshold" style="left: {{ budget.alert_threshold }}%;"></div>
+                                            {% endif %}
+                                        </div>
                                     </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="statistics-empty">
-                            <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <p>{% translate 'Нет бюджетов за выбранный период' %}</p>
-                        </div>
-                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="statistics-empty">
+                                <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <p>{% translate 'Нет лимитов за выбранный период' %}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <p class="statistics-muted">
+                        {% translate 'План — сумма, которую вы запланировали по категории на странице планирования бюджета. Лимит — максимально допустимая сумма расходов за месяц, с предупреждением при приближении к превышению.' %}
+                    </p>
+                    <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Открыть полную таблицу' %}</a>
                 </div>
 
                 <div class="statistics-pane" data-panel="calendar" role="tabpanel">
