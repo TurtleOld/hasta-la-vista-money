@@ -910,10 +910,12 @@
                         {% endif %}
                     </div>
 
-                    <p class="statistics-muted">
-                        {% translate 'План — сумма, которую вы запланировали по категории на странице планирования бюджета. Лимит — максимально допустимая сумма расходов за месяц, с предупреждением при приближении к превышению.' %}
-                    </p>
-                    <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Открыть полную таблицу' %}</a>
+                    <div class="statistics-section statistics-budget-legend">
+                        <p class="statistics-muted">
+                            {% translate 'План — сумма, которую вы запланировали по категории на странице планирования бюджета. Лимит — максимально допустимая сумма расходов за месяц, с предупреждением при приближении к превышению.' %}
+                        </p>
+                        <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Открыть полную таблицу' %}</a>
+                    </div>
 
                     <div class="statistics-section">
                         <h6 class="statistics-category-title">{% translate 'Предложенный план' %}</h6>

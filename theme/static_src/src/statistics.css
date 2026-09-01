@@ -308,6 +308,10 @@
     z-index: 1;
   }
 
+  .statistics-budget-legend p {
+    margin-bottom: 0.9rem;
+  }
+
   .statistics-chart-box {
     height: 20rem;
   }
