@@ -1,7 +1,7 @@
 from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth import get_user_model
@@ -338,6 +338,202 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
                 self.assertEqual(item['plan'], 500.0)
                 self.assertEqual(item['diff'], 300.0)
                 self.assertEqual(item['abs_diff'], 300.0)
+
+    def _plan_fact_engagement_for_period(
+        self,
+        account: Account,
+        *,
+        category_amounts: list[tuple[Decimal, Decimal]],
+        period_start: date,
+        period_end: date,
+    ) -> dict[str, Any]:
+        """Create expense categories with the given (plan, fact) pairs."""
+        for index, (plan_amount, fact_amount) in enumerate(category_amounts):
+            category = Category.objects.create(
+                user=self.user,
+                name=f'Engagement category {index}',
+                type=TransactionType.EXPENSE,
+            )
+            Planning.objects.create(
+                user=self.user,
+                category=category,
+                date=period_start,
+                amount=plan_amount,
+                planning_type=TransactionType.EXPENSE,
+            )
+            if fact_amount:
+                Transaction.objects.create(
+                    user=self.user,
+                    account=account,
+                    category=category,
+                    type=TransactionType.EXPENSE,
+                    amount=fact_amount,
+                    date=datetime.combine(
+                        period_start,
+                        time(12, 0),
+                        tzinfo=UTC,
+                    ),
+                )
+
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters(
+            period='range',
+            date_from=period_start,
+            date_to=period_end,
+        )
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+        return cast('dict[str, Any]', stats['plan_fact_engagement'])
+
+    def test_plan_fact_engagement_savings(self) -> None:
+        """Fact under plan in every category shows up as savings."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        engagement = self._plan_fact_engagement_for_period(
+            account,
+            category_amounts=[
+                (Decimal('1000.00'), Decimal('500.00')),
+                (Decimal('1000.00'), Decimal('800.00')),
+            ],
+            period_start=date(2026, 2, 1),
+            period_end=date(2026, 2, 28),
+        )
+
+        self.assertEqual(engagement['categories_with_plan'], 2)
+        self.assertEqual(engagement['categories_within_plan'], 2)
+        self.assertEqual(engagement['diff'], -700.0)
+        self.assertEqual(engagement['abs_diff'], 700.0)
+
+    def test_plan_fact_engagement_overspend(self) -> None:
+        """Fact over plan in every category shows up as overspend."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        engagement = self._plan_fact_engagement_for_period(
+            account,
+            category_amounts=[
+                (Decimal('500.00'), Decimal('800.00')),
+                (Decimal('500.00'), Decimal('900.00')),
+            ],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+        )
+
+        self.assertEqual(engagement['categories_with_plan'], 2)
+        self.assertEqual(engagement['categories_within_plan'], 0)
+        self.assertEqual(engagement['diff'], 700.0)
+        self.assertEqual(engagement['abs_diff'], 700.0)
+
+    def test_plan_fact_engagement_exact_plan(self) -> None:
+        """Fact exactly matching plan is reported as 'точно по плану'."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        engagement = self._plan_fact_engagement_for_period(
+            account,
+            category_amounts=[(Decimal('1000.00'), Decimal('1000.00'))],
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+        )
+
+        self.assertEqual(engagement['categories_with_plan'], 1)
+        self.assertEqual(engagement['categories_within_plan'], 1)
+        self.assertEqual(engagement['diff'], 0.0)
+        self.assertEqual(engagement['abs_diff'], 0.0)
+
+    def test_suggested_plan_categories(self) -> None:
+        """Suggested plan lists only unplanned categories spent in 3mo."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        today = timezone.now().date()
+        recent_month = today.replace(day=1) - relativedelta(months=1)
+        stale_month = today.replace(day=1) - relativedelta(months=4)
+
+        unplanned_category = Category.objects.create(
+            user=self.user,
+            name='Unplanned recent spend',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=unplanned_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('900.00'),
+            date=datetime.combine(recent_month, time(12, 0), tzinfo=UTC),
+        )
+
+        stale_category = Category.objects.create(
+            user=self.user,
+            name='Unplanned stale spend',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=stale_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('5000.00'),
+            date=datetime.combine(stale_month, time(12, 0), tzinfo=UTC),
+        )
+
+        planned_category = Category.objects.create(
+            user=self.user,
+            name='Already planned spend',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=planned_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('700.00'),
+            date=datetime.combine(recent_month, time(12, 0), tzinfo=UTC),
+        )
+        Planning.objects.create(
+            user=self.user,
+            category=planned_category,
+            date=today,
+            amount=Decimal('700.00'),
+            planning_type=TransactionType.EXPENSE,
+        )
+
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters(
+            period='range',
+            date_from=today.replace(day=1) - relativedelta(months=6),
+            date_to=today,
+        )
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+
+        suggestions = stats['suggested_plan_categories']
+        category_ids = {item['category_id'] for item in suggestions}
+
+        self.assertIn(unplanned_category.pk, category_ids)
+        self.assertNotIn(stale_category.pk, category_ids)
+        self.assertNotIn(planned_category.pk, category_ids)
+        self.assertLessEqual(len(suggestions), 5)
+
+        for item in suggestions:
+            if item['category_id'] == unplanned_category.pk:
+                self.assertAlmostEqual(item['suggested_amount'], 300.0)
 
     def test_statistics_template_contains_htmx_server_side_controls(
         self,

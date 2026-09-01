@@ -292,6 +292,22 @@
     z-index: 1;
   }
 
+  .statistics-plan-fact-headline {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    font-weight: 700;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding: 1.1rem 1.25rem;
+  }
+
+  .statistics-plan-fact-headline .statistics-badge {
+    position: relative;
+    z-index: 1;
+  }
+
   .statistics-chart-box {
     height: 20rem;
   }

@@ -823,6 +823,17 @@
                 </div>
 
                 <div class="statistics-pane" data-panel="budgets" role="tabpanel">
+                    <div class="statistics-plan-fact-headline statistics-summary-card {% if plan_fact_engagement.diff > 0 %}statistics-summary-danger{% elif plan_fact_engagement.diff < 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
+                        <span>
+                            {% blocktranslate with within=plan_fact_engagement.categories_within_plan total=plan_fact_engagement.categories_with_plan %}Уложились в план по {{ within }} из {{ total }} категорий{% endblocktranslate %}
+                        </span>
+                        <span class="statistics-badge {% if plan_fact_engagement.diff > 0 %}statistics-badge-negative{% elif plan_fact_engagement.diff < 0 %}statistics-badge-positive{% else %}statistics-badge-warning{% endif %}">
+                            {% if plan_fact_engagement.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_engagement.abs_diff|comma }} ₽
+                            {% elif plan_fact_engagement.diff < 0 %}{% translate 'Сэкономлено' %} {{ plan_fact_engagement.abs_diff|comma }} ₽
+                            {% else %}{% translate 'Точно по плану' %}{% endif %}
+                        </span>
+                    </div>
+
                     <div class="statistics-summary-grid">
                         <div class="statistics-summary-card {% if plan_fact_summary.expense.diff > 0 %}statistics-summary-danger{% elif plan_fact_summary.expense.diff < 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
                             <p class="statistics-summary-label">{% translate 'Расходы: факт / план' %}</p>
@@ -903,6 +914,23 @@
                         {% translate 'План — сумма, которую вы запланировали по категории на странице планирования бюджета. Лимит — максимально допустимая сумма расходов за месяц, с предупреждением при приближении к превышению.' %}
                     </p>
                     <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Открыть полную таблицу' %}</a>
+
+                    <div class="statistics-section">
+                        <h6 class="statistics-category-title">{% translate 'Предложенный план' %}</h6>
+                        {% if suggested_plan_categories %}
+                            <div class="statistics-list">
+                                {% for suggestion in suggested_plan_categories %}
+                                    <div class="statistics-list-row">
+                                        <span>{{ suggestion.category_name }}</span>
+                                        <span class="statistics-badge">{{ suggestion.suggested_amount|comma }} ₽</span>
+                                        <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Задать план' %}</a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="statistics-empty">{% translate 'Все категории с реальными тратами уже запланированы' %}</p>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div class="statistics-pane" data-panel="calendar" role="tabpanel">
