@@ -63,6 +63,8 @@ from hasta_la_vista_money.users.services.forecast import (
 from hasta_la_vista_money.users.services.monthly_statistics_service import (
     BudgetDataDict,
     MonthDataDict,
+    PlanFactDeviationDict,
+    PlanFactSummaryDict,
     StatisticsChoiceDict,
     StatisticsFilters,
     _budgets_data,
@@ -70,6 +72,8 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
     _member_choices,
     _month_ranges_for_filter,
     _period_choices,
+    _plan_fact_summary,
+    _plan_fact_top_deviations,
     _resolve_statistics_members,
     _six_months_data,
     _sum_amount_for_period,
@@ -228,6 +232,8 @@ class UserDetailedStatisticsDict(TypedDict):
     months_data: list[MonthDataDict]
     summary_cards: list[SummaryCardDict]
     budgets_data: list[BudgetDataDict]
+    plan_fact_summary: PlanFactSummaryDict
+    plan_fact_top_deviations: list[PlanFactDeviationDict]
     top_expense_categories: list[dict[str, Any]]
     top_income_categories: list[dict[str, Any]]
     receipt_info_by_month: QuerySet[Receipt]
@@ -1191,6 +1197,12 @@ def get_user_detailed_statistics(
         stats_filter,
     )
     budgets_data = _budgets_data(users, period_start, period_end)
+    plan_fact_summary = _plan_fact_summary(users, period_start, period_end)
+    plan_fact_top_deviations = _plan_fact_top_deviations(
+        users,
+        period_start,
+        period_end,
+    )
     top_expense_categories = _top_categories_with_comparison(
         TransactionType.EXPENSE,
         users,
@@ -1347,6 +1359,8 @@ def get_user_detailed_statistics(
         'months_data': months_data,
         'summary_cards': _summary_cards(months_data),
         'budgets_data': budgets_data,
+        'plan_fact_summary': plan_fact_summary,
+        'plan_fact_top_deviations': plan_fact_top_deviations,
         'top_expense_categories': top_expense_categories,
         'top_income_categories': top_income_categories,
         'receipt_info_by_month': receipt_info_by_month,
