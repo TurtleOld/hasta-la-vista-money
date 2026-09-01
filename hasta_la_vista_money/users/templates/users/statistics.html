@@ -145,6 +145,30 @@
                 </div>
             </div>
 
+            {% if summary_cards %}
+                <div class="statistics-summary-grid statistics-summary-grid-dynamics">
+                    {% for card in summary_cards %}
+                        <div class="statistics-summary-card {% if card.key == 'expenses' %}statistics-summary-warn{% elif card.key == 'income' %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
+                            <p class="statistics-summary-label">{{ card.label }}</p>
+                            <p class="statistics-summary-value">{{ card.value|comma }} ₽</p>
+                            {% if card.delta is not None %}
+                                {% if card.delta >= 0 %}
+                                    <span class="statistics-badge {% if card.positive_is_good %}statistics-badge-positive{% else %}statistics-badge-negative{% endif %}">
+                                        ↑ {{ card.delta|comma }} ₽{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="statistics-badge {% if card.positive_is_good %}statistics-badge-negative{% else %}statistics-badge-positive{% endif %}">
+                                        ↓ {{ card.delta|comma }} ₽{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="statistics-badge">{% translate 'Нет данных за прошлый месяц' %}</span>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             <div id="statistics-results" class="statistics-panel statistics-section">
                 {{ chart_combined|json_script:'statistics-chart-data' }}
                 <div class="statistics-panel-head">
@@ -989,6 +1013,19 @@
                         backgroundColor: 'rgba(220, 38, 38, 0.7)',
                         borderColor: 'rgb(220, 38, 38)',
                         borderWidth: 1,
+                    },
+                    {
+                        type: 'line',
+                        label: 'Скользящее среднее расходов (3 мес.)',
+                        data: chartData.expense_moving_average || [],
+                        borderColor: 'rgb(124, 58, 237)',
+                        backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.25,
+                        fill: false,
+                        spanGaps: true,
+                        order: 0,
                     },
                 ],
             },

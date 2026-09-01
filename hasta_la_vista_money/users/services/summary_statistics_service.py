@@ -98,6 +98,7 @@ class ChartDataDict(TypedDict):
     labels: list[str]
     expense_data: list[float | None]
     income_data: list[float | None]
+    expense_moving_average: list[float | None]
     forecast_balance: list[float | None]
     forecast_lower: list[float | None]
     forecast_upper: list[float | None]
@@ -113,6 +114,29 @@ class DeltaByCurrencyDict(TypedDict, total=False):
 
     delta: float
     percent: float | None
+
+
+class SummaryCardDict(TypedDict):
+    """Summary card shown above the dynamics block.
+
+    Attributes:
+        key: Card identifier ('expenses', 'income' or 'savings').
+        label: Human-readable card title.
+        value: Value for the current month of the statistics period.
+        delta: Change vs. the previous month, or None if there is no
+            previous month in the statistics period to compare against.
+        delta_percent: Percentage change vs. the previous month, or None
+            if it cannot be computed (no previous month or it is zero).
+        positive_is_good: Whether a positive delta should be shown as
+            favorable (green); expenses invert this (a rise is bad).
+    """
+
+    key: str
+    label: str
+    value: float
+    delta: float | None
+    delta_percent: float | None
+    positive_is_good: bool
 
 
 class CardMonthDict(TypedDict):
@@ -202,6 +226,7 @@ class UserDetailedStatisticsDict(TypedDict):
     """User detailed statistics."""
 
     months_data: list[MonthDataDict]
+    summary_cards: list[SummaryCardDict]
     budgets_data: list[BudgetDataDict]
     top_expense_categories: list[dict[str, Any]]
     top_income_categories: list[dict[str, Any]]
@@ -254,12 +279,38 @@ def _dates_amounts(
     return dates, amounts
 
 
+MOVING_AVERAGE_WINDOW_MONTHS = 3
+
+
+def _expense_moving_average_by_month(
+    months_data: list[MonthDataDict],
+) -> dict[str, float | None]:
+    """3-month trailing moving average of expenses, keyed by 'YYYY-MM'.
+
+    The first months of the statistics period (fewer than the window
+    size) have no full trailing window and map to None.
+    """
+    window = MOVING_AVERAGE_WINDOW_MONTHS
+    expenses = [float(m.get('expenses', 0.0) or 0.0) for m in months_data]
+
+    result: dict[str, float | None] = {}
+    for index, month in enumerate(months_data):
+        month_key = str(month.get('month_start', ''))[:7]
+        if index + 1 < window:
+            result[month_key] = None
+        else:
+            window_values = expenses[index + 1 - window : index + 1]
+            result[month_key] = sum(window_values) / window
+    return result
+
+
 def _build_chart(
     users: Iterable[User],
     stats_filter: StatisticsFilters,
     start: date,
     end: date,
     forecast: CashflowForecastDict | None = None,
+    months_data: list[MonthDataDict] | None = None,
 ) -> ChartDataDict:
     exp_ds = (
         _filtered_transactions(
@@ -312,6 +363,13 @@ def _build_chart(
         exp_series = [constants.ZERO, *exp_series]
         inc_series = [constants.ZERO, *inc_series]
 
+    moving_average_by_month = _expense_moving_average_by_month(
+        months_data or [],
+    )
+    moving_average_series: list[float | None] = [
+        moving_average_by_month.get(d[:7]) for d in all_dates
+    ]
+
     forecast_labels = forecast['forecast_labels'] if forecast else []
     forecast_balance = forecast['forecast_balance'] if forecast else []
     forecast_lower = forecast['forecast_lower'] if forecast else []
@@ -324,6 +382,7 @@ def _build_chart(
         'labels': labels,
         'expense_data': [*exp_series, *forecast_padding],
         'income_data': [*inc_series, *forecast_padding],
+        'expense_moving_average': [*moving_average_series, *forecast_padding],
         'forecast_balance': [
             *padding,
             *forecast_balance,
@@ -337,6 +396,56 @@ def _build_chart(
             *forecast_upper,
         ],
     }
+
+
+def _summary_card_delta(
+    current: MonthDataDict,
+    previous: MonthDataDict | None,
+    key: str,
+) -> tuple[float | None, float | None]:
+    if previous is None:
+        return None, None
+
+    current_value = float(cast('Any', current).get(key, 0.0) or 0.0)
+    previous_value = float(cast('Any', previous).get(key, 0.0) or 0.0)
+    delta = current_value - previous_value
+    percent = (
+        delta / previous_value * constants.PERCENTAGE_MULTIPLIER
+        if previous_value
+        else None
+    )
+    return delta, percent
+
+
+def _summary_cards(months_data: list[MonthDataDict]) -> list[SummaryCardDict]:
+    """Expenses/income/savings cards for the current month of the period."""
+    current: MonthDataDict = (
+        months_data[-1]
+        if months_data
+        else {'expenses': 0.0, 'income': 0.0, 'savings': 0.0}
+    )
+    previous = months_data[-2] if len(months_data) >= constants.TWO else None
+
+    definitions: list[tuple[str, str, bool]] = [
+        ('expenses', 'Расходы за месяц', False),
+        ('income', 'Доходы за месяц', True),
+        ('savings', 'Сбережения за месяц', True),
+    ]
+
+    cards: list[SummaryCardDict] = []
+    for key, label, positive_is_good in definitions:
+        delta, percent = _summary_card_delta(current, previous, key)
+        cards.append(
+            {
+                'key': key,
+                'label': label,
+                'value': float(cast('Any', current).get(key, 0.0) or 0.0),
+                'delta': delta,
+                'delta_percent': percent,
+                'positive_is_good': positive_is_good,
+            },
+        )
+    return cards
 
 
 def _balances_and_delta(
@@ -1186,6 +1295,7 @@ def get_user_detailed_statistics(
         period_start,
         period_end,
         forecast=cashflow_forecast,
+        months_data=months_data,
     )
     payment_calendar = build_payment_calendar(
         users=users,
@@ -1206,6 +1316,7 @@ def get_user_detailed_statistics(
 
     stats = {
         'months_data': months_data,
+        'summary_cards': _summary_cards(months_data),
         'budgets_data': budgets_data,
         'top_expense_categories': top_expense_categories,
         'top_income_categories': top_income_categories,
@@ -1255,6 +1366,7 @@ __all__ = [
     'IncomeExpenseDict',
     'PaymentItemDict',
     'PaymentScheduleItemDict',
+    'SummaryCardDict',
     'UserDetailedStatisticsDict',
     '_apply_payments_to_months',
     '_balances_and_delta',
@@ -1274,6 +1386,8 @@ __all__ = [
     '_payment_schedule_remaining_debt',
     '_pre_period_debt_for_card',
     '_statistics_alerts',
+    '_summary_card_delta',
+    '_summary_cards',
     'compute_total_payment_schedule_debt',
     'get_user_detailed_statistics',
 ]

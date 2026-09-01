@@ -222,6 +222,16 @@
     margin-bottom: 1.5rem;
   }
 
+  .statistics-summary-grid-dynamics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .statistics-summary-grid-dynamics .statistics-badge {
+    margin-top: 0.6rem;
+    position: relative;
+    z-index: 1;
+  }
+
   .statistics-summary-card {
     border-radius: 1.35rem;
     box-shadow: var(--statistics-shadow-soft);
