@@ -393,6 +393,7 @@ LOW_BALANCE_THRESHOLD: Final = 1000
 PERCENT_TO_DECIMAL: Final = 100
 PERCENTAGE_MULTIPLIER: Final = 100
 MONTHS_IN_YEAR: Final = 12
+EXPENSE_MOVING_AVERAGE_WINDOW_MONTHS: Final = 3
 
 # ============================================================================
 # Credit Card Constants

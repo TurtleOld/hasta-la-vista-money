@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
@@ -279,9 +279,6 @@ def _dates_amounts(
     return dates, amounts
 
 
-MOVING_AVERAGE_WINDOW_MONTHS = 3
-
-
 def _expense_moving_average_by_month(
     months_data: list[MonthDataDict],
 ) -> dict[str, float | None]:
@@ -290,7 +287,7 @@ def _expense_moving_average_by_month(
     The first months of the statistics period (fewer than the window
     size) have no full trailing window and map to None.
     """
-    window = MOVING_AVERAGE_WINDOW_MONTHS
+    window = constants.EXPENSE_MOVING_AVERAGE_WINDOW_MONTHS
     expenses = [float(m.get('expenses', 0.0) or 0.0) for m in months_data]
 
     result: dict[str, float | None] = {}
@@ -398,16 +395,52 @@ def _build_chart(
     }
 
 
+class _SummaryCardDefinition(NamedTuple):
+    """A summary card's identity, independent of any month's values."""
+
+    key: str
+    label: str
+    positive_is_good: bool
+
+
+_SUMMARY_CARD_DEFINITIONS: tuple[_SummaryCardDefinition, ...] = (
+    _SummaryCardDefinition(
+        key='expenses',
+        label='Расходы за месяц',
+        positive_is_good=False,
+    ),
+    _SummaryCardDefinition(
+        key='income',
+        label='Доходы за месяц',
+        positive_is_good=True,
+    ),
+    _SummaryCardDefinition(
+        key='savings',
+        label='Сбережения за месяц',
+        positive_is_good=True,
+    ),
+)
+
+
+def _month_field(month: MonthDataDict | None, key: str) -> float:
+    """Read a numeric field off a month row by name.
+
+    ``key`` is always one of the fixed strings in
+    ``_SUMMARY_CARD_DEFINITIONS``, but a TypedDict can't be subscripted
+    with a runtime string, hence the cast.
+    """
+    if month is None:
+        return 0.0
+    return float(cast('dict[str, float]', month).get(key, 0.0) or 0.0)
+
+
 def _summary_card_delta(
-    current: MonthDataDict,
-    previous: MonthDataDict | None,
-    key: str,
+    current_value: float,
+    previous_value: float | None,
 ) -> tuple[float | None, float | None]:
-    if previous is None:
+    if previous_value is None:
         return None, None
 
-    current_value = float(cast('Any', current).get(key, 0.0) or 0.0)
-    previous_value = float(cast('Any', previous).get(key, 0.0) or 0.0)
     delta = current_value - previous_value
     percent = (
         delta / previous_value * constants.PERCENTAGE_MULTIPLIER
@@ -419,30 +452,26 @@ def _summary_card_delta(
 
 def _summary_cards(months_data: list[MonthDataDict]) -> list[SummaryCardDict]:
     """Expenses/income/savings cards for the current month of the period."""
-    current: MonthDataDict = (
-        months_data[-1]
-        if months_data
-        else {'expenses': 0.0, 'income': 0.0, 'savings': 0.0}
-    )
+    current = months_data[-1] if months_data else None
     previous = months_data[-2] if len(months_data) >= constants.TWO else None
 
-    definitions: list[tuple[str, str, bool]] = [
-        ('expenses', 'Расходы за месяц', False),
-        ('income', 'Доходы за месяц', True),
-        ('savings', 'Сбережения за месяц', True),
-    ]
-
     cards: list[SummaryCardDict] = []
-    for key, label, positive_is_good in definitions:
-        delta, percent = _summary_card_delta(current, previous, key)
+    for definition in _SUMMARY_CARD_DEFINITIONS:
+        current_value = _month_field(current, definition.key)
+        previous_value = (
+            _month_field(previous, definition.key)
+            if previous is not None
+            else None
+        )
+        delta, percent = _summary_card_delta(current_value, previous_value)
         cards.append(
             {
-                'key': key,
-                'label': label,
-                'value': float(cast('Any', current).get(key, 0.0) or 0.0),
+                'key': definition.key,
+                'label': definition.label,
+                'value': current_value,
                 'delta': delta,
                 'delta_percent': percent,
-                'positive_is_good': positive_is_good,
+                'positive_is_good': definition.positive_is_good,
             },
         )
     return cards
