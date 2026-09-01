@@ -715,6 +715,16 @@ def _budgets_data(
     return result
 
 
+def _aware_period_bounds(
+    period_start: date,
+    period_end: date,
+) -> tuple[datetime, datetime]:
+    return (
+        _date_to_aware(period_start),
+        _date_to_aware(period_end, end_of_day=True),
+    )
+
+
 def _plan_fact_summary(
     users: Iterable[User],
     period_start: date,
@@ -722,8 +732,7 @@ def _plan_fact_summary(
 ) -> PlanFactSummaryDict:
     """Aggregate Planning vs actual totals for the period, by type."""
     users_list = list(users)
-    start_dt = _date_to_aware(period_start)
-    end_dt = _date_to_aware(period_end, end_of_day=True)
+    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
 
     plan_totals = (
         Planning.objects.filter(
@@ -770,8 +779,7 @@ def _plan_fact_top_deviations(
 ) -> list[PlanFactDeviationDict]:
     """Top categories by absolute |fact - plan| deviation in the period."""
     users_list = list(users)
-    start_dt = _date_to_aware(period_start)
-    end_dt = _date_to_aware(period_end, end_of_day=True)
+    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
 
     plan_rows = (
         Planning.objects.filter(
@@ -781,28 +789,41 @@ def _plan_fact_top_deviations(
         .values('category_id', 'category__name', 'planning_type')
         .annotate(total=Sum('amount'))
     )
+    plan_by_category: dict[tuple[int, str], tuple[str, float]] = {
+        (row['category_id'], row['planning_type']): (
+            row['category__name'],
+            float(row['total'] or 0),
+        )
+        for row in plan_rows
+    }
+
+    fact_rows = (
+        Transaction.objects.filter(
+            user__in=users_list,
+            type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
+            category_id__in=[key[0] for key in plan_by_category],
+            date__gte=start_dt,
+            date__lte=end_dt,
+        )
+        .values('category_id', 'type')
+        .annotate(total=Sum('amount'))
+    )
+    fact_by_category = {
+        (row['category_id'], row['type']): float(row['total'] or 0)
+        for row in fact_rows
+    }
 
     result: list[PlanFactDeviationDict] = []
-    for row in plan_rows:
-        category_id = row['category_id']
-        planning_type = row['planning_type']
-        plan_amount = float(row['total'] or 0)
-
-        fact_amount = float(
-            Transaction.objects.filter(
-                user__in=users_list,
-                type=planning_type,
-                category_id=category_id,
-                date__gte=start_dt,
-                date__lte=end_dt,
-            ).aggregate(total=Sum('amount'))['total']
-            or 0,
-        )
+    for (category_id, planning_type), (
+        category_name,
+        plan_amount,
+    ) in plan_by_category.items():
+        fact_amount = fact_by_category.get((category_id, planning_type), 0.0)
         diff = fact_amount - plan_amount
         result.append(
             {
                 'category_id': category_id,
-                'category_name': row['category__name'],
+                'category_name': category_name,
                 'planning_type': planning_type,
                 'fact': fact_amount,
                 'plan': plan_amount,
@@ -881,6 +902,7 @@ __all__ = [
     'StatisticsFilters',
     '_aggregate_amounts_by_month',
     '_allowed_sort',
+    '_aware_period_bounds',
     '_budgets_data',
     '_date_to_aware',
     '_family_users_for_statistics',

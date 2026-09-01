@@ -248,6 +248,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             )
 
     def test_plan_fact_summary_and_top_deviations(self) -> None:
+        """Plan/Fact summary totals and top-5 deviations match fixtures."""
         account = Account.objects.first()
         if account is None:
             msg = 'No account found in fixtures'
@@ -360,6 +361,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertContains(response, 'id="balanceForecastChart"')
 
     def test_statistics_template_renders_plan_fact_tab(self) -> None:
+        """The renamed Plan/Fact tab renders its sections and budget link."""
         self.client.force_login(self.user)
         response = self.client.get('/users/statistics/')
 
