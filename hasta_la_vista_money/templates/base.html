@@ -29,7 +29,10 @@
         </script>
         {% endif %}
         <link nonce="{{request.csp_nonce}}" rel="manifest" href="{% static 'manifest.webmanifest' %}?v={% word_hash %}">
-        <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
+        <link nonce="{{request.csp_nonce}}" rel="icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" sizes="any">
+        <link nonce="{{request.csp_nonce}}" rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon/favicon-16x16.png' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon/favicon-32x32.png' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="icon" type="image/png" sizes="48x48" href="{% static 'img/favicon/favicon-48x48.png' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="apple-touch-icon" href="{% static 'img/pwa/apple-touch-icon.png' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/swipe-list.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'fonts/local-fonts.css' %}?v={% word_hash %}">
