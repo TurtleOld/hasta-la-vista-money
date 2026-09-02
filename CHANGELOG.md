@@ -1,5 +1,29 @@
 # История изменений
 
+## [2.16.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.15.0...v2.16.0) (2026-09-02)
+
+
+### Features
+
+* **pwa:** replace app icon set with new dibbed.dev icon pack ([#1008](https://github.com/TurtleOld/hasta-la-vista-money/issues/1008)) ([4ab3353](https://github.com/TurtleOld/hasta-la-vista-money/commit/4ab3353bc111f5fa62902d7036fa54c18fe7d4cd))
+* **statistics:** add dynamics summary cards and expense moving average ([#1010](https://github.com/TurtleOld/hasta-la-vista-money/issues/1010)) ([f0168f1](https://github.com/TurtleOld/hasta-la-vista-money/commit/f0168f10508d7b88c73afbcf5a6ca6d10eaed34d))
+* **statistics:** add frequently-purchased products block with drill-down ([#1014](https://github.com/TurtleOld/hasta-la-vista-money/issues/1014)) ([bea09f6](https://github.com/TurtleOld/hasta-la-vista-money/commit/bea09f63565869845c8948984db7b967269d0d5c))
+* **statistics:** add Plan/Fact engagement feedback and suggested plan ([#1012](https://github.com/TurtleOld/hasta-la-vista-money/issues/1012)) ([bf7f4fe](https://github.com/TurtleOld/hasta-la-vista-money/commit/bf7f4feee5cc32c9e35eed8b24a4eebaf73789e1))
+* **statistics:** add receipts category-share donut chart with drill-down ([#1013](https://github.com/TurtleOld/hasta-la-vista-money/issues/1013)) ([91c2e47](https://github.com/TurtleOld/hasta-la-vista-money/commit/91c2e4793881db5c04097875fbbe4de10ef3a15e))
+* **statistics:** consolidating the "Budgets" tab into the "Plan/Fact" ([#1011](https://github.com/TurtleOld/hasta-la-vista-money/issues/1011)) ([c0b8cee](https://github.com/TurtleOld/hasta-la-vista-money/commit/c0b8ceea23036ddc3f9e6517ee14415ec945a6bb))
+* **statistics:** split dynamics chart into flow and balance ([#1007](https://github.com/TurtleOld/hasta-la-vista-money/issues/1007)) ([8a8b3e2](https://github.com/TurtleOld/hasta-la-vista-money/commit/8a8b3e2a4950ad68d84228426734eef1c03ff558))
+
+
+### Bug Fixes
+
+* **receipts:** improve actions and FNS processing ([#995](https://github.com/TurtleOld/hasta-la-vista-money/issues/995)) ([f6da7ab](https://github.com/TurtleOld/hasta-la-vista-money/commit/f6da7ab4cc21aac372b8a7be7a21a2671dbe396c))
+* **receipts:** tolerate 1-kopeck rounding in receipt amount validation ([#1009](https://github.com/TurtleOld/hasta-la-vista-money/issues/1009)) ([2df0dd3](https://github.com/TurtleOld/hasta-la-vista-money/commit/2df0dd3edfd161ed2e1f0b43ef56110cd3c3aa9e))
+
+
+### Documentation
+
+* **context:** add statistics budget and product-category glossary terms ([#1004](https://github.com/TurtleOld/hasta-la-vista-money/issues/1004)) ([d02952a](https://github.com/TurtleOld/hasta-la-vista-money/commit/d02952ac4ec18c24052b4652257e6b5e61f2ead0))
+
 ## [2.15.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.14.0...v2.15.0) (2026-08-30)
 
 
