@@ -14,6 +14,7 @@ from django.http import (
     HttpResponseRedirect,
     JsonResponse,
 )
+from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import View
@@ -32,6 +33,8 @@ from hasta_la_vista_money.users.services.cache import (
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
     StatisticsFilters,
+    _receipt_category_products,
+    _resolve_statistics_members,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -187,6 +190,53 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 ).items(),
             )
         return context
+
+
+class ReceiptCategoryProductsView(LoginRequiredMixin, View):
+    """Htmx drill-down for the receipts-tab category-share donut.
+
+    Returns the products bought within one `ProductCategory` for the
+    same period/scope as the currently displayed statistics, so a click
+    on a donut segment can load them in place without a page navigation.
+    """
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return HttpResponse(status=401)
+
+        stats_filter = StatisticsFilters.from_query(request.GET)
+        today = timezone.now().date()
+        period_start, period_end = stats_filter.date_range(today)
+        users = _resolve_statistics_members(user, stats_filter)
+
+        raw_category_id = request.GET.get('category_id', '')
+        category_id = (
+            int(raw_category_id) if raw_category_id.isdigit() else None
+        )
+        category_name = request.GET.get('category_name') or 'Без категории'
+
+        products = _receipt_category_products(
+            users,
+            stats_filter,
+            period_start,
+            period_end,
+            category_id,
+        )
+
+        return render(
+            request,
+            'users/partials/_receipt_category_products.html',
+            {
+                'category_name': category_name,
+                'products': products,
+            },
+        )
 
 
 class UserStatisticsExportView(LoginRequiredMixin, View):

@@ -388,6 +388,66 @@ def _receipt_details(
     return list(products), list(sellers), list(averages)
 
 
+def _receipt_category_shares(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+) -> list[dict[str, Any]]:
+    """Share of receipt-item spend per `ProductCategory` for the period.
+
+    Categories with no product spend in the period never appear, since
+    they simply have no joined rows to aggregate.
+    """
+    receipts = _filtered_receipts(users, stats_filter, start, end)
+    rows = list(
+        Product.objects.filter(receipt_products__in=receipts)
+        .values('category_id', 'category__name')
+        .annotate(total=Sum('amount'))
+        .order_by('-total'),
+    )
+    grand_total = sum(float(row['total'] or 0) for row in rows)
+
+    shares: list[dict[str, Any]] = []
+    for row in rows:
+        total = float(row['total'] or 0)
+        if total <= 0:
+            continue
+        shares.append(
+            {
+                'category_id': row['category_id'],
+                'category_name': row['category__name'] or 'Без категории',
+                'total': total,
+                'percent': (
+                    total / grand_total * constants.PERCENTAGE_MULTIPLIER
+                    if grand_total
+                    else 0.0
+                ),
+            },
+        )
+    return shares
+
+
+def _receipt_category_products(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+    category_id: int | None,
+) -> list[dict[str, Any]]:
+    """Products bought within one product category for the period."""
+    receipts = _filtered_receipts(users, stats_filter, start, end)
+    return list(
+        Product.objects.filter(
+            receipt_products__in=receipts,
+            category_id=category_id,
+        )
+        .values('product_name')
+        .annotate(total=Sum('amount'), quantity=Sum('quantity'))
+        .order_by('-total'),
+    )
+
+
 __all__ = [
     '_category_children_totals',
     '_category_choices',
@@ -398,6 +458,8 @@ __all__ = [
     '_filtered_receipts',
     '_filtered_transactions',
     '_match_income_expense_search',
+    '_receipt_category_products',
+    '_receipt_category_shares',
     '_receipt_details',
     '_sum_amount_for_period',
     '_top_categories_qs',

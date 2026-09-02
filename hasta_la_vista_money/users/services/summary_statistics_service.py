@@ -51,6 +51,7 @@ from hasta_la_vista_money.users.services.category_statistics_service import (
     _filtered_receipts,
     _filtered_transactions,
     _match_income_expense_search,
+    _receipt_category_shares,
     _receipt_details,
     _top_categories_with_comparison,
     _transfer_logs,
@@ -262,6 +263,8 @@ class UserDetailedStatisticsDict(TypedDict):
     top_receipt_products: list[dict[str, Any]]
     top_receipt_sellers: list[dict[str, Any]]
     average_receipts_by_month: list[dict[str, Any]]
+    receipt_category_shares: list[dict[str, Any]]
+    receipt_category_chart: dict[str, list[Any]]
     receipt_page: Page[Receipt]
     income_expense_page: Page[Any]
     transfer_money_log_page: Page[TransferMoneyLog]
@@ -976,6 +979,17 @@ def _credit_card_utilization_chart(
     return {'labels': labels, 'values': values}
 
 
+def _build_receipt_category_chart(
+    shares: list[dict[str, Any]],
+) -> dict[str, list[Any]]:
+    """Donut-chart-ready series for the receipts-tab category shares."""
+    return {
+        'labels': [item['category_name'] for item in shares],
+        'values': [item['total'] for item in shares],
+        'category_ids': [item['category_id'] for item in shares],
+    }
+
+
 def _minimum_payment_forecast(
     debt: Decimal | None,
 ) -> list[dict[str, float | int]]:
@@ -1257,6 +1271,15 @@ def get_user_detailed_statistics(
         top_receipt_sellers,
         average_receipts_by_month,
     ) = _receipt_details(users, stats_filter, period_start, period_end)
+    receipt_category_shares = _receipt_category_shares(
+        users,
+        stats_filter,
+        period_start,
+        period_end,
+    )
+    receipt_category_chart = _build_receipt_category_chart(
+        receipt_category_shares,
+    )
 
     income_category_ids = _category_ids(
         stats_filter.category_keys,
@@ -1387,6 +1410,8 @@ def get_user_detailed_statistics(
         'top_receipt_products': top_receipt_products,
         'top_receipt_sellers': top_receipt_sellers,
         'average_receipts_by_month': average_receipts_by_month,
+        'receipt_category_shares': receipt_category_shares,
+        'receipt_category_chart': receipt_category_chart,
         'income_expense': income_expense,
         'income_expense_page': income_expense_page,
         'transfer_money_log': transfer_money_log,
@@ -1435,6 +1460,7 @@ __all__ = [
     '_build_chart',
     '_build_expenses_receipts_dicts',
     '_build_payment_schedule',
+    '_build_receipt_category_chart',
     '_build_single_card_month',
     '_calculate_grace_period_end',
     '_card_months_block',
