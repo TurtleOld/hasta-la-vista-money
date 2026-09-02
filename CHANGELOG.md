@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.16.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.16.0...v2.16.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **receipts:** skip amount cross-check for weighed goods with fractional quantity ([#1015](https://github.com/TurtleOld/hasta-la-vista-money/issues/1015)) ([af399ef](https://github.com/TurtleOld/hasta-la-vista-money/commit/af399ef6839070ef6a0b1954d0e8d2c2abcf8791))
+
 ## [2.16.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.15.0...v2.16.0) (2026-09-02)
 
 
