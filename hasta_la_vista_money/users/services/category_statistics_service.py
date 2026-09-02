@@ -503,7 +503,7 @@ def _frequent_product_purchases(
             product_name=product_name,
         )
         .annotate(receipt_date=F('receipt_products__receipt_date'))
-        .values('receipt_date', 'price', 'quantity', 'amount')
+        .values('receipt_date', 'price', 'quantity')
         .order_by('-receipt_date'),
     )
 
