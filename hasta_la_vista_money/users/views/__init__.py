@@ -42,6 +42,7 @@ from hasta_la_vista_money.users.views.groups import (
 from hasta_la_vista_money.users.views.profile import (
     ExportUserDataView,
     ListUsers,
+    ReceiptCategoryProductsView,
     SwitchThemeView,
     UpdateUserView,
     UserNotificationsView,
@@ -73,6 +74,7 @@ __all__ = [
     'ListUsers',
     'LoginUser',
     'LogoutUser',
+    'ReceiptCategoryProductsView',
     'RegisterByInviteView',
     'SetPasswordUserView',
     'SwitchThemeView',

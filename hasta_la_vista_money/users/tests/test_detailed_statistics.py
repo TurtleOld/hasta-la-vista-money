@@ -13,7 +13,14 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import (
+    Product,
+    Receipt,
+    Seller,
+)
+from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -211,6 +218,175 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
                 search_value.lower(),
                 receipt.account.name_account.lower(),
             )
+
+    def test_receipt_category_shares_known_categories_and_sums(self) -> None:
+        """Category-share aggregation sums per `ProductCategory`."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Донат-тест магазин',
+        )
+        category_repo = ProductCategoryRepository()
+        drinks = category_repo.get_or_create_category(
+            user=self.user,
+            name='Напитки',
+        )
+        dairy = category_repo.get_or_create_category(
+            user=self.user,
+            name='Молочные продукты',
+        )
+
+        drink_a = Product.objects.create(
+            user=self.user,
+            product_name='Чай',
+            category=drinks,
+            price=Decimal('100.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('100.00'),
+        )
+        drink_b = Product.objects.create(
+            user=self.user,
+            product_name='Кофе',
+            category=drinks,
+            price=Decimal('50.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('50.00'),
+        )
+        milk = Product.objects.create(
+            user=self.user,
+            product_name='Молоко',
+            category=dairy,
+            price=Decimal('50.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('50.00'),
+        )
+        uncategorized = Product.objects.create(
+            user=self.user,
+            product_name='Разное',
+            category=None,
+            price=Decimal('25.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('25.00'),
+        )
+
+        receipt = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date='2026-01-15 12:00:00',
+            number_receipt=555001,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('225.00'),
+        )
+        receipt.product.add(drink_a, drink_b, milk, uncategorized)
+
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+
+        shares_by_category = {
+            item['category_name']: item
+            for item in stats['receipt_category_shares']
+        }
+        self.assertIn('Напитки', shares_by_category)
+        self.assertIn('Молочные продукты', shares_by_category)
+        self.assertIn('Без категории', shares_by_category)
+
+        self.assertAlmostEqual(shares_by_category['Напитки']['total'], 150.0)
+        self.assertAlmostEqual(
+            shares_by_category['Молочные продукты']['total'],
+            50.0,
+        )
+        self.assertAlmostEqual(
+            shares_by_category['Без категории']['total'],
+            25.0,
+        )
+        self.assertAlmostEqual(
+            shares_by_category['Напитки']['percent'],
+            150 / 225 * 100,
+        )
+        self.assertAlmostEqual(
+            shares_by_category['Без категории']['percent'],
+            25 / 225 * 100,
+        )
+
+        chart = stats['receipt_category_chart']
+        self.assertEqual(
+            set(chart['labels']),
+            {'Напитки', 'Молочные продукты', 'Без категории'},
+        )
+
+    def test_receipt_category_products_view_returns_category_products(
+        self,
+    ) -> None:
+        """Htmx drill-down lists only products in the requested category."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Дриллдаун магазин',
+        )
+        category = ProductCategoryRepository().get_or_create_category(
+            user=self.user,
+            name='Бытовая химия',
+        )
+        in_category = Product.objects.create(
+            user=self.user,
+            product_name='Стиральный порошок',
+            category=category,
+            price=Decimal('300.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('300.00'),
+        )
+        other_product = Product.objects.create(
+            user=self.user,
+            product_name='Хлеб',
+            category=None,
+            price=Decimal('60.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('60.00'),
+        )
+        receipt = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date='2026-02-10 10:00:00',
+            number_receipt=555002,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('360.00'),
+        )
+        receipt.product.add(in_category, other_product)
+
+        self.client.force_login(self.user)
+        url = reverse('users:statistics_receipts_category_products')
+        response = self.client.get(
+            url,
+            {
+                'category_id': str(category.pk),
+                'period': 'range',
+                'date_from': '2026-02-01',
+                'date_to': '2026-02-28',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Стиральный порошок')
+        self.assertNotContains(response, 'Хлеб')
 
     def test_operations_search_filters_income_expense(self) -> None:
         container = ApplicationContainer()

@@ -248,6 +248,30 @@
                 </div>
 
                 <div class="statistics-pane" data-panel="receipts" role="tabpanel">
+                    {{ receipt_category_chart|json_script:'receipt-category-chart-data' }}
+                    <div class="statistics-category-grid statistics-section">
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Доля трат по категориям товаров' %}</h6>
+                            {% if receipt_category_shares %}
+                                <div class="statistics-chart-box statistics-chart-box-small">
+                                    <canvas
+                                        id="receiptCategoryChart"
+                                        height="220"
+                                        data-drilldown-url="{% url 'users:statistics_receipts_category_products' %}?{{ statistics_filter.query_string }}"
+                                    ></canvas>
+                                </div>
+                                <p class="statistics-muted">{% translate 'Кликните по сегменту, чтобы увидеть товары категории' %}</p>
+                            {% else %}
+                                <p class="statistics-empty">{% translate 'Нет товарной детализации' %}</p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Товары категории' %}</h6>
+                            <div id="receipt-category-drilldown">
+                                <p class="statistics-empty">{% translate 'Выберите категорию на графике' %}</p>
+                            </div>
+                        </div>
+                    </div>
                     <div class="statistics-category-grid statistics-section">
                         <div>
                             <h6 class="statistics-category-title">{% translate 'Топ товаров' %}</h6>
@@ -1214,6 +1238,85 @@
         });
     }
 
+    const RECEIPT_CATEGORY_CHART_COLORS = [
+        'rgb(14, 165, 233)', 'rgb(34, 197, 94)', 'rgb(234, 179, 8)',
+        'rgb(239, 68, 68)', 'rgb(168, 85, 247)', 'rgb(20, 184, 166)',
+        'rgb(249, 115, 22)', 'rgb(99, 102, 241)', 'rgb(236, 72, 153)',
+        'rgb(132, 204, 22)',
+    ];
+
+    function loadReceiptCategoryProducts(canvas, categoryId, categoryName) {
+        const baseUrl = canvas.dataset.drilldownUrl;
+        const target = document.getElementById('receipt-category-drilldown');
+        if (!baseUrl || !target || typeof htmx === 'undefined') {
+            return;
+        }
+        const separator = baseUrl.indexOf('?') === -1 ? '?' : '&';
+        const url = baseUrl + separator
+            + 'category_id=' + encodeURIComponent(categoryId === null || categoryId === undefined ? '' : categoryId)
+            + '&category_name=' + encodeURIComponent(categoryName || '');
+        htmx.ajax('GET', url, { target: target, swap: 'innerHTML' });
+    }
+
+    function renderReceiptCategoryChart(themeColors) {
+        const canvas = document.getElementById('receiptCategoryChart');
+        if (!canvas || typeof Chart === 'undefined') {
+            return;
+        }
+        const source = document.getElementById('receipt-category-chart-data');
+        const chartJson = source ? (JSON.parse(source.textContent || '{}') || {}) : {};
+        if (!chartJson.labels || chartJson.labels.length === 0) {
+            return;
+        }
+        if (canvas._statisticsChart && typeof canvas._statisticsChart.destroy === 'function') {
+            canvas._statisticsChart.destroy();
+        }
+        const colors = chartJson.labels.map(function(_, index) {
+            return RECEIPT_CATEGORY_CHART_COLORS[index % RECEIPT_CATEGORY_CHART_COLORS.length];
+        });
+        const tooltipOptions = chartTooltipOptions(themeColors);
+        tooltipOptions.callbacks = {
+            label: function(context) {
+                return context.label + ': ' + formatRuble(context.parsed);
+            },
+        };
+        canvas._statisticsChart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: chartJson.labels,
+                datasets: [
+                    {
+                        data: chartJson.values || [],
+                        backgroundColor: colors,
+                        borderWidth: 1,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: themeColors.textColor },
+                    },
+                    tooltip: tooltipOptions,
+                },
+                onClick: function(event, elements) {
+                    if (!elements.length) {
+                        return;
+                    }
+                    const index = elements[0].index;
+                    loadReceiptCategoryProducts(
+                        canvas,
+                        chartJson.category_ids ? chartJson.category_ids[index] : null,
+                        chartJson.labels[index],
+                    );
+                },
+            },
+        });
+    }
+
     function renderStatisticsCharts() {
         const chartData = readStatisticsChartData();
         if (typeof Chart === 'undefined') {
@@ -1230,6 +1333,7 @@
 
         renderIncomeExpenseChart(chartData, themeColors);
         renderBalanceForecastChart(chartData, themeColors);
+        renderReceiptCategoryChart(themeColors);
 
         document.querySelectorAll('.credit-utilization-chart').forEach(function(canvas) {
             const source = document.getElementById(canvas.dataset.chartSource);
