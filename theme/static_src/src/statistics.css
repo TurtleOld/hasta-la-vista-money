@@ -478,6 +478,14 @@
     padding: 1rem;
   }
 
+  .statistics-list-row-clickable {
+    cursor: pointer;
+  }
+
+  .statistics-list-row-clickable:hover {
+    border-color: var(--statistics-accent);
+  }
+
   .statistics-category-grid {
     display: grid;
     gap: 1rem;

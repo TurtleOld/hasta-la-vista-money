@@ -1,0 +1,28 @@
+{% load i18n %}
+{% load comma %}
+
+<div class="statistics-info-box">
+    <h6 class="statistics-category-title">{{ product_name }}</h6>
+    <div class="statistics-table-wrap">
+        <table class="statistics-table statistics-table-compact">
+            <thead>
+                <tr>
+                    <th>{% translate 'Дата' %}</th>
+                    <th class="statistics-cell-center">{% translate 'Количество' %}</th>
+                    <th class="statistics-cell-right">{% translate 'Цена' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for purchase in purchases %}
+                    <tr>
+                        <td>{{ purchase.receipt_date|date:'d.m.Y H:i' }}</td>
+                        <td class="statistics-cell-center">{{ purchase.quantity|comma }}</td>
+                        <td class="statistics-cell-right">{{ purchase.price|comma }} ₽</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="3" class="statistics-empty">{% translate 'Нет данных' %}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
