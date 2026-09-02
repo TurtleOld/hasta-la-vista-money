@@ -123,6 +123,39 @@ class PlanFactDeviationDict(TypedDict):
     abs_diff: float
 
 
+class PlanFactEngagementDict(TypedDict):
+    """Motivating feedback row for the Plan/Fact tab.
+
+    Attributes:
+        categories_with_plan: Number of expense categories with a Planning
+            entry in the period (Y).
+        categories_within_plan: Of those, the number where fact <= plan (X).
+        diff: fact minus plan, summed over the planned categories only
+            (negative means saved overall, positive means overspent).
+        abs_diff: Absolute value of diff, for display.
+    """
+
+    categories_with_plan: int
+    categories_within_plan: int
+    diff: float
+    abs_diff: float
+
+
+class SuggestedPlanCategoryDict(TypedDict):
+    """A category proposed for planning on the Plan/Fact tab.
+
+    Attributes:
+        category_id: Category primary key.
+        category_name: Category name.
+        suggested_amount: Average actual expense for the category over the
+            last 3 calendar months (fixed window).
+    """
+
+    category_id: int
+    category_name: str
+    suggested_amount: float
+
+
 class StatisticsChoiceDict(TypedDict):
     """Generic select option for the statistics filter form."""
 
@@ -836,6 +869,110 @@ def _plan_fact_top_deviations(
     return result[:limit]
 
 
+def _plan_fact_engagement(
+    users: Iterable[User],
+    period_start: date,
+    period_end: date,
+) -> PlanFactEngagementDict:
+    """Motivating feedback: how many expense categories stayed within plan."""
+    users_list = list(users)
+    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
+
+    plan_rows = (
+        Planning.objects.filter(
+            user__in=users_list,
+            planning_type=TransactionType.EXPENSE,
+            date__range=(period_start, period_end),
+        )
+        .values('category_id')
+        .annotate(total=Sum('amount'))
+    )
+    plan_by_category = {
+        row['category_id']: float(row['total'] or 0) for row in plan_rows
+    }
+
+    fact_rows = (
+        Transaction.objects.filter(
+            user__in=users_list,
+            type=TransactionType.EXPENSE,
+            category_id__in=plan_by_category,
+            date__gte=start_dt,
+            date__lte=end_dt,
+        )
+        .values('category_id')
+        .annotate(total=Sum('amount'))
+    )
+    fact_by_category = {
+        row['category_id']: float(row['total'] or 0) for row in fact_rows
+    }
+
+    categories_within_plan = 0
+    diff_total = 0.0
+    for category_id, plan_amount in plan_by_category.items():
+        fact_amount = fact_by_category.get(category_id, 0.0)
+        diff_total += fact_amount - plan_amount
+        if fact_amount <= plan_amount:
+            categories_within_plan += 1
+
+    return {
+        'categories_with_plan': len(plan_by_category),
+        'categories_within_plan': categories_within_plan,
+        'diff': diff_total,
+        'abs_diff': abs(diff_total),
+    }
+
+
+def _suggested_plan_categories(
+    users: Iterable[User],
+    today: date,
+    period_start: date,
+    period_end: date,
+    limit: int = 5,
+) -> list[SuggestedPlanCategoryDict]:
+    """Top expense categories worth planning, from a fixed 3-month window.
+
+    Only categories with no Planning entry in the statistics period are
+    considered, regardless of how period_start/period_end are set — the
+    3-month spending window used to compute the suggested amount is
+    always the last 3 calendar months relative to today.
+    """
+    users_list = list(users)
+    window_start = today.replace(day=1) - relativedelta(months=2)
+    window_start_dt = _date_to_aware(window_start)
+    window_end_dt = _date_to_aware(today, end_of_day=True)
+
+    planned_category_ids = set(
+        Planning.objects.filter(
+            user__in=users_list,
+            planning_type=TransactionType.EXPENSE,
+            date__range=(period_start, period_end),
+        ).values_list('category_id', flat=True),
+    )
+
+    fact_rows = (
+        Transaction.objects.filter(
+            user__in=users_list,
+            type=TransactionType.EXPENSE,
+            category_id__isnull=False,
+            date__gte=window_start_dt,
+            date__lte=window_end_dt,
+        )
+        .exclude(category_id__in=planned_category_ids)
+        .values('category_id', 'category__name')
+        .annotate(total=Sum('amount'))
+        .order_by('-total')[:limit]
+    )
+
+    return [
+        {
+            'category_id': row['category_id'],
+            'category_name': row['category__name'],
+            'suggested_amount': float(row['total'] or 0) / constants.THREE,
+        }
+        for row in fact_rows
+    ]
+
+
 class DashboardSummaryStatisticsDict(TypedDict):
     """Lean dashboard payload for the SPA widgets."""
 
@@ -896,10 +1033,12 @@ __all__ = [
     'DashboardSummaryStatisticsDict',
     'MonthDataDict',
     'PlanFactDeviationDict',
+    'PlanFactEngagementDict',
     'PlanFactSummaryDict',
     'PlanFactTotalsDict',
     'StatisticsChoiceDict',
     'StatisticsFilters',
+    'SuggestedPlanCategoryDict',
     '_aggregate_amounts_by_month',
     '_allowed_sort',
     '_aware_period_bounds',
@@ -912,12 +1051,14 @@ __all__ = [
     '_owned_family_group_ids',
     '_parse_filter_date',
     '_period_choices',
+    '_plan_fact_engagement',
     '_plan_fact_summary',
     '_plan_fact_top_deviations',
     '_planning_amounts_by_month',
     '_positive_int',
     '_resolve_statistics_members',
     '_six_months_data',
+    '_suggested_plan_categories',
     '_sum_amount_for_period',
     'get_dashboard_summary_statistics',
 ]

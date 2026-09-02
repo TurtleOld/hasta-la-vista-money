@@ -64,18 +64,22 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
     BudgetDataDict,
     MonthDataDict,
     PlanFactDeviationDict,
+    PlanFactEngagementDict,
     PlanFactSummaryDict,
     StatisticsChoiceDict,
     StatisticsFilters,
+    SuggestedPlanCategoryDict,
     _budgets_data,
     _date_to_aware,
     _member_choices,
     _month_ranges_for_filter,
     _period_choices,
+    _plan_fact_engagement,
     _plan_fact_summary,
     _plan_fact_top_deviations,
     _resolve_statistics_members,
     _six_months_data,
+    _suggested_plan_categories,
     _sum_amount_for_period,
 )
 
@@ -234,6 +238,8 @@ class UserDetailedStatisticsDict(TypedDict):
     budgets_data: list[BudgetDataDict]
     plan_fact_summary: PlanFactSummaryDict
     plan_fact_top_deviations: list[PlanFactDeviationDict]
+    plan_fact_engagement: PlanFactEngagementDict
+    suggested_plan_categories: list[SuggestedPlanCategoryDict]
     top_expense_categories: list[dict[str, Any]]
     top_income_categories: list[dict[str, Any]]
     receipt_info_by_month: QuerySet[Receipt]
@@ -1203,6 +1209,17 @@ def get_user_detailed_statistics(
         period_start,
         period_end,
     )
+    plan_fact_engagement = _plan_fact_engagement(
+        users,
+        period_start,
+        period_end,
+    )
+    suggested_plan_categories = _suggested_plan_categories(
+        users,
+        today,
+        period_start,
+        period_end,
+    )
     top_expense_categories = _top_categories_with_comparison(
         TransactionType.EXPENSE,
         users,
@@ -1361,6 +1378,8 @@ def get_user_detailed_statistics(
         'budgets_data': budgets_data,
         'plan_fact_summary': plan_fact_summary,
         'plan_fact_top_deviations': plan_fact_top_deviations,
+        'plan_fact_engagement': plan_fact_engagement,
+        'suggested_plan_categories': suggested_plan_categories,
         'top_expense_categories': top_expense_categories,
         'top_income_categories': top_income_categories,
         'receipt_info_by_month': receipt_info_by_month,
