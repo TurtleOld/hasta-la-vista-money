@@ -32,6 +32,7 @@ from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    UNCATEGORIZED_CATEGORY_LABEL,
     StatisticsFilters,
     _receipt_category_products,
     _resolve_statistics_members,
@@ -219,7 +220,9 @@ class ReceiptCategoryProductsView(LoginRequiredMixin, View):
         category_id = (
             int(raw_category_id) if raw_category_id.isdigit() else None
         )
-        category_name = request.GET.get('category_name') or 'Без категории'
+        category_name = (
+            request.GET.get('category_name') or UNCATEGORIZED_CATEGORY_LABEL
+        )
 
         products = _receipt_category_products(
             users,

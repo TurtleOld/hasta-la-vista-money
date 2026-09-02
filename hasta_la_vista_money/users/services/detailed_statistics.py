@@ -5,6 +5,7 @@ New code should import directly from the specific sub-module.
 """
 
 from hasta_la_vista_money.users.services.category_statistics_service import (
+    UNCATEGORIZED_CATEGORY_LABEL,
     _category_children_totals,
     _category_choices,
     _category_drilldown_transactions,
@@ -14,6 +15,7 @@ from hasta_la_vista_money.users.services.category_statistics_service import (
     _filtered_receipts,
     _filtered_transactions,
     _match_income_expense_search,
+    _product_totals_by_name,
     _receipt_category_products,
     _receipt_category_shares,
     _receipt_details,
@@ -92,6 +94,7 @@ from hasta_la_vista_money.users.services.summary_statistics_service import (
 )
 
 __all__ = [
+    'UNCATEGORIZED_CATEGORY_LABEL',
     'BudgetDataDict',
     'CardHistoryDict',
     'CardMonthDict',
@@ -156,6 +159,7 @@ __all__ = [
     '_planning_amounts_by_month',
     '_positive_int',
     '_pre_period_debt_for_card',
+    '_product_totals_by_name',
     '_receipt_category_products',
     '_receipt_category_shares',
     '_receipt_details',
