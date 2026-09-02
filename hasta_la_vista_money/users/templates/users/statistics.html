@@ -299,6 +299,32 @@
                                 {% endfor %}
                             </div>
                         </div>
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Часто покупаемое' %}</h6>
+                            <div class="statistics-list">
+                                {% for product in top_receipt_frequent_products %}
+                                    <div
+                                        class="statistics-list-row statistics-list-row-clickable"
+                                        hx-get="{% url 'users:statistics_receipts_product_purchases' %}?{{ statistics_filter.query_string }}&product_name={{ product.product_name|urlencode }}"
+                                        hx-target="#receipt-frequent-product-drilldown"
+                                        hx-swap="innerHTML"
+                                    >
+                                        <span>{{ product.product_name }}</span>
+                                        <span class="statistics-badge">{{ product.receipt_count }} {% translate 'чеков' %}</span>
+                                    </div>
+                                {% empty %}
+                                    <p class="statistics-empty">{% translate 'Нет данных' %}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="statistics-category-grid statistics-section">
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Позиции покупки' %}</h6>
+                            <div id="receipt-frequent-product-drilldown">
+                                <p class="statistics-empty">{% translate 'Выберите товар в блоке «Часто покупаемое»' %}</p>
+                            </div>
+                        </div>
                     </div>
                     <div class="statistics-table-wrap statistics-section">
                         <input

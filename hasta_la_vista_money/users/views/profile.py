@@ -34,6 +34,7 @@ from hasta_la_vista_money.users.services.cache import (
 from hasta_la_vista_money.users.services.detailed_statistics import (
     UNCATEGORIZED_CATEGORY_LABEL,
     StatisticsFilters,
+    _frequent_product_purchases,
     _receipt_category_products,
     _resolve_statistics_members,
     get_user_detailed_statistics,
@@ -238,6 +239,54 @@ class ReceiptCategoryProductsView(LoginRequiredMixin, View):
             {
                 'category_name': category_name,
                 'products': products,
+            },
+        )
+
+
+class ReceiptFrequentProductPurchasesView(LoginRequiredMixin, View):
+    """Htmx drill-down for the receipts-tab "Часто покупаемое" block.
+
+    Returns the individual purchase line items (date, price) for one
+    product name over the currently displayed statistics period/scope,
+    so a click on the product loads them in place without a page
+    navigation.
+    """
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return HttpResponse(status=401)
+
+        stats_filter = StatisticsFilters.from_query(request.GET)
+        today = timezone.now().date()
+        period_start, period_end = stats_filter.date_range(today)
+        users = _resolve_statistics_members(user, stats_filter)
+
+        product_name = request.GET.get('product_name', '')
+
+        purchases = (
+            _frequent_product_purchases(
+                users,
+                stats_filter,
+                period_start,
+                period_end,
+                product_name,
+            )
+            if product_name
+            else []
+        )
+
+        return render(
+            request,
+            'users/partials/_receipt_product_purchases.html',
+            {
+                'product_name': product_name,
+                'purchases': purchases,
             },
         )
 

@@ -388,6 +388,162 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertContains(response, 'Стиральный порошок')
         self.assertNotContains(response, 'Хлеб')
 
+    def test_frequently_purchased_products_ranks_by_receipt_count(
+        self,
+    ) -> None:
+        """Ranks by distinct receipt count, not by sum or total quantity."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Частые покупки магазин',
+        )
+
+        # 'Хлеб' appears in 3 separate receipts.
+        bread_receipt_dates = [
+            '2026-03-01 09:00:00',
+            '2026-03-08 09:00:00',
+            '2026-03-15 09:00:00',
+        ]
+        for index, receipt_date in enumerate(bread_receipt_dates):
+            bread = Product.objects.create(
+                user=self.user,
+                product_name='Хлеб',
+                price=Decimal('50.00'),
+                quantity=Decimal('1.00'),
+                amount=Decimal('50.00'),
+            )
+            receipt = Receipt.objects.create(
+                user=self.user,
+                seller=seller,
+                account=account,
+                receipt_date=receipt_date,
+                number_receipt=556000 + index,
+                operation_type=RECEIPT_OPERATION_PURCHASE,
+                total_sum=Decimal('50.00'),
+            )
+            receipt.product.add(bread)
+
+        # 'Телевизор' has a much higher total amount but appears once.
+        tv = Product.objects.create(
+            user=self.user,
+            product_name='Телевизор',
+            price=Decimal('50000.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('50000.00'),
+        )
+        tv_receipt = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date='2026-03-05 09:00:00',
+            number_receipt=556100,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('50000.00'),
+        )
+        tv_receipt.product.add(tv)
+
+        container = ApplicationContainer()
+        stats_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2026, 3, 1),
+            date_to=date(2026, 3, 31),
+        )
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
+
+        frequent_products = {
+            item['product_name']: item['receipt_count']
+            for item in stats['top_receipt_frequent_products']
+        }
+        self.assertEqual(frequent_products['Хлеб'], 3)
+        self.assertEqual(frequent_products['Телевизор'], 1)
+
+        product_names = [
+            item['product_name']
+            for item in stats['top_receipt_frequent_products']
+        ]
+        self.assertEqual(product_names[0], 'Хлеб')
+
+    def test_receipt_frequent_product_purchases_view_returns_line_items(
+        self,
+    ) -> None:
+        """Htmx drill-down lists purchase dates/prices for one product."""
+        account = Account.objects.first()
+        if account is None:
+            msg = 'No account found in fixtures'
+            raise ValueError(msg)
+
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Дриллдаун товара магазин',
+        )
+        matching_a = Product.objects.create(
+            user=self.user,
+            product_name='Молоко 3.2%',
+            price=Decimal('80.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('80.00'),
+        )
+        matching_b = Product.objects.create(
+            user=self.user,
+            product_name='Молоко 3.2%',
+            price=Decimal('85.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('85.00'),
+        )
+        other_product = Product.objects.create(
+            user=self.user,
+            product_name='Йогурт',
+            price=Decimal('40.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('40.00'),
+        )
+        receipt_a = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date='2026-04-02 08:00:00',
+            number_receipt=557001,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('80.00'),
+        )
+        receipt_a.product.add(matching_a)
+        receipt_b = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date='2026-04-09 08:00:00',
+            number_receipt=557002,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('125.00'),
+        )
+        receipt_b.product.add(matching_b, other_product)
+
+        self.client.force_login(self.user)
+        url = reverse('users:statistics_receipts_product_purchases')
+        response = self.client.get(
+            url,
+            {
+                'product_name': 'Молоко 3.2%',
+                'period': 'range',
+                'date_from': '2026-04-01',
+                'date_to': '2026-04-30',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Молоко 3.2%')
+        self.assertContains(response, '80')
+        self.assertContains(response, '85')
+        self.assertNotContains(response, 'Йогурт')
+
     def test_operations_search_filters_income_expense(self) -> None:
         container = ApplicationContainer()
         base_filter = StatisticsFilters(

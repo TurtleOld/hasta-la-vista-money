@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any
 
-from django.db.models import Avg, Count, Q, QuerySet, Sum
+from django.db.models import Avg, Count, F, Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 
 from hasta_la_vista_money import constants
@@ -377,7 +377,12 @@ def _receipt_details(
     stats_filter: StatisticsFilters,
     start: date,
     end: date,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     receipts = _filtered_receipts(users, stats_filter, start, end)
     products = _product_totals_by_name(
         Product.objects.filter(receipt_products__in=receipts),
@@ -393,7 +398,13 @@ def _receipt_details(
         .annotate(avg_total=Avg('total_sum'), count=Count('id'))
         .order_by('month')
     )
-    return list(products), list(sellers), list(averages)
+    frequent_products = _frequently_purchased_products(
+        users,
+        stats_filter,
+        start,
+        end,
+    )
+    return list(products), list(sellers), list(averages), frequent_products
 
 
 def _receipt_category_shares(
@@ -457,6 +468,46 @@ def _receipt_category_products(
     )
 
 
+def _frequently_purchased_products(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+) -> list[dict[str, Any]]:
+    """Top products ranked by number of distinct receipts they appear in.
+
+    Ranks by receipt count, not by spend or total quantity, so a cheap
+    staple bought every week outranks a single big-ticket purchase.
+    """
+    receipts = _filtered_receipts(users, stats_filter, start, end)
+    return list(
+        Product.objects.filter(receipt_products__in=receipts)
+        .values('product_name')
+        .annotate(receipt_count=Count('receipt_products', distinct=True))
+        .order_by('-receipt_count')[: constants.RECEIPT_RANK_LIMIT],
+    )
+
+
+def _frequent_product_purchases(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+    product_name: str,
+) -> list[dict[str, Any]]:
+    """Individual purchase line items for one product name in the period."""
+    receipts = _filtered_receipts(users, stats_filter, start, end)
+    return list(
+        Product.objects.filter(
+            receipt_products__in=receipts,
+            product_name=product_name,
+        )
+        .annotate(receipt_date=F('receipt_products__receipt_date'))
+        .values('receipt_date', 'price', 'quantity')
+        .order_by('-receipt_date'),
+    )
+
+
 __all__ = [
     'UNCATEGORIZED_CATEGORY_LABEL',
     '_category_children_totals',
@@ -467,6 +518,8 @@ __all__ = [
     '_filtered_accounts',
     '_filtered_receipts',
     '_filtered_transactions',
+    '_frequent_product_purchases',
+    '_frequently_purchased_products',
     '_match_income_expense_search',
     '_product_totals_by_name',
     '_receipt_category_products',

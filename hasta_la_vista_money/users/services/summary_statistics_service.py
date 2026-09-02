@@ -262,6 +262,7 @@ class UserDetailedStatisticsDict(TypedDict):
     statistics_alerts: list[dict[str, Any]]
     top_receipt_products: list[dict[str, Any]]
     top_receipt_sellers: list[dict[str, Any]]
+    top_receipt_frequent_products: list[dict[str, Any]]
     average_receipts_by_month: list[dict[str, Any]]
     receipt_category_shares: list[dict[str, Any]]
     receipt_category_chart: dict[str, list[Any]]
@@ -1270,6 +1271,7 @@ def get_user_detailed_statistics(
         top_receipt_products,
         top_receipt_sellers,
         average_receipts_by_month,
+        top_receipt_frequent_products,
     ) = _receipt_details(users, stats_filter, period_start, period_end)
     receipt_category_shares = _receipt_category_shares(
         users,
@@ -1409,6 +1411,7 @@ def get_user_detailed_statistics(
         'receipt_page': receipt_page,
         'top_receipt_products': top_receipt_products,
         'top_receipt_sellers': top_receipt_sellers,
+        'top_receipt_frequent_products': top_receipt_frequent_products,
         'average_receipts_by_month': average_receipts_by_month,
         'receipt_category_shares': receipt_category_shares,
         'receipt_category_chart': receipt_category_chart,
