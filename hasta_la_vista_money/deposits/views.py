@@ -560,10 +560,15 @@ class DepositCapitalizeInterestView(LoginRequiredMixin, View):
         term = deposit.current_term
         form = CapitalizeInterestForm(request.POST, term=term, user=user)
         if not form.is_valid():
-            messages.error(
-                request,
-                _('Проверьте данные капитализации процентов.'),
-            )
+            for field, errors in form.errors.items():
+                label = (
+                    form.fields[field].label if field in form.fields else None
+                )
+                for error in errors:
+                    messages.error(
+                        request,
+                        f'{label}: {error}' if label else str(error),
+                    )
             return HttpResponseRedirect(deposit.get_absolute_url())
         forecast = form.cleaned_data.get('forecast')
         try:

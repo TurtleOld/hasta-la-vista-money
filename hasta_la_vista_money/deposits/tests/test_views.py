@@ -791,6 +791,31 @@ class CapitalizeInterestSmokeTests(TestCase):
             ).exists(),
         )
 
+    def test_capitalize_invalid_form_shows_field_error(self) -> None:
+        response = self.client.post(
+            reverse('deposits:capitalize', kwargs={'pk': self.deposit.pk}),
+            {
+                'gross': '6000.00',
+                'withholding': '780.00',
+                'net': '5220.00',
+                'posting_on': timezone.localdate().isoformat(),
+                'value_on': timezone.localdate().isoformat(),
+                'reason': '',
+            },
+            follow=True,
+        )
+
+        self.assertContains(
+            response,
+            'Выберите ожидаемую выплату или укажите причину '
+            'внеплановой выплаты.',
+        )
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=self.deposit,
+            ).exists(),
+        )
+
     def test_detail_page_includes_capitalize_form(self) -> None:
         response = self.client.get(
             reverse('deposits:detail', kwargs={'pk': self.deposit.pk}),
