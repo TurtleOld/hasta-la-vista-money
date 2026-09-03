@@ -4,12 +4,14 @@ from typing import TYPE_CHECKING, cast
 
 from django.forms import ChoiceField, DateField, DateInput, ModelChoiceField
 from django.test import TestCase
+from django.utils import translation
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
     CreateDepositForm,
     RenewDepositForm,
+    TopUpDepositForm,
 )
 from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
 from hasta_la_vista_money.finance_account.models import Account, Bank
@@ -25,6 +27,21 @@ def _sberbank() -> Bank:
         defaults={'name': 'Сбербанк', 'is_system': True},
     )
     return bank
+
+
+class TopUpDepositFormLabelTests(TestCase):
+    def test_labels_stay_russian_under_english_locale(self) -> None:
+        user = UserFactory()
+        with translation.override('en'):
+            form = TopUpDepositForm(user=user, currency='RUB')
+            self.assertEqual(
+                str(form.fields['source_account'].label),
+                'Счёт списания',
+            )
+            self.assertEqual(
+                str(form.fields['amount'].label),
+                'Сумма пополнения',
+            )
 
 
 class CreateDepositFormTests(TestCase):
