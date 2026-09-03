@@ -61,11 +61,7 @@
                                 {% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}
                             </div>
                             {% if not event.reversal_of_id and not event.reversal %}
-                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='principal' event_id=event.pk %}">
-                                {% csrf_token %}
-                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
-                            </form>
+                            {% include 'deposits/_reverse_event_form.html' with event_kind='principal' %}
                             {% endif %}
                         </div>
                     </div>
@@ -81,11 +77,7 @@
                             </div>
                             <div class="accounts-row-name">{{ event.previous_term.matures_on|date:'d.m.Y' }} → {{ event.renewed_term.matures_on|date:'d.m.Y' }}{% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}</div>
                             {% if not event.reversal_of_id and not event.reversal %}
-                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='renewal' event_id=event.pk %}">
-                                {% csrf_token %}
-                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
-                            </form>
+                            {% include 'deposits/_reverse_event_form.html' with event_kind='renewal' %}
                             {% endif %}
                         </div>
                     </div>
@@ -366,11 +358,7 @@
                                 {% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}
                             </div>
                             {% if not event.reversal_of_id and not event.reversal and not event.is_final %}
-                            <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind='interest' event_id=event.pk %}">
-                                {% csrf_token %}
-                                {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
-                            </form>
+                            {% include 'deposits/_reverse_event_form.html' with event_kind='interest' %}
                             {% endif %}
                         </div>
                     </div>

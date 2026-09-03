@@ -1,0 +1,18 @@
+{% load i18n %}
+<div x-data="{ open: false }">
+    <button type="button" class="btn btn-sm btn-outline-danger" @click="open = !open">
+        <span x-show="!open">{% translate 'Аннулировать это событие' %}</span>
+        <span x-show="open" x-cloak>{% translate 'Скрыть' %}</span>
+    </button>
+    <div x-show="open" x-cloak>
+        <p class="text-muted small mb-1">{% translate 'Аннулирование не удаляет событие — создаётся компенсирующая запись с указанной датой и причиной.' %}</p>
+        {% if event.type == 'opening_position' %}
+        <p class="text-muted small mb-1">{% translate 'Начальная позиция была перенесена без движения денег между счетами; аннулирование не вернёт средства на другой счёт — оно только помечает исходную запись как отменённую.' %}</p>
+        {% endif %}
+        <form method="post" action="{% url 'deposits:reverse-event' pk=deposit.pk event_kind=event_kind event_id=event.pk %}">
+            {% csrf_token %}
+            {% for field in reverse_form %}{% include 'forms/_field.html' with field=field %}{% endfor %}
+            <button type="submit" class="btn btn-sm btn-outline-danger">{% translate 'Аннулировать' %}</button>
+        </form>
+    </div>
+</div>
