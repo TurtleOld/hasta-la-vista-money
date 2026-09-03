@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import (
@@ -504,13 +505,13 @@ class RenewDepositForm(CreateDepositForm):
 class TopUpDepositForm(forms.Form):
     source_account = forms.ModelChoiceField(
         queryset=Account.objects.none(),
-        label=_('Счёт списания'),
+        label=pgettext_lazy('deposits', 'Счёт списания'),
     )
     amount = forms.DecimalField(
         min_value=constants.MIN_MONEY_AMOUNT,
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
-        label=_('Сумма пополнения'),
+        label=pgettext_lazy('deposits', 'Сумма пополнения'),
     )
     effective_on = forms.DateField(
         input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
