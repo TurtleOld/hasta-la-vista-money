@@ -585,7 +585,7 @@ class DepositCorrectPayoutScheduleView(LoginRequiredMixin, View):
             )
             return HttpResponseRedirect(deposit.get_absolute_url())
         try:
-            service.correct_payout_schedule(
+            result = service.correct_payout_schedule(
                 CorrectPayoutScheduleCommand(
                     user=user,
                     term_id=term_id,
@@ -599,8 +599,18 @@ class DepositCorrectPayoutScheduleView(LoginRequiredMixin, View):
             )
         except ValidationError as error:
             messages.error(request, error.message)
-        else:
-            messages.success(request, _('Расписание выплат исправлено.'))
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        messages.success(request, _('Расписание выплат исправлено.'))
+        if not result.forecast_recalculated:
+            messages.warning(
+                request,
+                _(
+                    'Прогноз выплат не удалось пересчитать под новое '
+                    'расписание — проверьте настройки расписания '
+                    '(например, укажите даты для индивидуального '
+                    'расписания) и пересчитайте прогноз вручную.',
+                ),
+            )
         return HttpResponseRedirect(deposit.get_absolute_url())
 
 

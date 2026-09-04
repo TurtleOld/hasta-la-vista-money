@@ -4249,7 +4249,7 @@ class CorrectPayoutScheduleServiceTests(TestCase):
         term = deposit.current_term
         service = ApplicationContainer().deposits.deposit_service()
 
-        updated = service.correct_payout_schedule(
+        result = service.correct_payout_schedule(
             CorrectPayoutScheduleCommand(
                 user=user,
                 term_id=term.pk,
@@ -4258,7 +4258,8 @@ class CorrectPayoutScheduleServiceTests(TestCase):
             ),
         )
 
-        self.assertEqual(updated.pk, term.pk)
+        self.assertEqual(result.term.pk, term.pk)
+        self.assertTrue(result.forecast_recalculated)
         term.refresh_from_db()
         self.assertEqual(
             term.payout_schedule_kind,
@@ -4381,6 +4382,37 @@ class CorrectPayoutScheduleServiceTests(TestCase):
         self.assertIn('Ежемесячно', audit.description)
         self.assertIn('Капитализация', audit.description)
         self.assertIn('На собственный счёт', audit.description)
+
+    def test_correction_succeeds_but_reports_stale_forecast_for_custom(
+        self,
+    ) -> None:
+        """Choosing CUSTOM without configured payout dates still saves the
+        schedule and audit event — the forecast just can't be rebuilt yet,
+        and the caller is told so via `forecast_recalculated`."""
+        user = cast('User', UserFactory())
+        deposit = self._active_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        result = service.correct_payout_schedule(
+            CorrectPayoutScheduleCommand(
+                user=user,
+                term_id=term.pk,
+                payout_schedule_kind=DepositTerm.PayoutScheduleKind.CUSTOM,
+                interest_payout_destination='internal_account',
+            ),
+        )
+
+        self.assertFalse(result.forecast_recalculated)
+        term.refresh_from_db()
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.CUSTOM,
+        )
+        self.assertEqual(
+            deposit.audit_events.get().event_type,
+            DepositAuditEvent.Type.SCHEDULE_CORRECTION,
+        )
 
     def test_rejects_correction_of_matured_term(self) -> None:
         user = cast('User', UserFactory())

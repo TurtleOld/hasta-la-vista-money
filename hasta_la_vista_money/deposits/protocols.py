@@ -10,6 +10,7 @@ from hasta_la_vista_money.deposits.commands import (
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
     CorrectPayoutScheduleCommand,
+    CorrectPayoutScheduleResult,
     CreateDepositCommand,
     ForecastEarlyClosureCommand,
     ForecastEarlyClosureResult,
@@ -81,14 +82,15 @@ class DepositServiceProtocol(Protocol):
     def correct_payout_schedule(
         self,
         command: CorrectPayoutScheduleCommand,
-    ) -> DepositTerm:
+    ) -> CorrectPayoutScheduleResult:
         """Correct an active term's payout schedule/destination in place.
 
         Args:
             command: Term identifier and the corrected schedule fields.
 
         Returns:
-            The updated DepositTerm.
+            The updated DepositTerm and whether the forecast recalculation
+            succeeded.
 
         Raises:
             ValidationError: If the term is invalid, not owned, or not

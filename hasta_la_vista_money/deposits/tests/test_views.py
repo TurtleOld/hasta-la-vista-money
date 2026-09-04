@@ -901,6 +901,28 @@ class DepositCorrectPayoutScheduleViewSmokeTests(TestCase):
         detail = self.client.get(self.deposit.get_absolute_url())
         self.assertContains(detail, 'Исправление расписания выплат')
 
+    def test_warns_when_custom_schedule_leaves_forecast_stale(self) -> None:
+        term = self.deposit.current_term
+
+        response = self.client.post(
+            reverse(
+                'deposits:correct-schedule',
+                kwargs={'pk': self.deposit.pk, 'term_id': term.pk},
+            ),
+            {
+                'payout_schedule_kind': 'custom',
+                'interest_payout_destination': 'internal_account',
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, 'не удалось пересчитать')
+        term.refresh_from_db()
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.CUSTOM,
+        )
+
     def test_other_user_cannot_correct_schedule(self) -> None:
         term = self.deposit.current_term
         self.client.logout()

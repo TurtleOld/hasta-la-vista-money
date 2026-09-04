@@ -18,6 +18,7 @@ from hasta_la_vista_money.deposits.commands import (
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
     CorrectPayoutScheduleCommand,
+    CorrectPayoutScheduleResult,
     CreateDepositCommand,
     EarlyClosureTerms,
     ForecastEarlyClosureCommand,
@@ -203,7 +204,7 @@ class DepositService:
     def correct_payout_schedule(
         self,
         command: CorrectPayoutScheduleCommand,
-    ) -> DepositTerm:
+    ) -> CorrectPayoutScheduleResult:
         """Correct an active term's payout schedule/destination in place.
 
         Points at an already existing DepositTerm — no new term is created
@@ -211,13 +212,17 @@ class DepositService:
         term) and no confirmed events are touched, since those are
         protected by ADR-0002 independently of `payout_schedule_kind`
         (see ADR-0008). Only unconfirmed forecast rows are recalculated
-        afterwards.
+        afterwards; if the new schedule can't be forecast yet (e.g. CUSTOM
+        without configured payout dates), the correction itself still
+        succeeds — the result reports the recalculation as failed so the
+        caller can tell the user the forecast is stale.
 
         Args:
             command: Term identifier and the corrected schedule fields.
 
         Returns:
-            The updated DepositTerm.
+            The updated DepositTerm and whether the forecast recalculation
+            succeeded.
 
         Raises:
             ValidationError: If the term is not found or not owned by the
@@ -248,8 +253,16 @@ class DepositService:
         )
         term.payout_schedule_kind = command.payout_schedule_kind
         term.interest_payout_destination = command.interest_payout_destination
-        with contextlib.suppress(ValidationError):
-            self._recalculate_forecast_for_term(term)
+        forecast_recalculated = True
+        try:
+            self.recalculate_forecast(
+                RecalculateInterestForecastCommand(
+                    user=command.user,
+                    term_id=term.pk,
+                ),
+            )
+        except ValidationError:
+            forecast_recalculated = False
         self._create_audit(
             deposit=term.deposit,
             event_type=DepositAuditEvent.Type.SCHEDULE_CORRECTION,
@@ -274,7 +287,10 @@ class DepositService:
                 )
             ),
         )
-        return term
+        return CorrectPayoutScheduleResult(
+            term=term,
+            forecast_recalculated=forecast_recalculated,
+        )
 
     @transaction.atomic
     def create_term_deposit(self, command: CreateDepositCommand) -> Deposit:

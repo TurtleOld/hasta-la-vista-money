@@ -184,6 +184,12 @@ class CorrectPayoutScheduleCommand:
 
 
 @dataclass(frozen=True)
+class CorrectPayoutScheduleResult:
+    term: DepositTerm
+    forecast_recalculated: bool
+
+
+@dataclass(frozen=True)
 class RecalculateInterestForecastCommand:
     """Command to (re)build a term's expected interest payout forecast.
 
