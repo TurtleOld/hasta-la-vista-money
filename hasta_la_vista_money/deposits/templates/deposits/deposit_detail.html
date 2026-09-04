@@ -133,9 +133,21 @@
         {% endif %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Подтвердить выплату процентов' %}</h2></div>
-            <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}">
+            <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}" data-cif-form data-cif-initial-scenario="{{ capitalize_initial_scenario }}">
                 {% csrf_token %}
                 <div class="accounts-cmp-body">
+                    <section class="accounts-cmp-section">
+                        <div class="accounts-radio-group">
+                            <label class="accounts-radio-option">
+                                <input type="radio" name="cif_scenario_switch" value="forecast" data-cif-scenario-radio {% if capitalize_initial_scenario == 'forecast' %}checked{% endif %}>
+                                <span>{% translate 'Подтвердить ожидаемую выплату' %}</span>
+                            </label>
+                            <label class="accounts-radio-option">
+                                <input type="radio" name="cif_scenario_switch" value="reason" data-cif-scenario-radio {% if capitalize_initial_scenario == 'reason' %}checked{% endif %}>
+                                <span>{% translate 'Внести выплату без прогноза' %}</span>
+                            </label>
+                        </div>
+                    </section>
                     {% for field in capitalize_form %}
                     <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
                         <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
@@ -190,6 +202,30 @@
                 <div class="accounts-composer-ft">
                     <div class="ft-actions">
                         <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Перевести на счёт' %}</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Исправить расписание выплат' %}</h2></div>
+            <div class="accounts-composer-ft">
+                <div class="hint">{% translate 'Точечно правит уже существующий срок на месте, не создавая пролонгацию. Подтверждённые выплаты процентов не затрагиваются.' %}</div>
+            </div>
+            <form method="post" action="{% url 'deposits:correct-schedule' pk=deposit.pk term_id=term.pk %}">
+                {% csrf_token %}
+                <div class="accounts-cmp-body">
+                    {% for field in correct_schedule_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Исправить расписание' %}</button>
                     </div>
                 </div>
             </form>
@@ -263,7 +299,19 @@
                 </form>{% endif %}
             </div>
             <div class="accounts-list">
-                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Способ выплаты' %}</div><div class="accounts-row-name">{{ term.get_payout_schedule_kind_display }} · {{ term.get_business_day_convention_display }}</div></div></div></div>
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">{% translate 'Способ выплаты' %}</div>
+                            <div class="accounts-row-name">{{ term.get_payout_schedule_kind_display }} · {{ term.get_business_day_convention_display }}</div>
+                            {% if term.payout_schedule_kind == 'monthly' %}
+                            <div class="text-muted small">{% translate 'Проценты выплачиваются ежемесячно' %}</div>
+                            {% elif term.payout_schedule_kind == 'maturity' %}
+                            <div class="text-muted small">{% translate 'Проценты выплачиваются один раз — в конце срока' %}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Обычное назначение' %}</div><div class="accounts-row-name">{{ term.get_interest_payout_destination_display }}</div></div></div></div>
                 {% for line in forecast_lines %}
                 <div class="accounts-row">
@@ -278,7 +326,17 @@
                                     {% translate 'Ставка периода не определена' %}
                                 {% else %}
                                     {{ line.amount|comma }}<span class="cur">{{ deposit.account.currency }}</span>
-        {% endif %}
+                                {% endif %}
+                                {% if line.confirmed %} · {% translate 'подтверждено' %}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-name">{% translate 'Прогноз ещё не рассчитан.' %}</div></div></div></div>
+                {% endfor %}
+            </div>
+        </section>
         {% if audit_events %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Аудит операций' %}</h2></div>
@@ -291,6 +349,9 @@
                                 {{ audit.created_at|date:'d.m.Y H:i' }} · {{ audit.get_event_type_display }}
                             </div>
                             <div class="accounts-row-name">{{ audit.description }}</div>
+                            {% if audit.event_type == 'conversion' %}
+                            <div class="text-muted small">{% translate 'Исторический контекст до открытия вклада — не действующие условия.' %}</div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -298,16 +359,6 @@
             </div>
         </section>
         {% endif %}
-                                {% if line.confirmed %} · {% translate 'подтверждено' %}{% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-name">{% translate 'Прогноз ещё не рассчитан.' %}</div></div></div></div>
-                {% endfor %}
-            </div>
-        </section>
         {% if closure_event %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% if closure_event.type == 'early_closure' %}{% translate 'Досрочное закрытие' %}{% else %}{% translate 'Плановое закрытие' %}{% endif %}</h2></div>
@@ -370,4 +421,8 @@
     </div>
 </main>
 {% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+    <script defer nonce="{{ request.csp_nonce }}" src="{% static 'deposits/js/deposit_capitalize_form.js' %}?v={% word_hash %}"></script>
 {% endblock %}

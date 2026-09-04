@@ -955,6 +955,10 @@ class DepositAuditEvent(models.Model):
         CANCELLATION = 'cancellation', _('Аннулирование события')
         CLOSURE = 'closure', _('Закрытие вклада')
         RENEWAL = 'renewal', _('Пролонгация вклада')
+        SCHEDULE_CORRECTION = (
+            'schedule_correction',
+            _('Исправление расписания выплат'),
+        )
 
     deposit = models.ForeignKey(
         Deposit,

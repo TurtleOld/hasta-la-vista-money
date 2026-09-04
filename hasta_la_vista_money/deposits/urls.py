@@ -4,6 +4,7 @@ from hasta_la_vista_money.deposits.views import (
     DepositAddRatePeriodView,
     DepositCapitalizeInterestView,
     DepositCloseView,
+    DepositCorrectPayoutScheduleView,
     DepositCreateView,
     DepositDetailView,
     DepositEarlyClosureView,
@@ -45,6 +46,11 @@ urlpatterns = [
         '<int:pk>/terms/<int:term_id>/rate-periods/add/',
         DepositAddRatePeriodView.as_view(),
         name='add-rate-period',
+    ),
+    path(
+        '<int:pk>/terms/<int:term_id>/correct-schedule/',
+        DepositCorrectPayoutScheduleView.as_view(),
+        name='correct-schedule',
     ),
     path(
         '<int:pk>/terms/<int:term_id>/forecast/recalculate/',

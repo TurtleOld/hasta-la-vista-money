@@ -855,6 +855,99 @@ class CapitalizeInterestSmokeTests(TestCase):
         self.assertIn('Карта для процентов', content)
 
 
+class DepositCorrectPayoutScheduleViewSmokeTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+        service = ApplicationContainer().deposits.deposit_service()
+        self.deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Легаси-мигрированный вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('75000.00'),
+                opened_on=timezone.localdate() - timedelta(days=30),
+                matures_on=timezone.localdate() + timedelta(days=335),
+                annual_rate=Decimal('14.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+    def test_user_corrects_payout_schedule_of_active_term(self) -> None:
+        term = self.deposit.current_term
+
+        response = self.client.post(
+            reverse(
+                'deposits:correct-schedule',
+                kwargs={'pk': self.deposit.pk, 'term_id': term.pk},
+            ),
+            {
+                'payout_schedule_kind': 'monthly',
+                'interest_payout_destination': 'internal_account',
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        term.refresh_from_db()
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.MONTHLY,
+        )
+        self.assertEqual(
+            term.interest_payout_destination,
+            'internal_account',
+        )
+        detail = self.client.get(self.deposit.get_absolute_url())
+        self.assertContains(detail, 'Исправление расписания выплат')
+
+    def test_warns_when_custom_schedule_leaves_forecast_stale(self) -> None:
+        term = self.deposit.current_term
+
+        response = self.client.post(
+            reverse(
+                'deposits:correct-schedule',
+                kwargs={'pk': self.deposit.pk, 'term_id': term.pk},
+            ),
+            {
+                'payout_schedule_kind': 'custom',
+                'interest_payout_destination': 'internal_account',
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, 'не удалось пересчитать')
+        term.refresh_from_db()
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.CUSTOM,
+        )
+
+    def test_other_user_cannot_correct_schedule(self) -> None:
+        term = self.deposit.current_term
+        self.client.logout()
+        other_user = cast('User', UserFactory())
+        self.client.force_login(other_user)
+
+        response = self.client.post(
+            reverse(
+                'deposits:correct-schedule',
+                kwargs={'pk': self.deposit.pk, 'term_id': term.pk},
+            ),
+            {
+                'payout_schedule_kind': 'monthly',
+                'interest_payout_destination': 'internal_account',
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        term.refresh_from_db()
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.MATURITY,
+        )
+
+
 class CloseMaturedDepositSmokeTests(TestCase):
     def setUp(self) -> None:
         self.user = cast('User', UserFactory())

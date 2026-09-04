@@ -17,6 +17,7 @@ from hasta_la_vista_money.deposits.commands import (
     CapitalizeInterestCommand,
     CloseDepositEarlyCommand,
     CloseMaturedDepositCommand,
+    CorrectPayoutScheduleCommand,
     EarlyClosureTerms,
     ForecastEarlyClosureCommand,
     ForecastTerms,
@@ -35,6 +36,7 @@ from hasta_la_vista_money.deposits.forms import (
     CapitalizeInterestForm,
     CloseDepositEarlyForm,
     CloseMaturedDepositForm,
+    CorrectPayoutScheduleForm,
     CreateDepositForm,
     ForecastEarlyClosureForm,
     RenewDepositForm,
@@ -233,6 +235,16 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['capitalize_form'] = CapitalizeInterestForm(
             term=deposit.current_term,
             user=user,
+        )
+        context['capitalize_initial_scenario'] = (
+            'forecast'
+            if deposit.current_term.interest_forecasts.filter(
+                confirmed=False,
+            ).exists()
+            else 'reason'
+        )
+        context['correct_schedule_form'] = CorrectPayoutScheduleForm(
+            term=deposit.current_term,
         )
         context['withdraw_form'] = WithdrawDepositForm(
             user=user,
@@ -548,6 +560,57 @@ class DepositAddRatePeriodView(
             form.add_error(None, error)
             return self.form_invalid(form)
         messages.success(self.request, _('Ставка вклада обновлена.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())
+
+
+class DepositCorrectPayoutScheduleView(LoginRequiredMixin, View):
+    def post(
+        self,
+        request: HttpRequest,
+        pk: int,
+        term_id: int,
+    ) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = get_object_or_404(service.get_user_deposits(user), pk=pk)
+        form = CorrectPayoutScheduleForm(
+            request.POST,
+            term=deposit.current_term,
+        )
+        if not form.is_valid():
+            messages.error(
+                request,
+                _('Проверьте данные исправления расписания выплат.'),
+            )
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        try:
+            result = service.correct_payout_schedule(
+                CorrectPayoutScheduleCommand(
+                    user=user,
+                    term_id=term_id,
+                    payout_schedule_kind=(
+                        form.cleaned_data['payout_schedule_kind']
+                    ),
+                    interest_payout_destination=(
+                        form.cleaned_data['interest_payout_destination']
+                    ),
+                ),
+            )
+        except ValidationError as error:
+            messages.error(request, error.message)
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        messages.success(request, _('Расписание выплат исправлено.'))
+        if not result.forecast_recalculated:
+            messages.warning(
+                request,
+                _(
+                    'Прогноз выплат не удалось пересчитать под новое '
+                    'расписание — проверьте настройки расписания '
+                    '(например, укажите даты для индивидуального '
+                    'расписания) и пересчитайте прогноз вручную.',
+                ),
+            )
         return HttpResponseRedirect(deposit.get_absolute_url())
 
 

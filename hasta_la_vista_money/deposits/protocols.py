@@ -9,7 +9,8 @@ from hasta_la_vista_money.deposits.commands import (
     CloseMaturedDepositCommand,
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
-    ConvertAccountToDepositCommand,
+    CorrectPayoutScheduleCommand,
+    CorrectPayoutScheduleResult,
     CreateDepositCommand,
     ForecastEarlyClosureCommand,
     ForecastEarlyClosureResult,
@@ -78,22 +79,22 @@ class DepositServiceProtocol(Protocol):
             The created Deposit.
         """
 
-    def convert_account_to_deposit(
+    def correct_payout_schedule(
         self,
-        command: ConvertAccountToDepositCommand,
-    ) -> Deposit:
-        """Convert an existing production account into a term deposit.
+        command: CorrectPayoutScheduleCommand,
+    ) -> CorrectPayoutScheduleResult:
+        """Correct an active term's payout schedule/destination in place.
 
         Args:
-            command: Account identifier, agreement parameters, and the
-                conversion date.
+            command: Term identifier and the corrected schedule fields.
 
         Returns:
-            The created Deposit, wrapping the same account.
+            The updated DepositTerm and whether the forecast recalculation
+            succeeded.
 
         Raises:
-            ValidationError: If the account is invalid, already a deposit,
-                already linked, or the agreement parameters are invalid.
+            ValidationError: If the term is invalid, not owned, or not
+                active.
         """
 
     def add_floating_rate_period(

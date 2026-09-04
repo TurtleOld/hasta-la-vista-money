@@ -17,7 +17,8 @@ from hasta_la_vista_money.deposits.commands import (
     CloseMaturedDepositCommand,
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
-    ConvertAccountToDepositCommand,
+    CorrectPayoutScheduleCommand,
+    CorrectPayoutScheduleResult,
     CreateDepositCommand,
     EarlyClosureTerms,
     ForecastEarlyClosureCommand,
@@ -200,94 +201,96 @@ class DepositService:
         return deposit
 
     @transaction.atomic
-    def convert_account_to_deposit(
+    def correct_payout_schedule(
         self,
-        command: ConvertAccountToDepositCommand,
-    ) -> Deposit:
-        """Convert an existing production account into a term deposit.
+        command: CorrectPayoutScheduleCommand,
+    ) -> CorrectPayoutScheduleResult:
+        """Correct an active term's payout schedule/destination in place.
 
-        The account keeps its PK, balance, currency, owner, and timestamps.
-        Its type changes to Deposit, and a deposit agreement, current term,
-        rate period, and a neutral opening-position event dated on the
-        conversion date are created. No monetary delta is applied.
+        Points at an already existing DepositTerm — no new term is created
+        (RenewDepositCommand is not applicable to an active, unfinished
+        term) and no confirmed events are touched, since those are
+        protected by ADR-0002 independently of `payout_schedule_kind`
+        (see ADR-0008). Only unconfirmed forecast rows are recalculated
+        afterwards; if the new schedule can't be forecast yet (e.g. CUSTOM
+        without configured payout dates), the correction itself still
+        succeeds — the result reports the recalculation as failed so the
+        caller can tell the user the forecast is stale.
 
         Args:
-            command: Account identifier, agreement parameters, and the
-                conversion date.
+            command: Term identifier and the corrected schedule fields.
 
         Returns:
-            The created Deposit, wrapping the same account.
+            The updated DepositTerm and whether the forecast recalculation
+            succeeded.
 
         Raises:
-            ValidationError: If the account is not found, not owned by the
-                user, already of Deposit type, already linked to a deposit,
-                or the agreement parameters are invalid.
+            ValidationError: If the term is not found or not owned by the
+                user, or the term is not active.
         """
-        account = self.account_repository.get_by_id_and_user(
-            command.account_id,
-            command.user,
-        )
-        if account is None:
-            raise ValidationError(_('Счёт не найден или недоступен.'))
-        if account.type_account == constants.ACCOUNT_TYPE_DEPOSIT:
-            raise ValidationError(
-                _('Счёт уже имеет тип «Вклад».'),
+        try:
+            term = self.deposit_repository.get_term_by_id_and_user_for_update(
+                command.term_id,
+                command.user,
             )
-        if Deposit.objects.filter(account=account).exists():
+        except DepositTerm.DoesNotExist as error:
             raise ValidationError(
-                _('Счёт уже связан со вкладом.'),
+                _('Срок не найден или недоступен.'),
+            ) from error
+        if term.state != DepositTerm.State.ACTIVE:
+            raise ValidationError(
+                _(
+                    'Исправление расписания выплат доступно только для '
+                    'активного срока.',
+                ),
             )
-        self._validate_agreement(
-            opened_on=command.opened_on,
-            matures_on=command.matures_on,
-            annual_rate=command.annual_rate,
-            balance=account.balance,
+        previous_schedule_kind = term.payout_schedule_kind
+        previous_destination = term.interest_payout_destination
+        self.deposit_repository.update_term_schedule(
+            term.pk,
+            payout_schedule_kind=command.payout_schedule_kind,
+            interest_payout_destination=(command.interest_payout_destination),
         )
-
-        account.type_account = constants.ACCOUNT_TYPE_DEPOSIT
-        account.save(update_fields=['type_account', 'updated_at'])
-
-        bank_instance = self._resolve_bank(command.bank)
-        deposit = self.deposit_repository.create_deposit(
-            account=account,
-            name=command.name,
-            bank=bank_instance,
-        )
-        term = self.deposit_repository.create_term(
-            deposit=deposit,
-            opened_on=command.opened_on,
-            matures_on=command.matures_on,
-            is_current=True,
-            rate_kind=command.rate_kind,
-            **self._forecast_term_kwargs(command.forecast_terms),
-            **self._withdrawal_term_kwargs(command.withdrawal_terms),
-            **self._top_up_term_kwargs(command.top_up_terms),
-            **self._early_closure_term_kwargs(command.early_closure_terms),
-        )
-        self.deposit_repository.create_rate_period(
-            term=term,
-            starts_on=command.opened_on,
-            ends_on=command.matures_on,
-            annual_rate=command.annual_rate,
-        )
-        self._create_custom_schedule_dates(term, command.forecast_terms)
-        self.deposit_repository.create_principal_event(
-            deposit=deposit,
-            type=DepositPrincipalEvent.Type.OPENING_POSITION,
-            amount=account.balance,
-            effective_on=command.converted_on,
-            source_account=None,
-        )
+        term.payout_schedule_kind = command.payout_schedule_kind
+        term.interest_payout_destination = command.interest_payout_destination
+        forecast_recalculated = True
+        try:
+            self.recalculate_forecast(
+                RecalculateInterestForecastCommand(
+                    user=command.user,
+                    term_id=term.pk,
+                ),
+            )
+        except ValidationError:
+            forecast_recalculated = False
         self._create_audit(
-            deposit=deposit,
-            event_type=DepositAuditEvent.Type.CONVERSION,
+            deposit=term.deposit,
+            event_type=DepositAuditEvent.Type.SCHEDULE_CORRECTION,
             description=(
-                _('Счёт «{name}» преобразован во вклад.').format(
-                    name=account.name_account,
+                _(
+                    'Расписание выплат: {old_schedule} → {new_schedule}. '
+                    'Получатель процентов: {old_destination} → '
+                    '{new_destination}.',
+                ).format(
+                    old_schedule=DepositTerm.PayoutScheduleKind(
+                        previous_schedule_kind,
+                    ).label,
+                    new_schedule=DepositTerm.PayoutScheduleKind(
+                        command.payout_schedule_kind,
+                    ).label,
+                    old_destination=InterestPayoutDestination(
+                        previous_destination,
+                    ).label,
+                    new_destination=InterestPayoutDestination(
+                        command.interest_payout_destination,
+                    ).label,
                 )
             ),
         )
-        return deposit
+        return CorrectPayoutScheduleResult(
+            term=term,
+            forecast_recalculated=forecast_recalculated,
+        )
 
     @transaction.atomic
     def create_term_deposit(self, command: CreateDepositCommand) -> Deposit:
@@ -843,6 +846,10 @@ class DepositService:
             ) from error
         self._validate_reversal_deposit(event.deposit_id, command.deposit_id)
         self._validate_reversal_source(event)
+        self._validate_no_later_deposit_events(
+            event.deposit_id,
+            event.effective_on,
+        )
         if command.reversed_on < event.effective_on:
             raise ValidationError(
                 _('Дата аннулирования не может быть раньше даты события.'),
@@ -1086,6 +1093,40 @@ class DepositService:
         if event_deposit_id != command_deposit_id:
             raise ValidationError(
                 _('Событие не принадлежит указанному вкладу.'),
+            )
+
+    @staticmethod
+    def _validate_no_later_deposit_events(
+        deposit_id: int,
+        effective_on: date,
+    ) -> None:
+        """Ensure no later unreversed event of the deposit exists.
+
+        Principal events are attached to the deposit rather than to a
+        single term, so this checks across all of the deposit's terms —
+        symmetric to the existing check for renewal reversal.
+        """
+        has_later_principal = DepositPrincipalEvent.objects.filter(
+            deposit_id=deposit_id,
+            effective_on__gt=effective_on,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
+        ).exists()
+        has_later_interest = DepositCapitalizationEvent.objects.filter(
+            deposit_id=deposit_id,
+            value_on__gt=effective_on,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
+        ).exists()
+        has_later_renewal = DepositRenewalEvent.objects.filter(
+            deposit_id=deposit_id,
+            effective_on__gt=effective_on,
+            reversal_of__isnull=True,
+            reversal__isnull=True,
+        ).exists()
+        if has_later_principal or has_later_interest or has_later_renewal:
+            raise ValidationError(
+                _('Сначала аннулируйте более поздние события вклада.'),
             )
 
     def _create_principal_reversal_log(

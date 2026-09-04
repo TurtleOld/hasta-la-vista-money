@@ -108,33 +108,6 @@ class FundDepositCommand:
 
 
 @dataclass(frozen=True)
-class ConvertAccountToDepositCommand:
-    """Command to convert an existing production account into a deposit.
-
-    The account keeps its PK, balance, currency, owner, and timestamps.
-    The account type changes to Deposit, a deposit agreement, term, and
-    rate period are created, and a neutral opening-position event is
-    recorded on the conversion date — no monetary delta is applied.
-    """
-
-    user: User
-    account_id: int
-    name: str
-    bank: 'str | Bank'
-    opened_on: date
-    matures_on: date
-    annual_rate: Decimal
-    converted_on: date
-    rate_kind: str
-    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
-    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
-    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
-    early_closure_terms: EarlyClosureTerms = field(
-        default_factory=EarlyClosureTerms,
-    )
-
-
-@dataclass(frozen=True)
 class OpenExistingDepositCommand:
     """Command to record an already-active term deposit.
 
@@ -193,6 +166,27 @@ class AddFloatingRatePeriodCommand:
     starts_on: date
     annual_rate: Decimal
     note: str
+
+
+@dataclass(frozen=True)
+class CorrectPayoutScheduleCommand:
+    """Command to correct an active term's payout schedule in place.
+
+    Points at an already existing DepositTerm — no new term is created and
+    no confirmed events are touched (see ADR-0008). After the correction,
+    the term's unconfirmed forecast rows are recalculated.
+    """
+
+    user: User
+    term_id: int
+    payout_schedule_kind: str
+    interest_payout_destination: str
+
+
+@dataclass(frozen=True)
+class CorrectPayoutScheduleResult:
+    term: DepositTerm
+    forecast_recalculated: bool
 
 
 @dataclass(frozen=True)
