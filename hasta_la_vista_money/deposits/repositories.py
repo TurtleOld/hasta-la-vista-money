@@ -142,6 +142,18 @@ class DepositRepository:
     def set_current_term(self, term_id: int, *, is_current: bool) -> None:
         DepositTerm.objects.filter(pk=term_id).update(is_current=is_current)
 
+    def update_term_schedule(
+        self,
+        term_id: int,
+        *,
+        payout_schedule_kind: str,
+        interest_payout_destination: str,
+    ) -> None:
+        DepositTerm.objects.filter(pk=term_id).update(
+            payout_schedule_kind=payout_schedule_kind,
+            interest_payout_destination=interest_payout_destination,
+        )
+
     def get_term_by_id_and_user(
         self,
         term_id: int,

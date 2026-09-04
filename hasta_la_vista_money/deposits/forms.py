@@ -567,7 +567,7 @@ class CapitalizeInterestForm(forms.Form):
         min_value=Decimal(0),
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
-        label=_('Валовый процентный доход'),
+        label=_('Сумма начисленных процентов (в валюте вклада)'),
     )
     withholding = forms.DecimalField(
         min_value=Decimal(0),
@@ -940,6 +940,40 @@ class CloseDepositEarlyForm(CloseMaturedDepositForm):
                     ),
                 )
         return cleaned
+
+
+class CorrectPayoutScheduleForm(forms.Form):
+    """Correct an already-existing term's payout schedule in place.
+
+    Offers the same full set of choices as at deposit creation (see
+    CreateDepositForm), without narrowing — including CUSTOM/EXTERNAL —
+    so the correction can describe any real bank condition (ADR-0008).
+    """
+
+    payout_schedule_kind = forms.ChoiceField(
+        choices=DepositTerm.PayoutScheduleKind.choices,
+        label=_('Расписание выплат'),
+    )
+    interest_payout_destination = forms.ChoiceField(
+        choices=DepositTerm.PayoutDestination.choices,
+        label=_('Обычный способ выплаты процентов'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.initial.setdefault(
+            'payout_schedule_kind',
+            term.payout_schedule_kind,
+        )
+        self.initial.setdefault(
+            'interest_payout_destination',
+            term.interest_payout_destination,
+        )
 
 
 class AddFloatingRatePeriodForm(forms.Form):

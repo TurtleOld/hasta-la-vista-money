@@ -6,9 +6,13 @@ from django.forms import ChoiceField, DateField, DateInput, ModelChoiceField
 from django.test import TestCase
 from django.utils import translation
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.deposits.commands import CreateDepositCommand
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
+    CapitalizeInterestForm,
+    CorrectPayoutScheduleForm,
     CreateDepositForm,
     RenewDepositForm,
     TopUpDepositForm,
@@ -319,3 +323,156 @@ class RenewDepositFormTests(TestCase):
         self.assertEqual(form.initial['top_up_deadline'], date(2026, 8, 2))
         self.assertNotIn('name', form.fields)
         self.assertNotIn('balance', form.fields)
+
+
+def _active_term(user: 'User') -> DepositTerm:
+    service = ApplicationContainer().deposits.deposit_service()
+    deposit = service.create_term_deposit(
+        CreateDepositCommand(
+            user=user,
+            name='Вклад для формы подтверждения',
+            bank=_sberbank(),
+            currency='RUB',
+            balance=Decimal('500.00'),
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 12, 31),
+            annual_rate=Decimal('12.00'),
+            rate_kind=DepositTerm.RateKind.FIXED,
+        ),
+    )
+    return cast('DepositTerm', deposit.current_term)
+
+
+class CapitalizeInterestFormTests(TestCase):
+    def _base_data(self) -> dict[str, object]:
+        return {
+            'destination': 'capitalization',
+            'gross': '100.00',
+            'withholding': '10.00',
+            'net': '90.00',
+            'posting_on': '2026-07-01',
+            'value_on': '2026-07-01',
+        }
+
+    def test_gross_label_states_amount_not_rate(self) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+
+        form = CapitalizeInterestForm(term=term, user=user)
+
+        self.assertEqual(
+            str(form.fields['gross'].label),
+            'Сумма начисленных процентов (в валюте вклада)',
+        )
+
+    def test_requires_reason_when_forecast_not_selected(self) -> None:
+        """Hiding `forecast`/`reason` in the frontend scenario switch must
+        not weaken server-side validation."""
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+
+        form = CapitalizeInterestForm(
+            data=self._base_data(),
+            term=term,
+            user=user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            'Выберите ожидаемую выплату или укажите причину',
+            str(form.errors),
+        )
+
+    def test_reason_alone_is_sufficient_without_forecast(self) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+        data = self._base_data()
+        data['reason'] = 'Внеплановая выплата банка.'
+
+        form = CapitalizeInterestForm(data=data, term=term, user=user)
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_forecast_alone_is_sufficient_without_reason(self) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+        forecast = term.interest_forecasts.create(
+            payout_on=date(2026, 7, 1),
+            amount=Decimal('90.00'),
+            period_starts_on=date(2026, 1, 1),
+            period_ends_on=date(2026, 7, 1),
+        )
+        data = self._base_data()
+        data['forecast'] = forecast.pk
+
+        form = CapitalizeInterestForm(data=data, term=term, user=user)
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_internal_account_destination_requires_destination_account(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+        data = self._base_data()
+        data['reason'] = 'Внеплановая выплата банка.'
+        data['destination'] = 'internal_account'
+
+        form = CapitalizeInterestForm(data=data, term=term, user=user)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('destination_account', form.errors)
+
+
+class CorrectPayoutScheduleFormTests(TestCase):
+    def test_initial_values_come_from_the_term(self) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+        term.payout_schedule_kind = DepositTerm.PayoutScheduleKind.MONTHLY
+        term.interest_payout_destination = 'internal_account'
+        term.save(
+            update_fields=[
+                'payout_schedule_kind',
+                'interest_payout_destination',
+            ],
+        )
+
+        form = CorrectPayoutScheduleForm(term=term)
+
+        self.assertEqual(
+            form.initial['payout_schedule_kind'],
+            DepositTerm.PayoutScheduleKind.MONTHLY,
+        )
+        self.assertEqual(
+            form.initial['interest_payout_destination'],
+            'internal_account',
+        )
+
+    def test_offers_the_full_set_of_choices_including_custom_and_external(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        term = _active_term(user)
+
+        form = CorrectPayoutScheduleForm(term=term)
+        schedule_field = cast(
+            'ChoiceField',
+            form.fields['payout_schedule_kind'],
+        )
+        destination_field = cast(
+            'ChoiceField',
+            form.fields['interest_payout_destination'],
+        )
+        schedule_choices = cast(
+            'list[tuple[str, str]]',
+            schedule_field.choices,
+        )
+        destination_choices = cast(
+            'list[tuple[str, str]]',
+            destination_field.choices,
+        )
+
+        schedule_values = [choice[0] for choice in schedule_choices]
+        destination_values = [choice[0] for choice in destination_choices]
+        self.assertIn(DepositTerm.PayoutScheduleKind.CUSTOM, schedule_values)
+        self.assertIn('external', destination_values)
