@@ -1,5 +1,18 @@
 # История изменений
 
+## [2.17.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.16.1...v2.17.0) (2026-09-04)
+
+
+### Features
+
+* **deposits:** clarify interest confirmation and add payout schedule correction ([#1020](https://github.com/TurtleOld/hasta-la-vista-money/issues/1020)) ([222dd3f](https://github.com/TurtleOld/hasta-la-vista-money/commit/222dd3f8ef2caf1ce4f8c480978e2b99a1e6e427))
+
+
+### Bug Fixes
+
+* **deposits:** explain and collapse the event reversal form ([#1018](https://github.com/TurtleOld/hasta-la-vista-money/issues/1018)) ([665938c](https://github.com/TurtleOld/hasta-la-vista-money/commit/665938cd343ccd7d28186d9c50fc34e43393cbf3))
+* **deposits:** surface field-level errors when capitalizing interest ([#1017](https://github.com/TurtleOld/hasta-la-vista-money/issues/1017)) ([cc2ff2b](https://github.com/TurtleOld/hasta-la-vista-money/commit/cc2ff2b2b747d0141d419c9fcb4099e2a836a1ea))
+
 ## [2.16.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.16.0...v2.16.1) (2026-09-02)
 
 
