@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.18.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.17.0...v2.18.0) (2026-09-05)
+
+
+### Features
+
+* **deposits:** improve interest payout visibility and confirmation UX ([#1021](https://github.com/TurtleOld/hasta-la-vista-money/issues/1021)) ([b865974](https://github.com/TurtleOld/hasta-la-vista-money/commit/b8659742207239f071e14b7736c64b27482c3435))
+
 ## [2.17.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.16.1...v2.17.0) (2026-09-04)
 
 
