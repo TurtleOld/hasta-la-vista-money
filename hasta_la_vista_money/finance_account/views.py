@@ -7,7 +7,7 @@ comprehensive error handling, user authentication, and AJAX support.
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
@@ -49,6 +49,10 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
 )
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
+from hasta_la_vista_money.deposits.models import (
+    DepositCapitalizationEvent,
+    InterestPayoutDestination,
+)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -856,6 +860,11 @@ def _finances_categories(users: Iterable[User]) -> list[FinancesCategoryChoice]:
                 name=str(_('Перевод')),
                 type='transfer',
             ),
+            FinancesCategoryChoice(
+                key='deposit-interest',
+                name=str(_('Проценты по вкладу')),
+                type='income',
+            ),
         ],
     )
     return sorted(categories, key=lambda item: (item.type, item.name))
@@ -925,6 +934,20 @@ def _finances_transactions(
                 finances_filter=finances_filter,
             ),
         )
+    if finances_filter.type in {
+        'all',
+        TransactionType.INCOME,
+        TransactionType.EXPENSE,
+    }:
+        interest_rows = _deposit_interest_transactions(
+            users=users,
+            finances_filter=finances_filter,
+        )
+        if finances_filter.type == TransactionType.INCOME:
+            interest_rows = [row for row in interest_rows if row.amount >= 0]
+        elif finances_filter.type == TransactionType.EXPENSE:
+            interest_rows = [row for row in interest_rows if row.amount < 0]
+        transactions.extend(interest_rows)
     return sorted(transactions, key=lambda item: item.date, reverse=True)
 
 
@@ -1081,6 +1104,98 @@ def _transfer_transactions(
     return [
         _build_transfer_row(transfer, current_user) for transfer in queryset
     ]
+
+
+def _deposit_interest_transactions(
+    users: list[User],
+    finances_filter: FinancesFilter,
+) -> list[FinancesTransaction]:
+    """Surface confirmed interest payouts as read-only ledger rows.
+
+    Deliberately reads DepositCapitalizationEvent directly rather than
+    creating a Transaction — the dashboard KPI totals already derive
+    income/expense from these events (see reporting.signed_interest), so
+    mirroring them into Transaction would double-count there. This page
+    computes its own summary from the returned rows, so no double count
+    happens here.
+    """
+    if finances_filter.category_keys and 'deposit-interest' not in (
+        finances_filter.category_keys
+    ):
+        return []
+    queryset: QuerySet[DepositCapitalizationEvent] = (
+        DepositCapitalizationEvent.objects.filter(
+            deposit__account__user__in=users,
+            destination__in=(
+                InterestPayoutDestination.CAPITALIZATION,
+                InterestPayoutDestination.INTERNAL_ACCOUNT,
+            ),
+        ).select_related(
+            'deposit__account__user',
+            'destination_account',
+        )
+    )
+    date_range = finances_filter.date_range()
+    if date_range is not None:
+        start, end = date_range
+        queryset = queryset.filter(value_on__gte=start, value_on__lte=end)
+    if finances_filter.account_ids:
+        queryset = queryset.filter(
+            models.Q(
+                destination=InterestPayoutDestination.CAPITALIZATION,
+                deposit__account_id__in=finances_filter.account_ids,
+            )
+            | models.Q(
+                destination_account_id__in=finances_filter.account_ids,
+            ),
+        )
+
+    rows = [_build_interest_row(event) for event in queryset]
+    if finances_filter.min_amount:
+        rows = [
+            row for row in rows if row.abs_amount >= finances_filter.min_amount
+        ]
+    if finances_filter.q:
+        query = finances_filter.q.casefold()
+        rows = [
+            row
+            for row in rows
+            if query in row.account_name.casefold()
+            or query in row.category_name.casefold()
+        ]
+    return rows
+
+
+def _build_interest_row(
+    event: DepositCapitalizationEvent,
+) -> FinancesTransaction:
+    account = (
+        event.deposit.account
+        if event.destination == InterestPayoutDestination.CAPITALIZATION
+        else event.destination_account
+    )
+    is_reversal = event.reversal_of_id is not None
+    amount = -event.net if is_reversal else event.net
+    category_name = (
+        _('Аннулирование выплаты процентов')
+        if is_reversal
+        else _('Проценты по вкладу')
+    )
+    return FinancesTransaction(
+        key=f'deposit-interest-{event.pk}',
+        source='deposit-interest',
+        source_id=event.pk,
+        date=timezone.make_aware(datetime.combine(event.value_on, time.min)),
+        amount=amount,
+        category_name=str(category_name),
+        category_key='deposit-interest',
+        account_name=account.name_account if account else '',
+        user_name=event.deposit.account.user.username,
+        edit_url=reverse('deposits:detail', kwargs={'pk': event.deposit_id}),
+        copy_url='',
+        delete_url='',
+        can_edit=False,
+    )
 
 
 def _receipt_transactions(
@@ -1306,6 +1421,17 @@ def _recent_transactions(
         .select_related('from_account', 'to_account', 'user')
         .order_by('-exchange_date')[:limit]
     )
+    interest_qs = (
+        DepositCapitalizationEvent.objects.filter(
+            deposit__account__user__in=user_list,
+            destination__in=(
+                InterestPayoutDestination.CAPITALIZATION,
+                InterestPayoutDestination.INTERNAL_ACCOUNT,
+            ),
+        )
+        .select_related('deposit__account__user', 'destination_account')
+        .order_by('-value_on')[:limit]
+    )
 
     transactions = [
         _build_transaction_row(transaction_obj, current_user)
@@ -1314,6 +1440,7 @@ def _recent_transactions(
     transactions.extend(
         _build_transfer_row(transfer, current_user) for transfer in transfer_qs
     )
+    transactions.extend(_build_interest_row(event) for event in interest_qs)
     transactions.sort(key=lambda item: item.date, reverse=True)
     return _group_finances_by_day(transactions[:limit])
 
