@@ -10,6 +10,7 @@ from django.db import models
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -765,6 +766,9 @@ class DepositInterestForecast(models.Model):
                 name='deposit_interest_forecast_period_valid',
             ),
         ]
+
+    def __str__(self) -> str:
+        return f'{date_format(self.payout_on, "d.m.Y")} — {self.amount}'
 
 
 class DepositCapitalizationEventQuerySet(

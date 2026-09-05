@@ -574,13 +574,14 @@ class CapitalizeInterestForm(forms.Form):
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
         initial=Decimal(0),
-        label=_('Удержание (налог)'),
+        label=_('Удержание (налог, в валюте вклада)'),
     )
     net = forms.DecimalField(
         min_value=Decimal('0.01'),
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
         label=_('Чистое зачисление'),
+        help_text=_('Считается автоматически: сумма минус удержание.'),
     )
     posting_on = forms.DateField(
         input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),

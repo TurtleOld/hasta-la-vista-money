@@ -1144,6 +1144,27 @@
   }
 }
 
+/* Deposit pages reuse .accounts-row purely for static card styling —
+   there is no hidden actions panel behind these rows, so the swipe-peek
+   hover state has nothing to reveal and only shifts text off-center. */
+.deposits-app .accounts-row-hint {
+  display: none;
+}
+
+.deposits-app .accounts-row-content {
+  cursor: inherit;
+}
+
+@media (hover: hover) {
+  .deposits-app .accounts-row:hover .accounts-row-content:not(.swiping) {
+    transform: none;
+  }
+}
+
+.deposits-app .accounts-row-cta {
+  visibility: visible;
+}
+
 /* ── FAB ────────────────────────────────────────────────────────── */
 .accounts-fab {
   position: fixed;
