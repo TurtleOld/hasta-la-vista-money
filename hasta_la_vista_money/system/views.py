@@ -16,6 +16,7 @@ from django.views.generic import ListView, TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.system.services.audit_render import render_entries
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.users.models import User
 
@@ -142,6 +143,11 @@ class AuditLogView(LoginRequiredMixin, ListView[AuditLog]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         ctx = super().get_context_data(**kwargs)
+        ctx['rendered_entries'] = [
+            item
+            for item in render_entries(list(ctx['entries']))
+            if item.has_changes
+        ]
         ctx['model_choices'] = AUDITED_MODEL_CHOICES
         ctx['action_choices'] = AuditLog.Action.choices
         ctx['filter'] = {

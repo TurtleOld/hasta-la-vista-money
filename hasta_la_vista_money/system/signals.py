@@ -1,9 +1,14 @@
-"""Audit logging for financial model changes."""
+"""Audit logging for financial model changes.
+
+The write layer records facts, not their presentation: every changed field
+lands in ``diff`` under its raw ``attname`` with a raw value. What of that
+is shown to the user is decided on read by the audited field registry.
+"""
 
 from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Final
 
 from django.db import models
 from django.db.models.signals import post_delete, post_save, pre_save
@@ -23,69 +28,9 @@ from hasta_la_vista_money.users.models import User
 AUDITED_MODELS = (Account, Transaction, Receipt, TransferMoneyLog)
 _ORIGINAL_STATE_ATTR = '_audit_original_state'
 
-FIELD_VERBOSE_NAMES: dict[str, dict[str, str]] = {
-    'finance_account.Account': {
-        'name_account': 'Название счёта',
-        'type_account': 'Тип счёта',
-        'bank': 'Банк',
-        'balance': 'Баланс',
-        'currency': 'Валюта',
-        'limit_credit': 'Кредитный лимит',
-        'payment_due_date': 'Дата платежа',
-        'grace_period_days': 'Льготный период (дней)',
-        'user_id': 'Пользователь',
-        'created_at': 'Дата создания',
-        'updated_at': 'Дата обновления',
-    },
-    'transactions.Transaction': {
-        'type': 'Тип',
-        'date': 'Дата',
-        'amount': 'Сумма',
-        'account_id': 'Счёт',
-        'category_id': 'Категория',
-        'user_id': 'Пользователь',
-        'source_ref': 'ID операции в выписке',
-        'created_at': 'Дата создания',
-    },
-    'receipts.Receipt': {
-        'receipt_date': 'Дата чека',
-        'seller_id': 'Продавец',
-        'account_id': 'Счёт',
-        'user_id': 'Пользователь',
-        'total_sum': 'Сумма',
-        'operation_type': 'Тип операции',
-        'created_at': 'Дата создания',
-        'updated_at': 'Дата обновления',
-    },
-    'finance_account.TransferMoneyLog': {
-        'from_account_id': 'Счёт списания',
-        'to_account_id': 'Счёт зачисления',
-        'amount': 'Сумма',
-        'exchange_date': 'Дата перевода',
-        'notes': 'Примечания',
-        'user_id': 'Пользователь',
-        'created_at': 'Дата создания',
-        'updated_at': 'Дата обновления',
-    },
-}
-
-HIDDEN_FIELDS = frozenset({'id', 'user_id', 'updated_at'})
-
-
-def _resolve_account_name(pk: Any) -> str:
-    if pk is None:
-        return '—'
-    try:
-        return Account.objects.values_list('name_account', flat=True).get(pk=pk)
-    except Account.DoesNotExist:
-        return f'(удалён, id={pk})'
-
-
-FK_RESOLVERS: dict[str, Any] = {
-    'account_id': _resolve_account_name,
-    'from_account_id': _resolve_account_name,
-    'to_account_id': _resolve_account_name,
-}
+#: Format of ``AuditLog.diff`` written by these signals. Entries stored
+#: before the registry carry no version and are read as version 1.
+AUDIT_DIFF_VERSION: Final = 2
 
 
 def _iter_concrete_fields(
@@ -110,28 +55,28 @@ def _serialize_value(value: Any) -> Any:
     return value
 
 
+def _normalize_value(field: models.Field[Any, Any], value: Any) -> Any:
+    """Bring a value to the field's own type.
+
+    Without it a freshly assigned ``0`` and a ``Decimal('0.00')`` read back
+    from the database look like a change of the balance.
+    """
+    if value is None:
+        return None
+    typed_value = field.to_python(value)
+    if isinstance(field, models.DecimalField) and field.decimal_places:
+        exponent = Decimal(1).scaleb(-field.decimal_places)
+        return Decimal(typed_value).quantize(exponent)
+    return typed_value
+
+
 def _snapshot(instance: models.Model) -> dict[str, Any]:
     return {
-        field.attname: _serialize_value(getattr(instance, field.attname))
+        field.attname: _serialize_value(
+            _normalize_value(field, getattr(instance, field.attname)),
+        )
         for field in _iter_concrete_fields(instance)
     }
-
-
-def _resolve_fk_values(
-    model_label: str,
-    raw_data: dict[str, Any],
-) -> dict[str, Any]:
-    """Replace FK ids with human-readable names and rename fields to verbose."""
-    verbose_map = FIELD_VERBOSE_NAMES.get(model_label, {})
-    result: dict[str, Any] = {}
-    for field_name, value in raw_data.items():
-        if field_name in HIDDEN_FIELDS:
-            continue
-        resolver = FK_RESOLVERS.get(field_name)
-        display_value = resolver(value) if resolver else value
-        display_name = verbose_map.get(field_name, field_name)
-        result[display_name] = display_value
-    return result
 
 
 def _diff(
@@ -143,28 +88,6 @@ def _diff(
         for field_name, new_value in new_state.items()
         if old_state.get(field_name) != new_value
     }
-
-
-def _diff_verbose(
-    model_label: str,
-    old_state: dict[str, Any],
-    new_state: dict[str, Any],
-) -> dict[str, dict[str, Any]]:
-    """Diff with verbose names and resolved FK values."""
-    verbose_map = FIELD_VERBOSE_NAMES.get(model_label, {})
-    result: dict[str, dict[str, Any]] = {}
-    for field_name, new_raw in new_state.items():
-        if field_name in HIDDEN_FIELDS:
-            continue
-        old_raw = old_state.get(field_name)
-        if old_raw == new_raw:
-            continue
-        resolver = FK_RESOLVERS.get(field_name)
-        old_display = resolver(old_raw) if resolver else old_raw
-        new_display = resolver(new_raw) if resolver else new_raw
-        display_name = verbose_map.get(field_name, field_name)
-        result[display_name] = {'old': old_display, 'new': new_display}
-    return result
 
 
 def _get_user(instance: models.Model) -> User | None:
@@ -204,7 +127,7 @@ def _create_audit_log(
         object_pk=str(instance.pk),
         object_name=object_name,
         action=action,
-        diff=diff,
+        diff={'v': AUDIT_DIFF_VERSION, **diff},
     )
 
 
@@ -242,20 +165,18 @@ def audit_saved_instance(
         _create_audit_log(
             instance=instance,
             action=AuditLog.Action.CREATE,
-            diff={
-                'created': _resolve_fk_values(instance._meta.label, new_state),
-            },
+            diff={'created': new_state},
             object_name=object_name,
         )
         return
 
     old_state = getattr(instance, _ORIGINAL_STATE_ATTR, {})
-    changes = _diff_verbose(instance._meta.label, old_state, new_state)
+    changes = _diff(old_state, new_state)
     if changes:
         _create_audit_log(
             instance=instance,
             action=AuditLog.Action.UPDATE,
-            diff=changes,
+            diff={'changed': changes},
             object_name=object_name,
         )
 
@@ -270,15 +191,9 @@ def audit_deleted_instance(
     if sender not in AUDITED_MODELS:
         return
 
-    object_name = _get_object_name(instance)
     _create_audit_log(
         instance=instance,
         action=AuditLog.Action.DELETE,
-        diff={
-            'deleted': _resolve_fk_values(
-                instance._meta.label,
-                _snapshot(instance),
-            ),
-        },
-        object_name=object_name,
+        diff={'deleted': _snapshot(instance)},
+        object_name=_get_object_name(instance),
     )
