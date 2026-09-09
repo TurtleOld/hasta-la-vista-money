@@ -81,7 +81,7 @@
         </form>
 
         <div class="audit-panel">
-            {% if entries %}
+            {% if rendered_entries %}
             <div class="audit-list-head">
                 <div>{% translate 'Действие' %}</div>
                 <div>{% translate 'Объект' %}</div>
@@ -89,7 +89,8 @@
                 <div>{% translate 'Дата' %}</div>
             </div>
 
-            {% for entry in entries %}
+            {% for item in rendered_entries %}
+            {% with entry=item.entry %}
             <div class="audit-row">
                 <div class="audit-row-content">
                     <div>
@@ -115,40 +116,28 @@
                     </div>
 
                     <div class="audit-diff-cell">
-                        {% if entry.action == 'create' and entry.diff.created %}
-                            <div class="audit-diff-list">
-                                {% for field_name, value in entry.diff.created.items %}
-                                <div class="audit-diff-item audit-diff-item--create">
-                                    <span class="audit-diff-field">{{ field_name }}</span>
-                                    <span class="audit-diff-new">{{ value|default:"—" }}</span>
-                                </div>
-                                {% endfor %}
+                        <div class="audit-diff-list">
+                            {% for change in item.changes %}
+                            {% if change.old is None %}
+                            <div class="audit-diff-item audit-diff-item--create">
+                                <span class="audit-diff-field">{{ change.label }}</span>
+                                <span class="audit-diff-new">{{ change.new }}</span>
                             </div>
-                        {% elif entry.action == 'delete' and entry.diff.deleted %}
-                            <div class="audit-diff-list">
-                                {% for field_name, value in entry.diff.deleted.items %}
-                                <div class="audit-diff-item audit-diff-item--delete">
-                                    <span class="audit-diff-field">{{ field_name }}</span>
-                                    <span class="audit-diff-old">{{ value|default:"—" }}</span>
-                                </div>
-                                {% endfor %}
+                            {% elif change.new is None %}
+                            <div class="audit-diff-item audit-diff-item--delete">
+                                <span class="audit-diff-field">{{ change.label }}</span>
+                                <span class="audit-diff-old">{{ change.old }}</span>
                             </div>
-                        {% elif entry.action == 'delete' %}
-                            <span class="audit-diff-deleted">{% translate 'Удалено' %}</span>
-                        {% elif entry.diff %}
-                            <div class="audit-diff-list">
-                                {% for field_name, change in entry.diff.items %}
-                                <div class="audit-diff-item">
-                                    <span class="audit-diff-field">{{ field_name }}</span>
-                                    <span class="audit-diff-old">{{ change.old|default:"—" }}</span>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                    <span class="audit-diff-new">{{ change.new|default:"—" }}</span>
-                                </div>
-                                {% endfor %}
+                            {% else %}
+                            <div class="audit-diff-item">
+                                <span class="audit-diff-field">{{ change.label }}</span>
+                                <span class="audit-diff-old">{{ change.old }}</span>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                <span class="audit-diff-new">{{ change.new }}</span>
                             </div>
-                        {% else %}
-                            <span class="audit-muted">—</span>
-                        {% endif %}
+                            {% endif %}
+                            {% endfor %}
+                        </div>
                     </div>
 
                     <div class="audit-row-date">
@@ -157,6 +146,7 @@
                     </div>
                 </div>
             </div>
+            {% endwith %}
             {% endfor %}
 
             {% if is_paginated %}
