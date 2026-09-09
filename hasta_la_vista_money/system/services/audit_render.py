@@ -489,7 +489,7 @@ def _format_moment(value: Any, moment_format: str) -> str:
 
 
 def _parse_moment(value: Any) -> date | datetime | None:
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, date | datetime):
         return value
     try:
         return datetime.fromisoformat(str(value))
