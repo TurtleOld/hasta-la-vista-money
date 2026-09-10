@@ -114,6 +114,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'config.middleware.CoreMiddleware',
+    'hasta_la_vista_money.system.middleware.AuditOperationMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.locale.LocaleMiddleware',
