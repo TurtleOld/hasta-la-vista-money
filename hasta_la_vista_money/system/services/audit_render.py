@@ -86,6 +86,18 @@ def render_entries(entries: Sequence[AuditLog]) -> list[RenderedEntry]:
     return [_render_entry(entry, sides, context) for entry, sides in raw_pages]
 
 
+def entry_has_visible_change(entry: AuditLog) -> bool:
+    """Whether rendering ``entry`` would show at least one change.
+
+    Cheaper than :func:`render_entries`: it skips the batched FK and
+    currency lookups and only checks which fields would be shown.
+    """
+    diff = entry.diff or {}
+    if _is_legacy(diff):
+        return bool(_legacy_changes(diff))
+    return bool(_visible_fields(entry, _raw_sides(entry)))
+
+
 def _is_legacy(diff: Mapping[str, Any]) -> bool:
     return diff.get('v') != AUDIT_DIFF_VERSION
 
