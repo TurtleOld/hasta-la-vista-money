@@ -10,6 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Final
 
+import structlog
 from django.db import models
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
@@ -22,8 +23,14 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.system.services.audit_context import (
+    current_operation_id,
+    current_operation_kind,
+)
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 AUDITED_MODELS = (Account, Transaction, Receipt, TransferMoneyLog)
 _ORIGINAL_STATE_ATTR = '_audit_original_state'
@@ -121,6 +128,14 @@ def _create_audit_log(
     diff: dict[str, Any],
     object_name: str = '',
 ) -> None:
+    operation_id = current_operation_id()
+    if operation_id is None:
+        logger.warning(
+            'audit_log_missing_operation_id',
+            model_name=instance._meta.label,
+            object_pk=str(instance.pk),
+            action=action,
+        )
     AuditLog.objects.create(
         user=_get_user(instance),
         model_name=instance._meta.label,
@@ -128,6 +143,8 @@ def _create_audit_log(
         object_name=object_name,
         action=action,
         diff={'v': AUDIT_DIFF_VERSION, **diff},
+        operation_id=operation_id,
+        kind=current_operation_kind(),
     )
 
 
