@@ -5,6 +5,8 @@ from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 
 
@@ -14,6 +16,7 @@ class ReceiptDeleterService:
     def __init__(self, account_service: AccountServiceProtocol) -> None:
         self.account_service = account_service
 
+    @audit_operation(kind=AuditOperationKind.RECEIPT_DELETE)
     @transaction.atomic
     def delete_receipt(self, *, user: User, receipt: Receipt) -> None:
         """Delete receipt and reverse its balance effect."""

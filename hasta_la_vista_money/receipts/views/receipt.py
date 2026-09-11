@@ -9,7 +9,7 @@ from hasta_la_vista_money.core.types import RequestWithContainer
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -276,7 +276,7 @@ class ReceiptUpdateView(
             receipt_updater_service = (
                 request.container.receipts.receipt_updater_service()
             )
-            receipt_updater_service.update_receipt(
+            self.object = receipt_updater_service.update_receipt(
                 user=current_user,
                 receipt=receipt,
                 form=form,
@@ -290,7 +290,14 @@ class ReceiptUpdateView(
                 ) or str(_('Нет данных'))
                 seller.save(update_fields=['retail_place'])
 
-            return super().form_valid(form)
+            # Not super().form_valid(form): the service above already
+            # persisted the receipt, so calling ModelFormMixin's form_valid
+            # here would save the form's own (pre-service) field values a
+            # second time, stomping fields the service computed (like
+            # total_sum for a non-manual receipt) and stray-writing an
+            # extra unkinded audit entry outside the service's operation.
+            messages.success(self.request, self.success_message)
+            return HttpResponseRedirect(self.get_success_url())
         return self.form_invalid(form)
 
     def form_invalid(self, form: ReceiptForm) -> HttpResponse:

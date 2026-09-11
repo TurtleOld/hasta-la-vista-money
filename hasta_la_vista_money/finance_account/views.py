@@ -64,6 +64,8 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
     UpdateTransactionCommand,
@@ -1670,7 +1672,8 @@ class AccountCreateView(
             if not isinstance(request.user, User):
                 raise TypeError('User must be authenticated')
             account.user = request.user
-            account.save()
+            with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
+                account.save()
             messages.success(request, self.success_message)
             return HttpResponseRedirect(self.get_success_url())
         except Exception:
@@ -1766,7 +1769,8 @@ class ChangeAccountView(
             if not isinstance(request.user, User):
                 raise TypeError('User must be authenticated')
             account.user = request.user
-            account.save()
+            with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
+                account.save()
             messages.success(request, self.success_message)
             return HttpResponseRedirect(str(self.get_success_url()))
         except ValidationError as e:
@@ -1908,6 +1912,7 @@ class DeleteAccountView(
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
+    audit_kind = AuditOperationKind.ACCOUNT_DELETE
 
     def get_queryset(self) -> QuerySet[Account]:
         request = cast('WSGIRequestWithContainer', self.request)

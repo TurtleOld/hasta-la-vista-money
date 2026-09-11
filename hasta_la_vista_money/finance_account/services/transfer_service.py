@@ -17,6 +17,8 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_different_accounts,
     validate_positive_amount,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -86,23 +88,24 @@ class TransferService:
                 ),
             )
 
-        locked_accounts = self._balance_service.apply_account_deltas(
-            {
-                from_account.pk: -amount,
-                to_account.pk: amount,
-            },
-        )
-        from_account = locked_accounts[from_account.pk]
-        to_account = locked_accounts[to_account.pk]
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            locked_accounts = self._balance_service.apply_account_deltas(
+                {
+                    from_account.pk: -amount,
+                    to_account.pk: amount,
+                },
+            )
+            from_account = locked_accounts[from_account.pk]
+            to_account = locked_accounts[to_account.pk]
 
-        return self.transfer_money_log_repository.create_log(
-            user=user,
-            from_account=from_account,
-            to_account=to_account,
-            amount=amount,
-            exchange_date=exchange_date,
-            notes=notes or '',
-        )
+            return self.transfer_money_log_repository.create_log(
+                user=user,
+                from_account=from_account,
+                to_account=to_account,
+                amount=amount,
+                exchange_date=exchange_date,
+                notes=notes or '',
+            )
 
     def get_last_used_accounts(
         self,
@@ -151,10 +154,11 @@ class TransferService:
                 ),
             )
 
-        self._balance_service.apply_account_deltas(
-            {
-                transfer_log.from_account.pk: transfer_log.amount,
-                transfer_log.to_account.pk: -transfer_log.amount,
-            },
-        )
-        self.transfer_money_log_repository.delete_log(transfer_log)
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            self._balance_service.apply_account_deltas(
+                {
+                    transfer_log.from_account.pk: transfer_log.amount,
+                    transfer_log.to_account.pk: -transfer_log.amount,
+                },
+            )
+            self.transfer_money_log_repository.delete_log(transfer_log)

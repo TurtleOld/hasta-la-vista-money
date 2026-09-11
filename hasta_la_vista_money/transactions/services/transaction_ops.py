@@ -16,6 +16,8 @@ from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
     UpdateTransactionCommand,
@@ -95,6 +97,12 @@ class TransactionService:
             return amount
         return -amount
 
+    @staticmethod
+    def _kind_for_type(type_value: str) -> AuditOperationKind:
+        if type_value == TransactionType.INCOME:
+            return AuditOperationKind.INCOME
+        return AuditOperationKind.EXPENSE
+
     def _apply_balance_for_create(
         self,
         account: Account,
@@ -130,7 +138,10 @@ class TransactionService:
         )
         self._validate_category_owner(command.user, command.category)
 
-        with db_transaction.atomic():
+        with (
+            db_transaction.atomic(),
+            audit_operation(kind=self._kind_for_type(command.type_value)),
+        ):
             new_transaction = self.transaction_repository.create_transaction(
                 user=command.user,
                 account=command.account,
@@ -163,7 +174,10 @@ class TransactionService:
         )
         self._validate_category_owner(command.user, command.category)
 
-        with db_transaction.atomic():
+        with (
+            db_transaction.atomic(),
+            audit_operation(kind=AuditOperationKind.TRANSACTION_EDIT),
+        ):
             transaction_obj = self.transaction_repository.get_by_id_for_update(
                 command.transaction_obj.pk,
             )
@@ -205,7 +219,10 @@ class TransactionService:
     ) -> None:
         """Delete a transaction and reverse its effect on the account."""
         self._validate_transaction_owner(user, transaction_obj)
-        with db_transaction.atomic():
+        with (
+            db_transaction.atomic(),
+            audit_operation(kind=AuditOperationKind.TRANSACTION_DELETE),
+        ):
             transaction_obj = self.transaction_repository.get_by_id_for_update(
                 transaction_obj.pk,
             )
@@ -232,17 +249,19 @@ class TransactionService:
                 raise PermissionDenied(
                     _('У вас нет прав на копирование этой операции.'),
                 )
-            new_transaction = self.transaction_repository.create_transaction(
-                user=original.user,
-                account=original.account,
-                category=original.category,
-                amount=original.amount,
-                date=timezone.now(),
-                type=original.type,
-            )
-            self._apply_balance_for_create(
-                new_transaction.account,
-                new_transaction.amount,
-                new_transaction.type,
-            )
+            with audit_operation(kind=self._kind_for_type(original.type)):
+                repository = self.transaction_repository
+                new_transaction = repository.create_transaction(
+                    user=original.user,
+                    account=original.account,
+                    category=original.category,
+                    amount=original.amount,
+                    date=timezone.now(),
+                    type=original.type,
+                )
+                self._apply_balance_for_create(
+                    new_transaction.account,
+                    new_transaction.amount,
+                    new_transaction.type,
+                )
         return new_transaction
