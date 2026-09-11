@@ -25,6 +25,8 @@ from hasta_la_vista_money.receipts.models import (
     Receipt,
     Seller,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -83,6 +85,7 @@ class ReceiptCreatorService:
         self.receipt_repository = receipt_repository
         self.seller_repository = seller_repository
 
+    @audit_operation(kind=AuditOperationKind.RECEIPT_PURCHASE)
     @transaction.atomic
     def create_receipt_with_products(
         self,
@@ -200,6 +203,7 @@ class ReceiptCreatorService:
                 ),
             )
 
+    @audit_operation(kind=AuditOperationKind.RECEIPT_PURCHASE)
     @transaction.atomic
     def create_manual_receipt(
         self,

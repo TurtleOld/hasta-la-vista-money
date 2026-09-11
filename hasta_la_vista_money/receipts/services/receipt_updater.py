@@ -27,6 +27,8 @@ from hasta_la_vista_money.receipts.protocols.services import (
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -77,6 +79,7 @@ class ReceiptUpdaterService:
         self.seller_repository = seller_repository
         self.category_correction_service = category_correction_service
 
+    @audit_operation(kind=AuditOperationKind.RECEIPT_EDIT)
     @transaction.atomic
     def update_receipt(
         self,

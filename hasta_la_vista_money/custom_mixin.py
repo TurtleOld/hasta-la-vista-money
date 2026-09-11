@@ -3,8 +3,12 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from django.contrib import messages
 from django.db.models import Model, ProtectedError, QuerySet
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 
 if TYPE_CHECKING:
     from django.forms import BaseForm, ModelForm
@@ -47,17 +51,26 @@ class DeleteObjectMixin:
 
     success_message: str = ''
     error_message: str = ''
+    audit_kind: AuditOperationKind | None = None
 
     def form_valid(self, form: 'BaseForm') -> 'HttpResponse':
-        """Override form_valid to handle ProtectedError."""
+        """Override form_valid to handle ProtectedError.
+
+        Deletes ``self.object`` (already set by ``BaseDeleteView.post``)
+        directly instead of delegating to the base ``form_valid``, which
+        would fetch and delete the object a second time and double the
+        audit trail for one user action.
+        """
         try:
-            obj = self.get_object()  # type: ignore[attr-defined]
-            obj.delete()
+            obj = self.object  # type: ignore[attr-defined]
+            with audit_operation(kind=self.audit_kind):
+                obj.delete()
             messages.success(
                 self.request,  # type: ignore[attr-defined]
                 self.success_message,
             )
-            return super().form_valid(form)  # type: ignore[misc,no-any-return]
+            success_url = self.get_success_url()  # type: ignore[attr-defined]
+            return HttpResponseRedirect(success_url)
         except ProtectedError:
             messages.error(
                 self.request,  # type: ignore[attr-defined]
