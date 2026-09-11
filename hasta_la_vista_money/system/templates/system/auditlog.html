@@ -16,7 +16,7 @@
             <div>
                 <h1 class="audit-title">{% translate 'История изменений' %}</h1>
                 <p class="audit-muted mt-3">
-                    {{ paginator.count }} {% translate 'записей' %}
+                    {{ paginator.count }} {% translate 'операций' %}
                 </p>
             </div>
         </header>
@@ -81,72 +81,75 @@
         </form>
 
         <div class="audit-panel">
-            {% if rendered_entries %}
+            {% if rendered_operations %}
             <div class="audit-list-head">
-                <div>{% translate 'Действие' %}</div>
-                <div>{% translate 'Объект' %}</div>
+                <div>{% translate 'Операция' %}</div>
                 <div>{% translate 'Изменения' %}</div>
                 <div>{% translate 'Дата' %}</div>
             </div>
 
-            {% for item in rendered_entries %}
-            {% with entry=item.entry %}
+            {% for operation in rendered_operations %}
             <div class="audit-row">
                 <div class="audit-row-content">
-                    <div>
-                        <span class="audit-badge audit-badge-{{ entry.action }}">
-                            {% if entry.action == 'create' %}
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                            {% elif entry.action == 'update' %}
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            {% else %}
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                            {% endif %}
-                            {{ entry.get_action_display }}
-                        </span>
-                    </div>
-
-                    <div class="audit-row-model">
-                        <span class="audit-model-name">{{ entry.model_name }}</span>
-                        {% if entry.object_name %}
-                            <span class="audit-model-object-name">{{ entry.object_name }}</span>
-                        {% else %}
-                            <span class="audit-model-pk">#{{ entry.object_pk }}</span>
+                    <div class="audit-row-operation">
+                        <span class="audit-operation-title">{{ operation.title }}</span>
+                        {% if operation.archival %}
+                            <span class="audit-heuristic-badge" title="{% translate 'Состав группы восстановлен эвристикой' %}">
+                                {% translate 'восстановлено эвристикой' %}
+                            </span>
                         {% endif %}
                     </div>
 
                     <div class="audit-diff-cell">
+                        {% if operation.collapsed_count %}
+                        <div class="audit-diff-collapsed">
+                            {% blocktranslate count counter=operation.collapsed_count %}
+                                {{ counter }} запись объединена в эту операцию
+                            {% plural %}
+                                {{ counter }} записей объединено в эту операцию
+                            {% endblocktranslate %}
+                        </div>
+                        {% else %}
                         <div class="audit-diff-list">
-                            {% for change in item.changes %}
-                            {% if change.old is None %}
-                            <div class="audit-diff-item audit-diff-item--create">
-                                <span class="audit-diff-field">{{ change.label }}</span>
-                                <span class="audit-diff-new">{{ change.new }}</span>
+                            {% for item in operation.entries %}
+                            {% with entry=item.entry %}
+                            <div class="audit-diff-entry">
+                                <span class="audit-diff-entry-head">
+                                    {{ entry.object_name|default:entry.model_name }} · {{ entry.get_action_display }}
+                                </span>
+                                {% for change in item.changes %}
+                                {% if change.old is None %}
+                                <div class="audit-diff-item audit-diff-item--create">
+                                    <span class="audit-diff-field">{{ change.label }}</span>
+                                    <span class="audit-diff-new">{{ change.new }}</span>
+                                </div>
+                                {% elif change.new is None %}
+                                <div class="audit-diff-item audit-diff-item--delete">
+                                    <span class="audit-diff-field">{{ change.label }}</span>
+                                    <span class="audit-diff-old">{{ change.old }}</span>
+                                </div>
+                                {% else %}
+                                <div class="audit-diff-item">
+                                    <span class="audit-diff-field">{{ change.label }}</span>
+                                    <span class="audit-diff-old">{{ change.old }}</span>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <span class="audit-diff-new">{{ change.new }}</span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
                             </div>
-                            {% elif change.new is None %}
-                            <div class="audit-diff-item audit-diff-item--delete">
-                                <span class="audit-diff-field">{{ change.label }}</span>
-                                <span class="audit-diff-old">{{ change.old }}</span>
-                            </div>
-                            {% else %}
-                            <div class="audit-diff-item">
-                                <span class="audit-diff-field">{{ change.label }}</span>
-                                <span class="audit-diff-old">{{ change.old }}</span>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                <span class="audit-diff-new">{{ change.new }}</span>
-                            </div>
-                            {% endif %}
+                            {% endwith %}
                             {% endfor %}
                         </div>
+                        {% endif %}
                     </div>
 
                     <div class="audit-row-date">
-                        <span class="audit-date-primary">{{ entry.created_at|date:"d.m.Y" }}</span>
-                        <span class="audit-date-time">{{ entry.created_at|date:"H:i:s" }}</span>
+                        <span class="audit-date-primary">{{ operation.created_at|date:"d.m.Y" }}</span>
+                        <span class="audit-date-time">{{ operation.created_at|date:"H:i:s" }}</span>
                     </div>
                 </div>
             </div>
-            {% endwith %}
             {% endfor %}
 
             {% if is_paginated %}

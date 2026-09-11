@@ -12,11 +12,11 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
-from django.views.generic import ListView, TemplateView
+from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.models import AuditLog
-from hasta_la_vista_money.system.services.audit_render import render_entries
+from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.users.models import User
 
@@ -113,10 +113,15 @@ AUDITED_MODEL_CHOICES = [
 ]
 
 
-class AuditLogView(LoginRequiredMixin, ListView[AuditLog]):
+class AuditLogView(LoginRequiredMixin, TemplateView):
+    """The audit history feed: one row per operation, not per entry.
+
+    Grouping and pagination are delegated to
+    :func:`audit_feed.list_operations`, which does both in SQL so that an
+    operation is never split across a page boundary.
+    """
+
     template_name = 'system/auditlog.html'
-    context_object_name = 'entries'
-    paginate_by = AUDIT_PAGE_SIZE
 
     def get_queryset(self) -> QuerySet[AuditLog]:
         if not isinstance(self.request.user, User):
@@ -142,12 +147,23 @@ class AuditLogView(LoginRequiredMixin, ListView[AuditLog]):
         self,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        """Build the feed page and the filter/choice context around it."""
         ctx = super().get_context_data(**kwargs)
-        ctx['rendered_entries'] = [
-            item
-            for item in render_entries(list(ctx['entries']))
-            if item.has_changes
-        ]
+        try:
+            page = int(self.request.GET.get('page', '1'))
+        except (TypeError, ValueError):
+            raise Http404('Страница не найдена') from None
+        if page < 1:
+            raise Http404('Страница не найдена')
+        feed_page = list_operations(
+            self.get_queryset(),
+            page=page,
+            page_size=AUDIT_PAGE_SIZE,
+        )
+        ctx['rendered_operations'] = feed_page.operations
+        ctx['page_obj'] = feed_page
+        ctx['paginator'] = feed_page.paginator
+        ctx['is_paginated'] = feed_page.paginator.num_pages > 1
         ctx['model_choices'] = AUDITED_MODEL_CHOICES
         ctx['action_choices'] = AuditLog.Action.choices
         ctx['filter'] = {

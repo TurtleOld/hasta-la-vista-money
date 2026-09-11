@@ -6,12 +6,14 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.audit_registry import (
     AUDIT_FIELDS,
     HIDDEN_AUDIT_FIELDS,
 )
 from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.system.services.audit_render import (
     NBSP,
     RenderedChange,
@@ -314,7 +316,7 @@ class AuditRenderTests(TestCase):
 
 
 class AuditLogViewTests(TestCase):
-    """Entries with no meaningful change give no row in history."""
+    """The feed shows operations, not raw entries."""
 
     def setUp(self) -> None:
         self.user = User.objects.create_user(
@@ -323,7 +325,64 @@ class AuditLogViewTests(TestCase):
         )
         self.client.force_login(self.user)
 
+    def _make_transfer(
+        self,
+        *,
+        from_name: str = '',
+        to_name: str = '',
+    ) -> None:
+        """Perform one real transfer through the transfer service."""
+        container = ApplicationContainer()
+        transfer_service = container.finance_account.transfer_service()
+        from_account = Account.objects.create(
+            user=self.user,
+            name_account=from_name,
+            balance=Decimal('1000.00'),
+        )
+        to_account = Account.objects.create(
+            user=self.user,
+            name_account=to_name,
+            balance=Decimal('500.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        transfer_service.transfer_money(
+            from_account=from_account,
+            to_account=to_account,
+            amount=Decimal('200.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+
+    def _make_archival_bucket(self, count: int) -> Account:
+        """Write ``count`` operation-id-less updates in the same second."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Т-Банк',
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        created = [
+            AuditLog.objects.create(
+                user=self.user,
+                model_name=ACCOUNT_LABEL,
+                object_pk=str(account.pk),
+                object_name=account.name_account,
+                action=AuditLog.Action.UPDATE,
+                diff={
+                    'v': 2,
+                    'changed': {
+                        'balance': {'old': '0.00', 'new': str(index)},
+                    },
+                },
+            )
+            for index in range(count)
+        ]
+        AuditLog.objects.filter(
+            pk__in=[entry.pk for entry in created],
+        ).update(created_at=created[0].created_at)
+        return account
+
     def test_service_only_change_gives_no_visible_row(self) -> None:
+        """A save that only touches hidden fields gives no feed row."""
         account = Account.objects.create(user=self.user)
         AuditLog.objects.filter(user=self.user).delete()
 
@@ -337,4 +396,109 @@ class AuditLogViewTests(TestCase):
         )
         response = self.client.get(reverse('system:auditlog'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(list(response.context['rendered_entries']), [])
+        self.assertEqual(list(response.context['rendered_operations']), [])
+
+    def test_transfer_is_one_operation_titled_perevod(self) -> None:
+        """A transfer's three audit entries render as one «Перевод» row."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+
+        self.assertEqual(
+            AuditLog.objects.filter(user=self.user).count(),
+            3,
+        )
+        response = self.client.get(reverse('system:auditlog'))
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        self.assertEqual(operations[0].title, 'Перевод')
+        self.assertFalse(operations[0].archival)
+
+    def test_operation_counter_counts_operations_not_entries(self) -> None:
+        """The feed counter counts operations, not raw audit entries."""
+        self._make_transfer()
+
+        self.assertEqual(
+            AuditLog.objects.filter(user=self.user).count(),
+            3,
+        )
+        response = self.client.get(reverse('system:auditlog'))
+        self.assertEqual(response.context['paginator'].count, 1)
+
+    def test_archival_entries_glue_into_one_heuristic_operation(
+        self,
+    ) -> None:
+        """Entries without an operation id bucket by owner and second."""
+        self._make_archival_bucket(2)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        self.assertTrue(operations[0].archival)
+        self.assertEqual(
+            operations[0].title,
+            'Изменение счёта «Т-Банк»',
+        )
+        self.assertEqual(len(operations[0].entries), 2)
+
+    def test_archival_bucket_over_twelve_collapses_to_mass_change(
+        self,
+    ) -> None:
+        """A bucket past the safety-valve limit collapses to one line."""
+        self._make_archival_bucket(13)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        operation = operations[0]
+        self.assertTrue(operation.archival)
+        self.assertEqual(operation.collapsed_count, 13)
+        self.assertEqual(
+            operation.title,
+            'Массовое изменение · 13 записей',
+        )
+        self.assertEqual(operation.entries, [])
+
+    def test_operation_never_splits_across_a_page(self) -> None:
+        """A one-page-sized page still returns a whole operation intact."""
+        self._make_transfer()
+        entries = list(AuditLog.objects.filter(user=self.user))
+        self.assertEqual(len(entries), 3)
+
+        operations = list_operations(
+            AuditLog.objects.filter(user=self.user),
+            page=1,
+            page_size=1,
+        )
+        self.assertEqual(len(operations.operations), 1)
+        self.assertEqual(len(operations.operations[0].entries), 3)
+
+    def test_collapsed_bucket_with_no_visible_changes_is_dropped(
+        self,
+    ) -> None:
+        """A >12 bucket whose entries are all hidden fields gives no row."""
+        account = Account.objects.create(user=self.user)
+        AuditLog.objects.filter(user=self.user).delete()
+        created = [
+            AuditLog.objects.create(
+                user=self.user,
+                model_name=ACCOUNT_LABEL,
+                object_pk=str(account.pk),
+                object_name=account.name_account,
+                action=AuditLog.Action.UPDATE,
+                diff={
+                    'v': 2,
+                    'changed': {
+                        'updated_at': {
+                            'old': str(index),
+                            'new': str(index + 1),
+                        },
+                    },
+                },
+            )
+            for index in range(13)
+        ]
+        AuditLog.objects.filter(
+            pk__in=[entry.pk for entry in created],
+        ).update(created_at=created[0].created_at)
+
+        response = self.client.get(reverse('system:auditlog'))
+        self.assertEqual(list(response.context['rendered_operations']), [])
