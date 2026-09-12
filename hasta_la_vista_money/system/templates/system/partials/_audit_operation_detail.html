@@ -1,0 +1,78 @@
+{% load i18n %}
+<div class="audit-operation-detail">
+    <div class="audit-row-operation">
+        <span class="audit-operation-title">{{ operation.title }}</span>
+        {% if operation.archival %}
+            <span class="audit-heuristic-badge" title="{% translate 'Состав группы восстановлен эвристикой' %}">
+                {% translate 'восстановлено эвристикой' %}
+            </span>
+        {% endif %}
+        {% if operation.caption %}
+            <span class="audit-operation-caption">{{ operation.caption }}</span>
+        {% endif %}
+    </div>
+
+    {% if operation.archival %}
+    <div class="audit-balance-archival" title="{% translate 'Запись старше идентификатора операции — восстановить остаток по ней нельзя' %}">
+        {% translate 'Остаток не восстановить' %}
+    </div>
+    {% elif operation.balance_chips %}
+    <div class="audit-balance-chips">
+        {% for chip in operation.balance_chips %}
+        <span class="audit-chip">
+            <span class="audit-chip-account">{{ chip.account_name }}</span>
+            <span class="audit-chip-before">{{ chip.before }}</span>
+            <span class="audit-chip-arrow">→</span>
+            <span class="audit-chip-movement {% if chip.negative %}audit-chip-negative{% else %}audit-chip-positive{% endif %}">{{ chip.movement }}</span>
+            <span class="audit-chip-arrow">→</span>
+            <span class="audit-chip-after">{{ chip.after }}</span>
+        </span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="audit-balance-none">{% translate 'Без изменения баланса' %}</div>
+    {% endif %}
+
+    <div class="audit-diff-list">
+        {% for item in operation.entries %}
+        {% with entry=item.entry %}
+        <div class="audit-diff-entry">
+            <span class="audit-diff-entry-head">
+                {{ item.header }} · {{ entry.get_action_display }}
+            </span>
+            {% for change in item.changes %}
+            {% if change.old is None %}
+            <div class="audit-diff-item audit-diff-item--create">
+                <span class="audit-diff-field">{{ change.label }}</span>
+                <span class="audit-diff-new">{{ change.new }}</span>
+            </div>
+            {% elif change.new is None %}
+            <div class="audit-diff-item audit-diff-item--delete">
+                <span class="audit-diff-field">{{ change.label }}</span>
+                <span class="audit-diff-old">{{ change.old }}</span>
+            </div>
+            {% else %}
+            <div class="audit-diff-item">
+                <span class="audit-diff-field">{{ change.label }}</span>
+                <span class="audit-diff-old">{{ change.old }}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <span class="audit-diff-new">{{ change.new }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endwith %}
+        {% endfor %}
+    </div>
+
+    <div class="audit-operation-date">
+        {% if operation.total %}
+        <span class="audit-row-total{% if operation.total.negative == True %} audit-total-negative{% elif operation.total.negative == False %} audit-total-positive{% endif %}">{{ operation.total.amount }}</span>
+        {% if operation.total.is_shift %}
+        <span class="audit-total-hint">{% translate 'сдвиг баланса' %}</span>
+        {% endif %}
+        {% endif %}
+        <span class="audit-date-primary">{{ operation.created_at|date:"d.m.Y" }}</span>
+        <span class="audit-date-time">{{ operation.created_at|date:"H:i:s" }}</span>
+    </div>
+</div>

@@ -16,6 +16,7 @@ const options = {
     'pages/profile': 'static/js/pages/profile.js',
     'pages/bank-statement-reconciliation':
       'static/js/pages/bank-statement-reconciliation.js',
+    'pages/auditlog': 'static/js/pages/auditlog.js',
   },
   bundle: true,
   format: 'iife',

@@ -9,10 +9,11 @@ Grouping and pagination both happen in SQL so an operation is never split
 across a page boundary.
 """
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Final, Protocol, cast
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
 from django.db.models import Count, Max, QuerySet, Value
 from django.db.models.fields import CharField
@@ -37,6 +38,9 @@ from hasta_la_vista_money.system.services.audit_render import (
     entry_has_visible_change,
     render_entries,
 )
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 class _WithGroupKey(Protocol):
@@ -172,6 +176,7 @@ class RenderedOperation:
     title: str
     created_at: datetime
     archival: bool
+    url_key: str = ''
     caption: str = ''
     entries: list[RenderedEntry] = field(default_factory=list)
     collapsed_count: int | None = None
@@ -299,6 +304,19 @@ def _build_page_operations(
     ]
 
 
+def _anchor_url_key(entries: list[AuditLog], archival: bool) -> str:
+    """The operation's own address: an operation id, or an anchor's pk.
+
+    A real operation is addressed by its ``operation_id``; an archival
+    group has none, so it is addressed by the primary key of its anchor —
+    the newest entry in the group, ``entries[0]`` under the feed's
+    ``-created_at, -id`` ordering.
+    """
+    if not archival and entries[0].operation_id is not None:
+        return str(entries[0].operation_id)
+    return str(entries[0].pk)
+
+
 def _build_operation(
     group_key: str,
     entries: list[AuditLog],
@@ -315,6 +333,21 @@ def _build_operation(
     created_at = entries[0].created_at
     if archival and size > ARCHIVAL_BUCKET_LIMIT:
         return _build_collapsed_operation(group_key, entries, created_at, size)
+    return _render_full_operation(group_key, entries, archival, created_at)
+
+
+def _render_full_operation(
+    group_key: str,
+    entries: list[AuditLog],
+    archival: bool,
+    created_at: datetime,
+) -> RenderedOperation:
+    """Render every entry of a group in full — no size-based collapsing.
+
+    Shared by the feed (once the collapse check has already passed) and
+    the operation screen, which always shows an operation whole regardless
+    of how many entries an archival bucket happens to hold.
+    """
     rendered = [item for item in render_entries(entries) if item.has_changes]
     # An archival group's composition is only a guess, so its balance chain
     # cannot be trusted either — it gets no chips, not even wrong ones.
@@ -333,10 +366,77 @@ def _build_operation(
         title=_title_for(entries, rendered, operation_kind),
         created_at=created_at,
         archival=archival,
+        url_key=_anchor_url_key(entries, archival),
         caption='' if archival else _caption_for(operation_kind, rendered),
         entries=rendered,
         balance_chips=balance_chips,
         total=_build_total(balance_chips, rendered, entries),
+    )
+
+
+def get_operation_detail(
+    user: 'User',
+    operation_key: str,
+) -> RenderedOperation | None:
+    """Look up one user's operation by its own address, rendered in full.
+
+    ``operation_key`` is either an ``operation_id`` (a real operation) or
+    the primary key of an archival group's anchor entry — the same two
+    shapes :func:`_anchor_url_key` hands out. Anything outside the
+    requesting user's own history, or matching neither shape, is reported
+    as absent rather than raising, so the view can turn it into a 404.
+    """
+    try:
+        key = uuid.UUID(operation_key)
+    except ValueError:
+        return _archival_operation_detail(user, operation_key)
+    entries = list(
+        AuditLog.objects.filter(user=user, operation_id=key)
+        .select_related('user')
+        .order_by('-created_at', '-id'),
+    )
+    if not entries:
+        return None
+    return _render_full_operation(
+        str(key),
+        entries,
+        archival=False,
+        created_at=entries[0].created_at,
+    )
+
+
+def _archival_operation_detail(
+    user: 'User',
+    operation_key: str,
+) -> RenderedOperation | None:
+    try:
+        anchor_id = int(operation_key)
+    except ValueError:
+        return None
+    anchor = AuditLog.objects.filter(
+        user=user,
+        pk=anchor_id,
+        operation_id__isnull=True,
+    ).first()
+    if anchor is None:
+        return None
+    bucket_start = anchor.created_at.replace(microsecond=0)
+    bucket_end = bucket_start + timedelta(seconds=1)
+    entries = list(
+        AuditLog.objects.filter(
+            user=user,
+            operation_id__isnull=True,
+            created_at__gte=bucket_start,
+            created_at__lt=bucket_end,
+        )
+        .select_related('user')
+        .order_by('-created_at', '-id'),
+    )
+    return _render_full_operation(
+        str(anchor_id),
+        entries,
+        archival=True,
+        created_at=entries[0].created_at,
     )
 
 
@@ -409,6 +509,7 @@ def _build_collapsed_operation(
         title=title,
         created_at=created_at,
         archival=True,
+        url_key=_anchor_url_key(entries, archival=True),
         collapsed_count=size,
     )
 

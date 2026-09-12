@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ operation.title }} — {% translate 'История изменений' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'system/css/auditlog.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="audit-app">
+    <div class="audit-wrap">
+        <header class="audit-header">
+            <div>
+                <a href="{{ back_url }}" class="audit-back-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    {% translate 'Назад к истории' %}
+                </a>
+                <h1 class="audit-title mt-3">{{ operation.title }}</h1>
+            </div>
+        </header>
+
+        <div class="audit-panel">
+            {% include 'system/partials/_audit_operation_detail.html' %}
+        </div>
+    </div>
+</main>
+{% endblock %}

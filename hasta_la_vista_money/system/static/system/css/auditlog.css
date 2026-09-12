@@ -228,6 +228,12 @@
   background: color-mix(in oklab, var(--audit-accent) 4%, var(--audit-surface));
 }
 
+.audit-row-link {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
 .audit-row-content {
   align-items: start;
   display: grid;
@@ -502,6 +508,45 @@
 
 .audit-empty-icon {
   opacity: 0.35;
+}
+
+.audit-row--open {
+  background: color-mix(in oklab, var(--audit-accent) 3%, var(--audit-surface));
+}
+
+.audit-accordion {
+  border-top: 1px solid var(--audit-border);
+  padding: 0.85rem 1.25rem 1.1rem;
+}
+
+.audit-operation-detail .audit-row-operation {
+  margin-bottom: 0.6rem;
+}
+
+.audit-operation-detail .audit-operation-caption {
+  overflow: visible;
+  white-space: normal;
+}
+
+.audit-operation-date {
+  align-items: baseline;
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.audit-back-link {
+  align-items: center;
+  color: var(--audit-muted);
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 600;
+  gap: 0.35rem;
+  text-decoration: none;
+}
+
+.audit-back-link:hover {
+  color: var(--audit-accent);
 }
 
 @media (max-width: 768px) {
