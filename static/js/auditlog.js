@@ -73,3 +73,14 @@ document.addEventListener('click', (event) => {
   }
   openRow(row, url);
 });
+
+window.matchMedia(WIDE_QUERY).addEventListener('change', (event) => {
+  if (event.matches) {
+    return;
+  }
+  document.querySelectorAll('[data-audit-row].audit-row--open').forEach((row) => {
+    if (row instanceof HTMLElement) {
+      closeRow(row);
+    }
+  });
+});

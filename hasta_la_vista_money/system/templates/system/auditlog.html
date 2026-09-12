@@ -91,7 +91,7 @@
 
             {% for operation in rendered_operations %}
             {% url 'system:auditlog_operation' operation.url_key as operation_url %}
-            <div class="audit-row" data-audit-row>
+            <div class="audit-row{% if not operation.collapsed_count and not operation.archival and not operation.balance_chips %} audit-row--money-none{% endif %}" data-audit-row>
                 <a href="{{ operation_url }}{% if feed_querystring %}?{{ feed_querystring }}{% endif %}"
                    class="audit-row-link"
                    data-audit-toggle
