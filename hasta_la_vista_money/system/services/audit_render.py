@@ -19,6 +19,7 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.system.audit_registry import (
     ACCOUNT_LABEL,
     AUDIT_FIELDS,
+    MODEL_LABELS,
     AuditField,
     CurrencySource,
     Formatter,
@@ -86,10 +87,26 @@ class RenderedEntry:
     changes: list[RenderedChange] = field(default_factory=list)
     legacy: bool = False
     balance_effect: BalanceEffect | None = None
+    header: str = ''
 
     @property
     def has_changes(self) -> bool:
         return bool(self.changes)
+
+
+def _entry_header(entry: AuditLog) -> str:
+    """Build the "model · object" half of the disclosure group heading.
+
+    Only the account model gets its object name quoted onto the label —
+    it is the only one where several instances of the same model can
+    appear side by side in one operation and need telling apart.
+    """
+    label = MODEL_LABELS.get(entry.model_name)
+    if label is None:
+        return entry.object_name or entry.model_name
+    if entry.model_name == ACCOUNT_LABEL and entry.object_name:
+        return f'{label} «{entry.object_name}»'
+    return str(label)
 
 
 def render_entries(entries: Sequence[AuditLog]) -> list[RenderedEntry]:
@@ -331,6 +348,7 @@ def _render_entry(
             entry=entry,
             changes=_legacy_changes(entry.diff or {}),
             legacy=True,
+            header=_entry_header(entry),
         )
     changes = [
         _render_change(entry, sides, attname, audit_field, context)
@@ -340,6 +358,7 @@ def _render_entry(
         entry=entry,
         changes=changes,
         balance_effect=_balance_effect(entry, sides, context),
+        header=_entry_header(entry),
     )
 
 

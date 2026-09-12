@@ -69,6 +69,18 @@ TRANSACTION_LABEL: Final = 'transactions.Transaction'
 RECEIPT_LABEL: Final = 'receipts.Receipt'
 TRANSFER_LABEL: Final = 'finance_account.TransferMoneyLog'
 
+# Singular, human-facing model names for the field-disclosure header
+# ("Счёт «Наличные» · Обновление"). Distinct from the plural filter labels
+# in AuditLogView, which name a whole model, not one entry.
+MODEL_LABELS: Final[Mapping[str, str | Promise]] = MappingProxyType(
+    {
+        ACCOUNT_LABEL: _('Счёт'),
+        TRANSACTION_LABEL: _('Транзакция'),
+        RECEIPT_LABEL: _('Чек'),
+        TRANSFER_LABEL: _('Перевод'),
+    },
+)
+
 # Declaration order is significant: it is the order fields are listed.
 AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
     {

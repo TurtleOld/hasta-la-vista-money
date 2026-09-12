@@ -138,7 +138,7 @@
                             {% with entry=item.entry %}
                             <div class="audit-diff-entry">
                                 <span class="audit-diff-entry-head">
-                                    {{ entry.object_name|default:entry.model_name }} · {{ entry.get_action_display }}
+                                    {{ item.header }} · {{ entry.get_action_display }}
                                 </span>
                                 {% for change in item.changes %}
                                 {% if change.old is None %}
