@@ -77,12 +77,23 @@ def _normalize_value(field: models.Field[Any, Any], value: Any) -> Any:
     return typed_value
 
 
-def _snapshot(instance: models.Model) -> dict[str, Any]:
+def _snapshot(
+    instance: models.Model,
+    *,
+    update_fields: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Snapshot the instance's concrete fields.
+
+    When ``update_fields`` is given, the snapshot is narrowed to just those
+    fields: a partial save must not read as a rewrite of every field, only
+    of the ones it actually persisted.
+    """
     return {
         field.attname: _serialize_value(
             _normalize_value(field, getattr(instance, field.attname)),
         )
         for field in _iter_concrete_fields(instance)
+        if update_fields is None or field.name in update_fields
     }
 
 
@@ -170,6 +181,7 @@ def audit_saved_instance(
     sender: type[models.Model],
     instance: models.Model,
     created: bool,
+    update_fields: frozenset[str] | None = None,
     **kwargs: Any,
 ) -> None:
     del kwargs
@@ -177,8 +189,8 @@ def audit_saved_instance(
         return
 
     object_name = _get_object_name(instance)
-    new_state = _snapshot(instance)
     if created:
+        new_state = _snapshot(instance)
         _create_audit_log(
             instance=instance,
             action=AuditLog.Action.CREATE,
@@ -187,6 +199,7 @@ def audit_saved_instance(
         )
         return
 
+    new_state = _snapshot(instance, update_fields=update_fields)
     old_state = getattr(instance, _ORIGINAL_STATE_ATTR, {})
     changes = _diff(old_state, new_state)
     if changes:
