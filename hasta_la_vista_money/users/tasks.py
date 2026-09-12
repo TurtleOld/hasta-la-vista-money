@@ -8,12 +8,14 @@ from typing import Any
 
 from celery import shared_task
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -334,8 +336,9 @@ def _process_transactions(
                 created = True
 
             if created:
-                Account.objects.filter(pk=upload.account.pk).update(
-                    balance=F('balance') + balance_change,
+                upload.account = BalanceService().apply_balance_delta(
+                    upload.account,
+                    balance_change,
                 )
                 if type_value == TransactionType.INCOME:
                     income_count += 1

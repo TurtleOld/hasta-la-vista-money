@@ -1219,7 +1219,6 @@ def process_bank_statement(
     income_count = 0
     expense_count = 0
     skipped_count = 0
-    balance_delta = Decimal(0)
 
     for idx, trans in enumerate(transactions):
         if idx % 10 == 0:
@@ -1263,14 +1262,11 @@ def process_bank_statement(
             source_ref=source_ref or None,
         )
         if type_value == TransactionType.INCOME:
-            balance_delta += abs_amount
+            BalanceService().apply_balance_delta(account, abs_amount)
             income_count += 1
         else:
-            balance_delta -= abs_amount
+            BalanceService().apply_balance_delta(account, -abs_amount)
             expense_count += 1
-
-    if balance_delta != Decimal(0):
-        BalanceService().apply_balance_delta(account, balance_delta)
 
     logger.info(
         'Finished processing: %d income, %d expenses, %d skipped',
