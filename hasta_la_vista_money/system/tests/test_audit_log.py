@@ -292,6 +292,35 @@ class AuditRenderTests(TestCase):
             diff={'v': 2, 'changed': changed},
         )
 
+    def test_account_entry_header_quotes_the_account_name(self) -> None:
+        self.account.balance = Decimal(2494)
+        self.account.save()
+
+        rendered = render_entries([self._latest(AuditLog.Action.UPDATE)])[0]
+        self.assertEqual(rendered.header, 'Счёт «Т-Банк»')
+
+    def test_transaction_entry_header_names_only_the_model(self) -> None:
+        entry = self._entry(
+            'transactions.Transaction',
+            {'amount': {'old': '100.00', 'new': '110.00'}},
+        )
+
+        rendered = render_entries([entry])[0]
+        self.assertEqual(rendered.header, 'Транзакция')
+
+    def test_legacy_entry_header_still_names_the_model(self) -> None:
+        entry = AuditLog.objects.create(
+            user=self.user,
+            model_name=ACCOUNT_LABEL,
+            object_pk=str(self.account.pk),
+            object_name='Т-Банк',
+            action=AuditLog.Action.UPDATE,
+            diff={'Баланс': {'old': '100.00', 'new': '75.50'}},
+        )
+
+        rendered = render_entries([entry])[0]
+        self.assertEqual(rendered.header, 'Счёт «Т-Банк»')
+
     def test_legacy_entry_is_printed_as_it_was_stored(self) -> None:
         entry = AuditLog.objects.create(
             user=self.user,
