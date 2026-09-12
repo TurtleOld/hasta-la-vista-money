@@ -850,3 +850,187 @@ class AuditLogViewTests(TestCase):
         operation = response.context['rendered_operations'][0]
         self.assertTrue(operation.archival)
         self.assertEqual(operation.caption, '')
+
+
+class AuditOperationViewTests(TestCase):
+    """The operation screen: one operation, opened at its own address."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='audit-viewer',
+            password='audit-password',
+        )
+        self.other_user = User.objects.create_user(
+            username='audit-other',
+            password='audit-password',
+        )
+        self.client.force_login(self.user)
+
+    def _make_single_account_change(
+        self,
+        *,
+        user: User,
+        kind: AuditOperationKind,
+    ) -> None:
+        account = Account.objects.create(user=user, balance=Decimal('100.00'))
+        AuditLog.objects.filter(user=user).delete()
+        with audit_operation(kind):
+            account.balance = Decimal('150.00')
+            account.save()
+
+    def _make_archival_bucket(self, *, user: User, count: int) -> None:
+        account = Account.objects.create(user=user, name_account='Т-Банк')
+        AuditLog.objects.filter(user=user).delete()
+        created = [
+            AuditLog.objects.create(
+                user=user,
+                model_name=ACCOUNT_LABEL,
+                object_pk=str(account.pk),
+                object_name=account.name_account,
+                action=AuditLog.Action.UPDATE,
+                diff={
+                    'v': 2,
+                    'changed': {
+                        'balance': {'old': '0.00', 'new': str(index)},
+                    },
+                },
+            )
+            for index in range(count)
+        ]
+        AuditLog.objects.filter(
+            pk__in=[entry.pk for entry in created],
+        ).update(created_at=created[0].created_at)
+
+    def _operation_url_key(self, *, user: User) -> str:
+        feed = list_operations(
+            AuditLog.objects.filter(user=user),
+            page=1,
+            page_size=10,
+        )
+        return feed.operations[0].url_key
+
+    def test_operation_screen_shows_full_field_breakdown(self) -> None:
+        """The operation's own page renders its full field disclosure."""
+        self._make_single_account_change(
+            user=self.user,
+            kind=AuditOperationKind.INCOME,
+        )
+        url_key = self._operation_url_key(user=self.user)
+
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        operation = response.context['operation']
+        self.assertEqual(len(operation.entries), 1)
+        self.assertTemplateUsed(response, 'system/audit_operation.html')
+
+    def test_archival_group_is_addressed_by_its_anchor_entry(self) -> None:
+        """An archival group's address is its newest entry's primary key."""
+        self._make_archival_bucket(user=self.user, count=2)
+        url_key = self._operation_url_key(user=self.user)
+        anchor = (
+            AuditLog.objects.filter(user=self.user)
+            .order_by(
+                '-created_at',
+                '-id',
+            )
+            .first()
+        )
+        if anchor is None:
+            self.fail('Expected at least one audit entry')
+
+        self.assertEqual(url_key, str(anchor.pk))
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['operation'].entries), 2)
+
+    def test_archival_bucket_over_twelve_is_shown_in_full_on_its_own_screen(
+        self,
+    ) -> None:
+        """The feed's 12-entry safety valve does not apply to the screen."""
+        self._make_archival_bucket(user=self.user, count=13)
+        url_key = self._operation_url_key(user=self.user)
+
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['operation'].entries), 13)
+
+    def test_foreign_operation_gives_404(self) -> None:
+        """An operation belonging to another user is a 404, not a redirect."""
+        self._make_single_account_change(
+            user=self.other_user,
+            kind=AuditOperationKind.INCOME,
+        )
+        url_key = self._operation_url_key(user=self.other_user)
+
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_unknown_operation_key_gives_404(self) -> None:
+        """A key matching no real operation and no archival anchor is 404."""
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=['does-not-exist']),
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_htmx_request_gets_the_partial_template(self) -> None:
+        """A feed-originated (HX-Request) fetch renders the bare partial."""
+        self._make_single_account_change(
+            user=self.user,
+            kind=AuditOperationKind.INCOME,
+        )
+        url_key = self._operation_url_key(user=self.user)
+
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response,
+            'system/partials/_audit_operation_detail.html',
+        )
+        self.assertTemplateNotUsed(response, 'system/audit_operation.html')
+
+    def test_back_link_carries_the_feed_filters(self) -> None:
+        """The screen's back link returns to the feed with its filters."""
+        self._make_single_account_change(
+            user=self.user,
+            kind=AuditOperationKind.INCOME,
+        )
+        url_key = self._operation_url_key(user=self.user)
+
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[url_key]),
+            {'model': ACCOUNT_LABEL, 'page': '2'},
+        )
+
+        self.assertIn('model=' + ACCOUNT_LABEL, response.context['back_url'])
+        self.assertIn('page=2', response.context['back_url'])
+
+    def test_feed_row_link_carries_current_filters(self) -> None:
+        """The feed row's own link keeps the filters active on the feed."""
+        self._make_single_account_change(
+            user=self.user,
+            kind=AuditOperationKind.INCOME,
+        )
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'model': ACCOUNT_LABEL},
+        )
+
+        self.assertContains(response, 'model=' + ACCOUNT_LABEL)
+        self.assertContains(response, 'data-audit-toggle')

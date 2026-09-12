@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -16,7 +17,10 @@ from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.models import AuditLog
-from hasta_la_vista_money.system.services.audit_feed import list_operations
+from hasta_la_vista_money.system.services.audit_feed import (
+    get_operation_detail,
+    list_operations,
+)
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.users.models import User
 
@@ -172,4 +176,43 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
             'date_from': self.request.GET.get('date_from', ''),
             'date_to': self.request.GET.get('date_to', ''),
         }
+        ctx['feed_querystring'] = self.request.GET.urlencode()
+        return ctx
+
+
+class AuditOperationView(LoginRequiredMixin, TemplateView):
+    """The operation screen: one operation, opened whole.
+
+    Reachable at its own address on any width. A feed request (``HX-
+    Request``) gets the same content as a bare partial, so the wide-screen
+    accordion and the standalone page share one data source; a plain
+    navigation gets the full page. Anything outside the requesting user's
+    own history is a 404, never a redirect or an empty page.
+    """
+
+    template_name = 'system/audit_operation.html'
+    partial_template_name = 'system/partials/_audit_operation_detail.html'
+
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request') == 'true':
+            return [self.partial_template_name]
+        return [str(self.template_name)]
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ctx = super().get_context_data(**kwargs)
+        if not isinstance(self.request.user, User):
+            raise TypeError('User must be authenticated')
+        operation = get_operation_detail(
+            self.request.user,
+            kwargs['operation_key'],
+        )
+        if operation is None:
+            raise Http404('Операция не найдена')
+        ctx['operation'] = operation
+        back_query = self.request.GET.urlencode()
+        ctx['back_url'] = (
+            f'{reverse("system:auditlog")}?{back_query}'
+            if back_query
+            else reverse('system:auditlog')
+        )
         return ctx
