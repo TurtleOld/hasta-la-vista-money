@@ -389,6 +389,7 @@
   font-family: inherit;
   font-weight: 700;
   margin-right: 0.1rem;
+  white-space: nowrap;
 }
 
 .audit-chip-before {
@@ -595,5 +596,36 @@
 
   .audit-input {
     width: 100%;
+  }
+
+  /* Фраза-подпись уступает место строке следствия — кроме операций
+     без денежного эффекта, где подпись остаётся единственным
+     местом, несущим смысл (переименование счёта, смена валюты). */
+  .audit-row .audit-operation-caption {
+    display: none;
+  }
+
+  .audit-row--money-none .audit-operation-caption {
+    display: inline;
+  }
+
+  /* Чип-триплет становится строкой следствия текстом на каждый
+     счёт: остаток «до» уезжает на экран операции, чипы перестают
+     быть пилюлями и выстраиваются в столбец. */
+  .audit-row .audit-balance-chips {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .audit-row .audit-chip {
+    background: none;
+    border-radius: 0;
+    padding: 0;
+    width: 100%;
+  }
+
+  .audit-row .audit-chip-before,
+  .audit-row .audit-chip-before + .audit-chip-arrow {
+    display: none;
   }
 }
