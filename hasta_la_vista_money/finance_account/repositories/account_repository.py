@@ -84,12 +84,14 @@ class AccountRepository:
         return account
 
     def archive(self, account_id: int) -> None:
-        Account.objects.filter(pk=account_id).update(
-            archived_at=timezone.now(),
-        )
+        account = Account.objects.select_for_update().get(pk=account_id)
+        account.archived_at = timezone.now()
+        account.save(update_fields=['archived_at', 'updated_at'])
 
     def unarchive(self, account_id: int) -> None:
-        Account.objects.filter(pk=account_id).update(archived_at=None)
+        account = Account.objects.select_for_update().get(pk=account_id)
+        account.archived_at = None
+        account.save(update_fields=['archived_at', 'updated_at'])
 
     def get_by_user(self, user: User) -> QuerySet[Account]:
         """Get all accounts for a user.
