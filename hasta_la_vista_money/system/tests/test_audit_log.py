@@ -7,7 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.audit_registry import (
     AUDIT_FIELDS,
     HIDDEN_AUDIT_FIELDS,
@@ -21,10 +23,15 @@ from hasta_la_vista_money.system.services.audit_render import (
     RenderedEntry,
     render_entries,
 )
-from hasta_la_vista_money.transactions.models import Category, Transaction
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 ACCOUNT_LABEL = 'finance_account.Account'
+RECEIPT_LABEL = 'receipts.Receipt'
 
 
 class AuditLogWriteTests(TestCase):
@@ -629,3 +636,188 @@ class AuditLogViewTests(TestCase):
         self.assertTrue(operation.archival)
         self.assertEqual(operation.balance_chips, [])
         self.assertIsNone(operation.total)
+
+    def test_transfer_caption_shows_both_accounts_and_the_amount(
+        self,
+    ) -> None:
+        """A transfer's caption is «from → to · amount», no fourth slot."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(
+            operation.caption,
+            f'Наличные → Т-Банк · 200,00{NBSP}RUB',
+        )
+
+    def test_account_rename_gives_a_dedicated_title_and_arrow_caption(
+        self,
+    ) -> None:
+        """Renaming an account titles and captions by the identity change."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Тинькофф',
+            balance=Decimal('100.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.ACCOUNT_EDIT):
+            account.name_account = 'Т-Банк'
+            account.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Переименование счёта')
+        self.assertEqual(operation.caption, 'Тинькофф → Т-Банк')
+
+    def test_account_currency_change_names_the_field_in_the_title(
+        self,
+    ) -> None:
+        """A single-field account edit is titled by that field, not flat."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Т-Банк',
+            currency='RUB',
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.ACCOUNT_EDIT):
+            account.currency = 'USD'
+            account.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Смена валюты счёта')
+        self.assertEqual(
+            operation.caption,
+            'Т-Банк · Российский рубль → Доллар США',
+        )
+
+    def test_account_edit_with_several_fields_falls_back_to_generic_title(
+        self,
+    ) -> None:
+        """Several changed fields drop the by-field title for a generic one."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Т-Банк',
+            currency='RUB',
+            limit_credit=Decimal('0.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.ACCOUNT_EDIT):
+            account.currency = 'USD'
+            account.limit_credit = Decimal('500.00')
+            account.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Изменение счёта «Т-Банк»')
+        self.assertEqual(operation.caption, 'Т-Банк · Валюта, Кредитный лимит')
+
+    def test_receipt_purchase_caption_shows_seller_account_and_amount(
+        self,
+    ) -> None:
+        """A fresh receipt captions as seller · account · its total."""
+        seller = Seller.objects.create(user=self.user, name_seller='Пятёрочка')
+        account = Account.objects.create(user=self.user, name_account='Т-Банк')
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.RECEIPT_PURCHASE):
+            Receipt.objects.create(
+                user=self.user,
+                seller=seller,
+                account=account,
+                receipt_date=timezone.now(),
+                operation_type=RECEIPT_OPERATION_PURCHASE,
+                total_sum=Decimal('494.00'),
+            )
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Чек')
+        self.assertEqual(
+            operation.caption,
+            f'Пятёрочка · Т-Банк · 494,00{NBSP}RUB',
+        )
+
+    def test_receipt_edit_title_is_flat_and_measure_slot_is_empty(
+        self,
+    ) -> None:
+        """A receipt edit keeps a flat title; the shift shows on the right."""
+        seller = Seller.objects.create(user=self.user, name_seller='Пятёрочка')
+        account = Account.objects.create(user=self.user, name_account='Т-Банк')
+        receipt = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date=timezone.now(),
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('350.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.RECEIPT_EDIT):
+            receipt.total_sum = Decimal('400.00')
+            receipt.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Правка чека')
+        self.assertEqual(
+            operation.caption,
+            f'Т-Банк · 350,00{NBSP}RUB → 400,00{NBSP}RUB',
+        )
+
+    def test_receipt_delete_has_a_flat_title(self) -> None:
+        """A deleted receipt's operation is titled «Удаление чека»."""
+        seller = Seller.objects.create(user=self.user, name_seller='Пятёрочка')
+        account = Account.objects.create(user=self.user, name_account='Т-Банк')
+        receipt = Receipt.objects.create(
+            user=self.user,
+            seller=seller,
+            account=account,
+            receipt_date=timezone.now(),
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+            total_sum=Decimal('100.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.RECEIPT_DELETE):
+            receipt.delete()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Удаление чека')
+
+    def test_transaction_edit_caption_has_no_measure_slot(self) -> None:
+        """An edited transaction's caption carries no amount of its own."""
+        account = Account.objects.create(user=self.user, name_account='Т-Банк')
+        category = Category.objects.create(
+            user=self.user,
+            name='Еда',
+            type=TransactionType.EXPENSE,
+        )
+        transaction = Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=category,
+            amount=Decimal('200.00'),
+            date=timezone.now(),
+            type=TransactionType.EXPENSE,
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.TRANSACTION_EDIT):
+            transaction.amount = Decimal('250.00')
+            transaction.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.title, 'Правка транзакции')
+        self.assertEqual(
+            operation.caption,
+            f'Т-Банк · 200,00{NBSP}RUB → 250,00{NBSP}RUB',
+        )
+
+    def test_archival_operation_has_no_caption(self) -> None:
+        """An archival, heuristically-glued group gets no caption phrase."""
+        self._make_archival_bucket(2)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertTrue(operation.archival)
+        self.assertEqual(operation.caption, '')

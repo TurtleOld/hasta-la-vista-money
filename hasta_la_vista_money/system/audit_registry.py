@@ -52,6 +52,7 @@ class AuditField:
     related: Related | None = None
     currency_from: CurrencySource | None = None
     choices: Mapping[Any, str | Promise] | None = None
+    participant: bool = False
 
 
 RECEIPT_OPERATION_TYPES: Final[Mapping[Any, str]] = MappingProxyType(
@@ -73,7 +74,11 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
     {
         ACCOUNT_LABEL: MappingProxyType(
             {
-                'name_account': AuditField(_('Название счёта'), Formatter.TEXT),
+                'name_account': AuditField(
+                    _('Название счёта'),
+                    Formatter.TEXT,
+                    participant=True,
+                ),
                 'type_account': AuditField(_('Тип счёта'), Formatter.CHOICE),
                 'bank_id': AuditField(
                     _('Банк'),
@@ -122,6 +127,7 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     _('Счёт'),
                     Formatter.FK,
                     related=Related.ACCOUNT,
+                    participant=True,
                 ),
                 'category_id': AuditField(
                     _('Категория'),
@@ -139,15 +145,17 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     Formatter.MONEY,
                     currency_from=CurrencySource.ACCOUNT,
                 ),
-                'account_id': AuditField(
-                    _('Счёт'),
-                    Formatter.FK,
-                    related=Related.ACCOUNT,
-                ),
                 'seller_id': AuditField(
                     _('Продавец'),
                     Formatter.FK,
                     related=Related.SELLER,
+                    participant=True,
+                ),
+                'account_id': AuditField(
+                    _('Счёт'),
+                    Formatter.FK,
+                    related=Related.ACCOUNT,
+                    participant=True,
                 ),
                 'operation_type': AuditField(
                     _('Тип операции'),
@@ -167,11 +175,13 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     _('Счёт списания'),
                     Formatter.FK,
                     related=Related.ACCOUNT,
+                    participant=True,
                 ),
                 'to_account_id': AuditField(
                     _('Счёт зачисления'),
                     Formatter.FK,
                     related=Related.ACCOUNT,
+                    participant=True,
                 ),
                 'amount': AuditField(
                     _('Сумма'),

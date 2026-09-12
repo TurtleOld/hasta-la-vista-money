@@ -251,6 +251,15 @@
   font-weight: 700;
 }
 
+.audit-operation-caption {
+  color: var(--audit-muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 .audit-heuristic-badge {
   background: color-mix(in oklab, var(--audit-muted) 16%, var(--audit-surface-2));
   border-radius: 999px;

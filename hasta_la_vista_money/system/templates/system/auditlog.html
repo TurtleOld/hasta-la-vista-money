@@ -98,6 +98,9 @@
                                 {% translate 'восстановлено эвристикой' %}
                             </span>
                         {% endif %}
+                        {% if operation.caption %}
+                            <span class="audit-operation-caption">{{ operation.caption }}</span>
+                        {% endif %}
                     </div>
 
                     <div class="audit-diff-cell">

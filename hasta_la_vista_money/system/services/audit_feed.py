@@ -23,13 +23,16 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.system.audit_registry import (
     ACCOUNT_LABEL,
+    AUDIT_FIELDS,
     RECEIPT_LABEL,
     TRANSACTION_LABEL,
     TRANSFER_LABEL,
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_render import (
+    EMPTY,
     BalanceEffect,
+    RenderedChange,
     RenderedEntry,
     entry_has_visible_change,
     render_entries,
@@ -73,13 +76,78 @@ _KIND_TITLES: Final[dict[str, Any]] = {
     AuditOperationKind.TRANSACTION_DELETE: _('Удаление транзакции'),
     AuditOperationKind.RECEIPT_EDIT: _('Правка чека'),
     AuditOperationKind.RECEIPT_DELETE: _('Удаление чека'),
-    AuditOperationKind.ACCOUNT_EDIT: _('Правка счёта'),
     AuditOperationKind.ACCOUNT_DELETE: _('Удаление счёта'),
     AuditOperationKind.STATEMENT_IMPORT: _('Импорт выписки'),
     AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: _(
         'Разбор нерешённых строк',
     ),
 }
+
+# ACCOUNT_EDIT has no money effect of its own, so unlike a receipt or a
+# transaction it gets no flat title: the changed field is named directly,
+# and only when several fields change at once does it fall back to the
+# generic "Изменение счёта «X»" from _fallback_title.
+_ACCOUNT_EDIT_FIELD_TITLES: Final[dict[str, Any]] = {
+    'name_account': _('Переименование счёта'),
+    'type_account': _('Смена типа счёта'),
+    'bank_id': _('Смена банка счёта'),
+    'currency': _('Смена валюты счёта'),
+    'balance': _('Корректировка остатка'),
+    'limit_credit': _('Изменение кредитного лимита'),
+    'payment_due_date': _('Изменение даты платежа'),
+    'grace_period_days': _('Изменение льготного периода'),
+    'archived_at': _('Архивация счёта'),
+    'last_reconciled_at': _('Сверка счёта'),
+}
+
+# Fields the caption's participant slot names instead of listing them among
+# "what changed" — their change is already spelled out there as an arrow.
+_PARTICIPANT_FIELDS: Final[dict[str, frozenset[str]]] = {
+    model_label: frozenset(
+        attname
+        for attname, audit_field in fields.items()
+        if audit_field.participant
+    )
+    for model_label, fields in AUDIT_FIELDS.items()
+}
+
+# Which entry of a (possibly multi-model) operation the caption is read
+# off: the model the operation kind is actually about.
+_CAPTION_MODEL_FOR_KIND: Final[dict[AuditOperationKind, str]] = {
+    AuditOperationKind.TRANSFER: TRANSFER_LABEL,
+    AuditOperationKind.RECEIPT_PURCHASE: RECEIPT_LABEL,
+    AuditOperationKind.INCOME: TRANSACTION_LABEL,
+    AuditOperationKind.EXPENSE: TRANSACTION_LABEL,
+    AuditOperationKind.TRANSACTION_EDIT: TRANSACTION_LABEL,
+    AuditOperationKind.TRANSACTION_DELETE: TRANSACTION_LABEL,
+    AuditOperationKind.RECEIPT_EDIT: RECEIPT_LABEL,
+    AuditOperationKind.RECEIPT_DELETE: RECEIPT_LABEL,
+    AuditOperationKind.ACCOUNT_EDIT: ACCOUNT_LABEL,
+    AuditOperationKind.ACCOUNT_DELETE: ACCOUNT_LABEL,
+}
+
+# The measure slot's money field, by kind — absent for a kind whose right
+# side already carries the operation's amount (an edit) or that has none.
+_CAPTION_MONEY_FIELD: Final[dict[AuditOperationKind, str]] = {
+    AuditOperationKind.TRANSFER: 'amount',
+    AuditOperationKind.RECEIPT_PURCHASE: 'total_sum',
+    AuditOperationKind.INCOME: 'amount',
+    AuditOperationKind.EXPENSE: 'amount',
+    AuditOperationKind.TRANSACTION_DELETE: 'amount',
+    AuditOperationKind.RECEIPT_DELETE: 'total_sum',
+}
+
+# The one participant field whose current value is already captured, even
+# when it did not change, by AuditLog.object_name — set by the write layer
+# for exactly this purpose. A participant with no such fallback (a
+# receipt's seller) simply drops out of the phrase when unchanged.
+_OBJECT_NAME_FIELD: Final[dict[str, str]] = {
+    ACCOUNT_LABEL: 'name_account',
+    TRANSACTION_LABEL: 'account_id',
+    RECEIPT_LABEL: 'account_id',
+}
+
+_CAPTION_FIELD_LIMIT: Final = 3
 
 
 @dataclass(frozen=True)
@@ -106,6 +174,7 @@ class RenderedOperation:
     title: str
     created_at: datetime
     archival: bool
+    caption: str = ''
     entries: list[RenderedEntry] = field(default_factory=list)
     collapsed_count: int | None = None
     balance_chips: list[BalanceEffect] = field(default_factory=list)
@@ -260,11 +329,15 @@ def _build_operation(
             if item.balance_effect is not None
         ]
     )
+    operation_kind = _operation_kind_of(entries)
     return RenderedOperation(
         group_key=group_key,
-        title=_title_for(entries),
+        title=_title_for(entries, rendered, operation_kind),
         created_at=created_at,
         archival=archival,
+        # The archival group's composition is a guess, so it gets no
+        # caption either — same reasoning as the balance chips above.
+        caption='' if archival else _caption_for(operation_kind, rendered),
         entries=rendered,
         balance_chips=balance_chips,
         total=_build_total(balance_chips, rendered, entries),
@@ -344,10 +417,131 @@ def _build_collapsed_operation(
     )
 
 
-def _title_for(entries: list[AuditLog]) -> str:
-    operation_kind = _operation_kind_of(entries)
+def _caption_for(
+    operation_kind: AuditOperationKind | None,
+    rendered: list[RenderedEntry],
+) -> str:
+    """The caption phrase: participants · what changed · measure.
+
+    Read off the single entry the operation's kind is about — a transfer's
+    two balance-chip account entries, say, are not it. An empty slot drops
+    together with its separator.
+    """
+    if operation_kind is None:
+        return ''
+    model_label = _CAPTION_MODEL_FOR_KIND.get(operation_kind)
+    if model_label is None:
+        return ''
+    item = next(
+        (entry for entry in rendered if entry.entry.model_name == model_label),
+        None,
+    )
+    if item is None:
+        return ''
+    slots = (
+        _caption_participants(operation_kind, model_label, item),
+        _caption_body(model_label, item.changes),
+        _caption_measure(operation_kind, item.changes),
+    )
+    return ' · '.join(slot for slot in slots if slot)
+
+
+def _caption_participants(
+    operation_kind: AuditOperationKind,
+    model_label: str,
+    item: RenderedEntry,
+) -> str:
+    # A transfer's arrow means money moving between two accounts, always
+    # printed in that order — a meaning kept apart from an edited value's
+    # own arrow by never sharing a line with it (see module docstring).
+    if operation_kind is AuditOperationKind.TRANSFER:
+        by_attname = {change.attname: change for change in item.changes}
+        from_change = by_attname.get('from_account_id')
+        to_change = by_attname.get('to_account_id')
+        from_name = from_change.new if from_change else EMPTY
+        to_name = to_change.new if to_change else EMPTY
+        return f'{from_name} → {to_name}'
+    by_attname = {change.attname: change for change in item.changes}
+    object_name_field = _OBJECT_NAME_FIELD.get(model_label)
+    parts = []
+    for attname, audit_field in AUDIT_FIELDS.get(model_label, {}).items():
+        if not audit_field.participant:
+            continue
+        change = by_attname.get(attname)
+        if change is not None:
+            parts.append(_caption_side(change))
+        elif attname == object_name_field and item.entry.object_name:
+            parts.append(item.entry.object_name)
+    return ' · '.join(part for part in parts if part)
+
+
+def _caption_side(change: RenderedChange) -> str:
+    if change.old is not None and change.new is not None:
+        return f'{change.old} → {change.new}'
+    return change.new or change.old or ''
+
+
+def _caption_body(model_label: str, changes: list[RenderedChange]) -> str:
+    participant_fields = _PARTICIPANT_FIELDS.get(model_label, frozenset())
+    changed = [
+        change
+        for change in changes
+        if change.attname not in participant_fields
+        and change.old is not None
+        and change.new is not None
+    ]
+    if not changed:
+        return ''
+    if len(changed) == 1:
+        change = changed[0]
+        return f'{change.old} → {change.new}'
+    labels = [change.label for change in changed[:_CAPTION_FIELD_LIMIT]]
+    text = ', '.join(labels)
+    remaining = len(changed) - _CAPTION_FIELD_LIMIT
+    if remaining > 0:
+        text += str(_gettext(' и ещё %(count)s') % {'count': remaining})
+    return text
+
+
+def _caption_measure(
+    operation_kind: AuditOperationKind,
+    changes: list[RenderedChange],
+) -> str:
+    if operation_kind in _AMOUNT_EDIT_KINDS:
+        return ''
+    money_attname = _CAPTION_MONEY_FIELD.get(operation_kind)
+    if money_attname is None:
+        return ''
+    for change in changes:
+        if change.attname == money_attname:
+            return change.new or change.old or ''
+    return ''
+
+
+def _title_for(
+    entries: list[AuditLog],
+    rendered: list[RenderedEntry],
+    operation_kind: AuditOperationKind | None,
+) -> str:
+    if operation_kind is AuditOperationKind.ACCOUNT_EDIT:
+        return _account_edit_title(entries, rendered)
     if operation_kind is not None:
         label = _KIND_TITLES.get(operation_kind)
+        if label is not None:
+            return str(label)
+    return _fallback_title(entries)
+
+
+def _account_edit_title(
+    entries: list[AuditLog],
+    rendered: list[RenderedEntry],
+) -> str:
+    account_item = next(
+        (item for item in rendered if item.entry.model_name == ACCOUNT_LABEL),
+        None,
+    )
+    if account_item is not None and len(account_item.changes) == 1:
+        label = _ACCOUNT_EDIT_FIELD_TITLES.get(account_item.changes[0].attname)
         if label is not None:
             return str(label)
     return _fallback_title(entries)
