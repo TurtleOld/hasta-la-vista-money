@@ -12,7 +12,8 @@ from hasta_la_vista_money.system.audit_registry import (
     AUDIT_FIELDS,
     HIDDEN_AUDIT_FIELDS,
 )
-from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.system.services.audit_render import (
     NBSP,
@@ -353,6 +354,21 @@ class AuditLogViewTests(TestCase):
             exchange_date=timezone.now(),
         )
 
+    def _make_single_account_change(
+        self,
+        *,
+        kind: AuditOperationKind,
+        balance_before: Decimal,
+        balance_after: Decimal,
+    ) -> Account:
+        """Move one account's balance under a chosen operation kind."""
+        account = Account.objects.create(user=self.user, balance=balance_before)
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(kind):
+            account.balance = balance_after
+            account.save()
+        return account
+
     def _make_archival_bucket(self, count: int) -> Account:
         """Write ``count`` operation-id-less updates in the same second."""
         account = Account.objects.create(
@@ -502,3 +518,114 @@ class AuditLogViewTests(TestCase):
 
         response = self.client.get(reverse('system:auditlog'))
         self.assertEqual(list(response.context['rendered_operations']), [])
+
+    def test_single_account_change_gives_one_chip_and_signed_total(
+        self,
+    ) -> None:
+        """One account moved: one chip, and the total is its movement."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.INCOME,
+            balance_before=Decimal('1000.00'),
+            balance_after=Decimal('1500.00'),
+        )
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(len(operation.balance_chips), 1)
+        chip = operation.balance_chips[0]
+        self.assertEqual(chip.before, f'1{NBSP}000,00{NBSP}RUB')
+        self.assertEqual(chip.after, f'1{NBSP}500,00{NBSP}RUB')
+        self.assertEqual(chip.movement, f'+500,00{NBSP}RUB')
+        self.assertFalse(chip.negative)
+        if operation.total is None:
+            self.fail('у операции нет итога')
+        self.assertEqual(operation.total.amount, chip.movement)
+        self.assertFalse(operation.total.negative)
+        self.assertFalse(operation.total.is_shift)
+
+    def test_amount_edit_total_is_marked_as_balance_shift(self) -> None:
+        """An amount edit's total is the balance shift, marked as such."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.TRANSACTION_EDIT,
+            balance_before=Decimal('1250.00'),
+            balance_after=Decimal('1000.00'),
+        )
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(len(operation.balance_chips), 1)
+        chip = operation.balance_chips[0]
+        self.assertTrue(chip.negative)
+        if operation.total is None:
+            self.fail('у операции нет итога')
+        self.assertEqual(operation.total.amount, f'-250,00{NBSP}RUB')
+        self.assertTrue(operation.total.negative)
+        self.assertTrue(operation.total.is_shift)
+
+    def test_direct_balance_edit_total_is_marked_as_balance_shift(
+        self,
+    ) -> None:
+        """Editing an account's balance field is also an amount edit."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.ACCOUNT_EDIT,
+            balance_before=Decimal('1000.00'),
+            balance_after=Decimal('1200.00'),
+        )
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        if operation.total is None:
+            self.fail('у операции нет итога')
+        self.assertEqual(operation.total.amount, f'+200,00{NBSP}RUB')
+        self.assertTrue(operation.total.is_shift)
+
+    def test_transfer_gives_two_chips_with_matching_amounts(self) -> None:
+        """A transfer gives two chips whose movements cancel out."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(len(operation.balance_chips), 2)
+        by_account = {
+            chip.account_name: chip for chip in operation.balance_chips
+        }
+        from_chip = by_account.get('Наличные')
+        to_chip = by_account.get('Т-Банк')
+        if from_chip is None or to_chip is None:
+            self.fail('чипы построены не для обоих счетов перевода')
+        self.assertTrue(from_chip.negative)
+        self.assertFalse(to_chip.negative)
+        self.assertEqual(from_chip.movement, f'-200,00{NBSP}RUB')
+        self.assertEqual(to_chip.movement, f'+200,00{NBSP}RUB')
+        if operation.total is None:
+            self.fail('у операции нет итога')
+        self.assertIsNone(operation.total.negative)
+        self.assertEqual(operation.total.amount, f'200,00{NBSP}RUB')
+        self.assertFalse(operation.total.is_shift)
+
+    def test_rename_only_change_has_no_balance_chips_or_total(self) -> None:
+        """A field edit with no money effect gets no chips and no total."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Тинькофф',
+            balance=Decimal('100.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        with audit_operation(AuditOperationKind.ACCOUNT_EDIT):
+            account.name_account = 'Т-Банк'
+            account.save()
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(operation.balance_chips, [])
+        self.assertIsNone(operation.total)
+
+    def test_archival_balance_change_gets_no_chips(self) -> None:
+        """A heuristically-glued group never gets a balance chip."""
+        self._make_archival_bucket(2)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertTrue(operation.archival)
+        self.assertEqual(operation.balance_chips, [])
+        self.assertIsNone(operation.total)
