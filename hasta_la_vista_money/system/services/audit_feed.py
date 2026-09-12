@@ -111,8 +111,6 @@ _PARTICIPANT_FIELDS: Final[dict[str, frozenset[str]]] = {
     for model_label, fields in AUDIT_FIELDS.items()
 }
 
-# Which entry of a (possibly multi-model) operation the caption is read
-# off: the model the operation kind is actually about.
 _CAPTION_MODEL_FOR_KIND: Final[dict[AuditOperationKind, str]] = {
     AuditOperationKind.TRANSFER: TRANSFER_LABEL,
     AuditOperationKind.RECEIPT_PURCHASE: RECEIPT_LABEL,
@@ -335,8 +333,6 @@ def _build_operation(
         title=_title_for(entries, rendered, operation_kind),
         created_at=created_at,
         archival=archival,
-        # The archival group's composition is a guess, so it gets no
-        # caption either — same reasoning as the balance chips above.
         caption='' if archival else _caption_for(operation_kind, rendered),
         entries=rendered,
         balance_chips=balance_chips,
