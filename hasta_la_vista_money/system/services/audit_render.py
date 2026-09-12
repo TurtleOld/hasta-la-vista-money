@@ -64,6 +64,7 @@ class RenderedChange:
     label: str
     old: str | None
     new: str | None
+    attname: str = ''
 
 
 @dataclass(frozen=True)
@@ -416,6 +417,7 @@ def _render_change(
     old_raw, new_raw = sides[attname]
     return RenderedChange(
         label=str(audit_field.label),
+        attname=attname,
         old=_render_side(
             entry,
             sides,
