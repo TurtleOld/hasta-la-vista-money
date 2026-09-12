@@ -110,6 +110,26 @@
                             {% endblocktranslate %}
                         </div>
                         {% else %}
+                        {% if operation.archival %}
+                        <div class="audit-balance-archival" title="{% translate 'Запись старше идентификатора операции — восстановить остаток по ней нельзя' %}">
+                            {% translate 'Остаток не восстановить' %}
+                        </div>
+                        {% elif operation.balance_chips %}
+                        <div class="audit-balance-chips">
+                            {% for chip in operation.balance_chips %}
+                            <span class="audit-chip">
+                                <span class="audit-chip-account">{{ chip.account_name }}</span>
+                                <span class="audit-chip-before">{{ chip.before }}</span>
+                                <span class="audit-chip-arrow">→</span>
+                                <span class="audit-chip-movement {% if chip.negative %}audit-chip-negative{% else %}audit-chip-positive{% endif %}">{{ chip.movement }}</span>
+                                <span class="audit-chip-arrow">→</span>
+                                <span class="audit-chip-after">{{ chip.after }}</span>
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="audit-balance-none">{% translate 'Без изменения баланса' %}</div>
+                        {% endif %}
                         <div class="audit-diff-list">
                             {% for item in operation.entries %}
                             {% with entry=item.entry %}
@@ -145,6 +165,12 @@
                     </div>
 
                     <div class="audit-row-date">
+                        {% if operation.total %}
+                        <span class="audit-row-total{% if operation.total.negative == True %} audit-total-negative{% elif operation.total.negative == False %} audit-total-positive{% endif %}">{{ operation.total.amount }}</span>
+                        {% if operation.total.is_shift %}
+                        <span class="audit-total-hint">{% translate 'сдвиг баланса' %}</span>
+                        {% endif %}
+                        {% endif %}
                         <span class="audit-date-primary">{{ operation.created_at|date:"d.m.Y" }}</span>
                         <span class="audit-date-time">{{ operation.created_at|date:"H:i:s" }}</span>
                     </div>

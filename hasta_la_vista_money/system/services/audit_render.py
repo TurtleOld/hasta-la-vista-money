@@ -67,12 +67,24 @@ class RenderedChange:
 
 
 @dataclass(frozen=True)
+class BalanceEffect:
+    """One account's contribution to an operation: before → move → after."""
+
+    account_name: str
+    before: str
+    movement: str
+    after: str
+    negative: bool
+
+
+@dataclass(frozen=True)
 class RenderedEntry:
     """An audit entry together with its visible changes."""
 
     entry: AuditLog
     changes: list[RenderedChange] = field(default_factory=list)
     legacy: bool = False
+    balance_effect: BalanceEffect | None = None
 
     @property
     def has_changes(self) -> bool:
@@ -323,7 +335,48 @@ def _render_entry(
         _render_change(entry, sides, attname, audit_field, context)
         for attname, audit_field in _visible_fields(entry, sides)
     ]
-    return RenderedEntry(entry=entry, changes=changes)
+    return RenderedEntry(
+        entry=entry,
+        changes=changes,
+        balance_effect=_balance_effect(entry, sides, context),
+    )
+
+
+def _balance_effect(
+    entry: AuditLog,
+    sides: Mapping[str, tuple[Any, Any]],
+    context: _ReadContext,
+) -> BalanceEffect | None:
+    """Before → movement → after triplet for one account's balance change."""
+    if entry.model_name != ACCOUNT_LABEL or 'balance' not in sides:
+        return None
+    old_raw, new_raw = sides['balance']
+    if isinstance(old_raw, _Absent) or isinstance(new_raw, _Absent):
+        return None
+    try:
+        old_value = Decimal(str(old_raw))
+        new_value = Decimal(str(new_raw))
+    except InvalidOperation:
+        return None
+    currency = context.currency_for(
+        entry,
+        sides,
+        CurrencySource.SELF,
+        old_side=False,
+    )
+    delta = new_value - old_value
+    return BalanceEffect(
+        account_name=entry.object_name or EMPTY,
+        before=_format_money(old_value, currency),
+        movement=_format_signed_money(delta, currency),
+        after=_format_money(new_value, currency),
+        negative=delta < 0,
+    )
+
+
+def _format_signed_money(value: Decimal, currency_code: str) -> str:
+    formatted = _format_money(value, currency_code)
+    return formatted if value < 0 else f'+{formatted}'
 
 
 def _legacy_changes(diff: Mapping[str, Any]) -> list[RenderedChange]:

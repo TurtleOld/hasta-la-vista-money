@@ -29,6 +29,7 @@ from hasta_la_vista_money.system.audit_registry import (
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_render import (
+    BalanceEffect,
     RenderedEntry,
     entry_has_visible_change,
     render_entries,
@@ -52,6 +53,17 @@ _MODEL_PRIORITY: Final[tuple[str, ...]] = (
     ACCOUNT_LABEL,
 )
 
+# Operations whose right-hand total must show the balance shift the edit
+# caused, not the new value of the edited amount — the two only coincide by
+# accident, and showing the shift unlabeled reads as the operation's amount.
+_AMOUNT_EDIT_KINDS: Final = frozenset(
+    {
+        AuditOperationKind.TRANSACTION_EDIT,
+        AuditOperationKind.RECEIPT_EDIT,
+        AuditOperationKind.ACCOUNT_EDIT,
+    },
+)
+
 _KIND_TITLES: Final[dict[str, Any]] = {
     AuditOperationKind.TRANSFER: _('Перевод'),
     AuditOperationKind.RECEIPT_PURCHASE: _('Чек'),
@@ -71,6 +83,22 @@ _KIND_TITLES: Final[dict[str, Any]] = {
 
 
 @dataclass(frozen=True)
+class OperationTotal:
+    """The operation's signed total, printed next to the time.
+
+    ``negative`` is ``None`` for a transfer's total: it is the amount moved,
+    not a gain or a loss, so it carries no sign color. ``is_shift`` marks a
+    total that is a balance shift rather than the operation's own amount —
+    true only for an edit of an amount field, where the two could otherwise
+    be mistaken for each other.
+    """
+
+    amount: str
+    negative: bool | None
+    is_shift: bool
+
+
+@dataclass(frozen=True)
 class RenderedOperation:
     """One row of the audit feed: an operation, not a raw entry."""
 
@@ -80,6 +108,8 @@ class RenderedOperation:
     archival: bool
     entries: list[RenderedEntry] = field(default_factory=list)
     collapsed_count: int | None = None
+    balance_chips: list[BalanceEffect] = field(default_factory=list)
+    total: OperationTotal | None = None
 
     @property
     def has_changes(self) -> bool:
@@ -219,13 +249,68 @@ def _build_operation(
     if archival and size > ARCHIVAL_BUCKET_LIMIT:
         return _build_collapsed_operation(group_key, entries, created_at, size)
     rendered = [item for item in render_entries(entries) if item.has_changes]
+    # An archival group's composition is only a guess, so its balance chain
+    # cannot be trusted either — it gets no chips, not even wrong ones.
+    balance_chips = (
+        []
+        if archival
+        else [
+            item.balance_effect
+            for item in rendered
+            if item.balance_effect is not None
+        ]
+    )
     return RenderedOperation(
         group_key=group_key,
         title=_title_for(entries),
         created_at=created_at,
         archival=archival,
         entries=rendered,
+        balance_chips=balance_chips,
+        total=_build_total(balance_chips, rendered, entries),
     )
+
+
+def _operation_kind_of(entries: list[AuditLog]) -> AuditOperationKind | None:
+    """The operation's kind, if any entry carries one and it's still known."""
+    kind = next((entry.kind for entry in entries if entry.kind), None)
+    if not kind:
+        return None
+    try:
+        return AuditOperationKind(kind)
+    except ValueError:
+        return None
+
+
+def _build_total(
+    chips: list[BalanceEffect],
+    rendered: list[RenderedEntry],
+    entries: list[AuditLog],
+) -> OperationTotal | None:
+    if not chips:
+        return None
+    if len(chips) == 1:
+        chip = chips[0]
+        return OperationTotal(
+            amount=chip.movement,
+            negative=chip.negative,
+            is_shift=_operation_kind_of(entries) in _AMOUNT_EDIT_KINDS,
+        )
+    transfer_amount = _find_transfer_amount(rendered)
+    if transfer_amount is None:
+        return None
+    return OperationTotal(amount=transfer_amount, negative=None, is_shift=False)
+
+
+def _find_transfer_amount(rendered: list[RenderedEntry]) -> str | None:
+    amount_label = str(_('Сумма'))
+    for item in rendered:
+        if item.entry.model_name != TRANSFER_LABEL:
+            continue
+        for change in item.changes:
+            if change.label == amount_label:
+                return change.new or change.old
+    return None
 
 
 def _build_collapsed_operation(
@@ -260,16 +345,11 @@ def _build_collapsed_operation(
 
 
 def _title_for(entries: list[AuditLog]) -> str:
-    kind = next((entry.kind for entry in entries if entry.kind), None)
-    if kind:
-        try:
-            operation_kind = AuditOperationKind(kind)
-        except ValueError:
-            operation_kind = None
-        if operation_kind is not None:
-            label = _KIND_TITLES.get(operation_kind)
-            if label is not None:
-                return str(label)
+    operation_kind = _operation_kind_of(entries)
+    if operation_kind is not None:
+        label = _KIND_TITLES.get(operation_kind)
+        if label is not None:
+            return str(label)
     return _fallback_title(entries)
 
 
