@@ -72,6 +72,7 @@ class RenderedChange:
 class BalanceEffect:
     """One account's contribution to an operation: before → move → after."""
 
+    account_id: int
     account_name: str
     before: str
     movement: str
@@ -386,6 +387,7 @@ def _balance_effect(
     )
     delta = new_value - old_value
     return BalanceEffect(
+        account_id=int(entry.object_pk),
         account_name=entry.object_name or EMPTY,
         before=_format_money(old_value, currency),
         movement=_format_signed_money(delta, currency),

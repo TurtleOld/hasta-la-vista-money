@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
-from django.db.models import Count, Max, QuerySet, Value
+from django.db.models import Count, Max, Q, QuerySet, Value
 from django.db.models.fields import CharField
 from django.db.models.functions import Cast, Coalesce, Concat, TruncSecond
 from django.utils import timezone
@@ -279,6 +279,49 @@ def list_operations(
         previous_page_number=page_number - 1 if page_number > 1 else None,
         next_page_number=(page_number + 1 if page_number < num_pages else None),
     )
+
+
+def parse_account_id(raw: str) -> int | None:
+    """The ``account`` GET param as an id, or ``None`` when absent/invalid."""
+    return int(raw) if raw.isdigit() else None
+
+
+def scope_to_account(
+    queryset: QuerySet[AuditLog],
+    user: 'User',
+    account_pk: str,
+) -> QuerySet[AuditLog]:
+    """Restrict ``queryset`` to whole operations with a consequence for
+    one account.
+
+    An operation "touches" an account exactly when one of its own entries is
+    that account's row — the same entries :func:`_balance_effect` reads to
+    build a balance chip. Matching happens on that entry first, then the
+    whole operation it belongs to (every entry sharing its ``operation_id``,
+    or its archival second-bucket) is kept, so the account's row is never
+    handed to the feed alone.
+    """
+    account_entries = AuditLog.objects.filter(
+        user=user,
+        model_name=ACCOUNT_LABEL,
+        object_pk=account_pk,
+    ).values_list('operation_id', 'created_at')
+    real_ids = {op_id for op_id, _ in account_entries if op_id is not None}
+    archival_seconds = {
+        created_at.replace(microsecond=0)
+        for op_id, created_at in account_entries
+        if op_id is None
+    }
+    if not real_ids and not archival_seconds:
+        return queryset.none()
+    condition = Q(operation_id__in=real_ids)
+    for second in archival_seconds:
+        condition |= Q(
+            operation_id__isnull=True,
+            created_at__gte=second,
+            created_at__lt=second + timedelta(seconds=1),
+        )
+    return queryset.filter(condition)
 
 
 def _build_page_operations(

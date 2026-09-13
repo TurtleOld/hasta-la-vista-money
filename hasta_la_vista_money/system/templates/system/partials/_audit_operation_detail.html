@@ -19,7 +19,7 @@
     {% elif operation.balance_chips %}
     <div class="audit-balance-chips">
         {% for chip in operation.balance_chips %}
-        <span class="audit-chip">
+        <span class="audit-chip{% if filter_account_id and chip.account_id == filter_account_id %} audit-chip--highlighted{% endif %}">
             <span class="audit-chip-account">{{ chip.account_name }}</span>
             <span class="audit-chip-before">{{ chip.before }}</span>
             <span class="audit-chip-arrow">→</span>
