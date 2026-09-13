@@ -22,65 +22,103 @@
             </div>
         </header>
 
-        <form method="get" class="audit-filters" id="audit-filter-form">
-            <div class="audit-filter-row">
-                <div class="audit-filter-group">
-                    <label class="audit-filter-label" for="id_kind">{% translate 'Вид операции' %}</label>
-                    <div class="audit-select-wrap">
-                        <select name="kind" id="id_kind" class="audit-select" data-autosubmit>
-                            <option value="" {% if not filter.kind %}selected{% endif %}>{% translate 'Все виды' %}</option>
-                            {% for value, label in kind_choices %}
-                                <option value="{{ value }}" {% if filter.kind == value %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                        <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                        </svg>
-                    </div>
-                </div>
+        {% translate 'Вид' as chip_kind_default %}
+        {% translate 'Счёт' as chip_account_default %}
+        {% translate 'Период' as chip_period_default %}
+        <div class="audit-filters" data-audit-filters>
+            <div class="audit-chip-row" data-audit-chip-row>
+                {% include 'system/partials/_audit_filter_chip.html' with field='kind' active=filter.kind value=kind_label default_label=chip_kind_default %}
+                {% include 'system/partials/_audit_filter_chip.html' with field='account' active=filter.account value=account_label default_label=chip_account_default %}
+                {% include 'system/partials/_audit_filter_chip.html' with field='period' active=period_active value=period_label default_label=chip_period_default %}
 
-                <div class="audit-filter-group">
-                    <label class="audit-filter-label" for="id_account">{% translate 'Счёт' %}</label>
-                    <div class="audit-select-wrap">
-                        <select name="account" id="id_account" class="audit-select" data-autosubmit>
-                            <option value="" {% if not filter.account %}selected{% endif %}>{% translate 'Все счета' %}</option>
-                            {% for value, label in account_choices %}
-                                <option value="{{ value }}" {% if filter.account == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                        <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <div class="audit-filter-group">
-                    <label class="audit-filter-label" for="id_date_range">{% translate 'Период' %}</label>
-                    <div class="audit-input-wrap">
-                        <svg class="audit-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                        </svg>
-                        <input type="text" id="id_date_range" class="audit-input audit-input-range"
-                               placeholder="{% translate 'Выберите период' %}"
-                               autocomplete="off" readonly
-                               data-flatpickr data-flatpickr-mode="range"
-                               data-flatpickr-from="id_date_from"
-                               data-flatpickr-to="id_date_to">
-                    </div>
-                    <input type="hidden" name="date_from" id="id_date_from" value="{{ filter.date_from }}">
-                    <input type="hidden" name="date_to" id="id_date_to" value="{{ filter.date_to }}">
-                </div>
-
-                {% if filter.kind or filter.account or filter.date_from or filter.date_to %}
-                <a href="{% url 'system:auditlog' %}" class="audit-reset-btn" title="{% translate 'Сбросить фильтры' %}">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    {% translate 'Сбросить' %}
-                </a>
+                {% if active_filter_count >= 2 %}
+                    <a href="{% url 'system:auditlog' %}" class="audit-chip-btn audit-chip-btn--reset">
+                        {% translate 'Сбросить' %} &times;
+                    </a>
                 {% endif %}
             </div>
-        </form>
+
+            <form method="get" id="audit-filter-form" data-audit-filter-form hidden>
+                <select name="kind" id="id_kind">
+                    <option value="" {% if not filter.kind %}selected{% endif %}>{% translate 'Все виды' %}</option>
+                    {% for value, label in kind_choices %}
+                        <option value="{{ value }}" {% if filter.kind == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="account" id="id_account">
+                    <option value="" {% if not filter.account %}selected{% endif %}>{% translate 'Все счета' %}</option>
+                    {% for value, label in account_choices %}
+                        <option value="{{ value }}" {% if filter.account == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="date_from" id="id_date_from" value="{{ filter.date_from }}">
+                <input type="hidden" name="date_to" id="id_date_to" value="{{ filter.date_to }}">
+            </form>
+
+            <dialog class="audit-sheet" data-audit-sheet="kind" aria-label="{% translate 'Вид операции' %}">
+                <div class="audit-sheet-grip" aria-hidden="true"></div>
+                <h2 class="audit-sheet-title">{% translate 'Вид операции' %}</h2>
+                <div class="audit-sheet-options">
+                    <button type="button" class="audit-sheet-option{% if not filter.kind %} audit-sheet-option--selected{% endif %}"
+                            data-audit-pick="kind" data-value="">
+                        {% translate 'Все виды' %}
+                        {% if not filter.kind %}<span class="audit-sheet-tick" aria-hidden="true">&check;</span>{% endif %}
+                    </button>
+                    {% for value, label in kind_choices %}
+                        <button type="button" class="audit-sheet-option{% if filter.kind == value %} audit-sheet-option--selected{% endif %}"
+                                data-audit-pick="kind" data-value="{{ value }}">
+                            {{ label }}
+                            {% if filter.kind == value %}<span class="audit-sheet-tick" aria-hidden="true">&check;</span>{% endif %}
+                        </button>
+                    {% endfor %}
+                </div>
+            </dialog>
+
+            <dialog class="audit-sheet" data-audit-sheet="account" aria-label="{% translate 'Счёт' %}">
+                <div class="audit-sheet-grip" aria-hidden="true"></div>
+                <h2 class="audit-sheet-title">{% translate 'Счёт' %}</h2>
+                <div class="audit-sheet-options">
+                    <button type="button" class="audit-sheet-option{% if not filter.account %} audit-sheet-option--selected{% endif %}"
+                            data-audit-pick="account" data-value="">
+                        {% translate 'Все счета' %}
+                        {% if not filter.account %}<span class="audit-sheet-tick" aria-hidden="true">&check;</span>{% endif %}
+                    </button>
+                    {% for value, label in account_choices %}
+                        <button type="button" class="audit-sheet-option{% if filter.account == value|stringformat:"s" %} audit-sheet-option--selected{% endif %}"
+                                data-audit-pick="account" data-value="{{ value }}">
+                            {{ label }}
+                            {% if filter.account == value|stringformat:"s" %}<span class="audit-sheet-tick" aria-hidden="true">&check;</span>{% endif %}
+                        </button>
+                    {% endfor %}
+                </div>
+            </dialog>
+
+            <dialog class="audit-sheet audit-sheet--period" data-audit-sheet="period" aria-label="{% translate 'Период' %}">
+                <div class="audit-sheet-nav">
+                    <button type="button" class="audit-sheet-back" data-audit-sheet-close>&lsaquo; {% translate 'Назад' %}</button>
+                    <span class="audit-sheet-nav-title">{% translate 'Период' %}</span>
+                </div>
+                <div class="audit-sheet-body">
+                    <div class="audit-presets" data-audit-presets>
+                        <button type="button" class="audit-preset" data-audit-preset="today">{% translate 'Сегодня' %}</button>
+                        <button type="button" class="audit-preset" data-audit-preset="last-7">{% translate '7 дней' %}</button>
+                        <button type="button" class="audit-preset" data-audit-preset="this-month">{% translate 'Этот месяц' %}</button>
+                        <button type="button" class="audit-preset" data-audit-preset="last-month">{% translate 'Прошлый месяц' %}</button>
+                    </div>
+                    <div class="audit-period-fields">
+                        <label class="audit-field">
+                            <span class="audit-field-label">{% translate 'С' %}</span>
+                            <input type="date" class="audit-field-input" data-audit-period-from value="{{ filter.date_from }}">
+                        </label>
+                        <label class="audit-field">
+                            <span class="audit-field-label">{% translate 'По' %}</span>
+                            <input type="date" class="audit-field-input" data-audit-period-to value="{{ filter.date_to }}">
+                        </label>
+                    </div>
+                    <button type="button" class="audit-sheet-apply" data-audit-period-apply>{% translate 'Применить' %}</button>
+                </div>
+            </dialog>
+        </div>
 
         <div class="audit-panel">
             {% if rendered_operations %}
