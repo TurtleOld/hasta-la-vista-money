@@ -25,11 +25,12 @@
         <form method="get" class="audit-filters" id="audit-filter-form">
             <div class="audit-filter-row">
                 <div class="audit-filter-group">
-                    <label class="audit-filter-label" for="id_model">{% translate 'Модель' %}</label>
+                    <label class="audit-filter-label" for="id_kind">{% translate 'Вид операции' %}</label>
                     <div class="audit-select-wrap">
-                        <select name="model" id="id_model" class="audit-select" data-autosubmit>
-                            {% for value, label in model_choices %}
-                                <option value="{{ value }}" {% if filter.model == value %}selected{% endif %}>{{ label }}</option>
+                        <select name="kind" id="id_kind" class="audit-select" data-autosubmit>
+                            <option value="" {% if not filter.kind %}selected{% endif %}>{% translate 'Все виды' %}</option>
+                            {% for value, label in kind_choices %}
+                                <option value="{{ value }}" {% if filter.kind == value %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                         <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -39,12 +40,12 @@
                 </div>
 
                 <div class="audit-filter-group">
-                    <label class="audit-filter-label" for="id_action">{% translate 'Действие' %}</label>
+                    <label class="audit-filter-label" for="id_account">{% translate 'Счёт' %}</label>
                     <div class="audit-select-wrap">
-                        <select name="action" id="id_action" class="audit-select" data-autosubmit>
-                            <option value="" {% if not filter.action %}selected{% endif %}>{% translate 'Все действия' %}</option>
-                            {% for value, label in action_choices %}
-                                <option value="{{ value }}" {% if filter.action == value %}selected{% endif %}>{{ label }}</option>
+                        <select name="account" id="id_account" class="audit-select" data-autosubmit>
+                            <option value="" {% if not filter.account %}selected{% endif %}>{% translate 'Все счета' %}</option>
+                            {% for value, label in account_choices %}
+                                <option value="{{ value }}" {% if filter.account == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                         <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -70,7 +71,7 @@
                     <input type="hidden" name="date_to" id="id_date_to" value="{{ filter.date_to }}">
                 </div>
 
-                {% if filter.model or filter.action or filter.date_from or filter.date_to %}
+                {% if filter.kind or filter.account or filter.date_from or filter.date_to %}
                 <a href="{% url 'system:auditlog' %}" class="audit-reset-btn" title="{% translate 'Сбросить фильтры' %}">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -95,7 +96,7 @@
                 <a href="{{ operation_url }}{% if feed_querystring %}?{{ feed_querystring }}{% endif %}"
                    class="audit-row-link"
                    data-audit-toggle
-                   data-audit-url="{{ operation_url }}">
+                   data-audit-url="{{ operation_url }}{% if feed_querystring %}?{{ feed_querystring }}{% endif %}">
                     <div class="audit-row-content">
                         <div class="audit-row-operation">
                             <span class="audit-operation-title">{{ operation.title }}</span>
@@ -125,7 +126,7 @@
                             {% elif operation.balance_chips %}
                             <div class="audit-balance-chips">
                                 {% for chip in operation.balance_chips %}
-                                <span class="audit-chip">
+                                <span class="audit-chip{% if filter_account_id and chip.account_id == filter_account_id %} audit-chip--highlighted{% endif %}">
                                     <span class="audit-chip-account">{{ chip.account_name }}</span>
                                     <span class="audit-chip-before">{{ chip.before }}</span>
                                     <span class="audit-chip-arrow">→</span>
@@ -159,7 +160,7 @@
             {% if is_paginated %}
             <div class="audit-pagination">
                 {% if page_obj.has_previous %}
-                    <a class="audit-page-link" href="?{% if filter.model %}model={{ filter.model }}&{% endif %}{% if filter.action %}action={{ filter.action }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                    <a class="audit-page-link" href="?{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                     </a>
                 {% endif %}
@@ -169,7 +170,7 @@
                 </span>
 
                 {% if page_obj.has_next %}
-                    <a class="audit-page-link" href="?{% if filter.model %}model={{ filter.model }}&{% endif %}{% if filter.action %}action={{ filter.action }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
+                    <a class="audit-page-link" href="?{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
                     </a>
                 {% endif %}
@@ -182,7 +183,7 @@
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
                 <p>{% translate 'Записей не найдено' %}</p>
-                {% if filter.model or filter.action or filter.date_from or filter.date_to %}
+                {% if filter.kind or filter.account or filter.date_from or filter.date_to %}
                     <a href="{% url 'system:auditlog' %}" class="audit-reset-btn mt-3">{% translate 'Сбросить фильтры' %}</a>
                 {% endif %}
             </div>

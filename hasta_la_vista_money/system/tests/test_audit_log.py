@@ -851,6 +851,100 @@ class AuditLogViewTests(TestCase):
         self.assertTrue(operation.archival)
         self.assertEqual(operation.caption, '')
 
+    def test_model_and_action_filters_are_removed(self) -> None:
+        """The retired model/action filters are gone from the feed."""
+        response = self.client.get(reverse('system:auditlog'))
+        self.assertNotIn('model_choices', response.context)
+        self.assertNotIn('action_choices', response.context)
+        self.assertNotContains(response, 'id="id_model"')
+        self.assertNotContains(response, 'id="id_action"')
+
+    def test_kind_filter_only_shows_operations_of_that_kind(self) -> None:
+        """The kind filter narrows the feed to operations of that kind."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.INCOME,
+            balance_before=Decimal('100.00'),
+            balance_after=Decimal('200.00'),
+        )
+        # Not through the helper: it clears every AuditLog row for this
+        # user, which would wipe out the income operation created above.
+        other_account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('200.00'),
+        )
+        with audit_operation(AuditOperationKind.EXPENSE):
+            other_account.balance = Decimal('150.00')
+            other_account.save()
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'kind': AuditOperationKind.INCOME.value},
+        )
+
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        self.assertEqual(operations[0].title, 'Доход')
+
+    def test_kind_filter_excludes_archival_records(self) -> None:
+        """Archival records carry no kind, so a kind filter drops them."""
+        self._make_archival_bucket(2)
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'kind': AuditOperationKind.INCOME.value},
+        )
+
+        self.assertEqual(list(response.context['rendered_operations']), [])
+
+    def test_account_filter_shows_whole_operation_with_highlighted_chip(
+        self,
+    ) -> None:
+        """Filtering by account keeps the whole operation, chip flagged."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+        from_account = Account.objects.get(name_account='Наличные')
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'account': from_account.pk},
+        )
+
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        operation = operations[0]
+        self.assertEqual(len(operation.balance_chips), 2)
+        self.assertEqual(response.context['filter_account_id'], from_account.pk)
+        highlighted_ids = {
+            chip.account_id
+            for chip in operation.balance_chips
+            if chip.account_id == from_account.pk
+        }
+        self.assertEqual(highlighted_ids, {from_account.pk})
+
+    def test_account_filter_excludes_operations_for_other_accounts(
+        self,
+    ) -> None:
+        """An account untouched by any operation gives an empty feed."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.INCOME,
+            balance_before=Decimal('0.00'),
+            balance_after=Decimal('50.00'),
+        )
+        other_account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('10.00'),
+        )
+        AuditLog.objects.filter(
+            model_name=ACCOUNT_LABEL,
+            object_pk=str(other_account.pk),
+        ).delete()
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'account': other_account.pk},
+        )
+
+        self.assertEqual(list(response.context['rendered_operations']), [])
+
 
 class AuditOperationViewTests(TestCase):
     """The operation screen: one operation, opened at its own address."""

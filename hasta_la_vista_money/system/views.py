@@ -16,10 +16,12 @@ from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_feed import (
     get_operation_detail,
     list_operations,
+    scope_to_account,
 )
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.users.models import User
@@ -108,21 +110,17 @@ class OfflineView(TemplateView):
 
 AUDIT_PAGE_SIZE = 30
 
-AUDITED_MODEL_CHOICES = [
-    ('', 'Все модели'),
-    ('finance_account.Transaction', 'Транзакции'),
-    ('receipts.Receipt', 'Чеки'),
-    ('finance_account.TransferMoneyLog', 'Переводы'),
-    ('finance_account.Account', 'Счета'),
-]
-
 
 class AuditLogView(LoginRequiredMixin, TemplateView):
     """The audit history feed: one row per operation, not per entry.
 
     Grouping and pagination are delegated to
     :func:`audit_feed.list_operations`, which does both in SQL so that an
-    operation is never split across a page boundary.
+    operation is never split across a page boundary. Filters narrow which
+    operations are shown, never split one: the kind filter relies on every
+    entry of an operation sharing one kind (set once per
+    :func:`audit_operation` block), and the account filter keeps whole
+    operations via :func:`audit_feed.scope_to_account`.
     """
 
     template_name = 'system/auditlog.html'
@@ -133,14 +131,14 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
         qs = AuditLog.objects.filter(
             user=self.request.user,
         ).select_related('user')
-        model = self.request.GET.get('model', '')
+        kind = self.request.GET.get('kind', '')
+        account = self.request.GET.get('account', '')
         date_from = self.request.GET.get('date_from', '')
         date_to = self.request.GET.get('date_to', '')
-        action = self.request.GET.get('action', '')
-        if model:
-            qs = qs.filter(model_name=model)
-        if action:
-            qs = qs.filter(action=action)
+        if kind:
+            qs = qs.filter(kind=kind)
+        if account:
+            qs = scope_to_account(qs, self.request.user, account)
         if date_from:
             qs = qs.filter(created_at__date__gte=date_from)
         if date_to:
@@ -168,14 +166,24 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
         ctx['page_obj'] = feed_page
         ctx['paginator'] = feed_page.paginator
         ctx['is_paginated'] = feed_page.paginator.num_pages > 1
-        ctx['model_choices'] = AUDITED_MODEL_CHOICES
-        ctx['action_choices'] = AuditLog.Action.choices
+        ctx['kind_choices'] = AuditOperationKind.choices
+        if not isinstance(self.request.user, User):
+            raise TypeError('User must be authenticated')
+        ctx['account_choices'] = list(
+            Account.objects.filter(user=self.request.user)
+            .order_by('name_account')
+            .values_list('id', 'name_account'),
+        )
+        account_raw = self.request.GET.get('account', '')
         ctx['filter'] = {
-            'model': self.request.GET.get('model', ''),
-            'action': self.request.GET.get('action', ''),
+            'kind': self.request.GET.get('kind', ''),
+            'account': account_raw,
             'date_from': self.request.GET.get('date_from', ''),
             'date_to': self.request.GET.get('date_to', ''),
         }
+        ctx['filter_account_id'] = (
+            int(account_raw) if account_raw.isdigit() else None
+        )
         ctx['feed_querystring'] = self.request.GET.urlencode()
         return ctx
 
@@ -209,6 +217,10 @@ class AuditOperationView(LoginRequiredMixin, TemplateView):
         if operation is None:
             raise Http404('Операция не найдена')
         ctx['operation'] = operation
+        account_raw = self.request.GET.get('account', '')
+        ctx['filter_account_id'] = (
+            int(account_raw) if account_raw.isdigit() else None
+        )
         back_query = self.request.GET.urlencode()
         ctx['back_url'] = (
             f'{reverse("system:auditlog")}?{back_query}'

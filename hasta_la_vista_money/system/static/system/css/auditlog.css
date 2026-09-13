@@ -418,6 +418,11 @@
   color: var(--audit-negative);
 }
 
+.audit-chip--highlighted {
+  background: var(--audit-halo);
+  box-shadow: inset 0 0 0 1px var(--audit-accent);
+}
+
 .audit-balance-none,
 .audit-balance-archival {
   color: var(--audit-muted);
