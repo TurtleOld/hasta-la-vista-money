@@ -18,6 +18,8 @@ from django.utils import timezone
 from faker import Faker
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
+from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -634,6 +636,56 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.refresh_from_db()
         self.assertEqual(self.upload.imported_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
+
+    def test_decision_is_its_own_resolution_operation(self) -> None:
+        """Resolving a row tags its audit entries as their own operation."""
+        url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.client.post(url, {'decision': 'new'})
+
+        entries = AuditLog.objects.filter(
+            user=self.user,
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        )
+        self.assertTrue(entries.exists())
+        operation_ids = {entry.operation_id for entry in entries}
+        self.assertEqual(len(operation_ids), 1)
+
+    def test_bulk_decision_shares_one_operation_across_rows(self) -> None:
+        """A batch of independent row decisions is one audit operation."""
+        second_row = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=self.candidate.date,
+            amount=Decimal('75.00'),
+            description='Такси в аэропорт',
+            suggested_category='Поездки',
+            source_row_position=1,
+        )
+        url = reverse(
+            'users:bank_statement_reconciliation_bulk',
+            args=[self.upload.pk],
+        )
+
+        self.client.post(
+            url,
+            {
+                'decision': 'new',
+                'confirm_risk': 'true',
+                'rows': [self.row.pk, second_row.pk],
+            },
+        )
+
+        entries = AuditLog.objects.filter(
+            user=self.user,
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        )
+        operation_ids = {entry.operation_id for entry in entries}
+        self.assertEqual(len(operation_ids), 1)
+        self.assertGreaterEqual(entries.count(), 2)
 
     def test_bulk_link_returns_independent_results_and_is_idempotent(
         self,
@@ -2827,6 +2879,60 @@ class TestBankStatementProcessIntegration(TestCase):
         finally:
             pdf_path.unlink()
 
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.BankStatementParser',
+    )
+    def test_run_of_several_rows_is_one_operation_with_a_summary(
+        self,
+        mock_parser_cls: MagicMock,
+    ) -> None:
+        """The sync branch also groups a run under one operation."""
+        self.account.balance = Decimal('10000.00')
+        self.account.save(update_fields=['balance'])
+        base_date = timezone.now()
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': base_date - timedelta(days=2 - i),
+                    'amount': Decimal(f'-{500 + i}.00'),
+                    'description': f'Такси {i}',
+                    'source_ref': f'sync-ref-{i}',
+                }
+                for i in range(3)
+            ],
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            pdf_path = Path(temp_file.name)
+
+        try:
+            process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+        finally:
+            pdf_path.unlink()
+
+        run_entries = AuditLog.objects.filter(
+            user=self.user,
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        operation_ids = {entry.operation_id for entry in run_entries}
+        self.assertEqual(len(operation_ids), 1)
+        summary = AuditLog.objects.get(
+            user=self.user,
+            model_name=STATEMENT_IMPORT_LABEL,
+        )
+        self.assertEqual(summary.diff['created'], 3)
+
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_process_bank_statement_with_zero_amount(
         self,
@@ -4071,6 +4177,117 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             name='Продукты',
         ).first()
         self.assertIsNotNone(category)
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_run_of_several_rows_is_one_operation_with_a_summary(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        """A multi-row run shares one operation_id, set outside the loop."""
+        mock_classifier = MagicMock()
+        mock_classifier.classify.return_value = 'Такси'
+        mock_container = MagicMock()
+        mock_container.users.category_classifier.return_value = mock_classifier
+        mock_container_cls.return_value = mock_container
+
+        base_date = timezone.now()
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': base_date - timedelta(days=2 - i),
+                    'amount': Decimal(f'-{500 + i}.00'),
+                    'description': f'Такси {i}',
+                    'source_ref': f'ref-{i}',
+                }
+                for i in range(3)
+            ],
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/three-rows.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        run_entries = AuditLog.objects.filter(
+            user=self.user,
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        operation_ids = {entry.operation_id for entry in run_entries}
+        self.assertEqual(len(operation_ids), 1)
+        summary = AuditLog.objects.get(
+            user=self.user,
+            model_name=STATEMENT_IMPORT_LABEL,
+        )
+        self.assertEqual(summary.diff['created'], 3)
+        self.assertEqual(summary.diff['skipped_duplicates'], 0)
+        self.assertEqual(summary.operation_id, next(iter(operation_ids)))
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_all_rows_duplicate_still_writes_a_summary(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        """A run whose rows are all duplicates is still recorded."""
+        mock_container_cls.return_value = MagicMock()
+        existing_date = timezone.now()
+        existing = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=Category.objects.create(
+                user=self.user,
+                name='Такси',
+                type=TransactionType.EXPENSE,
+            ),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('500.00'),
+            date=existing_date,
+            source_ref='dup-ref',
+        )
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': existing.date,
+                    'amount': Decimal('-500.00'),
+                    'description': 'Такси',
+                    'source_ref': 'dup-ref',
+                },
+            ],
+        )
+        mock_parser_cls.return_value = mock_parser
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/all-duplicate.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        summary = AuditLog.objects.get(
+            user=self.user,
+            model_name=STATEMENT_IMPORT_LABEL,
+        )
+        self.assertEqual(summary.diff['created'], 0)
+        self.assertEqual(summary.diff['skipped_duplicates'], 1)
 
     @patch(
         'hasta_la_vista_money.users.tasks.ApplicationContainer',

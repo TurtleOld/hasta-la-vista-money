@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.apps import apps
@@ -13,6 +13,7 @@ from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.audit_registry import (
     AUDIT_FIELDS,
     HIDDEN_AUDIT_FIELDS,
+    STATEMENT_IMPORT_LABEL,
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -22,6 +23,9 @@ from hasta_la_vista_money.system.services.audit_render import (
     RenderedChange,
     RenderedEntry,
     render_entries,
+)
+from hasta_la_vista_money.system.services.audit_statement_import import (
+    record_statement_import_summary,
 )
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -1195,3 +1199,184 @@ class AuditOperationViewTests(TestCase):
 
         self.assertContains(response, 'model=' + ACCOUNT_LABEL)
         self.assertContains(response, 'data-audit-toggle')
+
+
+class StatementImportOperationTests(TestCase):
+    """A statement import run renders as one operation, not per row."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='statement-import-viewer',
+            password='audit-password',
+        )
+        self.client.force_login(self.user)
+
+    def _run_import(
+        self,
+        *,
+        account: Account,
+        rows: int,
+        skipped_duplicates: int = 0,
+        period_from: date | None = None,
+        period_to: date | None = None,
+    ) -> None:
+        """Simulate a run's writes the way process_bank_statement does."""
+        with audit_operation(AuditOperationKind.STATEMENT_IMPORT):
+            category, _ = Category.objects.get_or_create(
+                user=self.user,
+                name='Прочее',
+                type=TransactionType.EXPENSE,
+            )
+            for _row in range(rows):
+                Transaction.objects.create(
+                    user=self.user,
+                    account=account,
+                    category=category,
+                    type=TransactionType.EXPENSE,
+                    amount=Decimal('10.00'),
+                    date=timezone.now(),
+                )
+                account.balance -= Decimal('10.00')
+                account.save(update_fields=['balance'])
+            record_statement_import_summary(
+                user=self.user,
+                account=account,
+                created=rows,
+                skipped_duplicates=skipped_duplicates,
+                period_from=period_from,
+                period_to=period_to,
+            )
+
+    def test_run_of_many_rows_is_one_operation(self) -> None:
+        """N transactions plus N balance updates render as one feed row."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Тинькофф Блэк',
+            balance=Decimal('1000.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        self._run_import(
+            account=account,
+            rows=5,
+            period_from=date(2026, 3, 1),
+            period_to=date(2026, 3, 31),
+        )
+
+        self.assertGreater(
+            AuditLog.objects.filter(user=self.user).count(),
+            5,
+        )
+        response = self.client.get(reverse('system:auditlog'))
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        operation = operations[0]
+        self.assertEqual(operation.title, 'Импорт выписки')
+        self.assertIn('Тинькофф Блэк', operation.caption)
+        self.assertIn('создано 5, пропущено дублями 0', operation.caption)
+        self.assertIn('01.03.2026', operation.caption)
+        self.assertIn('31.03.2026', operation.caption)
+
+    def test_all_rows_skipped_as_duplicates_still_appears_in_the_feed(
+        self,
+    ) -> None:
+        """A run with no money effect is not hidden from the feed."""
+        account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('1000.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        self._run_import(account=account, rows=0, skipped_duplicates=7)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        self.assertEqual(operations[0].balance_chips, [])
+        self.assertIn('пропущено дублями 7', operations[0].caption)
+
+    def test_many_row_level_balance_updates_collapse_to_one_chip(
+        self,
+    ) -> None:
+        """The run's chip is one before→after span, not one per row."""
+        account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('1000.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        self._run_import(account=account, rows=20)
+
+        response = self.client.get(reverse('system:auditlog'))
+        operation = response.context['rendered_operations'][0]
+        self.assertEqual(len(operation.balance_chips), 1)
+        chip = operation.balance_chips[0]
+        self.assertEqual(chip.before, f'1{NBSP}000,00{NBSP}RUB')
+        self.assertEqual(chip.after, f'800,00{NBSP}RUB')
+        self.assertEqual(chip.movement, f'-200,00{NBSP}RUB')
+        self.assertTrue(chip.negative)
+
+    def test_operation_screen_previews_ten_transactions_with_a_link(
+        self,
+    ) -> None:
+        """The disclosure shows a capped preview, not every created row."""
+        account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('1000.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        self._run_import(account=account, rows=15)
+        summary = AuditLog.objects.get(
+            user=self.user,
+            model_name=STATEMENT_IMPORT_LABEL,
+        )
+
+        response = self.client.get(
+            reverse(
+                'system:auditlog_operation',
+                args=[summary.operation_id],
+            ),
+        )
+
+        operation = response.context['operation']
+        self.assertEqual(len(operation.entries), 10)
+        self.assertEqual(operation.more_transactions_count, 5)
+        self.assertTrue(operation.transactions_url)
+
+    def test_pre_operation_id_import_collapses_to_mass_change(self) -> None:
+        """A real old import (no operation_id) hits the archival safety valve.
+
+        Before the operation_id mechanism existed, a statement import wrote
+        one Transaction CREATE entry per row with no operation_id and no
+        kind — indistinguishable, at read time, from any other bulk write
+        of that era. It must still collapse under the existing archival
+        safety valve rather than get the STATEMENT_IMPORT treatment.
+        """
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Тинькофф Блэк',
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        created = [
+            AuditLog.objects.create(
+                user=self.user,
+                model_name='transactions.Transaction',
+                object_pk=str(index),
+                object_name=account.name_account,
+                action=AuditLog.Action.CREATE,
+                diff={'v': 2, 'created': {'amount': '10.00'}},
+            )
+            for index in range(13)
+        ]
+        AuditLog.objects.filter(
+            pk__in=[entry.pk for entry in created],
+        ).update(created_at=created[0].created_at)
+
+        response = self.client.get(reverse('system:auditlog'))
+
+        operations = response.context['rendered_operations']
+        self.assertEqual(len(operations), 1)
+        operation = operations[0]
+        self.assertTrue(operation.archival)
+        self.assertEqual(operation.collapsed_count, 13)
+        self.assertEqual(
+            operation.title,
+            'Массовое изменение · 13 записей',
+        )

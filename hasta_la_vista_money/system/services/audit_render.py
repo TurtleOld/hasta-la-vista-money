@@ -70,7 +70,13 @@ class RenderedChange:
 
 @dataclass(frozen=True)
 class BalanceEffect:
-    """One account's contribution to an operation: before → move → after."""
+    """One account's contribution to an operation: before → move → after.
+
+    ``before_value``, ``after_value`` and ``currency`` carry the same
+    triplet unformatted, so a run touching one account many times (a
+    statement import) can be collapsed into a single chip without
+    reparsing the printed strings.
+    """
 
     account_id: int
     account_name: str
@@ -78,6 +84,9 @@ class BalanceEffect:
     movement: str
     after: str
     negative: bool
+    before_value: Decimal = Decimal(0)
+    after_value: Decimal = Decimal(0)
+    currency: str = ''
 
 
 @dataclass(frozen=True)
@@ -390,13 +399,16 @@ def _balance_effect(
         account_id=int(entry.object_pk),
         account_name=entry.object_name or EMPTY,
         before=_format_money(old_value, currency),
-        movement=_format_signed_money(delta, currency),
+        movement=format_signed_money(delta, currency),
         after=_format_money(new_value, currency),
         negative=delta < 0,
+        before_value=old_value,
+        after_value=new_value,
+        currency=currency,
     )
 
 
-def _format_signed_money(value: Decimal, currency_code: str) -> str:
+def format_signed_money(value: Decimal, currency_code: str) -> str:
     formatted = _format_money(value, currency_code)
     return formatted if value < 0 else f'+{formatted}'
 

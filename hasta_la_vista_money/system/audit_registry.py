@@ -69,6 +69,12 @@ TRANSACTION_LABEL: Final = 'transactions.Transaction'
 RECEIPT_LABEL: Final = 'receipts.Receipt'
 TRANSFER_LABEL: Final = 'finance_account.TransferMoneyLog'
 
+# A virtual model: one such entry, not a per-field diff, carries a statement
+# import run's own facts (account, created/skipped counts, imported period).
+# It is rendered by dedicated code in audit_feed.py, so it is deliberately
+# absent from MODEL_LABELS and AUDIT_FIELDS below.
+STATEMENT_IMPORT_LABEL: Final = 'system.StatementImportSummary'
+
 # Singular, human-facing model names for the field-disclosure header
 # ("Счёт «Наличные» · Обновление"). Distinct from the plural filter labels
 # in AuditLogView, which name a whole model, not one entry.
