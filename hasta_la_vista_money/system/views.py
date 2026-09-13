@@ -21,6 +21,7 @@ from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_feed import (
     get_operation_detail,
     list_operations,
+    parse_account_id,
     scope_to_account,
 )
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
@@ -181,9 +182,7 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
             'date_from': self.request.GET.get('date_from', ''),
             'date_to': self.request.GET.get('date_to', ''),
         }
-        ctx['filter_account_id'] = (
-            int(account_raw) if account_raw.isdigit() else None
-        )
+        ctx['filter_account_id'] = parse_account_id(account_raw)
         ctx['feed_querystring'] = self.request.GET.urlencode()
         return ctx
 
@@ -218,9 +217,7 @@ class AuditOperationView(LoginRequiredMixin, TemplateView):
             raise Http404('Операция не найдена')
         ctx['operation'] = operation
         account_raw = self.request.GET.get('account', '')
-        ctx['filter_account_id'] = (
-            int(account_raw) if account_raw.isdigit() else None
-        )
+        ctx['filter_account_id'] = parse_account_id(account_raw)
         back_query = self.request.GET.urlencode()
         ctx['back_url'] = (
             f'{reverse("system:auditlog")}?{back_query}'

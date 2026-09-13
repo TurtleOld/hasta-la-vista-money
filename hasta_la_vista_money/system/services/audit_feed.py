@@ -281,6 +281,11 @@ def list_operations(
     )
 
 
+def parse_account_id(raw: str) -> int | None:
+    """The ``account`` GET param as an id, or ``None`` when absent/invalid."""
+    return int(raw) if raw.isdigit() else None
+
+
 def scope_to_account(
     queryset: QuerySet[AuditLog],
     user: 'User',
