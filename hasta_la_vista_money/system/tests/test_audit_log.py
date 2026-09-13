@@ -426,7 +426,7 @@ class AuditLogViewTests(TestCase):
                 diff={
                     'v': 2,
                     'changed': {
-                        'balance': {'old': '0.00', 'new': str(index)},
+                        'balance': {'old': '0.00', 'new': str(index + 1)},
                     },
                 },
             )
@@ -1056,7 +1056,7 @@ class AuditOperationViewTests(TestCase):
                 diff={
                     'v': 2,
                     'changed': {
-                        'balance': {'old': '0.00', 'new': str(index)},
+                        'balance': {'old': '0.00', 'new': str(index + 1)},
                     },
                 },
             )

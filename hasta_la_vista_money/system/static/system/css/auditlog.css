@@ -97,7 +97,6 @@ a.audit-chip-btn {
   font-size: 0.82rem;
   font-weight: 600;
   gap: 0.35rem;
-  padding: 0 0.9rem;
 }
 
 .audit-chip-btn--on {
@@ -109,6 +108,7 @@ a.audit-chip-btn {
 
 .audit-chip-btn--reset {
   color: var(--audit-muted);
+  padding: 0 0.9rem;
 }
 
 .audit-chip-btn--reset:hover {
@@ -120,6 +120,7 @@ a.audit-chip-btn {
 .audit-chip-caret {
   color: var(--audit-muted);
   font-size: 0.7rem;
+  padding-right: 0.9rem;
 }
 
 .audit-chip-btn-text {
@@ -133,6 +134,11 @@ a.audit-chip-btn {
   height: 100%;
   padding: 0 0.9rem;
   white-space: nowrap;
+}
+
+button.audit-chip-btn .audit-chip-btn-text {
+  padding-left: 0.9rem;
+  padding-right: 0;
 }
 
 .audit-chip-btn--on .audit-chip-btn-text {
@@ -379,7 +385,22 @@ dialog.audit-sheet::backdrop {
 .audit-row-link {
   color: inherit;
   display: block;
+  position: relative;
   text-decoration: none;
+}
+
+.audit-row-chevron {
+  color: var(--audit-muted);
+  flex-shrink: 0;
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: transform 0.15s ease;
+}
+
+.audit-row--open .audit-row-chevron {
+  transform: translateY(-50%) rotate(180deg);
 }
 
 .audit-row-content {
@@ -388,7 +409,7 @@ dialog.audit-sheet::backdrop {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 9rem;
   gap: 0.8rem;
   min-height: 3.4rem;
-  padding: 0.85rem 1.25rem;
+  padding: 0.85rem 2rem 0.85rem 1.25rem;
 }
 
 .audit-row-operation {
@@ -673,6 +694,14 @@ dialog.audit-sheet::backdrop {
   padding: 0.85rem 1.25rem 1.1rem;
 }
 
+.audit-accordion .audit-row-operation,
+.audit-accordion .audit-balance-chips,
+.audit-accordion .audit-balance-archival,
+.audit-accordion .audit-balance-none,
+.audit-accordion .audit-operation-date {
+  display: none;
+}
+
 .audit-operation-detail .audit-row-operation {
   margin-bottom: 0.6rem;
 }
@@ -731,6 +760,10 @@ dialog.audit-sheet::backdrop {
 
   .audit-row-date {
     text-align: right;
+  }
+
+  .audit-row-chevron {
+    display: none;
   }
 
   dialog.audit-sheet {
