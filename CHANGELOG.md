@@ -1,5 +1,31 @@
 # История изменений
 
+## [2.18.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.17.0...v2.18.0) (2026-09-13)
+
+
+### Features
+
+* **deposits:** improve interest payout visibility and confirmation UX ([#1021](https://github.com/TurtleOld/hasta-la-vista-money/issues/1021)) ([b865974](https://github.com/TurtleOld/hasta-la-vista-money/commit/b8659742207239f071e14b7736c64b27482c3435))
+* **system:** add caption phrase and field-derived account titles ([#1033](https://github.com/TurtleOld/hasta-la-vista-money/issues/1033)) ([4cf21e0](https://github.com/TurtleOld/hasta-la-vista-money/commit/4cf21e0d25938f5b9581079c06e0e37081d00278))
+* **system:** add kind, account and period filters to audit feed ([#1037](https://github.com/TurtleOld/hasta-la-vista-money/issues/1037)) ([5bcb3f8](https://github.com/TurtleOld/hasta-la-vista-money/commit/5bcb3f87c4844abbb3728f2c0775f786a0c96167))
+* **system:** assign audit operation kinds across services ([#1027](https://github.com/TurtleOld/hasta-la-vista-money/issues/1027)) ([8293df7](https://github.com/TurtleOld/hasta-la-vista-money/commit/8293df735bdde45fe47a553fbc846699ea34878c))
+* **system:** assign audit operation kinds across services ([#1028](https://github.com/TurtleOld/hasta-la-vista-money/issues/1028)) ([d1580ac](https://github.com/TurtleOld/hasta-la-vista-money/commit/d1580ace6aacbffddee09ab9fc7e269216d97b02))
+* **system:** collapse a statement import run into one audit operation ([#1039](https://github.com/TurtleOld/hasta-la-vista-money/issues/1039)) ([307fbf7](https://github.com/TurtleOld/hasta-la-vista-money/commit/307fbf72de090de66ece4e60477361bdbddbbed6))
+* **system:** give every audit operation its own screen at the 768 px boundary ([#1035](https://github.com/TurtleOld/hasta-la-vista-money/issues/1035)) ([02a536b](https://github.com/TurtleOld/hasta-la-vista-money/commit/02a536b37f21eadab7878208001cec0f627fa11d))
+* **system:** group audit history into operations in the feed ([#1029](https://github.com/TurtleOld/hasta-la-vista-money/issues/1029)) ([a3d466f](https://github.com/TurtleOld/hasta-la-vista-money/commit/a3d466fc59b6f00e0651237d36991ba0962cd9f3))
+* **system:** make audit history readable through a field registry ([#1025](https://github.com/TurtleOld/hasta-la-vista-money/issues/1025)) ([5ac632a](https://github.com/TurtleOld/hasta-la-vista-money/commit/5ac632ac1f8d7a36c72d30f273c203dad119d9e7))
+* **system:** name model and object in field-disclosure headers ([#1034](https://github.com/TurtleOld/hasta-la-vista-money/issues/1034)) ([867e129](https://github.com/TurtleOld/hasta-la-vista-money/commit/867e1297c3db02753774df1384e0ef40e189dfe6))
+* **system:** render feed rows as readable consequence lines below 768 px ([#1036](https://github.com/TurtleOld/hasta-la-vista-money/issues/1036)) ([d7da1b0](https://github.com/TurtleOld/hasta-la-vista-money/commit/d7da1b0987603fc0bb2ae0ce439238dd93a39bd1))
+* **system:** show balance chips and a signed total on the audit feed ([#1032](https://github.com/TurtleOld/hasta-la-vista-money/issues/1032)) ([1dab982](https://github.com/TurtleOld/hasta-la-vista-money/commit/1dab982f21a091d08d1f7e80c0112161dac20e3c))
+* **system:** tag audit log entries with operation id and kind ([#1026](https://github.com/TurtleOld/hasta-la-vista-money/issues/1026)) ([56e26ca](https://github.com/TurtleOld/hasta-la-vista-money/commit/56e26caa85831b5d8cdf3ba3725fe72cbbd2efb8))
+* **system:** turn the audit feed's filter panel into a chip row on narrow screens ([#1038](https://github.com/TurtleOld/hasta-la-vista-money/issues/1038)) ([38e58ba](https://github.com/TurtleOld/hasta-la-vista-money/commit/38e58baaf29bf8ad1296b92ada8357697c2caff9))
+
+
+### Bug Fixes
+
+* **system:** close the account balance audit chain ([#1031](https://github.com/TurtleOld/hasta-la-vista-money/issues/1031)) ([bcdf999](https://github.com/TurtleOld/hasta-la-vista-money/commit/bcdf999ab0c01b0dd74ebf769c833e7465397d6e))
+* **system:** stop the audit feed's inline disclosure from repeating the row ([#1040](https://github.com/TurtleOld/hasta-la-vista-money/issues/1040)) ([5398f24](https://github.com/TurtleOld/hasta-la-vista-money/commit/5398f24c02e2f63d79fd1d86d00ecb088eede2e0))
+
 ## [2.17.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.16.1...v2.17.0) (2026-09-04)
 
 
