@@ -7,6 +7,8 @@ from django.db.models import Count, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
@@ -83,8 +85,21 @@ class BankStatementReconciliationService:
             .order_by('transaction_date', 'pk')
         )
 
-    @transaction.atomic
     def decide(
+        self,
+        row_id: int,
+        decision: str,
+        user_id: int,
+        candidate_id: int | None = None,
+    ) -> BankStatementRow:
+        """Apply one owner decision to one row, as its own audit operation."""
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return self._decide(row_id, decision, user_id, candidate_id)
+
+    @transaction.atomic
+    def _decide(
         self,
         row_id: int,
         decision: str,
@@ -146,6 +161,16 @@ class BankStatementReconciliationService:
         user_id: int,
     ) -> BankStatementRow:
         """Replace a linked decision with one newly imported transaction."""
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return self._revise_linked_to_new(row_id, user_id)
+
+    def _revise_linked_to_new(
+        self,
+        row_id: int,
+        user_id: int,
+    ) -> BankStatementRow:
         upload = self._lock_upload(row_id, user_id)
         row = (
             BankStatementRow.objects.select_for_update()
@@ -185,40 +210,48 @@ class BankStatementReconciliationService:
         user_id: int,
         upload_id: int,
     ) -> list[BulkDecisionResult]:
-        """Apply a decision independently to each selected statement row."""
+        """Apply a decision independently to each selected statement row.
+
+        One audit operation covers the whole batch, set once outside the
+        per-row loop — the rows share one user action even though each is
+        decided independently.
+        """
         results = []
-        for row_id in dict.fromkeys(row_ids):
-            try:
-                BankStatementRow.objects.only('pk').get(
-                    pk=row_id,
-                    upload_id=upload_id,
-                    upload__user_id=user_id,
-                    upload__account__user_id=user_id,
-                )
-                if decision == BankStatementRow.Decision.LINKED:
-                    self._decide_linked_if_unique(
-                        row_id,
-                        user_id,
-                        upload_id,
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            for row_id in dict.fromkeys(row_ids):
+                try:
+                    BankStatementRow.objects.only('pk').get(
+                        pk=row_id,
+                        upload_id=upload_id,
+                        upload__user_id=user_id,
+                        upload__account__user_id=user_id,
                     )
-                else:
-                    self.decide(row_id, decision, user_id)
-                results.append(BulkDecisionResult(row_id, decision))
-            except BankStatementRow.DoesNotExist:
-                results.append(BulkDecisionResult(row_id, 'not_found'))
-            except StaleStatementCandidateError:
-                results.append(BulkDecisionResult(row_id, 'stale'))
-            except AmbiguousStatementCandidateError:
-                results.append(BulkDecisionResult(row_id, 'ambiguous'))
-            except ReconciliationExpiredError:
-                results.append(BulkDecisionResult(row_id, 'expired'))
-            except (
-                InvalidReconciliationDecisionError,
-                ReconciliationDecisionConflictError,
-            ):
-                results.append(BulkDecisionResult(row_id, 'conflict'))
-            except DatabaseError:
-                results.append(BulkDecisionResult(row_id, 'error'))
+                    if decision == BankStatementRow.Decision.LINKED:
+                        self._decide_linked_if_unique(
+                            row_id,
+                            user_id,
+                            upload_id,
+                        )
+                    else:
+                        self._decide(row_id, decision, user_id)
+                    results.append(BulkDecisionResult(row_id, decision))
+                except BankStatementRow.DoesNotExist:
+                    results.append(BulkDecisionResult(row_id, 'not_found'))
+                except StaleStatementCandidateError:
+                    results.append(BulkDecisionResult(row_id, 'stale'))
+                except AmbiguousStatementCandidateError:
+                    results.append(BulkDecisionResult(row_id, 'ambiguous'))
+                except ReconciliationExpiredError:
+                    results.append(BulkDecisionResult(row_id, 'expired'))
+                except (
+                    InvalidReconciliationDecisionError,
+                    ReconciliationDecisionConflictError,
+                ):
+                    results.append(BulkDecisionResult(row_id, 'conflict'))
+                except DatabaseError:
+                    results.append(BulkDecisionResult(row_id, 'error'))
         return results
 
     @transaction.atomic
@@ -250,7 +283,7 @@ class BankStatementReconciliationService:
             raise AmbiguousStatementCandidateError(row_id)
         if not candidate_ids:
             raise StaleStatementCandidateError(row_id)
-        return self.decide(
+        return self._decide(
             row_id,
             BankStatementRow.Decision.LINKED,
             user_id,

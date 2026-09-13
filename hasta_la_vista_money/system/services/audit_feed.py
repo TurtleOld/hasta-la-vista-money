@@ -12,12 +12,14 @@ across a page boundary.
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date as date_type
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
 from django.db.models import Count, Max, Q, QuerySet, Value
 from django.db.models.fields import CharField
 from django.db.models.functions import Cast, Coalesce, Concat, TruncSecond
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _gettext
 from django.utils.translation import gettext_lazy as _
@@ -26,16 +28,19 @@ from hasta_la_vista_money.system.audit_registry import (
     ACCOUNT_LABEL,
     AUDIT_FIELDS,
     RECEIPT_LABEL,
+    STATEMENT_IMPORT_LABEL,
     TRANSACTION_LABEL,
     TRANSFER_LABEL,
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_render import (
+    DATE_FORMAT,
     EMPTY,
     BalanceEffect,
     RenderedChange,
     RenderedEntry,
     entry_has_visible_change,
+    format_signed_money,
     render_entries,
 )
 
@@ -126,6 +131,7 @@ _CAPTION_MODEL_FOR_KIND: Final[dict[AuditOperationKind, str]] = {
     AuditOperationKind.RECEIPT_DELETE: RECEIPT_LABEL,
     AuditOperationKind.ACCOUNT_EDIT: ACCOUNT_LABEL,
     AuditOperationKind.ACCOUNT_DELETE: ACCOUNT_LABEL,
+    AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: TRANSACTION_LABEL,
 }
 
 # The measure slot's money field, by kind — absent for a kind whose right
@@ -137,6 +143,7 @@ _CAPTION_MONEY_FIELD: Final[dict[AuditOperationKind, str]] = {
     AuditOperationKind.EXPENSE: 'amount',
     AuditOperationKind.TRANSACTION_DELETE: 'amount',
     AuditOperationKind.RECEIPT_DELETE: 'total_sum',
+    AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: 'amount',
 }
 
 # The one participant field whose current value is already captured, even
@@ -182,10 +189,18 @@ class RenderedOperation:
     collapsed_count: int | None = None
     balance_chips: list[BalanceEffect] = field(default_factory=list)
     total: OperationTotal | None = None
+    # A statement import run is shown even with zero effect (all rows were
+    # duplicates) — its own summary entry, not the entries list, is what
+    # makes it real, so has_changes cannot be derived from entries alone.
+    force_has_changes: bool = False
+    # Set for a statement import: where the disclosure's transaction
+    # preview is truncated, and the page listing every imported row.
+    more_transactions_count: int = 0
+    transactions_url: str = ''
 
     @property
     def has_changes(self) -> bool:
-        if self.collapsed_count is not None:
+        if self.collapsed_count is not None or self.force_has_changes:
             return True
         return any(entry.has_changes for entry in self.entries)
 
@@ -376,6 +391,15 @@ def _build_operation(
     created_at = entries[0].created_at
     if archival and size > ARCHIVAL_BUCKET_LIMIT:
         return _build_collapsed_operation(group_key, entries, created_at, size)
+    operation_kind = _operation_kind_of(entries)
+    if not archival and operation_kind is AuditOperationKind.STATEMENT_IMPORT:
+        import_operation = _build_statement_import_operation(
+            group_key,
+            entries,
+            created_at,
+        )
+        if import_operation is not None:
+            return import_operation
     return _render_full_operation(group_key, entries, archival, created_at)
 
 
@@ -417,6 +441,160 @@ def _render_full_operation(
     )
 
 
+_STATEMENT_IMPORT_PREVIEW_LIMIT: Final = 10
+
+
+def _build_statement_import_operation(
+    group_key: str,
+    entries: list[AuditLog],
+    created_at: datetime,
+) -> RenderedOperation | None:
+    """Render a statement import run as one summary row, not per-field diffs.
+
+    A run can create hundreds of Transaction and Account entries; disclosing
+    each by field would defeat the point. The run's own facts (account,
+    created/skipped counts, imported period) live on the one summary entry
+    :func:`audit_statement_import.record_statement_import_summary` always
+    writes, even when every row turned out a duplicate — that entry, not the
+    Transaction/Account entries, is what the caption and ``force_has_changes``
+    are built from. The disclosure still shows the first few created
+    transactions, through the ordinary per-field renderer, plus a link to
+    see the rest.
+    """
+    summary_entry = next(
+        (
+            entry
+            for entry in entries
+            if entry.model_name == STATEMENT_IMPORT_LABEL
+        ),
+        None,
+    )
+    if summary_entry is None:
+        return None
+    diff = summary_entry.diff or {}
+    created = int(diff.get('created', 0))
+    skipped = int(diff.get('skipped_duplicates', 0))
+    caption = _statement_import_caption(
+        account_name=summary_entry.object_name,
+        created=created,
+        skipped=skipped,
+        period_from=diff.get('period_from'),
+        period_to=diff.get('period_to'),
+    )
+
+    transaction_entries = [
+        entry for entry in entries if entry.model_name == TRANSACTION_LABEL
+    ]
+    preview_entries = [
+        item
+        for item in render_entries(
+            transaction_entries[:_STATEMENT_IMPORT_PREVIEW_LIMIT],
+        )
+        if item.has_changes
+    ]
+    account_entries = [
+        entry for entry in entries if entry.model_name == ACCOUNT_LABEL
+    ]
+    balance_chips = _collapse_account_chips(render_entries(account_entries))
+
+    return RenderedOperation(
+        group_key=group_key,
+        title=str(_KIND_TITLES[AuditOperationKind.STATEMENT_IMPORT]),
+        created_at=created_at,
+        archival=False,
+        url_key=_anchor_url_key(entries, archival=False),
+        caption=caption,
+        entries=preview_entries,
+        balance_chips=balance_chips,
+        total=_build_total(balance_chips, preview_entries, entries),
+        force_has_changes=True,
+        more_transactions_count=max(
+            0,
+            len(transaction_entries) - len(preview_entries),
+        ),
+        transactions_url=reverse('finance_account:list'),
+    )
+
+
+def _statement_import_caption(
+    *,
+    account_name: str,
+    created: int,
+    skipped: int,
+    period_from: str | None,
+    period_to: str | None,
+) -> str:
+    slots = [
+        _gettext('Счёт «%(name)s»') % {'name': account_name or EMPTY},
+        _gettext(
+            'создано %(created)s, пропущено дублями %(skipped)s',
+        )
+        % {'created': created, 'skipped': skipped},
+    ]
+    period_from_label = _format_period_date(period_from)
+    period_to_label = _format_period_date(period_to)
+    if period_from_label and period_to_label:
+        slots.append(
+            _gettext('операции с %(from)s по %(to)s')
+            % {'from': period_from_label, 'to': period_to_label},
+        )
+    return ' · '.join(slot for slot in slots if slot)
+
+
+def _format_period_date(raw: str | None) -> str:
+    if not raw:
+        return ''
+    try:
+        return date_type.fromisoformat(raw).strftime(DATE_FORMAT)
+    except ValueError:
+        return ''
+
+
+def _collapse_account_chips(
+    rendered_accounts: list[RenderedEntry],
+) -> list[BalanceEffect]:
+    """Collapse a run's per-row balance entries into one chip per account.
+
+    ``rendered_accounts`` is ordered newest first (the feed's own entry
+    order), so the first occurrence of an account holds its final balance
+    and the last occurrence holds its original one — together the chain's
+    two ends, without needing every step in between.
+    """
+    newest_by_account: dict[int, BalanceEffect] = {}
+    oldest_by_account: dict[int, BalanceEffect] = {}
+    order: list[int] = []
+    for item in rendered_accounts:
+        effect = item.balance_effect
+        if effect is None:
+            continue
+        if effect.account_id not in newest_by_account:
+            newest_by_account[effect.account_id] = effect
+            order.append(effect.account_id)
+        oldest_by_account[effect.account_id] = effect
+    collapsed = []
+    for account_id in order:
+        newest = newest_by_account[account_id]
+        oldest = oldest_by_account[account_id]
+        if newest is oldest:
+            collapsed.append(newest)
+            continue
+        delta = newest.after_value - oldest.before_value
+        collapsed.append(
+            BalanceEffect(
+                account_id=account_id,
+                account_name=newest.account_name,
+                before=oldest.before,
+                movement=format_signed_money(delta, newest.currency),
+                after=newest.after,
+                negative=delta < 0,
+                before_value=oldest.before_value,
+                after_value=newest.after_value,
+                currency=newest.currency,
+            ),
+        )
+    return collapsed
+
+
 def get_operation_detail(
     user: 'User',
     operation_key: str,
@@ -440,6 +618,14 @@ def get_operation_detail(
     )
     if not entries:
         return None
+    if _operation_kind_of(entries) is AuditOperationKind.STATEMENT_IMPORT:
+        import_operation = _build_statement_import_operation(
+            str(key),
+            entries,
+            entries[0].created_at,
+        )
+        if import_operation is not None:
+            return import_operation
     return _render_full_operation(
         str(key),
         entries,

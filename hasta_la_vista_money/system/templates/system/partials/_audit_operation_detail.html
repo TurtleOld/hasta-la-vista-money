@@ -65,6 +65,23 @@
         {% endfor %}
     </div>
 
+    {% if operation.transactions_url %}
+    <div class="audit-statement-import-more">
+        {% if operation.more_transactions_count %}
+        <span class="audit-statement-import-more-count">
+            {% blocktranslate count counter=operation.more_transactions_count %}
+            и ещё {{ counter }} транзакция
+            {% plural %}
+            и ещё {{ counter }} транзакций
+            {% endblocktranslate %}
+        </span>
+        {% endif %}
+        <a href="{{ operation.transactions_url }}" class="audit-statement-import-link">
+            {% translate 'Открыть страницу транзакций' %}
+        </a>
+    </div>
+    {% endif %}
+
     <div class="audit-operation-date">
         {% if operation.total %}
         <span class="audit-row-total{% if operation.total.negative == True %} audit-total-negative{% elif operation.total.negative == False %} audit-total-positive{% endif %}">{{ operation.total.amount }}</span>

@@ -28,6 +28,11 @@ from pdfminer.pdfparser import PDFSyntaxError
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_statement_import import (
+    record_statement_import_summary,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -1219,54 +1224,75 @@ def process_bank_statement(
     income_count = 0
     expense_count = 0
     skipped_count = 0
+    period_from: date_type | None = None
+    period_to: date_type | None = None
 
-    for idx, trans in enumerate(transactions):
-        if idx % 10 == 0:
-            logger.info(
-                'Processing transaction %d/%d',
-                idx + 1,
-                len(transactions),
+    with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+        for idx, trans in enumerate(transactions):
+            if idx % 10 == 0:
+                logger.info(
+                    'Processing transaction %d/%d',
+                    idx + 1,
+                    len(transactions),
+                )
+            amount = trans['amount']
+            description = trans['description']
+            trans_date = trans['date']
+            source_ref = trans.get('source_ref')
+            source = trans.get('source')
+            abs_amount = abs(amount)
+
+            if amount > 0:
+                type_value = TransactionType.INCOME
+            else:
+                type_value = TransactionType.EXPENSE
+
+            if _transaction_already_exists(
+                account=account,
+                user=user,
+                type_value=type_value,
+                abs_amount=abs_amount,
+                trans_date=trans_date,
+                source_ref=source_ref,
+                match_calendar_date=source == 'ozon',
+            ):
+                skipped_count += 1
+                continue
+
+            category = _get_or_create_category(user, description, type_value)
+            Transaction.objects.create(
+                user=user,
+                account=account,
+                category=category,
+                type=type_value,
+                amount=abs_amount,
+                date=trans_date,
+                source_ref=source_ref or None,
             )
-        amount = trans['amount']
-        description = trans['description']
-        trans_date = trans['date']
-        source_ref = trans.get('source_ref')
-        source = trans.get('source')
-        abs_amount = abs(amount)
+            if type_value == TransactionType.INCOME:
+                BalanceService().apply_balance_delta(account, abs_amount)
+                income_count += 1
+            else:
+                BalanceService().apply_balance_delta(account, -abs_amount)
+                expense_count += 1
+            row_date = (
+                trans_date.date()
+                if isinstance(trans_date, datetime)
+                else trans_date
+            )
+            if period_from is None or row_date < period_from:
+                period_from = row_date
+            if period_to is None or row_date > period_to:
+                period_to = row_date
 
-        if amount > 0:
-            type_value = TransactionType.INCOME
-        else:
-            type_value = TransactionType.EXPENSE
-
-        if _transaction_already_exists(
-            account=account,
-            user=user,
-            type_value=type_value,
-            abs_amount=abs_amount,
-            trans_date=trans_date,
-            source_ref=source_ref,
-            match_calendar_date=source == 'ozon',
-        ):
-            skipped_count += 1
-            continue
-
-        category = _get_or_create_category(user, description, type_value)
-        Transaction.objects.create(
+        record_statement_import_summary(
             user=user,
             account=account,
-            category=category,
-            type=type_value,
-            amount=abs_amount,
-            date=trans_date,
-            source_ref=source_ref or None,
+            created=income_count + expense_count,
+            skipped_duplicates=skipped_count,
+            period_from=period_from,
+            period_to=period_to,
         )
-        if type_value == TransactionType.INCOME:
-            BalanceService().apply_balance_delta(account, abs_amount)
-            income_count += 1
-        else:
-            BalanceService().apply_balance_delta(account, -abs_amount)
-            expense_count += 1
 
     logger.info(
         'Finished processing: %d income, %d expenses, %d skipped',

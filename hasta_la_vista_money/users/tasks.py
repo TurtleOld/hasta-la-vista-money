@@ -1,7 +1,7 @@
 """Celery tasks for user-related async operations."""
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from difflib import SequenceMatcher
 from typing import Any
@@ -15,6 +15,11 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
+)
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_statement_import import (
+    record_statement_import_summary,
 )
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -105,12 +110,13 @@ def process_bank_statement_task(
             .distinct(),
         )
 
-        income_count, expense_count, skipped_count = _process_transactions(
-            upload=upload,
-            transactions=transactions,
-            classifier=classifier,
-            existing_categories=existing_categories,
-        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            income_count, expense_count, skipped_count = _process_transactions(
+                upload=upload,
+                transactions=transactions,
+                classifier=classifier,
+                existing_categories=existing_categories,
+            )
 
         upload.account.refresh_from_db(fields=['balance'])
         if parse_result.closing_balance is not None:
@@ -233,6 +239,8 @@ def _process_transactions(
     skipped_count = 0
     batch_size = 10
     total = len(transactions)
+    period_from: date | None = None
+    period_to: date | None = None
 
     for idx, trans in enumerate(transactions):
         with transaction.atomic():
@@ -344,6 +352,15 @@ def _process_transactions(
                     income_count += 1
                 else:
                     expense_count += 1
+                row_date = (
+                    trans_date.date()
+                    if isinstance(trans_date, datetime)
+                    else trans_date
+                )
+                if period_from is None or row_date < period_from:
+                    period_from = row_date
+                if period_to is None or row_date > period_to:
+                    period_to = row_date
 
         upload.processed_transactions = idx + 1
         upload.income_count = income_count
@@ -368,6 +385,14 @@ def _process_transactions(
                 upload.progress,
             )
 
+    record_statement_import_summary(
+        user=upload.user,
+        account=upload.account,
+        created=income_count + expense_count,
+        skipped_duplicates=skipped_count,
+        period_from=period_from,
+        period_to=period_to,
+    )
     return income_count, expense_count, skipped_count
 
 
