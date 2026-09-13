@@ -361,8 +361,12 @@ def _render_entry(
             header=_entry_header(entry),
         )
     changes = [
-        _render_change(entry, sides, attname, audit_field, context)
-        for attname, audit_field in _visible_fields(entry, sides)
+        change
+        for change in (
+            _render_change(entry, sides, attname, audit_field, context)
+            for attname, audit_field in _visible_fields(entry, sides)
+        )
+        if change.old != change.new
     ]
     return RenderedEntry(
         entry=entry,
