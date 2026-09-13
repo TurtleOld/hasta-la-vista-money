@@ -1,0 +1,15 @@
+{% load i18n %}
+{% if active %}
+    <span class="audit-chip-btn audit-chip-btn--on">
+        <button type="button" class="audit-chip-btn-text" data-audit-chip-open="{{ field }}"
+                aria-haspopup="dialog" aria-expanded="false">{{ value }}</button>
+        <button type="button" class="audit-chip-x" data-audit-chip-clear="{{ field }}"
+                title="{% translate 'Сбросить фильтр' %}">&times;</button>
+    </span>
+{% else %}
+    <button type="button" class="audit-chip-btn" data-audit-chip-open="{{ field }}"
+            aria-haspopup="dialog" aria-expanded="false">
+        <span class="audit-chip-btn-text">{{ default_label }}</span>
+        <span class="audit-chip-caret" aria-hidden="true">&#9662;</span>
+    </button>
+{% endif %}

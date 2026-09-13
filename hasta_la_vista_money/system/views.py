@@ -176,14 +176,39 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
             .values_list('id', 'name_account'),
         )
         account_raw = self.request.GET.get('account', '')
+        kind_raw = self.request.GET.get('kind', '')
+        date_from = self.request.GET.get('date_from', '')
+        date_to = self.request.GET.get('date_to', '')
         ctx['filter'] = {
-            'kind': self.request.GET.get('kind', ''),
+            'kind': kind_raw,
             'account': account_raw,
-            'date_from': self.request.GET.get('date_from', ''),
-            'date_to': self.request.GET.get('date_to', ''),
+            'date_from': date_from,
+            'date_to': date_to,
         }
-        ctx['filter_account_id'] = parse_account_id(account_raw)
+        filter_account_id = parse_account_id(account_raw)
+        ctx['filter_account_id'] = filter_account_id
         ctx['feed_querystring'] = self.request.GET.urlencode()
+        ctx['kind_label'] = dict(AuditOperationKind.choices).get(kind_raw, '')
+        ctx['account_label'] = next(
+            (
+                name
+                for account_id, name in ctx['account_choices']
+                if account_id == filter_account_id
+            ),
+            '',
+        )
+        period_active = bool(date_from or date_to)
+        ctx['period_active'] = period_active
+        ctx['period_label'] = (
+            f'{date_from} – {date_to}' if period_active else ''
+        )
+        ctx['active_filter_count'] = sum(
+            (
+                bool(kind_raw),
+                bool(account_raw),
+                period_active,
+            ),
+        )
         return ctx
 
 

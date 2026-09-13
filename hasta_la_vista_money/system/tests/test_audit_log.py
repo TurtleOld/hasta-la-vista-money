@@ -945,6 +945,73 @@ class AuditLogViewTests(TestCase):
 
         self.assertEqual(list(response.context['rendered_operations']), [])
 
+    def test_no_filters_gives_zero_active_count_and_no_labels(self) -> None:
+        """With no filters, the chip row carries no active-filter state."""
+        response = self.client.get(reverse('system:auditlog'))
+
+        self.assertEqual(response.context['active_filter_count'], 0)
+        self.assertEqual(response.context['kind_label'], '')
+        self.assertEqual(response.context['account_label'], '')
+
+    def test_period_filter_with_only_date_to_counts_as_active(self) -> None:
+        """A period filter is active with just one bound set."""
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'date_to': '2026-08-31'},
+        )
+
+        self.assertEqual(response.context['active_filter_count'], 1)
+        self.assertTrue(response.context['period_active'])
+        self.assertIn('2026-08-31', response.context['period_label'])
+
+    def test_single_filter_gives_active_count_of_one(self) -> None:
+        """One filter is not enough to show the combined reset chip."""
+        self._make_single_account_change(
+            kind=AuditOperationKind.INCOME,
+            balance_before=Decimal('0.00'),
+            balance_after=Decimal('50.00'),
+        )
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {'kind': AuditOperationKind.INCOME.value},
+        )
+
+        self.assertEqual(response.context['active_filter_count'], 1)
+        self.assertNotContains(response, 'audit-chip-btn--reset')
+
+    def test_two_filters_show_the_combined_reset_chip(self) -> None:
+        """The combined «Сбросить» chip appears from two active filters."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+        from_account = Account.objects.get(name_account='Наличные')
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {
+                'kind': AuditOperationKind.TRANSFER.value,
+                'account': str(from_account.pk),
+            },
+        )
+
+        self.assertEqual(response.context['active_filter_count'], 2)
+        self.assertContains(response, 'audit-chip-btn--reset')
+
+    def test_kind_and_account_labels_carry_the_chip_text(self) -> None:
+        """The active kind/account chips show the human-readable value."""
+        self._make_transfer(from_name='Наличные', to_name='Т-Банк')
+        from_account = Account.objects.get(name_account='Наличные')
+
+        response = self.client.get(
+            reverse('system:auditlog'),
+            {
+                'kind': AuditOperationKind.TRANSFER.value,
+                'account': str(from_account.pk),
+            },
+        )
+
+        self.assertEqual(response.context['kind_label'], 'Перевод')
+        self.assertEqual(response.context['account_label'], 'Наличные')
+
 
 class AuditOperationViewTests(TestCase):
     """The operation screen: one operation, opened at its own address."""
