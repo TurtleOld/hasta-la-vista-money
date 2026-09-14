@@ -1691,14 +1691,6 @@
   .composer-sidebar {
     position: static;
   }
-
-  .composer-sidebar .composer-ft {
-    order: 1;
-  }
-
-  .composer-sidebar .preview-card {
-    order: 2;
-  }
 }
 
 /* Footer */
