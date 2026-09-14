@@ -1014,6 +1014,12 @@
   .finances-toolbar-primary {
     align-items: stretch;
     flex-direction: column;
+    /* The 900px breakpoint below sets flex-wrap: wrap for a row layout
+       (search wraps onto its own line while staying in the same axis).
+       Once flex-direction flips to column here, that inherited wrap
+       switches to wrapping into a second *column* instead of stacking —
+       which is exactly what shoved the search box off to the side. */
+    flex-wrap: nowrap;
   }
 
   .finances-segment {
@@ -1061,8 +1067,30 @@
   }
 
   .finances-pills {
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  /* Anchoring the popup under its chip (desktop behavior) breaks down on a
+     narrow screen: a chip near the right edge pushes the menu off-screen,
+     and a wrapped row leaves little room below the last one anyway.
+     Detaching it to the viewport as a reachable bottom sheet sidesteps both
+     and reads clearer as "here's the menu" than a tiny anchored popover. */
+  .finances-pop {
+    left: 0.75rem;
+    right: 0.75rem;
+    top: auto;
+    bottom: 1rem;
+    position: fixed;
+    width: auto;
+    min-width: 0;
+    max-width: 26rem;
+    margin: 0 auto;
+    max-height: 70vh;
+  }
+
+  .finances-pop-body {
+    max-height: calc(70vh - 3rem);
   }
 }
 
