@@ -470,15 +470,29 @@
   position: relative;
 }
 
-.finances-date-trigger {
-  position: absolute;
-  inset: 0 0 0 auto;
-  width: 1px;
-  height: 1px;
-  border: 0;
-  padding: 0;
-  opacity: 0;
+.finances-date-chip {
+  cursor: pointer;
+  position: relative;
+}
+
+.finances-date-chip-label {
   pointer-events: none;
+  white-space: nowrap;
+}
+
+/* The input stays real and on top so a tap always opens the native OS
+   picker — reliably, with no JS deciding whether/when to open it. Its own
+   text is just hidden: the browser renders that text (mm/dd/yyyy, dd.mm.yyyy,
+   ...) per OS/browser locale, which we can't control, so .finances-date-chip-label
+   shows our own dd.mm.yyyy text instead, kept in sync by transactions.js. */
+.finances-date-chip-input {
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
 }
 
 .finances-pop {
@@ -515,6 +529,103 @@
 
 .finances-pop.is-open {
   display: block;
+}
+
+/* Flatpickr renders its calendar appended to <body>, outside .finances-app,
+   so it can't see the --finances-* aliases — reach for --app-* directly.
+   The library ships a light-only theme; left unstyled it's a stark white
+   box on this app's dark background, easy to miss as "nothing happened". */
+.flatpickr-calendar {
+  background: var(--app-surface);
+  border-radius: 0.85rem;
+  box-shadow: var(--finances-shadow-pop, 0 20px 45px rgba(0, 0, 0, 0.35));
+}
+
+.flatpickr-calendar.arrowTop:before {
+  border-bottom-color: var(--app-border);
+}
+
+.flatpickr-calendar.arrowTop:after {
+  border-bottom-color: var(--app-surface);
+}
+
+.flatpickr-calendar.arrowBottom:before {
+  border-top-color: var(--app-border);
+}
+
+.flatpickr-calendar.arrowBottom:after {
+  border-top-color: var(--app-surface);
+}
+
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month,
+.flatpickr-current-month .numInputWrapper span,
+.flatpickr-weekday {
+  color: var(--app-text);
+  fill: var(--app-text);
+}
+
+.flatpickr-current-month input.cur-year {
+  color: var(--app-text);
+}
+
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month {
+  color: var(--app-muted);
+  fill: var(--app-muted);
+}
+
+.flatpickr-months .flatpickr-prev-month:hover,
+.flatpickr-months .flatpickr-next-month:hover {
+  color: var(--app-accent);
+  fill: var(--app-accent);
+}
+
+.flatpickr-weekdays {
+  background: var(--app-surface);
+}
+
+span.flatpickr-weekday {
+  background: var(--app-surface);
+}
+
+.flatpickr-day {
+  color: var(--app-text);
+}
+
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.flatpickr-disabled:hover,
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay {
+  color: var(--app-muted);
+}
+
+.flatpickr-day.today {
+  border-color: var(--app-accent);
+}
+
+.flatpickr-day:hover,
+.flatpickr-day.prevMonthDay:hover,
+.flatpickr-day.nextMonthDay:hover {
+  background: var(--finances-surface-2, var(--app-surface-2));
+  border-color: var(--finances-surface-2, var(--app-surface-2));
+}
+
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: var(--app-on-accent, #fff);
+}
+
+.flatpickr-time input,
+.flatpickr-time .flatpickr-am-pm {
+  color: var(--app-text);
+}
+
+.flatpickr-time .numInputWrapper:hover,
+.flatpickr-time input:hover {
+  background: var(--finances-surface-2, var(--app-surface-2));
 }
 
 .finances-pop-option {
