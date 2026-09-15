@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.18.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.18.0...v2.18.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **finance_account:** fix mobile usability across accounts, receipts and finances ([#1043](https://github.com/TurtleOld/hasta-la-vista-money/issues/1043)) ([eca3eb3](https://github.com/TurtleOld/hasta-la-vista-money/commit/eca3eb3a1f9448abec463c3da549c20b3b592f2c))
+
 ## [2.18.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.17.0...v2.18.0) (2026-09-13)
 
 
