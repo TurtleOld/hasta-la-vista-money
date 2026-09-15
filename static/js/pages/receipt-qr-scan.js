@@ -56,6 +56,14 @@ function registerReceiptUploadTabs(Alpine) {
     return {
       activeTab: 'file',
 
+      init() {
+        document.addEventListener('receipt-upload:file-pasted', () => {
+          if (this.activeTab !== 'file') {
+            this.selectFile();
+          }
+        });
+      },
+
       selectFile() {
         this.activeTab = 'file';
         document.dispatchEvent(new CustomEvent('receipt-scan:deactivate'));

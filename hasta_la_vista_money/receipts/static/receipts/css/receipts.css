@@ -277,6 +277,26 @@
     align-items: stretch;
     flex-direction: column;
   }
+
+  .receipts-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .receipts-actions .receipts-button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .receipts-pills {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .receipts-pills .receipts-chip {
+    width: 100%;
+  }
 }
 
 .receipts-side {
