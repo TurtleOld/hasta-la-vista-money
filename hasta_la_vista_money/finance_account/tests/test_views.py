@@ -491,7 +491,7 @@ class TestFinancesView(TestCase):
         self.assertIn('date_from=01%2F02%2F2026', finances_filter.query_string)
         self.assertIn('date_to=28%2F02%2F2026', finances_filter.query_string)
 
-    def test_finances_toolbar_renders_date_chip_with_date_only_flatpickr(
+    def test_finances_toolbar_renders_date_chip_with_native_date_input(
         self,
     ) -> None:
         self.client.force_login(self.user)
@@ -501,8 +501,8 @@ class TestFinancesView(TestCase):
             HTTP_HX_REQUEST='true',
         )
 
-        self.assertContains(response, 'data-finances-date-button')
-        self.assertContains(response, 'data-flatpickr-mode="day-filter"')
+        self.assertContains(response, 'data-finances-date-native')
+        self.assertContains(response, 'type="date"')
         self.assertContains(response, 'Конкретная дата')
 
     def test_selecting_day_shows_formatted_date_on_active_chip(self) -> None:

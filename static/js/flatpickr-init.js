@@ -57,40 +57,6 @@ function buildFlatpickrOptions(element) {
     };
   }
 
-  if (mode === 'day-filter') {
-    const fromId = element.dataset.flatpickrFrom;
-    const toId = element.dataset.flatpickrTo;
-    const clearId = element.dataset.flatpickrClearId;
-    const clearValue = element.dataset.flatpickrClearValue ?? '';
-    const formEl = element.closest('form');
-
-    const fromInput = fromId ? document.getElementById(fromId) : null;
-    const toInput = toId ? document.getElementById(toId) : null;
-
-    const fmt = (d) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    return {
-      locale: Russian,
-      dateFormat: 'Y-m-d',
-      onChange(selectedDates) {
-        if (selectedDates.length !== 1) return;
-        const value = fmt(selectedDates[0]);
-        if (fromInput) fromInput.value = value;
-        if (toInput) toInput.value = value;
-        if (clearId) {
-          const clearTarget = document.getElementById(clearId);
-          if (clearTarget) clearTarget.value = clearValue;
-        }
-        if (formEl?.requestSubmit) {
-          formEl.requestSubmit();
-        } else {
-          formEl?.submit();
-        }
-      },
-    };
-  }
-
   return {
     locale: Russian,
     dateFormat: 'Y-m-d',
@@ -133,8 +99,12 @@ export function initializeFlatpickr(rootElement = document) {
       return;
     }
 
-    const instance = flatpickr(element, buildFlatpickrOptions(element));
-    enableHourAutoAdvance(instance);
+    try {
+      const instance = flatpickr(element, buildFlatpickrOptions(element));
+      enableHourAutoAdvance(instance);
+    } catch (error) {
+      console.error('flatpickr-init: failed to initialize', element, error);
+    }
   });
 }
 

@@ -75,6 +75,7 @@ function registerReceiptUploadPage(Alpine) {
                 }
                 this.setInputFiles(images);
                 this.applyFiles(images);
+                document.dispatchEvent(new CustomEvent('receipt-upload:file-pasted'));
             },
 
             applyFiles(fileList) {
