@@ -773,7 +773,21 @@
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.125rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.accounts-op-meta > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.accounts-op-meta .sep,
+.accounts-op-meta > span:not(:first-child) {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .accounts-op-meta .sep {
@@ -1009,6 +1023,23 @@
   .accounts-page-hd {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .accounts-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+  }
+
+  .accounts-actions .accounts-btn,
+  .accounts-actions .accounts-eye {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .accounts-actions .accounts-btn-primary {
+    grid-column: 1 / -1;
   }
 
   .accounts-row-content {

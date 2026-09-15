@@ -48,17 +48,32 @@
     </div>
 
     <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if finances_filter.selected_date %}is-active{% endif %}" data-finances-date-button aria-haspopup="dialog">
+        {% comment %}
+        A native date input, not a custom calendar popup: it opens the
+        OS/browser's own picker on tap with zero positioning or binding
+        logic of our own to get wrong on some device we can't test on.
+        {% endcomment %}
+        <label class="finances-chip finances-date-chip {% if finances_filter.selected_date %}is-active{% endif %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
-            <span>{% if finances_filter.selected_date %}{{ finances_filter.selected_date|date:'d.m.Y' }}{% else %}{% translate 'Конкретная дата' %}{% endif %}</span>
-        </button>
-        <input type="text" class="finances-date-trigger" tabindex="-1" aria-hidden="true"
-               data-flatpickr data-flatpickr-mode="day-filter"
-               data-flatpickr-from="finances-date-from" data-flatpickr-to="finances-date-to"
-               data-flatpickr-clear-id="finances-period" data-flatpickr-clear-value="m"
-               value="{{ finances_filter.selected_date|date:'Y-m-d'|default:'' }}">
+            {% comment %}
+            The browser renders the native input's own text per OS/browser
+            locale (often en-US mm/dd/yyyy regardless of this page's lang).
+            This span shows our own dd.mm.yyyy text instead; the input
+            stays fully present and clickable underneath for the actual
+            picker interaction, just visually transparent.
+            {% endcomment %}
+            <span class="finances-date-chip-label" data-finances-date-label
+                  data-finances-date-placeholder="{% translate 'Конкретная дата' %}">
+                {% if finances_filter.selected_date %}{{ finances_filter.selected_date|date:'d.m.Y' }}{% else %}{% translate 'Конкретная дата' %}{% endif %}
+            </span>
+            <input type="date" class="finances-date-chip-input"
+                   data-finances-date-native
+                   data-finances-clear-id="finances-period" data-finances-clear-value="m"
+                   value="{{ finances_filter.selected_date|date:'Y-m-d'|default:'' }}"
+                   aria-label="{% translate 'Конкретная дата' %}">
+        </label>
     </div>
     <input id="finances-date-from" type="hidden" name="date_from" value="{{ finances_filter.date_from|date:'Y-m-d'|default:'' }}">
     <input id="finances-date-to" type="hidden" name="date_to" value="{{ finances_filter.date_to|date:'Y-m-d'|default:'' }}">

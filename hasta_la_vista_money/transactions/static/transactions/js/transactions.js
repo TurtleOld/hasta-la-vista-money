@@ -129,25 +129,21 @@ document.addEventListener('alpine:init', () => {
       if (target) {
         target.value = setter.dataset.financesValue || '';
       }
-      (setter.dataset.financesClear || '')
+      const clearedIds = (setter.dataset.financesClear || '')
         .split(/\s+/)
-        .filter(Boolean)
-        .forEach((id) => {
-          const clearTarget = document.getElementById(id);
-          if (clearTarget) clearTarget.value = '';
-        });
+        .filter(Boolean);
+      clearedIds.forEach((id) => {
+        const clearTarget = document.getElementById(id);
+        if (clearTarget) clearTarget.value = '';
+      });
+      if (clearedIds.includes('finances-date-from')) {
+        const dateNative = document.querySelector('[data-finances-date-native]');
+        const label = document.querySelector('[data-finances-date-label]');
+        if (dateNative) dateNative.value = '';
+        if (label) label.textContent = label.dataset.financesDatePlaceholder;
+      }
       closePops();
       submitForm();
-      return;
-    }
-
-    const dateButton = event.target.closest('[data-finances-date-button]');
-    if (dateButton) {
-      closePops();
-      const trigger = dateButton
-        .closest('.finances-pop-wrap')
-        ?.querySelector('[data-flatpickr]');
-      trigger?._flatpickr?.open();
       return;
     }
 
@@ -205,6 +201,48 @@ document.addEventListener('alpine:init', () => {
       }
     }
   });
+
+  function formatDayMonthYear(isoDate) {
+    const [year, month, day] = isoDate.split('-');
+    return `${day}.${month}.${year}`;
+  }
+
+  // Capture phase, and stopped here: the toolbar sits inside the form that
+  // htmx auto-submits on "change" (hx-trigger="change, ..."), and the form
+  // is reached before document in the bubble phase. Left as a normal bubble
+  // listener, htmx would fire its request off the stale (not yet copied)
+  // finances-date-from/-to hidden fields a tick before this code runs, and
+  // the swapped-in response would immediately erase what we just set.
+  document.addEventListener(
+    'change',
+    (event) => {
+      const dateNative = event.target.closest('[data-finances-date-native]');
+      if (!dateNative) return;
+      event.stopPropagation();
+
+      const value = dateNative.value || '';
+      const fromInput = document.getElementById('finances-date-from');
+      const toInput = document.getElementById('finances-date-to');
+      if (fromInput) fromInput.value = value;
+      if (toInput) toInput.value = value;
+      if (value) {
+        const clearId = dateNative.dataset.financesClearId;
+        const clearValue = dateNative.dataset.financesClearValue ?? '';
+        const clearTarget = clearId && document.getElementById(clearId);
+        if (clearTarget) clearTarget.value = clearValue;
+      }
+      const label = dateNative
+        .closest('.finances-date-chip')
+        ?.querySelector('[data-finances-date-label]');
+      if (label) {
+        label.textContent = value
+          ? formatDayMonthYear(value)
+          : label.dataset.financesDatePlaceholder;
+      }
+      submitForm();
+    },
+    true,
+  );
 
   document.addEventListener('change', (event) => {
     if (event.target.closest('.finances-pop')) {
