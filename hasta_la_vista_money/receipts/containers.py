@@ -168,4 +168,5 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ),
         receipt_creator_service=receipt_creator_service,
         processing_log_repository=receipt_processing_log_repository,
+        balance_history_service=finance_account.balance_history_service,
     )

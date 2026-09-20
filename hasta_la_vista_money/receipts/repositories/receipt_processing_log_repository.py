@@ -1,28 +1,17 @@
 """Data access for automatic receipt processing logs."""
 
-from decimal import Decimal
 from typing import Any
 
 from django.db import IntegrityError
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import (
-    Account,
-    TransferMoneyLog,
-)
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptImageHash,
     ReceiptProcessingLog,
     ReceiptProcessingStatus,
-)
-from hasta_la_vista_money.receipts.services.receipt_creator import (
-    receipt_balance_delta,
-)
-from hasta_la_vista_money.transactions.models import (
-    Transaction,
-    TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -270,40 +259,3 @@ class ReceiptProcessingLogRepository:
                 pk__in=[log.pk for log in logs],
             ).update(notified_at=timezone.now())
         return logs
-
-    def balance_after_receipt(self, *, receipt: Receipt) -> Decimal:
-        """Reconstruct the account balance immediately after this receipt."""
-        balance = receipt.account.balance
-        later_receipts = Receipt.objects.filter(
-            account_id=receipt.account_id,
-            receipt_date__gt=receipt.receipt_date,
-        )
-        for later_receipt in later_receipts:
-            balance -= receipt_balance_delta(
-                later_receipt.operation_type,
-                later_receipt.total_sum,
-            )
-        later_transactions = Transaction.objects.filter(
-            account_id=receipt.account_id,
-            date__gt=receipt.receipt_date,
-        )
-        for transaction in later_transactions:
-            delta = (
-                transaction.amount
-                if transaction.type == TransactionType.INCOME
-                else -transaction.amount
-            )
-            balance -= delta
-        later_transfers = TransferMoneyLog.objects.filter(
-            Q(from_account_id=receipt.account_id)
-            | Q(to_account_id=receipt.account_id),
-            exchange_date__gt=receipt.receipt_date,
-        )
-        for transfer in later_transfers:
-            delta = Decimal('0.00')
-            if transfer.from_account_id == receipt.account_id:
-                delta -= transfer.amount
-            if transfer.to_account_id == receipt.account_id:
-                delta += transfer.amount
-            balance -= delta
-        return balance

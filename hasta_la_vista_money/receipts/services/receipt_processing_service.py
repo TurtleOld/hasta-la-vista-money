@@ -9,6 +9,9 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services import (
+    BalanceHistoryService,
+)
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptProcessingLog,
@@ -54,9 +57,11 @@ class ReceiptProcessingService:
         self,
         receipt_creator_service: ReceiptCreatorServiceProtocol,
         processing_log_repository: ReceiptProcessingLogRepository,
+        balance_history_service: BalanceHistoryService,
     ) -> None:
         self.receipt_creator_service = receipt_creator_service
         self.processing_log_repository = processing_log_repository
+        self.balance_history_service = balance_history_service
 
     def find_duplicate(
         self,
@@ -253,8 +258,9 @@ class ReceiptProcessingService:
 
     def is_insufficient_at_conducting(self, *, receipt: Receipt) -> bool:
         return (
-            self.processing_log_repository.balance_after_receipt(
-                receipt=receipt,
+            self.balance_history_service.balance_at(
+                receipt.account,
+                receipt.receipt_date,
             )
             < 0
         )
