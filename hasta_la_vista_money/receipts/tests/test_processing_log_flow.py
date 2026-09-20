@@ -9,7 +9,8 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptProcessingLog,
@@ -401,3 +402,61 @@ class ReceiptProcessingLogScanViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['insufficient_at_conducting'])
+
+    def test_insufficient_funds_hidden_by_untracked_deposit_withdrawal(
+        self,
+    ) -> None:
+        """A deposit withdrawal credited to the account after the receipt
+        must not hide a real shortfall that existed at conducting time.
+
+        Regression for candidate 01 of the 2026-09-18 architecture review:
+        `balance_after_receipt` only undoes later Receipt/Transaction/
+        TransferMoneyLog rows, so a later deposit movement on the same
+        account is invisible to it.
+        """
+        seller = Seller.objects.create(user=self.user, name_seller='Shop')
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            receipt_date=timezone.now() - timedelta(days=2),
+            operation_type=1,
+            total_sum=Decimal('900.00'),
+        )
+        bank, _ = Bank.objects.get_or_create(
+            code='SBERBANK',
+            defaults={'name': 'Сбербанк', 'is_system': True},
+        )
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Deposit',
+            currency='RU',
+            balance=Decimal('0.00'),
+        )
+        deposit = Deposit.objects.create(
+            account=deposit_account,
+            name='Test deposit',
+            bank=bank,
+        )
+        DepositPrincipalEvent.objects.create(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.WITHDRAWAL,
+            amount=Decimal('900.00'),
+            effective_on=(timezone.now() - timedelta(days=1)).date(),
+            destination_account=self.account,
+        )
+        # Balance right after the receipt was 800 - 900 = -100 (a real
+        # shortfall). The withdrawal above returned 900 to the account the
+        # next day, so the current balance looks comfortable again.
+        self.account.balance = Decimal('800.00')
+        self.account.save(update_fields=['balance'])
+
+        response = self.client.get(reverse('receipts:view', args=[receipt.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            response.context['insufficient_at_conducting'],
+            'Остаток сразу после чека был отрицательным (800 - 900), но '
+            'проверка не увидела последующее движение вклада и посчитала '
+            'средства достаточными.',
+        )
