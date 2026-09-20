@@ -13,6 +13,9 @@ from hasta_la_vista_money.finance_account.bank_constants import (
 from hasta_la_vista_money.finance_account.services.account_service import (
     AccountService,
 )
+from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
+    BalanceHistoryService,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
@@ -55,6 +58,7 @@ __all__ = [
     'BANK_SBERBANK',
     'SUPPORTED_BANKS',
     'AccountService',
+    'BalanceHistoryService',
     'BalanceReconcileCommand',
     'BalanceService',
     'BalanceServiceProtocol',

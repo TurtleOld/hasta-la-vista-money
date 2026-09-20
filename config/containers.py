@@ -44,6 +44,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
         core=core,
         receipts=receipts,
         transactions=transactions,
+        deposits=providers.DependenciesContainer(),
     )
 
     core.account_service.override(finance_account.account_service)
@@ -54,6 +55,8 @@ class ApplicationContainer(containers.DeclarativeContainer):
         DepositContainer,
         finance_account=finance_account,
     )
+
+    finance_account.deposits.override(deposits)
 
     budget = providers.Container(
         BudgetContainer,
