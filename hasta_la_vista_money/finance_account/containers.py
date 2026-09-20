@@ -11,6 +11,7 @@ from hasta_la_vista_money.finance_account.repositories import (
 )
 from hasta_la_vista_money.finance_account.services import (
     AccountService,
+    BalanceHistoryService,
     BalanceTrendService,
     BankService,
     TransferService,
@@ -21,12 +22,17 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     core = providers.DependenciesContainer()
     receipts = providers.DependenciesContainer()
     transactions = providers.DependenciesContainer()
+    deposits = providers.DependenciesContainer()
 
     account_repository = providers.Singleton(AccountRepository)
     transfer_money_log_repository = providers.Singleton(
         TransferMoneyLogRepository,
     )
     bank_repository = providers.Singleton(BankRepository)
+    balance_history_service = providers.Factory(
+        BalanceHistoryService,
+        movement_sources=providers.List(deposits.deposit_movement_source),
+    )
 
     account_service: providers.Factory[AccountServiceProtocol] = (
         providers.Factory(
