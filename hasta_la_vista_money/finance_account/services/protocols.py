@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
+    FinancialMovement,
     GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
@@ -141,5 +142,32 @@ class BalanceServiceProtocol(Protocol):
             new_account: Account after change.
             old_total_sum: Total amount before change.
             new_total_sum: Total amount after change.
+        """
+        ...
+
+
+@runtime_checkable
+class FinancialMovementSourceProtocol(Protocol):
+    """Protocol for a domain that owns balance-affecting events other than
+    Receipt, Transaction, and TransferMoneyLog.
+
+    `finance_account` does not import the owning domain's models directly;
+    each source translates its own events into normalized
+    `FinancialMovement` values on request.
+    """
+
+    def list_financial_movements(
+        self,
+        account: Account,
+        since: date,
+    ) -> list[FinancialMovement]:
+        """List this domain's balance-affecting events for an account.
+
+        Args:
+            account: Account to list movements for.
+            since: Only movements effective on or after this date.
+
+        Returns:
+            Normalized movements, in no particular order.
         """
         ...
