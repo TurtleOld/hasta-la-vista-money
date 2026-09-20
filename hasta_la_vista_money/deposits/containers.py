@@ -1,6 +1,7 @@
 from dependency_injector import containers, providers
 
 from hasta_la_vista_money.deposits.interest_forecast import WeekendOnlyCalendar
+from hasta_la_vista_money.deposits.movement_source import DepositMovementSource
 from hasta_la_vista_money.deposits.protocols import DepositServiceProtocol
 from hasta_la_vista_money.deposits.repositories import DepositRepository
 from hasta_la_vista_money.deposits.services import DepositService
@@ -22,3 +23,4 @@ class DepositContainer(containers.DeclarativeContainer):
             calendar=production_calendar,
         )
     )
+    deposit_movement_source = providers.Factory(DepositMovementSource)

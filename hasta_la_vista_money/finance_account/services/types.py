@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import date, datetime
     from decimal import Decimal
 
     from hasta_la_vista_money.finance_account.models import Account
@@ -18,6 +18,21 @@ class BalanceReconcileCommand:
     new_account: Account
     old_total_sum: Decimal
     new_total_sum: Decimal
+
+
+@dataclass(frozen=True, kw_only=True)
+class FinancialMovement:
+    """A single balance-affecting event on one account, as seen from
+    outside the domain that owns it.
+
+    Reported by a `FinancialMovementSourceProtocol` implementation so that
+    `BalanceHistoryService` can reconstruct an account's balance at a past
+    moment without reading that domain's own models directly.
+    """
+
+    effective_on: date
+    delta: Decimal
+    description: str
 
 
 class GracePeriodInfoDict(TypedDict, total=False):
