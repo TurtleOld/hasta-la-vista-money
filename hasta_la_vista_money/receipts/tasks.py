@@ -62,6 +62,7 @@ from hasta_la_vista_money.receipts.services.fns_mapper import (
 )
 from hasta_la_vista_money.receipts.services.fns_qr import (
     QRCodeDecodeError,
+    QRCodeError,
     QRCodeExtractor,
     QRCodeNotFoundError,
     parse_fns_qr,
@@ -335,10 +336,14 @@ def process_receipt_processing_log(
     except Exception as exc:
         event, message = _classify_failure(exc)
         service.mark_failed(log=log, error_message=message, task_id=task_id)
+        image_width = exc.width if isinstance(exc, QRCodeError) else None
+        image_height = exc.height if isinstance(exc, QRCodeError) else None
         logger.warning(
             event,
             processing_log_id=processing_log_id,
             error=str(exc),
+            image_width=image_width,
+            image_height=image_height,
         )
 
 

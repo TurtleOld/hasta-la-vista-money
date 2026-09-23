@@ -159,9 +159,9 @@ class ScanQRReceiptView(
 ):
     """Accept a QR string decoded in-browser and enqueue an FNS lookup.
 
-    Mirrors UploadImageView but skips the image upload + pyzbar decode step
-    entirely: the QR is already decoded client-side (camera scan), so only
-    the raw QR string and target account are submitted.
+    Mirrors UploadImageView but skips the image upload + QRCodeExtractor
+    decode step entirely: the QR is already decoded client-side (camera
+    scan), so only the raw QR string and target account are submitted.
     """
 
     template_name = 'receipts/upload_image.html'

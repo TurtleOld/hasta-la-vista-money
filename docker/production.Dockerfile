@@ -39,7 +39,6 @@ RUN apt-get update && \
     libxrender-dev \
     libgomp1 \
     libgl1 \
-    libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install uv==0.7.13
@@ -75,7 +74,6 @@ RUN apt-get update && \
     libxrender1 \
     libgomp1 \
     libgl1 \
-    libzbar0 \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/* && \
     pip install uv==0.7.13 && \
