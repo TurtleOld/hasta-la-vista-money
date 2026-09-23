@@ -1,5 +1,23 @@
 # История изменений
 
+## [2.19.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.18.1...v2.19.0) (2026-09-21)
+
+
+### Features
+
+* **deposits:** publish deposit balance movements via a protocol ([#1047](https://github.com/TurtleOld/hasta-la-vista-money/issues/1047)) ([5ffaf9c](https://github.com/TurtleOld/hasta-la-vista-money/commit/5ffaf9c5f4dcb2c24806294e47b9b80a3a8b7e51))
+* **finance_account:** add BalanceHistoryService to reconstruct past balances ([#1048](https://github.com/TurtleOld/hasta-la-vista-money/issues/1048)) ([d57e946](https://github.com/TurtleOld/hasta-la-vista-money/commit/d57e9462ec4ffa2c143096e3fd226e379158aa85))
+
+
+### Bug Fixes
+
+* **receipts:** use BalanceHistoryService for insufficient-funds check ([#1050](https://github.com/TurtleOld/hasta-la-vista-money/issues/1050)) ([3e90523](https://github.com/TurtleOld/hasta-la-vista-money/commit/3e90523076aa3dbe1e4efd6981a017c324c1cf14))
+
+
+### Documentation
+
+* extend financial movement term and record balance facade ADR ([#1045](https://github.com/TurtleOld/hasta-la-vista-money/issues/1045)) ([a2c3b19](https://github.com/TurtleOld/hasta-la-vista-money/commit/a2c3b192e5b2a466cc3fa93d782fe6a768db73d3))
+
 ## [2.18.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.18.0...v2.18.1) (2026-09-15)
 
 
