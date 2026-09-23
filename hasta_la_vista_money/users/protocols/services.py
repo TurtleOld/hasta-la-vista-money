@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.services import (
         bank_statement_reconciliation,
     )
+    from hasta_la_vista_money.users.services.bank_statement_import import (
+        StatementImportResult,
+    )
     from hasta_la_vista_money.users.services.monthly_statistics_service import (
         DashboardSummaryStatisticsDict,
         StatisticsFilters,
@@ -114,3 +117,13 @@ class BankStatementRetentionServiceProtocol(Protocol):
     """Protocol for statement retention cleanup."""
 
     def cleanup_expired(self, now: datetime | None = None) -> int: ...
+
+
+@runtime_checkable
+class BankStatementImportServiceProtocol(Protocol):
+    """Protocol for the unified bank statement import pipeline."""
+
+    def import_statement(
+        self,
+        upload: BankStatementUpload,
+    ) -> StatementImportResult: ...

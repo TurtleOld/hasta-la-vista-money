@@ -17,6 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
@@ -44,7 +45,6 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _OzonBankParser,
     _RaiffeisenBankParser,
     _SberbankParser,
-    process_bank_statement,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -2199,25 +2199,22 @@ class TestBankStatementIntegration(TestCase):
             currency='RUB',
         )
 
-        # Create mock PDF file
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=account,
+            pdf_file=SimpleUploadedFile(
+                'statement.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+        )
 
-        try:
-            # This will fail with mock PDF, but we can test error handling
-            with self.assertRaises(BankStatementParseError):
-                process_bank_statement(
-                    pdf_path=pdf_path,
-                    account=account,
-                    user=self.user,
-                )
-        finally:
-            pdf_path.unlink()
+        # This will fail with mock PDF, but we can test error handling
+        with self.assertRaises(BankStatementParseError):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
 
     def test_category_creation_for_transaction(self) -> None:
         """Test that categories are created for transactions."""
@@ -2818,7 +2815,11 @@ class TestBankStatementParserAdvanced(TestCase):
 
 
 class TestBankStatementProcessIntegration(TestCase):
-    """Integration tests for process_bank_statement function."""
+    """Integration tests for the bank statement import seam.
+
+    Uses the same seam as production: a synchronous call to
+    ``process_bank_statement_task`` against a real ``BankStatementUpload``.
+    """
 
     fixtures: list[str] = ['users.yaml']
 
@@ -2832,22 +2833,36 @@ class TestBankStatementProcessIntegration(TestCase):
             currency='RUB',
         )
 
+    def _create_upload(
+        self,
+        filename: str = 'statement.pdf',
+    ) -> BankStatementUpload:
+        return BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                filename,
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+        )
+
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_process_bank_statement_creates_transactions(
         self,
         mock_camelot: MagicMock,
     ) -> None:
-        """Test that process_bank_statement creates transactions."""
+        """Test that the import task creates transactions."""
         # Create mock transaction data
         mock_df = pd.DataFrame(
             {
-                0: ['01.01.2024 10:00', '1', '2'],
-                1: ['', '', ''],
-                2: ['', 'Зарплата', 'Покупка'],
-                3: ['', '', ''],
-                4: ['', '', ''],
-                5: ['', '+50000,00 ₽', '-1500,00 ₽'],
-                6: ['', '', ''],
+                0: ['', '01.01.2024 10:00', '1', '2'],
+                1: ['', '', '', ''],
+                2: ['', '', 'Зарплата', 'Покупка'],
+                3: ['', '', '', ''],
+                4: ['', '', '', ''],
+                5: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
+                6: ['', '', '', ''],
             },
         )
 
@@ -2855,83 +2870,13 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        # Create mock PDF file
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = self._create_upload()
 
-        try:
-            result = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
 
-            # Basic validation - just check it returns a dict
-            self.assertIsInstance(result, dict)
-            self.assertIn('income_count', result)
-            self.assertIn('expense_count', result)
-            self.assertIn('total_count', result)
-        finally:
-            pdf_path.unlink()
-
-    @patch(
-        'hasta_la_vista_money.users.services.bank_statement.BankStatementParser',
-    )
-    def test_run_of_several_rows_is_one_operation_with_a_summary(
-        self,
-        mock_parser_cls: MagicMock,
-    ) -> None:
-        """The sync branch also groups a run under one operation."""
-        self.account.balance = Decimal('10000.00')
-        self.account.save(update_fields=['balance'])
-        base_date = timezone.now()
-        mock_parser = MagicMock()
-        mock_parser.parse.return_value = StatementParseResult(
-            transactions=[
-                {
-                    'date': base_date - timedelta(days=2 - i),
-                    'amount': Decimal(f'-{500 + i}.00'),
-                    'description': f'Такси {i}',
-                    'source_ref': f'sync-ref-{i}',
-                }
-                for i in range(3)
-            ],
-        )
-        mock_parser_cls.return_value = mock_parser
-
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
-
-        try:
-            process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
-        finally:
-            pdf_path.unlink()
-
-        run_entries = AuditLog.objects.filter(
-            user=self.user,
-            kind=AuditOperationKind.STATEMENT_IMPORT,
-        )
-        operation_ids = {entry.operation_id for entry in run_entries}
-        self.assertEqual(len(operation_ids), 1)
-        summary = AuditLog.objects.get(
-            user=self.user,
-            model_name=STATEMENT_IMPORT_LABEL,
-        )
-        self.assertEqual(summary.diff['created'], 3)
+        self.assertEqual(result['income_count'], 1)
+        self.assertEqual(result['expense_count'], 1)
+        self.assertEqual(result['total_count'], 2)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_process_bank_statement_with_zero_amount(
@@ -2955,25 +2900,11 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = self._create_upload()
 
-        try:
-            result = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
 
-            # Basic validation - just check it returns a dict
-            self.assertIsInstance(result, dict)
-        finally:
-            pdf_path.unlink()
+        self.assertEqual(result['total_count'], 0)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_process_bank_statement_creates_categories(
@@ -2983,13 +2914,11 @@ class TestBankStatementProcessIntegration(TestCase):
         """Test that categories are created for transactions."""
         mock_df = pd.DataFrame(
             {
-                0: ['01.01.2024 10:00', '1', '2'],
-                1: ['', '', ''],
-                2: ['', 'Зарплата Январь', 'Продукты Магнит'],
-                3: ['', '', ''],
-                4: ['', '', ''],
-                5: ['', '+50000,00 ₽', '-1500,00 ₽'],
-                6: ['', '', ''],
+                0: ['', '01.01.2024 10:00', '1', '2'],
+                1: ['', '', '', ''],
+                2: ['', '', 'Зарплата Январь', 'Продукты Магнит'],
+                3: ['', '', '', ''],
+                4: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
             },
         )
 
@@ -2997,25 +2926,24 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = self._create_upload()
 
-        try:
-            result = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
+        process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        self.assertTrue(
+            Category.objects.filter(
                 user=self.user,
-            )
-
-            # Basic validation - just check it completes without error
-            self.assertIsInstance(result, dict)
-        finally:
-            pdf_path.unlink()
+                name='Зарплата Январь',
+                type=TransactionType.INCOME,
+            ).exists(),
+        )
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user,
+                name='Продукты Магнит',
+                type=TransactionType.EXPENSE,
+            ).exists(),
+        )
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_process_bank_statement_reuses_existing_categories(
@@ -3037,13 +2965,11 @@ class TestBankStatementProcessIntegration(TestCase):
 
         mock_df = pd.DataFrame(
             {
-                0: ['01.01.2024 10:00', '1', '2'],
-                1: ['', '', ''],
-                2: ['', 'Зарплата Январь', 'Продукты Магнит'],
-                3: ['', '', ''],
-                4: ['', '', ''],
-                5: ['', '+50000,00 ₽', '-1500,00 ₽'],
-                6: ['', '', ''],
+                0: ['', '01.01.2024 10:00', '1', '2'],
+                1: ['', '', '', ''],
+                2: ['', '', 'Зарплата Январь', 'Продукты Магнит'],
+                3: ['', '', '', ''],
+                4: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
             },
         )
 
@@ -3051,37 +2977,24 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = self._create_upload()
 
-        try:
-            process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
+        process_bank_statement_task.apply(args=[upload.pk]).get()
 
-            # Verify existing categories were used (not created again)
-            income_count = Category.objects.filter(
-                user=self.user,
-                name='Зарплата Январь',
-                type=TransactionType.INCOME,
-            ).count()
-            expense_count = Category.objects.filter(
-                user=self.user,
-                name='Продукты Магнит',
-                type=TransactionType.EXPENSE,
-            ).count()
+        # Verify existing categories were used (not created again)
+        income_count = Category.objects.filter(
+            user=self.user,
+            name='Зарплата Январь',
+            type=TransactionType.INCOME,
+        ).count()
+        expense_count = Category.objects.filter(
+            user=self.user,
+            name='Продукты Магнит',
+            type=TransactionType.EXPENSE,
+        ).count()
 
-            self.assertEqual(income_count, 1)
-            self.assertEqual(expense_count, 1)
-        finally:
-            pdf_path.unlink()
+        self.assertEqual(income_count, 1)
+        self.assertEqual(expense_count, 1)
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -3122,43 +3035,26 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        first_upload = self._create_upload('statement-1.pdf')
+        first = process_bank_statement_task.apply(
+            args=[first_upload.pk],
+        ).get()
+        self.assertEqual(first['income_count'], 1)
+        self.assertEqual(first['expense_count'], 1)
+        self.assertEqual(first['skipped_count'], 0)
 
-        try:
-            first = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
-            self.assertEqual(first['income_count'], 1)
-            self.assertEqual(first['expense_count'], 1)
-            self.assertEqual(first['skipped_count'], 0)
+        balance_after_first = Account.objects.get(pk=self.account.pk).balance
 
-            balance_after_first = Account.objects.get(
-                pk=self.account.pk,
-            ).balance
+        second_upload = self._create_upload('statement-2.pdf')
+        second = process_bank_statement_task.apply(
+            args=[second_upload.pk],
+        ).get()
+        self.assertEqual(second['income_count'], 0)
+        self.assertEqual(second['expense_count'], 0)
+        self.assertEqual(second['skipped_count'], 2)
 
-            second = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
-            self.assertEqual(second['income_count'], 0)
-            self.assertEqual(second['expense_count'], 0)
-            self.assertEqual(second['skipped_count'], 2)
-
-            balance_after_second = Account.objects.get(
-                pk=self.account.pk,
-            ).balance
-            self.assertEqual(balance_after_first, balance_after_second)
-        finally:
-            pdf_path.unlink()
+        balance_after_second = Account.objects.get(pk=self.account.pk).balance
+        self.assertEqual(balance_after_first, balance_after_second)
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -3166,18 +3062,20 @@ class TestBankStatementProcessIntegration(TestCase):
         return_value='Выписка по счёту кредитной карты',
     )
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_reimport_matches_legacy_records_without_source_ref(
+    def test_legacy_record_without_source_ref_surfaces_as_probable_duplicate(
         self,
         mock_camelot: MagicMock,
         mock_detect: MagicMock,
     ) -> None:
-        """Legacy rows with source_ref=NULL get matched and backfilled.
+        """Legacy rows with source_ref=NULL surface as a probable duplicate.
 
-        Reproduces the migration scenario: a transaction was imported
-        before source_ref existed (stored with NULL). On the next import
-        the parser now extracts source_ref. We must NOT create a duplicate
-        and instead recognise the legacy row by (account, user, type,
-        amount, date) and backfill its source_ref.
+        A transaction imported before source_ref existed (stored with NULL)
+        matches an incoming row by (account, user, type, amount, date) —
+        the same signal the probable-duplicate check uses. Probable-duplicate
+        detection runs before the legacy-backfill fallback, so this is
+        surfaced for reconciliation rather than silently auto-matched: no
+        new ``Transaction`` is created and the legacy row is left for the
+        user to resolve via statement reconciliation.
         """
         # Pre-create a legacy record without source_ref (mimics pre-fix DB)
         legacy_date = datetime(
@@ -3219,42 +3117,30 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_table.df = mock_df
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        upload = self._create_upload()
 
-        try:
-            result = process_bank_statement(
-                pdf_path=pdf_path,
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
+        self.assertEqual(result['expense_count'], 0)
+        self.assertEqual(result['income_count'], 0)
+        self.assertEqual(result['skipped_count'], 1)
+
+        self.assertEqual(
+            Transaction.objects.filter(
                 account=self.account,
                 user=self.user,
-            )
-            self.assertEqual(result['expense_count'], 0)
-            self.assertEqual(result['income_count'], 0)
-            self.assertEqual(result['skipped_count'], 1)
-
-            self.assertEqual(
-                Transaction.objects.filter(
-                    account=self.account,
-                    user=self.user,
-                    amount=Decimal('73.00'),
-                    date=legacy_date,
-                ).count(),
-                1,
-                'No duplicate must be created for the legacy row',
-            )
-            legacy_tx.refresh_from_db()
-            self.assertEqual(
-                legacy_tx.source_ref,
-                '869838',
-                'Legacy row must be backfilled with source_ref',
-            )
-        finally:
-            pdf_path.unlink()
+                amount=Decimal('73.00'),
+                date=legacy_date,
+            ).count(),
+            1,
+            'No duplicate must be created for the legacy row',
+        )
+        legacy_tx.refresh_from_db()
+        self.assertIsNone(
+            legacy_tx.source_ref,
+            'Ambiguous match is left for reconciliation, not auto-backfilled',
+        )
+        statement_row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(statement_row.candidate, legacy_tx)
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -3325,35 +3211,22 @@ class TestBankStatementProcessIntegration(TestCase):
             [second_table],
         ]
 
-        with tempfile.NamedTemporaryFile(
-            mode='wb',
-            suffix='.pdf',
-            delete=False,
-        ) as temp_file:
-            temp_file.write(b'%PDF-1.4 mock pdf')
-            pdf_path = Path(temp_file.name)
+        first_upload = self._create_upload('statement-1.pdf')
+        first = process_bank_statement_task.apply(
+            args=[first_upload.pk],
+        ).get()
+        self.assertEqual(
+            first['income_count'] + first['expense_count'],
+            2,
+        )
 
-        try:
-            first = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
-            self.assertEqual(
-                first['income_count'] + first['expense_count'],
-                2,
-            )
-
-            second = process_bank_statement(
-                pdf_path=pdf_path,
-                account=self.account,
-                user=self.user,
-            )
-            self.assertEqual(second['skipped_count'], 2)
-            self.assertEqual(second['expense_count'], 1)
-            self.assertEqual(second['income_count'], 0)
-        finally:
-            pdf_path.unlink()
+        second_upload = self._create_upload('statement-2.pdf')
+        second = process_bank_statement_task.apply(
+            args=[second_upload.pk],
+        ).get()
+        self.assertEqual(second['skipped_count'], 2)
+        self.assertEqual(second['expense_count'], 1)
+        self.assertEqual(second['income_count'], 0)
 
 
 class TestBankStatementEdgeCases(TestCase):
@@ -4126,21 +3999,21 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_category_uses_classifier_output(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         mock_classifier = MagicMock()
         mock_classifier.classify.return_value = 'Продукты'
-        mock_container = MagicMock()
-        mock_container.users.category_classifier.return_value = mock_classifier
-        mock_container_cls.return_value = mock_container
+        ApplicationContainer.users.category_classifier.override(
+            mock_classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
 
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
@@ -4179,22 +4052,22 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertIsNotNone(category)
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_run_of_several_rows_is_one_operation_with_a_summary(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         """A multi-row run shares one operation_id, set outside the loop."""
         mock_classifier = MagicMock()
         mock_classifier.classify.return_value = 'Такси'
-        mock_container = MagicMock()
-        mock_container.users.category_classifier.return_value = mock_classifier
-        mock_container_cls.return_value = mock_container
+        ApplicationContainer.users.category_classifier.override(
+            mock_classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
 
         base_date = timezone.now()
         mock_parser = MagicMock()
@@ -4235,18 +4108,14 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(summary.operation_id, next(iter(operation_ids)))
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_all_rows_duplicate_still_writes_a_summary(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         """A run whose rows are all duplicates is still recorded."""
-        mock_container_cls.return_value = MagicMock()
         existing_date = timezone.now()
         existing = Transaction.objects.create(
             user=self.user,
@@ -4290,21 +4159,21 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(summary.diff['skipped_duplicates'], 1)
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_balance_discrepancy_saved(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         mock_classifier = MagicMock()
         mock_classifier.classify.return_value = 'Прочее'
-        mock_container = MagicMock()
-        mock_container.users.category_classifier.return_value = mock_classifier
-        mock_container_cls.return_value = mock_container
+        ApplicationContainer.users.category_classifier.override(
+            mock_classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
 
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
@@ -4337,15 +4206,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_probable_duplicate_waits_for_confirmation(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         category = Category.objects.create(
@@ -4363,9 +4229,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.return_value = 'Такси'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4407,15 +4276,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(statement_row.candidate_description, 'Транспорт')
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_classifier_failure_uses_fallback_for_probable_duplicate(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         category = Category.objects.create(
@@ -4433,9 +4299,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.side_effect = RuntimeError('offline')
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4469,21 +4338,21 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_classifier_failure_uses_fallback_for_new_row(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         classifier = MagicMock()
         classifier.classify.side_effect = RuntimeError('offline')
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4513,15 +4382,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_exact_source_duplicate_does_not_require_confirmation(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         category = Category.objects.create(
@@ -4539,9 +4405,10 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             source_ref='same-ref',
         )
         classifier = MagicMock()
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4568,15 +4435,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         classifier.classify.assert_not_called()
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_candidate_must_have_same_account_and_type(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         other_account = Account.objects.create(
@@ -4600,9 +4464,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.return_value = 'Продукты'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4630,15 +4497,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(self.account.balance, Decimal('9900.00'))
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_multiple_candidates_are_saved_without_auto_selection(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         first_category = Category.objects.create(
@@ -4671,9 +4535,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.return_value = 'Поездки'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4707,15 +4574,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_candidates_are_ranked_by_description_similarity(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         groceries = Category.objects.create(
@@ -4748,9 +4612,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.return_value = 'Поездки'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4776,15 +4643,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_mixed_statement_imports_clear_row_and_awaits_duplicate(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         duplicate_date = timezone.now()
         category = Category.objects.create(
@@ -4802,9 +4666,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         classifier = MagicMock()
         classifier.classify.side_effect = ['Поездки', 'Продукты']
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4849,22 +4716,22 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_identical_rows_in_same_file_are_imported_separately(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         transaction_date = timezone.now()
         classifier = MagicMock()
         classifier.classify.return_value = 'Кофе'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -4901,21 +4768,21 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
 
     @patch(
-        'hasta_la_vista_money.users.tasks.ApplicationContainer',
-    )
-    @patch(
-        'hasta_la_vista_money.users.tasks.BankStatementParser',
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
     )
     def test_clear_statement_completes_with_outcomes_and_balance(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         classifier = MagicMock()
         classifier.classify.return_value = 'Продукты'
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {
@@ -5070,6 +4937,15 @@ class TestOzonBankStatement(TestCase):
         mock_camelot: MagicMock,
         mock_detect: MagicMock,
     ) -> None:
+        """Both rows matching one legacy candidate become probable duplicates.
+
+        Probable-duplicate detection runs ahead of the legacy-backfill
+        fallback and does not remove a candidate from the pool once another
+        row has matched it, so two incoming rows that both match the same
+        legacy transaction by (account, type, amount, calendar date) each
+        surface as a probable duplicate for reconciliation — the legacy
+        transaction itself is left untouched.
+        """
         category = Category.objects.create(
             user=self.user,
             name='Чек Ozon',
@@ -5110,32 +4986,47 @@ class TestOzonBankStatement(TestCase):
         )
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        result = process_bank_statement(
-            pdf_path=self.pdf_path,
-            account=self.account,
+        upload = BankStatementUpload.objects.create(
             user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'ozon.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
         )
 
-        self.assertEqual(result['skipped_count'], 1)
-        self.assertEqual(result['expense_count'], 1)
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        self.assertEqual(result['skipped_count'], 2)
+        self.assertEqual(result['expense_count'], 0)
         self.assertEqual(
             Transaction.objects.filter(account=self.account).count(),
-            2,
+            1,
         )
         existing.refresh_from_db()
-        self.assertEqual(existing.source_ref, '12110154131')
+        self.assertIsNone(existing.source_ref)
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                candidate=existing,
+            ).count(),
+            2,
+        )
 
-    @patch('hasta_la_vista_money.users.tasks.ApplicationContainer')
-    @patch('hasta_la_vista_money.users.tasks.BankStatementParser')
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
     def test_task_uses_explicit_ozon_category(
         self,
         mock_parser_cls: MagicMock,
-        mock_container_cls: MagicMock,
     ) -> None:
         classifier = MagicMock()
-        container = MagicMock()
-        container.users.category_classifier.return_value = classifier
-        mock_container_cls.return_value = container
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
             transactions=[
                 {

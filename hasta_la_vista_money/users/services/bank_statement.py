@@ -20,29 +20,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import camelot
-from django.db import transaction
 from django.utils import timezone
 from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
 
-from hasta_la_vista_money.finance_account.services.balance_service import (
-    BalanceService,
-)
-from hasta_la_vista_money.system.models import AuditOperationKind
-from hasta_la_vista_money.system.services.audit_context import audit_operation
-from hasta_la_vista_money.system.services.audit_statement_import import (
-    record_statement_import_summary,
-)
-from hasta_la_vista_money.transactions.models import (
-    Category,
-    Transaction,
-    TransactionType,
-)
+from hasta_la_vista_money.transactions.models import Category
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
 
 logger = logging.getLogger(__name__)
@@ -1189,177 +1175,6 @@ class BankStatementParser:
     def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to the delegate parser."""
         return getattr(self._delegate, name)
-
-
-# ---------------------------------------------------------------------------
-# process_bank_statement (unchanged public function)
-# ---------------------------------------------------------------------------
-
-
-@transaction.atomic
-def process_bank_statement(
-    pdf_path: str | Path,
-    account: Account,
-    user: User,
-) -> dict[str, int]:
-    """Process bank statement and create Income/Expense records.
-
-    Args:
-        pdf_path: Path to the PDF file.
-        account: Account to associate transactions with.
-        user: User who owns the account.
-
-    Returns:
-        Dictionary with income_count, expense_count, skipped_count,
-        total_count.
-
-    Raises:
-        BankStatementParseError: If parsing fails.
-    """
-    parser = BankStatementParser(pdf_path)
-    parse_result = parser.parse()
-    transactions = parse_result.transactions
-    logger.info('Found %d transactions to process', len(transactions))
-
-    income_count = 0
-    expense_count = 0
-    skipped_count = 0
-    period_from: date_type | None = None
-    period_to: date_type | None = None
-
-    with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
-        for idx, trans in enumerate(transactions):
-            if idx % 10 == 0:
-                logger.info(
-                    'Processing transaction %d/%d',
-                    idx + 1,
-                    len(transactions),
-                )
-            amount = trans['amount']
-            description = trans['description']
-            trans_date = trans['date']
-            source_ref = trans.get('source_ref')
-            source = trans.get('source')
-            abs_amount = abs(amount)
-
-            if amount > 0:
-                type_value = TransactionType.INCOME
-            else:
-                type_value = TransactionType.EXPENSE
-
-            if _transaction_already_exists(
-                account=account,
-                user=user,
-                type_value=type_value,
-                abs_amount=abs_amount,
-                trans_date=trans_date,
-                source_ref=source_ref,
-                match_calendar_date=source == 'ozon',
-            ):
-                skipped_count += 1
-                continue
-
-            category = _get_or_create_category(user, description, type_value)
-            Transaction.objects.create(
-                user=user,
-                account=account,
-                category=category,
-                type=type_value,
-                amount=abs_amount,
-                date=trans_date,
-                source_ref=source_ref or None,
-            )
-            if type_value == TransactionType.INCOME:
-                BalanceService().apply_balance_delta(account, abs_amount)
-                income_count += 1
-            else:
-                BalanceService().apply_balance_delta(account, -abs_amount)
-                expense_count += 1
-            row_date = (
-                trans_date.date()
-                if isinstance(trans_date, datetime)
-                else trans_date
-            )
-            if period_from is None or row_date < period_from:
-                period_from = row_date
-            if period_to is None or row_date > period_to:
-                period_to = row_date
-
-        record_statement_import_summary(
-            user=user,
-            account=account,
-            created=income_count + expense_count,
-            skipped_duplicates=skipped_count,
-            period_from=period_from,
-            period_to=period_to,
-        )
-
-    logger.info(
-        'Finished processing: %d income, %d expenses, %d skipped',
-        income_count,
-        expense_count,
-        skipped_count,
-    )
-    return {
-        'income_count': income_count,
-        'expense_count': expense_count,
-        'skipped_count': skipped_count,
-        'total_count': income_count + expense_count,
-    }
-
-
-def _transaction_already_exists(
-    *,
-    account: Account,
-    user: User,
-    type_value: str,
-    abs_amount: Decimal,
-    trans_date: datetime,
-    source_ref: str | None,
-    match_calendar_date: bool = False,
-) -> bool:
-    """Check whether the transaction has already been imported.
-
-    When ``source_ref`` is provided we first look for an exact match. If
-    none is found we additionally fall back to ``(account, user, type,
-    amount, date)`` against legacy records that have ``source_ref IS NULL``
-    (created before per-operation refs were stored). When such a legacy
-    record is found we backfill its ``source_ref`` so that subsequent
-    imports match it directly, preventing duplicates.
-    """
-    if source_ref:
-        if Transaction.objects.filter(
-            account=account,
-            source_ref=source_ref,
-        ).exists():
-            return True
-        legacy_queryset = Transaction.objects.filter(
-            account=account,
-            user=user,
-            type=type_value,
-            amount=abs_amount,
-            source_ref__isnull=True,
-        )
-        if match_calendar_date:
-            legacy_queryset = legacy_queryset.filter(
-                date__date=timezone.localtime(trans_date).date(),
-            )
-        else:
-            legacy_queryset = legacy_queryset.filter(date=trans_date)
-        legacy = legacy_queryset.order_by('date', 'pk').first()
-        if legacy is not None:
-            legacy.source_ref = source_ref
-            legacy.save(update_fields=['source_ref'])
-            return True
-        return False
-    return Transaction.objects.filter(
-        account=account,
-        user=user,
-        type=type_value,
-        amount=abs_amount,
-        date=trans_date,
-        source_ref__isnull=True,
-    ).exists()
 
 
 def _get_or_create_category(

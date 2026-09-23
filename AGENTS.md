@@ -4,6 +4,22 @@
 
 ---
 
+## Agent skills
+
+### Issue tracker
+
+Issues и спеки живут как markdown-файлы в `.scratch/<feature>/`. См. `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Стандартный словарь из пяти ролей (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). См. `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` и `docs/adr/` в корне репозитория. См. `docs/agents/domain.md`.
+
+---
+
 ## 📋 О проекте
 
 **Hasta La Vista, Money!** — это Django-приложение для управления личными финансами с открытым исходным кодом. Проект использует современные практики разработки, включая dependency injection, репозиторный паттерн, и RESTful API.
