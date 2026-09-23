@@ -5,12 +5,16 @@ from django.conf import settings
 
 from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.users.protocols.services import (
+    BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
     UserStatisticsServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
+)
+from hasta_la_vista_money.users.services.bank_statement_import import (
+    BankStatementImportService,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -86,4 +90,11 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         BankStatementRetentionService,
         reconciliation_service=bank_statement_reconciliation_service,
+    )
+
+    bank_statement_import_service: providers.Factory[
+        BankStatementImportServiceProtocol
+    ] = providers.Factory(
+        BankStatementImportService,
+        classifier=category_classifier,
     )

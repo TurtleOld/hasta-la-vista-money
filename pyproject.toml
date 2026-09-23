@@ -136,7 +136,7 @@ known-first-party = ["hasta_la_vista_money"]
 "**/users/apps.py" = [
   "PLC0415",  # signals import must be deferred to ready()
 ]
-"**/users/tasks.py" = [
+"**/users/services/bank_statement_import.py" = [
   "C901",     # statement batch orchestration keeps row decisions atomic
   "PLR0912",  # statement batch orchestration keeps row decisions atomic
   "PLR0915",  # orchestration task keeps upload state transitions together
