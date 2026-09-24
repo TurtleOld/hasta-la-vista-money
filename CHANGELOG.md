@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.19.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.19.0...v2.19.1) (2026-09-23)
+
+
+### Documentation
+
+* add agent skills docs and receipt QR decoder ADR ([#1055](https://github.com/TurtleOld/hasta-la-vista-money/issues/1055)) ([179befd](https://github.com/TurtleOld/hasta-la-vista-money/commit/179befd2bee8a76c34630362debe32b1816f99b9))
+
 ## [2.19.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.18.1...v2.19.0) (2026-09-21)
 
 
