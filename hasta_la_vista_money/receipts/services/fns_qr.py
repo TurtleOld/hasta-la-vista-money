@@ -3,19 +3,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import Any, Final
 from urllib.parse import parse_qs
 
+import zxingcpp
 from PIL import Image, UnidentifiedImageError
 
 REQUIRED_QR_FIELDS: Final[frozenset[str]] = frozenset(
     {'t', 's', 'fn', 'i', 'fp', 'n'},
 )
 
+_READER_OPTIONS: Final[dict[str, Any]] = {
+    'formats': zxingcpp.QRCode,
+    'try_rotate': True,
+    'try_downscale': True,
+    'try_invert': True,
+    'binarizer': zxingcpp.Binarizer.LocalAverage,
+    'text_mode': zxingcpp.TextMode.Plain,
+}
+
 
 class QRCodeError(ValueError):
-    """Base exception for QR extraction failures."""
+    """Base exception for QR extraction failures.
+
+    Carries the source image dimensions (when known) so callers can log
+    them without reopening the file, e.g. to tell "photo too small" apart
+    from "QR physically unreadable" when diagnosing user reports.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.width = width
+        self.height = height
 
 
 class QRCodeNotFoundError(QRCodeError):
@@ -74,43 +99,55 @@ def parse_fns_qr(raw_qr: str) -> FNSQRCode:
 
 
 class QRCodeExtractor:
-    """Extract FNS QR data from receipt images using pyzbar."""
+    """Extract FNS QR data from receipt images using zxing-cpp.
+
+    Mirrors the reader options used by the browser camera-scan worker
+    (``static/js/pages/receipt-qr-worker.js``), so a photo uploaded via the
+    "Файл" tab gets the same rotation/inversion/downscale robustness as a
+    live camera scan (see ADR-0011).
+    """
 
     def extract(self, image_file: Any) -> FNSQRCode:
         """Read the first valid QR code from an uploaded/persisted image."""
-        try:
-            pyzbar = import_module('pyzbar.pyzbar')
-        except ImportError as exc:  # pragma: no cover - environment-specific
-            raise QRCodeDecodeError(
-                'pyzbar or system zbar library is not installed',
-            ) from exc
-
+        width: int | None = None
+        height: int | None = None
         try:
             if hasattr(image_file, 'seek'):
                 image_file.seek(0)
             with Image.open(image_file) as image:
-                decoded_codes = pyzbar.decode(
+                width, height = image.size
+                decoded_codes = zxingcpp.read_barcodes(
                     image,
-                    symbols=[pyzbar.ZBarSymbol.QRCODE],
+                    **_READER_OPTIONS,
                 )
         except (OSError, UnidentifiedImageError) as exc:
-            raise QRCodeDecodeError('Receipt image cannot be opened') from exc
+            raise QRCodeDecodeError(
+                'Receipt image cannot be opened',
+                width=width,
+                height=height,
+            ) from exc
 
         if not decoded_codes:
-            raise QRCodeNotFoundError('Receipt image has no QR code')
+            raise QRCodeNotFoundError(
+                'Receipt image has no QR code',
+                width=width,
+                height=height,
+            )
 
         for code in decoded_codes:
-            data = getattr(code, 'data', b'')
-            try:
-                raw_qr = data.decode('utf-8')
-            except UnicodeDecodeError:
+            raw_qr = code.text
+            if not raw_qr:
                 continue
             try:
                 return parse_fns_qr(raw_qr)
             except QRCodeDecodeError:
                 continue
 
-        raise QRCodeDecodeError('Receipt QR code is not an FNS QR')
+        raise QRCodeDecodeError(
+            'Receipt QR code is not an FNS QR',
+            width=width,
+            height=height,
+        )
 
 
 __all__ = [
