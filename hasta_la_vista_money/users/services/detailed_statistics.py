@@ -90,7 +90,6 @@ from hasta_la_vista_money.users.services.summary_statistics_service import (
     _statistics_alerts,
     _summary_card_delta,
     _summary_cards,
-    compute_total_payment_schedule_debt,
     get_user_detailed_statistics,
 )
 
@@ -175,7 +174,6 @@ __all__ = [
     '_top_categories_qs',
     '_top_categories_with_comparison',
     '_transfer_logs',
-    'compute_total_payment_schedule_debt',
     'get_dashboard_summary_statistics',
     'get_user_detailed_statistics',
 ]

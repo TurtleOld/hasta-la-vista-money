@@ -37,6 +37,9 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    card_debt_for_balance,
+)
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
@@ -914,7 +917,7 @@ def _pre_period_debt_for_card(
     total_income = sum((p['amount'] for p in payments), Decimal(0))
     total_expenses = sum((m['debt_for_month'] for m in months), Decimal(0))
     return max(
-        _card_debt_for_balance(card, Decimal(card.balance))
+        card_debt_for_balance(card, Decimal(card.balance))
         + total_income
         - total_expenses,
         Decimal(0),
@@ -1019,12 +1022,6 @@ def _build_receipt_category_chart(
     }
 
 
-def _card_debt_for_balance(card: Account, balance: Decimal) -> Decimal:
-    """Задолженность по кредитной карте при заданном остатке счёта."""
-    limit = Decimal(card.limit_credit or 0)
-    return max(limit - balance, Decimal(0))
-
-
 def _card_limit_left(card: Account) -> Decimal:
     """Остаток лимита: остаток счёта в пределах от нуля до лимита."""
     limit = Decimal(card.limit_credit or 0)
@@ -1096,7 +1093,7 @@ def _card_debt_at(
         (m.delta for m in movements if m.moment > moment),
         Decimal(0),
     )
-    return _card_debt_for_balance(card, Decimal(card.balance) - later)
+    return card_debt_for_balance(card, Decimal(card.balance) - later)
 
 
 def _card_grace_summary(
@@ -1202,53 +1199,6 @@ def _payment_schedule_remaining_debt(
     )
 
 
-def compute_total_payment_schedule_debt(
-    accounts: QuerySet[Account],
-    account_service: AccountServiceProtocol,
-) -> Decimal:
-    """Sum ``remaining_debt`` from payment schedules across credit cards.
-
-    Builds the same payment schedule used in the detailed-statistics
-    table ("График платежей по беспроцентному периоду") for every
-    credit account in the queryset, then sums the per-month
-    ``remaining_debt`` values. The result matches the "Осталось"
-    column on the statistics page.
-
-    Args:
-        accounts: QuerySet of accounts to inspect.
-        account_service: Account service used for grace and debt
-            calculations.
-
-    Returns:
-        Non-negative Decimal representing total outstanding debt
-        across credit-card payment schedules.
-    """
-    today = timezone.now().date()
-    stats_filter = StatisticsFilters()
-    period_start, period_end = stats_filter.date_range(today)
-
-    credit_cards = accounts.filter(
-        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
-    )
-
-    total = Decimal(str(constants.ZERO))
-    for card in credit_cards:
-        months, history = _card_months_block(
-            card,
-            today,
-            stats_filter,
-            account_service=account_service,
-        )
-
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
-        schedule = _build_payment_schedule(months, history, card)
-        total += _payment_schedule_remaining_debt(schedule)
-
-    return total
-
-
 def _credit_cards_block(
     accounts: QuerySet[Account],
     stats_filter: StatisticsFilters,
@@ -1269,7 +1219,7 @@ def _credit_cards_block(
     )
 
     for card in credit_cards:
-        debt_now = _card_debt_for_balance(card, Decimal(card.balance))
+        debt_now = card_debt_for_balance(card, Decimal(card.balance))
         months, history = _card_months_block(
             card,
             today,
@@ -1630,6 +1580,5 @@ __all__ = [
     '_statistics_alerts',
     '_summary_card_delta',
     '_summary_cards',
-    'compute_total_payment_schedule_debt',
     'get_user_detailed_statistics',
 ]
