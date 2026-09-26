@@ -917,11 +917,11 @@ class CreditCardPaymentScheduleTest(TestCase):
                 'purchase_start': timezone.now(),
                 'purchase_end': timezone.now(),
                 'grace_end': grace_end,
-                'debt_for_month': 10000.0,
+                'debt_for_month': Decimal('10000.00'),
                 'is_overdue': False,
                 'days_until_due': 0,
-                'payments_made': 0.0,
-                'remaining_debt': 0.0,
+                'payments_made': Decimal(0),
+                'remaining_debt': Decimal(0),
                 'is_paid': False,
             },
         ]
@@ -934,8 +934,11 @@ class CreditCardPaymentScheduleTest(TestCase):
 
         _apply_payments_to_months(months, payments)
 
-        self.assertEqual(months[0]['payments_made'], 0.0)
-        self.assertEqual(months[0]['remaining_debt'], 10000.0)
+        self.assertEqual(months[0]['payments_made'], Decimal(0))
+        self.assertEqual(
+            months[0]['remaining_debt'],
+            Decimal('10000.00'),
+        )
         self.assertFalse(months[0]['is_paid'])
 
 
