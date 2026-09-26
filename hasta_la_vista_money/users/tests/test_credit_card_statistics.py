@@ -282,3 +282,103 @@ class CreditCardStatisticsTest(TestCase):
         self.card.save(update_fields=['limit_credit'])
 
         self.assertFalse(self._card_data()['schedule_mismatch'])
+
+
+class CardGracePeriodFilterTest(TestCase):
+    """The grace block reads all card movements, ignoring statistics filters."""
+
+    def setUp(self) -> None:
+        cache.clear()
+        self.user = User.objects.create_user(
+            username='gracefilteruser',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        sberbank = Bank.objects.get(code='SBERBANK')
+        self.card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная СберКарта',
+            balance=Decimal('94500.00'),
+            limit_credit=Decimal('100000.00'),
+            currency='RUB',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            bank=sberbank,
+        )
+        self.used_category = Category.objects.create(
+            user=self.user,
+            name='Покупки',
+            type=TransactionType.EXPENSE,
+        )
+        self.empty_category = Category.objects.create(
+            user=self.user,
+            name='Другое',
+            type=TransactionType.EXPENSE,
+        )
+        self._purchase(
+            '5000.00',
+            datetime(2026, 2, 10, 12, 0, tzinfo=UTC),
+            self.used_category,
+        )
+        self._purchase(
+            '500.00',
+            datetime(2026, 9, 5, 12, 0, tzinfo=UTC),
+            self.used_category,
+        )
+
+    def tearDown(self) -> None:
+        cache.clear()
+        super().tearDown()
+
+    def _purchase(
+        self,
+        amount: str,
+        when: datetime,
+        category: Category,
+    ) -> None:
+        Transaction.objects.create(
+            user=self.user,
+            account=self.card,
+            category=category,
+            amount=Decimal(amount),
+            date=when,
+            type=TransactionType.EXPENSE,
+        )
+
+    def _summary(
+        self,
+        stats_filter: StatisticsFilters | None = None,
+    ) -> dict[str, Any]:
+        with patch('django.utils.timezone.now', return_value=TODAY):
+            stats = get_user_detailed_statistics(
+                self.user,
+                container=ApplicationContainer(),
+                stats_filter=stats_filter or StatisticsFilters(),
+            )
+        return dict(stats['credit_cards_data'][0]['grace_summary'])
+
+    def test_overdue_purchase_outside_period_is_seen(self) -> None:
+        summary = self._summary()
+
+        self.assertEqual(summary['nearest_due_date'], date(2026, 5, 31))
+        self.assertEqual(summary['nearest_due_amount'], Decimal('5000.00'))
+        self.assertIsNone(summary['mandatory_payment'])
+        self.assertTrue(summary['mandatory_payment_unknown'])
+
+    def test_current_purchases_ignore_category_filter(self) -> None:
+        summary = self._summary(
+            StatisticsFilters(
+                category_keys=[f'expense-{self.empty_category.pk}'],
+            ),
+        )
+
+        self.assertEqual(summary['current_purchases'], Decimal('500.00'))
+        self.assertTrue(summary['mandatory_payment_unknown'])
+
+    def test_category_filter_does_not_change_grace_block(self) -> None:
+        default = self._summary()
+        filtered = self._summary(
+            StatisticsFilters(
+                category_keys=[f'expense-{self.used_category.pk}'],
+            ),
+        )
+
+        self.assertEqual(filtered, default)

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet, Sum
+from django.db.models import Min, Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -859,6 +859,73 @@ def _card_months_block(
     return months, history
 
 
+def _earliest_card_movement(card: Account) -> date | None:
+    """Earliest date of any movement on a credit card account.
+
+    Args:
+        card: Credit card account.
+
+    Returns:
+        Local date of the earliest transaction, receipt or transfer, or
+        None when the card has no movements.
+    """
+    transaction_date = Transaction.objects.filter(account=card).aggregate(
+        earliest=Min('date'),
+    )['earliest']
+    receipt_date = Receipt.objects.filter(account=card).aggregate(
+        earliest=Min('receipt_date'),
+    )['earliest']
+    transfer_date = TransferMoneyLog.objects.filter(
+        Q(to_account=card) | Q(from_account=card),
+    ).aggregate(earliest=Min('exchange_date'))['earliest']
+    moments: list[datetime] = [
+        moment
+        for moment in (transaction_date, receipt_date, transfer_date)
+        if isinstance(moment, datetime)
+    ]
+    if not moments:
+        return None
+    return timezone.localtime(min(moments)).date()
+
+
+def _card_grace_months(
+    card: Account,
+    today: date,
+    account_service: AccountServiceProtocol,
+) -> tuple[list[CardMonthDict], date, date]:
+    """Months for the grace block, ignoring the statistics filters.
+
+    The block mirrors the bank, so it must see every card movement:
+    debt predating the selected period or filed under a filtered-out
+    category still counts.
+
+    Args:
+        card: Credit card account.
+        today: Current date.
+        account_service: Account service for grace and debt calculations.
+
+    Returns:
+        Tuple of (months, period_start, period_end) covering all card
+        movements up to today.
+    """
+    month_start = today.replace(day=1)
+    earliest = _earliest_card_movement(card)
+    if earliest is None or earliest > month_start:
+        earliest = month_start
+    grace_filter = StatisticsFilters(
+        period='range',
+        date_from=earliest,
+        date_to=today,
+    )
+    months, _ = _card_months_block(
+        card,
+        today,
+        grace_filter,
+        account_service=account_service,
+    )
+    return months, earliest, today
+
+
 def _collect_card_payments(
     card: Account,
     period_start: date,
@@ -1232,13 +1299,30 @@ def _credit_cards_block(
         _apply_payments_to_months(months, payments, pre_period_debt)
         schedule = _build_payment_schedule(months, history, card)
 
+        grace_months, grace_start, grace_end = _card_grace_months(
+            card,
+            today,
+            account_service,
+        )
+        grace_payments = _collect_card_payments(card, grace_start, grace_end)
+        grace_pre_period_debt = _pre_period_debt_for_card(
+            card,
+            grace_payments,
+            grace_months,
+        )
+        _apply_payments_to_months(
+            grace_months,
+            grace_payments,
+            grace_pre_period_debt,
+        )
         movements_since = min(
-            [m['purchase_end'] for m in months] + [_previous_month_end(today)],
+            [m['purchase_end'] for m in grace_months]
+            + [_previous_month_end(today)],
         )
         movements = _card_balance_movements_after(card, movements_since)
         grace_summary = _card_grace_summary(
             card,
-            months,
+            grace_months,
             debt_now,
             movements,
             today,
