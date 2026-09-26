@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -71,6 +72,17 @@ class TransactionService:
                     'Операции по вкладу доступны только через сервис вкладов.',
                 ),
             )
+
+    @staticmethod
+    def _validate_income_not_credit(
+        account: Account,
+        type_value: str,
+    ) -> None:
+        if (
+            type_value == TransactionType.INCOME
+            and account.type_account in constants.CREDIT_ACCOUNT_TYPES
+        ):
+            raise ValidationError(constants.CREDIT_CARD_INCOME_BAN)
 
     @staticmethod
     def _validate_type_matches_category(
@@ -132,6 +144,7 @@ class TransactionService:
         """Create a new transaction and adjust the account balance."""
         self._validate_account_owner(command.user, command.account)
         self._validate_account_not_deposit(command.account)
+        self._validate_income_not_credit(command.account, command.type_value)
         self._validate_type_matches_category(
             command.type_value,
             command.category,
@@ -168,6 +181,7 @@ class TransactionService:
         )
         self._validate_account_owner(command.user, command.account)
         self._validate_account_not_deposit(command.account)
+        self._validate_income_not_credit(command.account, command.type_value)
         self._validate_type_matches_category(
             command.type_value,
             command.category,
@@ -249,6 +263,7 @@ class TransactionService:
                 raise PermissionDenied(
                     _('У вас нет прав на копирование этой операции.'),
                 )
+            self._validate_income_not_credit(original.account, original.type)
             with audit_operation(kind=self._kind_for_type(original.type)):
                 repository = self.transaction_repository
                 new_transaction = repository.create_transaction(

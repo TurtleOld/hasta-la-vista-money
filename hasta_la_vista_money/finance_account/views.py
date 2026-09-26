@@ -6,6 +6,7 @@ comprehensive error handling, user authentication, and AJAX support.
 """
 
 from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -29,7 +30,9 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.decorators import method_decorator
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -597,7 +600,21 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             account_queryset=accounts,
         )
         if not form.is_valid():
-            messages.error(request, _('Пожалуйста, исправьте ошибки в форме.'))
+            if form.credit_card_transfer_url:
+                messages.error(
+                    request,
+                    format_html(
+                        '{} <a href="{}">{}</a>',
+                        constants.CREDIT_CARD_INCOME_BAN,
+                        form.credit_card_transfer_url,
+                        _('Сделать перевод'),
+                    ),
+                )
+            else:
+                messages.error(
+                    request,
+                    _('Пожалуйста, исправьте ошибки в форме.'),
+                )
             return HttpResponseRedirect(reverse('finances_create'))
         cd = form.cleaned_data
         try:
@@ -620,7 +637,7 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
                 else constants.SUCCESS_EXPENSE_ADDED
             )
             messages.success(request, success_message)
-        except (ValueError, TypeError, PermissionDenied):
+        except (ValueError, TypeError, PermissionDenied, ValidationError):
             error_message = (
                 _('Ошибка при создании дохода.')
                 if type_value == TransactionType.INCOME
@@ -690,7 +707,12 @@ class TransactionUpdateView(
             )
             messages.success(request, _('Операция успешно обновлена.'))
             return HttpResponseRedirect(str(self.success_url))
-        except (ValueError, TypeError, PermissionDenied) as error:
+        except (
+            ValueError,
+            TypeError,
+            PermissionDenied,
+            ValidationError,
+        ) as error:
             form.add_error(None, str(error))
             return self.form_invalid(form)
 
@@ -724,7 +746,12 @@ class TransactionCopyView(LoginRequiredMixin, View):
                     kwargs={'pk': new_transaction.pk},
                 ),
             )
-        except (ValueError, TypeError, PermissionDenied) as error:
+        except (
+            ValueError,
+            TypeError,
+            PermissionDenied,
+            ValidationError,
+        ) as error:
             messages.error(request, str(error))
         return redirect('finances')
 
@@ -1602,6 +1629,27 @@ class AccountView(
             user=current_user,
             type=TransactionType.EXPENSE,
         ).order_by('name')
+        reconciliation_service = (
+            request.container.users.bank_statement_reconciliation_service()
+        )
+        reconciliation_service.settle_transfers_for_user(current_user)
+        now = timezone.now()
+        grouped_transfers: dict[int, dict[str, Any]] = {}
+        for row in reconciliation_service.pending_transfers_for_user(
+            current_user,
+        ):
+            account = row.upload.account
+            group = grouped_transfers.setdefault(
+                account.pk,
+                {'account': account, 'rows': []},
+            )
+            group['rows'].append(
+                {
+                    'row': row,
+                    'days_left': max((row.upload.expires_at - now).days, 0),
+                },
+            )
+        context['pending_card_transfers'] = list(grouped_transfers.values())
         return context
 
 
@@ -1829,24 +1877,77 @@ class TransferMoneyAccountView(
         return kwargs
 
     def get_initial(self) -> dict[str, Any]:
-        """Prefill ``from_account`` from ``?from_account=<id>`` query param.
+        """Prefill transfer fields from query parameters.
 
         The accounts page lets users start a transfer from a specific card
-        via swipe action; the source account id is passed in the URL.
+        via swipe action (``?from_account=<id>``). Pending statement
+        repayments pass ``to_account``, ``amount`` and ``datetime``/``date``
+        so the repayment can be conducted from the reminder.
         """
         initial = super().get_initial()
         request = cast('WSGIRequestWithContainer', self.request)
-        from_account_id = request.GET.get('from_account')
-        if from_account_id and from_account_id.isdigit():
+        account_repository = (
+            request.container.finance_account.account_repository()
+        )
+        self._apply_account_initial(
+            initial,
+            request,
+            account_repository,
+            'from_account',
+        )
+        self._apply_account_initial(
+            initial,
+            request,
+            account_repository,
+            'to_account',
+        )
+        self._apply_amount_initial(initial, request)
+        self._apply_exchange_date_initial(initial, request)
+        return initial
+
+    @staticmethod
+    def _apply_account_initial(
+        initial: dict[str, Any],
+        request: 'WSGIRequestWithContainer',
+        account_repository: Any,
+        param: str,
+    ) -> None:
+        value = request.GET.get(param)
+        if value and value.isdigit():
             account = (
-                request.container.finance_account.account_repository()
-                .get_by_user_with_related(request.user)
-                .filter(pk=int(from_account_id))
+                account_repository.get_by_user_with_related(request.user)
+                .filter(pk=int(value))
                 .first()
             )
             if account is not None:
-                initial['from_account'] = account
-        return initial
+                initial[param] = account
+
+    @staticmethod
+    def _apply_amount_initial(
+        initial: dict[str, Any],
+        request: 'WSGIRequestWithContainer',
+    ) -> None:
+        value = request.GET.get('amount')
+        if value:
+            with suppress(InvalidOperation):
+                initial['amount'] = Decimal(value)
+
+    @staticmethod
+    def _apply_exchange_date_initial(
+        initial: dict[str, Any],
+        request: 'WSGIRequestWithContainer',
+    ) -> None:
+        datetime_value = request.GET.get('datetime')
+        parsed = parse_datetime(datetime_value) if datetime_value else None
+        if parsed is None:
+            date_value = request.GET.get('date')
+            parsed_date = parse_date(date_value) if date_value else None
+            if parsed_date is not None:
+                parsed = datetime.combine(parsed_date, time.min)
+        if parsed is not None:
+            if timezone.is_naive(parsed):
+                parsed = timezone.make_aware(parsed)
+            initial['exchange_date'] = parsed
 
     def form_valid(
         self,
@@ -1875,6 +1976,19 @@ class TransferMoneyAccountView(
                 exchange_date=cleaned_data.get('exchange_date'),
                 notes=cleaned_data.get('notes'),
             )
+            try:
+                users_container = request.container.users
+                reconciliation_service = (
+                    users_container.bank_statement_reconciliation_service()
+                )
+                reconciliation_service.settle_pending_transfers(
+                    cleaned_data['to_account'],
+                )
+            except Exception:
+                logger.exception(
+                    'Ошибка при закрытии непроведённых погашений',
+                    user_id=getattr(request.user, 'id', None),
+                )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:

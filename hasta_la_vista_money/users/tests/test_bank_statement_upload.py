@@ -365,6 +365,7 @@ class TestBankStatementUploadStatusView(TestCase):
                 'imported': 4,
                 'linked': 2,
                 'awaiting_decision': 3,
+                'needs_transfer': 0,
                 'expired': 1,
                 'failed': 0,
             },
