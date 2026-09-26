@@ -892,7 +892,7 @@ def _card_grace_months(
     card: Account,
     today: date,
     account_service: AccountServiceProtocol,
-) -> tuple[list[CardMonthDict], date, date]:
+) -> tuple[list[CardMonthDict], date]:
     """Months for the grace block, ignoring the statistics filters.
 
     The block mirrors the bank, so it must see every card movement:
@@ -905,8 +905,8 @@ def _card_grace_months(
         account_service: Account service for grace and debt calculations.
 
     Returns:
-        Tuple of (months, period_start, period_end) covering all card
-        movements up to today.
+        Tuple of (months, period_start) covering all card movements up to
+        today.
     """
     month_start = today.replace(day=1)
     earliest = _earliest_card_movement(card)
@@ -923,7 +923,7 @@ def _card_grace_months(
         grace_filter,
         account_service=account_service,
     )
-    return months, earliest, today
+    return months, earliest
 
 
 def _collect_card_payments(
@@ -1020,6 +1020,18 @@ def _apply_payments_to_months(
         m['payments_made'] = paid
         m['remaining_debt'] = debt - paid
         m['is_paid'] = m['remaining_debt'] <= constants.ZERO
+
+
+def _apply_card_payments_for_period(
+    card: Account,
+    months: list[CardMonthDict],
+    period_start: date,
+    period_end: date,
+) -> None:
+    """Apply the repayments of a period to the card's month balances."""
+    payments = _collect_card_payments(card, period_start, period_end)
+    pre_period_debt = _pre_period_debt_for_card(card, payments, months)
+    _apply_payments_to_months(months, payments, pre_period_debt)
 
 
 def _build_payment_schedule(
@@ -1294,27 +1306,20 @@ def _credit_cards_block(
             account_service=account_service,
         )
 
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
+        _apply_card_payments_for_period(
+            card,
+            months,
+            period_start,
+            period_end,
+        )
         schedule = _build_payment_schedule(months, history, card)
 
-        grace_months, grace_start, grace_end = _card_grace_months(
+        grace_months, grace_start = _card_grace_months(
             card,
             today,
             account_service,
         )
-        grace_payments = _collect_card_payments(card, grace_start, grace_end)
-        grace_pre_period_debt = _pre_period_debt_for_card(
-            card,
-            grace_payments,
-            grace_months,
-        )
-        _apply_payments_to_months(
-            grace_months,
-            grace_payments,
-            grace_pre_period_debt,
-        )
+        _apply_card_payments_for_period(card, grace_months, grace_start, today)
         movements_since = min(
             [m['purchase_end'] for m in grace_months]
             + [_previous_month_end(today)],
