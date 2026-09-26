@@ -84,14 +84,12 @@ from hasta_la_vista_money.users.services.summary_statistics_service import (
     _credit_cards_block,
     _credit_cards_summary,
     _dates_amounts,
-    _minimum_payment_forecast,
     _paginate,
     _payment_schedule_remaining_debt,
     _pre_period_debt_for_card,
     _statistics_alerts,
     _summary_card_delta,
     _summary_cards,
-    compute_total_payment_schedule_debt,
     get_user_detailed_statistics,
 )
 
@@ -149,7 +147,6 @@ __all__ = [
     '_frequently_purchased_products',
     '_match_income_expense_search',
     '_member_choices',
-    '_minimum_payment_forecast',
     '_month_ranges_for_filter',
     '_normalize_member_filter',
     '_owned_family_group_ids',
@@ -177,7 +174,6 @@ __all__ = [
     '_top_categories_qs',
     '_top_categories_with_comparison',
     '_transfer_logs',
-    'compute_total_payment_schedule_debt',
     'get_dashboard_summary_statistics',
     'get_user_detailed_statistics',
 ]

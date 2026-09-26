@@ -34,6 +34,10 @@ from hasta_la_vista_money.finance_account.services.bank_service import (
 from hasta_la_vista_money.finance_account.services.credit_calculation_service import (  # noqa: E501
     CreditCalculationService,
 )
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    card_debt_for_balance,
+    compute_total_credit_debt,
+)
 from hasta_la_vista_money.finance_account.services.protocols import (
     BalanceServiceProtocol,
     BankCalculatorProtocol,
@@ -77,5 +81,7 @@ __all__ = [
     'RaiffeisenbankScheduleDict',
     'SberbankCalculator',
     'TransferService',
+    'card_debt_for_balance',
+    'compute_total_credit_debt',
     'create_bank_calculator',
 ]

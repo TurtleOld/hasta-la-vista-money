@@ -727,65 +727,41 @@
                                         </svg>
                                     </summary>
                                     <div class="statistics-accordion-body">
-                                        {% if card.current_grace_info %}
-                                            <div class="statistics-info-box">
-                                                <h6 class="statistics-category-title">
-                                                    <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 2.75v3.5M16 2.75v3.5M4 9h16M5.5 5.25h13A1.5 1.5 0 0120 6.75v11.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.25V6.75a1.5 1.5 0 011.5-1.5zM9 14l2 2 4-4"></path>
-                                                    </svg>
-                                                    {% translate 'Текущий беспроцентный период' %}
-                                                </h6>
-                                                <div class="statistics-inline-grid">
-                                                    <div>
-                                                        <p><strong>{% translate 'Период покупок:' %}</strong> {{ card.current_grace_info.purchase_month }}</p>
-                                                        <p><strong>{% translate 'Конец беспроцентного периода:' %}</strong> {{ card.current_grace_info.grace_end|date:'d.m.Y' }}</p>
-                                                        {% if card.current_grace_info.days_until_due > 0 %}
-                                                            <span class="statistics-badge statistics-badge-positive">{% translate 'Осталось дней:' %} {{ card.current_grace_info.days_until_due }}</span>
-                                                        {% elif card.current_grace_info.is_overdue %}
-                                                            <span class="statistics-badge statistics-badge-negative">{% translate 'Просрочено' %}</span>
-                                                        {% endif %}
-                                                    </div>
-                                                    <div>
-                                                        <p><strong>{% translate 'Долг за месяц:' %}</strong> {{ card.current_grace_info.debt_for_month|comma }} {{ card.currency }}</p>
-                                                        <p><strong>{% translate 'Платежи за период:' %}</strong> {{ card.current_grace_info.payments_for_period|comma }} {{ card.currency }}</p>
-                                                        <p><strong>{% translate 'Итоговый долг:' %}</strong> {{ card.current_grace_info.final_debt|comma }} {{ card.currency }}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        {% if card.schedule_mismatch %}
+                                            <p class="statistics-section">
+                                                <span class="statistics-badge statistics-badge-warning">{% blocktranslate with schedule_debt=card.schedule_debt|comma debt=card.debt_now|comma currency=card.currency %}Сумма остатков по графику ({{ schedule_debt }} {{ currency }}) не совпадает с задолженностью по карте ({{ debt }} {{ currency }}): часть операций могла не попасть в приложение или в выбранный период.{% endblocktranslate %}</span>
+                                            </p>
                                         {% endif %}
+                                        {% with grace=card.grace_summary %}
+                                            {% if grace.nearest_due_date or grace.current_period_end or grace.mandatory_payment or grace.mandatory_payment_unknown %}
+                                                <div class="statistics-info-box">
+                                                    <h6 class="statistics-category-title">
+                                                        <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 2.75v3.5M16 2.75v3.5M4 9h16M5.5 5.25h13A1.5 1.5 0 0120 6.75v11.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.25V6.75a1.5 1.5 0 011.5-1.5zM9 14l2 2 4-4"></path>
+                                                        </svg>
+                                                        {% translate 'Текущий беспроцентный период' %}
+                                                    </h6>
+                                                    {% if grace.nearest_due_date %}
+                                                        <p><strong>{% blocktranslate with due=grace.nearest_due_date|date:'d.m.Y' %}До {{ due }} осталось внести{% endblocktranslate %}</strong> {{ grace.nearest_due_amount|comma }} {{ card.currency }}</p>
+                                                    {% endif %}
+                                                    {% if grace.current_period_end %}
+                                                        <p>{% blocktranslate with period_end=grace.current_period_end|date:'d.m.Y' grace_end=grace.current_grace_end|date:'d.m.Y' %}На всё, что купите до {{ period_end }}, действует беспроцентный период до {{ grace_end }}{% endblocktranslate %}</p>
+                                                        <p><strong>{% translate 'Покупки за период:' %}</strong> {{ grace.current_purchases|comma }} {{ card.currency }}</p>
+                                                    {% endif %}
+                                                    {% if grace.mandatory_payment %}
+                                                        <p><strong>{% blocktranslate with due=grace.mandatory_payment_due|date:'d.m.Y' %}Обязательный платёж до {{ due }}:{% endblocktranslate %}</strong> ≈ {{ grace.mandatory_payment|comma }} {{ card.currency }}</p>
+                                                    {% elif grace.mandatory_payment_unknown %}
+                                                        <p><strong>{% translate 'Обязательный платёж:' %}</strong> {% translate 'есть просрочка, уточните сумму в банке' %}</p>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
 
-                                        <div class="statistics-category-grid statistics-section">
-                                            <div class="statistics-info-box">
-                                                <h6 class="statistics-category-title">{% translate 'Утилизация лимита за 12 месяцев' %}</h6>
-                                                {{ card.utilization_chart|json_script:card.utilization_chart_id }}
-                                                <div class="statistics-chart-box statistics-chart-box-small">
-                                                    <canvas class="credit-utilization-chart" data-chart-source="{{ card.utilization_chart_id }}" height="220"></canvas>
-                                                </div>
-                                            </div>
-                                            <div class="statistics-info-box">
-                                                <h6 class="statistics-category-title">{% translate 'Если платить только минимум' %}</h6>
-                                                <div class="statistics-table-wrap">
-                                                    <table class="statistics-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>{% translate 'Месяц' %}</th>
-                                                                <th class="statistics-cell-right">{% translate 'Мин. платёж' %}</th>
-                                                                <th class="statistics-cell-right">{% translate 'Остаток' %}</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {% for forecast in card.minimum_payment_forecast|slice:':6' %}
-                                                                <tr>
-                                                                    <td>{{ forecast.month }}</td>
-                                                                    <td class="statistics-cell-right">{{ forecast.minimum_payment|comma }} {{ card.currency }}</td>
-                                                                    <td class="statistics-cell-right">{{ forecast.remaining_debt|comma }} {{ card.currency }}</td>
-                                                                </tr>
-                                                            {% empty %}
-                                                                <tr><td colspan="3" class="statistics-empty">{% translate 'Нет текущего долга' %}</td></tr>
-                                                            {% endfor %}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                        <div class="statistics-info-box statistics-section">
+                                            <h6 class="statistics-category-title">{% translate 'Утилизация лимита за 12 месяцев' %}</h6>
+                                            {{ card.utilization_chart|json_script:card.utilization_chart_id }}
+                                            <div class="statistics-chart-box statistics-chart-box-small">
+                                                <canvas class="credit-utilization-chart" data-chart-source="{{ card.utilization_chart_id }}" height="220"></canvas>
                                             </div>
                                         </div>
 
@@ -1392,11 +1368,11 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: textColor } },
+                        legend: { labels: { color: themeColors.textColor } },
                         tooltip: {
-                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                            titleColor: textColor,
-                            bodyColor: textColor,
+                            backgroundColor: themeColors.isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: themeColors.textColor,
+                            bodyColor: themeColors.textColor,
                             callbacks: {
                                 label: function(context) {
                                     return context.parsed.y.toLocaleString('ru-RU') + '%';
@@ -1409,14 +1385,14 @@
                             beginAtZero: true,
                             suggestedMax: 100,
                             ticks: {
-                                color: mutedColor,
+                                color: themeColors.mutedColor,
                                 callback: function(value) { return value + '%'; },
                             },
-                            grid: { color: gridColor },
+                            grid: { color: themeColors.gridColor },
                         },
                         x: {
-                            ticks: { color: mutedColor },
-                            grid: { color: gridColor },
+                            ticks: { color: themeColors.mutedColor },
+                            grid: { color: themeColors.gridColor },
                         },
                     },
                 },
