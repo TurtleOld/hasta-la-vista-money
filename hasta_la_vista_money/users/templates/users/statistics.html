@@ -717,6 +717,16 @@
                                 <p class="statistics-summary-value">{{ credit_cards_summary.total_remaining_debt|comma }}</p>
                             </div>
                         </div>
+                        {% for card in credit_cards_data %}
+                            {% if card.pending_transfers_count %}
+                                <p class="statistics-section">
+                                    <a class="statistics-badge statistics-badge-warning"
+                                       href="{% url 'finance_account:list' %}#pending-transfers-{{ card.card_obj.pk }}">
+                                        {% blocktranslate with name=card.name pending=card.pending_transfers_count %}{{ name }}: {{ pending }} непроведённых погашений{% endblocktranslate %}
+                                    </a>
+                                </p>
+                            {% endif %}
+                        {% endfor %}
                         <div class="statistics-accordion">
                             {% for card in credit_cards_data %}
                                 <details class="statistics-accordion-item">

@@ -165,6 +165,7 @@ class BankStatementUpload(Model):
     imported_count = IntegerField(default=0)
     linked_count = IntegerField(default=0)
     awaiting_decision_count = IntegerField(default=0)
+    needs_transfer_count = IntegerField(default=0)
     expired_count = IntegerField(default=0)
     failed_count = IntegerField(default=0)
     statement_closing_balance = DecimalField(
@@ -223,6 +224,9 @@ class BankStatementRow(Model):
         PENDING = 'pending', _('Ожидает решения')
         LINKED = 'linked', _('Уже учтена')
         NEW = 'new', _('Новая операция')
+        NEEDS_TRANSFER = 'needs_transfer', _('Нужен перевод')
+        TRANSFERRED = 'transferred', _('Уже учтена')
+        NOT_A_PAYMENT = 'not_a_payment', _('Не погашение')
         EXPIRED = 'expired', _('Срок решения истёк')
 
     class TransactionType(TextChoices):
@@ -267,8 +271,15 @@ class BankStatementRow(Model):
         blank=True,
         null=True,
     )
+    transfer = ForeignKey(
+        'finance_account.TransferMoneyLog',
+        on_delete=SET_NULL,
+        related_name='statement_rows',
+        blank=True,
+        null=True,
+    )
     decision = CharField(
-        max_length=10,
+        max_length=20,
         choices=Decision.choices,
         default=Decision.PENDING,
     )
@@ -281,6 +292,11 @@ class BankStatementRow(Model):
             UniqueConstraint(
                 fields=['upload', 'source_row_position'],
                 name='unique_statement_upload_row',
+            ),
+            UniqueConstraint(
+                fields=['transfer'],
+                condition=Q(transfer__isnull=False),
+                name='unique_statement_row_transfer',
             ),
         ]
         indexes = [
@@ -335,7 +351,7 @@ class BankStatementDecisionAudit(Model):
         null=True,
     )
     decision = CharField(
-        max_length=10,
+        max_length=20,
         choices=BankStatementRow.Decision.choices,
     )
     previous_transaction = ForeignKey(

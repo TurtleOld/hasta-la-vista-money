@@ -49,7 +49,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementRow, User
 from hasta_la_vista_money.users.services.cache import (
     get_user_detailed_statistics_cache_key,
 )
@@ -231,6 +231,7 @@ class CreditCardDataDict(TypedDict, total=False):
     schedule_mismatch: bool
     utilization_chart: dict[str, list[float] | list[str]]
     utilization_chart_id: str
+    pending_transfers_count: int
 
 
 class CreditCardSummaryDict(TypedDict):
@@ -1360,6 +1361,10 @@ def _credit_cards_block(
                     movements,
                 ),
                 'utilization_chart_id': f'credit-utilization-{card.pk}',
+                'pending_transfers_count': BankStatementRow.objects.filter(
+                    upload__account=card,
+                    decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+                ).count(),
             },
         )
     return out

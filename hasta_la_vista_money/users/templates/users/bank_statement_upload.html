@@ -130,6 +130,12 @@
                             <div>
                                 <p class="font-medium text-gray-900 dark:text-white">{{ history_upload.account.name_account }}</p>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">{{ history_upload.created_at|date:'d.m.Y H:i' }} · {{ history_upload.get_status_display }}</p>
+                                {% if history_upload.needs_transfer_count %}
+                                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                                        {% blocktranslate with count=history_upload.needs_transfer_count %}Пропущено {{ count }} погашений — проведите их переводами{% endblocktranslate %}
+                                        <a class="underline" href="{% url 'finance_account:list' %}#pending-transfers">{% translate 'Провести переводы' %}</a>
+                                    </p>
+                                {% endif %}
                             </div>
                             {% if history_upload.status == 'awaiting_confirmation' %}
                                 <a class="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" href="{% url 'users:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
@@ -238,6 +244,8 @@
         incomes: '{% translate "доходов" %}',
         expenses: '{% translate "расходов" %}',
         skipped: '{% translate "пропущено (уже были загружены)" %}',
+        pendingTransfersPrefix: '{% translate "Пропущено" %}',
+        pendingTransfersSuffix: '{% translate "погашений — проведите их переводами" %}',
         done: '{% translate "Готово!" %}',
         error: '{% translate "Ошибка:" %}',
         unknownError: '{% translate "Неизвестная ошибка" %}',

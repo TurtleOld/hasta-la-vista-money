@@ -24,6 +24,11 @@ from hasta_la_vista_money.finance_account.models import (
     Bank,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -164,6 +169,86 @@ class TestAddAccountForm(TestCase):
         account = form.save(commit=True)
         self.assertIsInstance(account, Account)
         self.assertEqual(account.name_account, 'Test Account')
+
+    def _credit_data(self, **overrides: object) -> dict[str, object]:
+        data: dict[str, object] = {
+            'name_account': 'Карта',
+            'type_account': ACCOUNT_TYPE_CREDIT_CARD,
+            'bank': self.sberbank.pk,
+            'limit_credit': Decimal('100000.00'),
+            'payment_due_date': '2026-12-31',
+            'grace_period_days': 120,
+            'balance': Decimal('1000.00'),
+            'currency': 'RUB',
+        }
+        data.update(overrides)
+        return data
+
+    def test_switch_to_credit_rejected_when_account_has_income(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Дебет',
+            type_account=ACCOUNT_TYPE_DEBIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        category = Category.objects.create(
+            user=self.user,
+            name='Доход',
+            type=TransactionType.INCOME,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=category,
+            type=TransactionType.INCOME,
+            amount=Decimal('100.00'),
+            date=timezone.now(),
+        )
+        form = AddAccountForm(
+            data=self._credit_data(),
+            instance=account,
+            user=self.user,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('type_account', form.errors)
+
+    def test_switch_to_credit_allowed_without_income(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Дебет',
+            type_account=ACCOUNT_TYPE_DEBIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        form = AddAccountForm(
+            data=self._credit_data(),
+            instance=account,
+            user=self.user,
+        )
+        self.assertTrue(form.is_valid(), msg=form.errors)
+        saved = form.save(commit=False)
+        self.assertEqual(saved.type_account, ACCOUNT_TYPE_CREDIT_CARD)
+
+    def test_switch_credit_to_debit_allowed(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Кредитка',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        form = AddAccountForm(
+            data={
+                'name_account': 'Кредитка',
+                'type_account': ACCOUNT_TYPE_DEBIT_CARD,
+                'balance': Decimal('1000.00'),
+                'currency': 'RUB',
+            },
+            instance=account,
+            user=self.user,
+        )
+        self.assertTrue(form.is_valid(), msg=form.errors)
 
 
 class TestTransferMoneyAccountForm(TestCase):

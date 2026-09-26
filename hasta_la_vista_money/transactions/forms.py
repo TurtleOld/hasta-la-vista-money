@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any, ClassVar
+from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
@@ -15,6 +16,7 @@ from django.forms import (
     ModelForm,
 )
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -99,6 +101,7 @@ class TransactionForm(
             account_queryset=account_queryset,
             **kwargs,
         )
+        self.credit_card_transfer_url: str | None = None
 
     def clean_date(self) -> datetime:
         """Make naive ``date`` values timezone-aware."""
@@ -128,6 +131,20 @@ class TransactionForm(
                     ),
                 },
             )
+
+        if (
+            type_value == TransactionType.INCOME
+            and account_form is not None
+            and account_form.type_account in constants.CREDIT_ACCOUNT_TYPES
+        ):
+            params: dict[str, Any] = {'to_account': account_form.pk}
+            if amount:
+                params['amount'] = str(amount)
+            self.credit_card_transfer_url = (
+                f'{reverse("finance_account:transfer_money")}?'
+                f'{urlencode(params)}'
+            )
+            self.add_error('account', constants.CREDIT_CARD_INCOME_BAN)
 
         if (
             type_value == TransactionType.EXPENSE

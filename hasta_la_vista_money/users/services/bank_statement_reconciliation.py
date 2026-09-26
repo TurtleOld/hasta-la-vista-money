@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -6,15 +7,24 @@ from django.db import DatabaseError, transaction
 from django.db.models import Count, QuerySet
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
-from hasta_la_vista_money.transactions.models import Category, Transaction
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
+    User,
 )
 
 
@@ -69,6 +79,9 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.PENDING,
             BankStatementRow.Decision.LINKED,
             BankStatementRow.Decision.NEW,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+            BankStatementRow.Decision.TRANSFERRED,
+            BankStatementRow.Decision.NOT_A_PAYMENT,
             BankStatementRow.Decision.EXPIRED,
         }
         decision = (
@@ -323,6 +336,10 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.PENDING,
             0,
         )
+        upload.needs_transfer_count = counts.get(
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+            0,
+        )
         upload.expired_count = counts.get(
             BankStatementRow.Decision.EXPIRED,
             0,
@@ -336,6 +353,7 @@ class BankStatementReconciliationService:
             update_fields=[
                 'linked_count',
                 'awaiting_decision_count',
+                'needs_transfer_count',
                 'expired_count',
                 'imported_count',
             ],
@@ -443,6 +461,13 @@ class BankStatementReconciliationService:
         )
         if account.is_archived or account.is_deposit:
             raise InvalidReconciliationDecisionError('account')
+        if (
+            transaction_type == TransactionType.INCOME
+            and account.type_account in constants.CREDIT_ACCOUNT_TYPES
+        ):
+            raise InvalidReconciliationDecisionError(
+                constants.CREDIT_CARD_INCOME_BAN,
+            )
         created = Transaction.objects.create(
             user=row.upload.user,
             account=row.upload.account,
@@ -465,3 +490,150 @@ class BankStatementReconciliationService:
         account.balance += Decimal(delta)
         account.save(update_fields=['balance', 'updated_at'])
         return created
+
+    def pending_transfer_rows(
+        self,
+        account: Account,
+    ) -> QuerySet[BankStatementRow]:
+        """Return unperformed repayments imported for a credit account."""
+        return (
+            BankStatementRow.objects.filter(
+                upload__account=account,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            )
+            .select_related('upload__account')
+            .order_by('transaction_date', 'pk')
+        )
+
+    def pending_transfer_count(self, account: Account) -> int:
+        """Return the number of unperformed repayments for an account."""
+        return self.pending_transfer_rows(account).count()
+
+    def pending_transfers_for_user(
+        self,
+        user: User,
+    ) -> QuerySet[BankStatementRow]:
+        """Return all unperformed repayments of a user's credit accounts."""
+        return (
+            BankStatementRow.objects.filter(
+                upload__user_id=user.pk,
+                upload__account__user_id=user.pk,
+                upload__account__type_account__in=(
+                    constants.CREDIT_ACCOUNT_TYPES
+                ),
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            )
+            .select_related('upload__account')
+            .order_by('transaction_date', 'pk')
+        )
+
+    def mark_not_payment(self, row_id: int, user_id: int) -> BankStatementRow:
+        """Close an unperformed repayment row without creating a movement."""
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return self._mark_not_payment(row_id, user_id)
+
+    @transaction.atomic
+    def _mark_not_payment(
+        self,
+        row_id: int,
+        user_id: int,
+    ) -> BankStatementRow:
+        row = (
+            BankStatementRow.objects.select_for_update()
+            .select_related('upload')
+            .get(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+        )
+        if row.decision == BankStatementRow.Decision.NOT_A_PAYMENT:
+            return row
+        if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
+            raise ReconciliationDecisionConflictError(row.decision)
+        row.decision = BankStatementRow.Decision.NOT_A_PAYMENT
+        row.decided_at = timezone.now()
+        row.save(update_fields=['decision', 'decided_at'])
+        BankStatementDecisionAudit.objects.create(
+            row=row,
+            actor_id=user_id,
+            decision=row.decision,
+        )
+        self.refresh_outcome_counts(row.upload)
+        return row
+
+    @transaction.atomic
+    def settle_pending_transfers(self, account: Account) -> int:
+        """Close unperformed repayments matched by existing transfers.
+
+        A transfer closes at most one row: its amount must match and its
+        date must be within one day of the statement row.
+        """
+        if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
+            return 0
+        rows = list(
+            BankStatementRow.objects.select_for_update()
+            .filter(
+                upload__account=account,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            )
+            .order_by('transaction_date', 'pk'),
+        )
+        if not rows:
+            return 0
+        used_ids = set(
+            BankStatementRow.objects.filter(
+                transfer__isnull=False,
+            ).values_list('transfer_id', flat=True),
+        )
+        settled_upload_ids: set[int] = set()
+        settled = 0
+        for row in rows:
+            if row.amount is None or row.transaction_date is None:
+                continue
+            row_date = timezone.localtime(row.transaction_date).date()
+            transfer = (
+                TransferMoneyLog.objects.filter(
+                    user_id=account.user_id,
+                    to_account=account,
+                    amount=row.amount,
+                    exchange_date__date__gte=row_date - timedelta(days=1),
+                    exchange_date__date__lte=row_date + timedelta(days=1),
+                )
+                .exclude(pk__in=used_ids)
+                .order_by('exchange_date', 'pk')
+                .first()
+            )
+            if transfer is None:
+                continue
+            row.transfer = transfer
+            row.decision = BankStatementRow.Decision.TRANSFERRED
+            row.decided_at = timezone.now()
+            row.save(update_fields=['transfer', 'decision', 'decided_at'])
+            BankStatementDecisionAudit.objects.create(
+                row=row,
+                actor_id=account.user_id,
+                decision=row.decision,
+            )
+            used_ids.add(transfer.pk)
+            settled_upload_ids.add(row.upload_id)
+            settled += 1
+        for upload in BankStatementUpload.objects.filter(
+            pk__in=settled_upload_ids,
+        ):
+            self.refresh_outcome_counts(upload)
+        return settled
+
+
+def settle_pending_transfers_for_user(user: User) -> int:
+    """Auto-close statement repayments for all of a user's credit accounts."""
+    service = BankStatementReconciliationService()
+    total = 0
+    for account in Account.objects.filter(
+        user=user,
+        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
+    ):
+        total += service.settle_pending_transfers(account)
+    return total

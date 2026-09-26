@@ -235,6 +235,9 @@
                 if (data.skipped_count && data.skipped_count > 0) {
                     completedText += `, ${data.skipped_count} ${window.bankStatementTranslations.skipped}`;
                 }
+                if (data.needs_transfer_count && data.needs_transfer_count > 0) {
+                    completedText += `, ${window.bankStatementTranslations.pendingTransfersPrefix} ${data.needs_transfer_count} ${window.bankStatementTranslations.pendingTransfersSuffix}`;
+                }
                 progressStatus.textContent = completedText;
 
                 // Safely create icon and text elements using DOM methods
