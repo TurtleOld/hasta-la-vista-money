@@ -283,6 +283,17 @@ class CreditCardStatisticsTest(TestCase):
 
         self.assertFalse(self._card_data()['schedule_mismatch'])
 
+    def test_account_page_debt_matches_statistics(self) -> None:
+        self.client.force_login(self.user)
+        with patch('django.utils.timezone.now', return_value=TODAY):
+            response = self.client.get(reverse('finance_account:list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context['total_credit_debt'],
+            self._statistics()['credit_cards_data'][0]['debt_now'],
+        )
+
 
 class CardGracePeriodFilterTest(TestCase):
     """The grace block reads all card movements, ignoring statistics filters."""

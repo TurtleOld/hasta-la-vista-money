@@ -5,12 +5,13 @@ not be reconstructed from the tracked movements: debt that predates the
 user's tracking, or falls outside the selected period, still counts.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_DEBIT_CARD,
@@ -140,3 +141,46 @@ class CardDebtForBalanceTest(TestCase):
         )
 
         self.assertEqual(total, Decimal(0))
+
+    def test_total_debt_differs_from_period_debt(self) -> None:
+        card = self._card(balance='94000.00')
+        expense_category = Category.objects.create(
+            user=self.user,
+            name='Покупки',
+            type=TransactionType.EXPENSE,
+        )
+        income_category = Category.objects.create(
+            user=self.user,
+            name='Погашение',
+            type=TransactionType.INCOME,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=card,
+            category=expense_category,
+            amount=Decimal('10000.00'),
+            date=datetime(2026, 8, 2, 12, 0, tzinfo=UTC),
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=card,
+            category=income_category,
+            amount=Decimal('4000.00'),
+            date=datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
+            type=TransactionType.INCOME,
+        )
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
+
+        period_debt = account_service.get_credit_card_debt(
+            card,
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+        )
+
+        self.assertEqual(period_debt, Decimal('10000.00'))
+        self.assertEqual(
+            card_debt_for_balance(card, card.balance),
+            Decimal('6000.00'),
+        )
