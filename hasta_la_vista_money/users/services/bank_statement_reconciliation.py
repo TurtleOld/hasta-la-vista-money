@@ -505,10 +505,6 @@ class BankStatementReconciliationService:
             .order_by('transaction_date', 'pk')
         )
 
-    def pending_transfer_count(self, account: Account) -> int:
-        """Return the number of unperformed repayments for an account."""
-        return self.pending_transfer_rows(account).count()
-
     def pending_transfers_for_user(
         self,
         user: User,
@@ -564,13 +560,29 @@ class BankStatementReconciliationService:
         self.refresh_outcome_counts(row.upload)
         return row
 
-    @transaction.atomic
     def settle_pending_transfers(self, account: Account) -> int:
         """Close unperformed repayments matched by existing transfers.
 
         A transfer closes at most one row: its amount must match and its
         date must be within one day of the statement row.
         """
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return self._settle_pending_transfers(account)
+
+    def settle_transfers_for_user(self, user: User) -> int:
+        """Auto-close pending repayments across a user's credit accounts."""
+        total = 0
+        for account in Account.objects.filter(
+            user=user,
+            type_account__in=constants.CREDIT_ACCOUNT_TYPES,
+        ):
+            total += self.settle_pending_transfers(account)
+        return total
+
+    @transaction.atomic
+    def _settle_pending_transfers(self, account: Account) -> int:
         if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
             return 0
         rows = list(
@@ -625,15 +637,3 @@ class BankStatementReconciliationService:
         ):
             self.refresh_outcome_counts(upload)
         return settled
-
-
-def settle_pending_transfers_for_user(user: User) -> int:
-    """Auto-close statement repayments for all of a user's credit accounts."""
-    service = BankStatementReconciliationService()
-    total = 0
-    for account in Account.objects.filter(
-        user=user,
-        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
-    ):
-        total += service.settle_pending_transfers(account)
-    return total

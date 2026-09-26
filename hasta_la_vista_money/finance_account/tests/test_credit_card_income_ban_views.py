@@ -113,6 +113,9 @@ class PendingTransferViewTest(TestCase):
         self.assertContains(response, '199')
         self.assertContains(response, 'Сделать перевод')
         self.assertContains(response, 'Не погашение')
+        self.assertContains(response, f'to_account={self.card.pk}')
+        self.assertContains(response, 'amount=199.00')
+        self.assertContains(response, 'date=2026-02-09')
 
     def test_transfer_form_prefilled_from_reminder(self) -> None:
         response = self.client.get(

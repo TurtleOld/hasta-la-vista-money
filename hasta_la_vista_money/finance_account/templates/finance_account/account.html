@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load i18n %}
 {% load comma %}
+{% load l10n %}
 {% load static %}
 {% load word_hash %}
 
@@ -150,7 +151,7 @@
                                     <span>{{ item.row.transaction_date|date:'d.m.Y' }}</span>
                                     <span>{{ item.row.amount|comma }} {{ group.account.currency }}</span>
                                     <span>{% blocktranslate with days=item.days_left %}Осталось дней: {{ days }}{% endblocktranslate %}</span>
-                                    <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount }}&date={{ item.row.transaction_date|date:'Y-m-d' }}">
+                                    <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount|unlocalize }}&date={{ item.row.transaction_date|date:'Y-m-d' }}">
                                         {% translate 'Сделать перевод' %}
                                     </a>
                                     <form method="post" action="{% url 'users:bank_statement_pending_transfer_dismiss' item.row.upload_id item.row.pk %}">

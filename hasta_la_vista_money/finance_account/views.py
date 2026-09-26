@@ -80,9 +80,6 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    settle_pending_transfers_for_user,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import (
@@ -1635,7 +1632,7 @@ class AccountView(
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()
         )
-        settle_pending_transfers_for_user(current_user)
+        reconciliation_service.settle_transfers_for_user(current_user)
         now = timezone.now()
         grouped_transfers: dict[int, dict[str, Any]] = {}
         for row in reconciliation_service.pending_transfers_for_user(
