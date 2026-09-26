@@ -63,6 +63,9 @@ class AccountServiceProtocol(Protocol):
     ) -> Decimal | None:
         """Calculate credit card debt for a period.
 
+        Period-scoped debt; the total card debt is the credit limit minus
+        the account balance.
+
         Args:
             account: Credit card account.
             start_date: Optional start date.

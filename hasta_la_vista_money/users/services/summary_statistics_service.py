@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet, Sum
+from django.db.models import Min, Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -36,6 +36,9 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
     collect_info_income,
     sort_expense_income,
+)
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    card_debt_for_balance,
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -856,6 +859,73 @@ def _card_months_block(
     return months, history
 
 
+def _earliest_card_movement(card: Account) -> date | None:
+    """Earliest date of any movement on a credit card account.
+
+    Args:
+        card: Credit card account.
+
+    Returns:
+        Local date of the earliest transaction, receipt or transfer, or
+        None when the card has no movements.
+    """
+    transaction_date = Transaction.objects.filter(account=card).aggregate(
+        earliest=Min('date'),
+    )['earliest']
+    receipt_date = Receipt.objects.filter(account=card).aggregate(
+        earliest=Min('receipt_date'),
+    )['earliest']
+    transfer_date = TransferMoneyLog.objects.filter(
+        Q(to_account=card) | Q(from_account=card),
+    ).aggregate(earliest=Min('exchange_date'))['earliest']
+    moments: list[datetime] = [
+        moment
+        for moment in (transaction_date, receipt_date, transfer_date)
+        if isinstance(moment, datetime)
+    ]
+    if not moments:
+        return None
+    return timezone.localtime(min(moments)).date()
+
+
+def _card_grace_months(
+    card: Account,
+    today: date,
+    account_service: AccountServiceProtocol,
+) -> tuple[list[CardMonthDict], date]:
+    """Months for the grace block, ignoring the statistics filters.
+
+    The block mirrors the bank, so it must see every card movement:
+    debt predating the selected period or filed under a filtered-out
+    category still counts.
+
+    Args:
+        card: Credit card account.
+        today: Current date.
+        account_service: Account service for grace and debt calculations.
+
+    Returns:
+        Tuple of (months, period_start) covering all card movements up to
+        today.
+    """
+    month_start = today.replace(day=1)
+    earliest = _earliest_card_movement(card)
+    if earliest is None or earliest > month_start:
+        earliest = month_start
+    grace_filter = StatisticsFilters(
+        period='range',
+        date_from=earliest,
+        date_to=today,
+    )
+    months, _ = _card_months_block(
+        card,
+        today,
+        grace_filter,
+        account_service=account_service,
+    )
+    return months, earliest
+
+
 def _collect_card_payments(
     card: Account,
     period_start: date,
@@ -914,7 +984,7 @@ def _pre_period_debt_for_card(
     total_income = sum((p['amount'] for p in payments), Decimal(0))
     total_expenses = sum((m['debt_for_month'] for m in months), Decimal(0))
     return max(
-        _card_debt_for_balance(card, Decimal(card.balance))
+        card_debt_for_balance(card, Decimal(card.balance))
         + total_income
         - total_expenses,
         Decimal(0),
@@ -950,6 +1020,18 @@ def _apply_payments_to_months(
         m['payments_made'] = paid
         m['remaining_debt'] = debt - paid
         m['is_paid'] = m['remaining_debt'] <= constants.ZERO
+
+
+def _apply_card_payments_for_period(
+    card: Account,
+    months: list[CardMonthDict],
+    period_start: date,
+    period_end: date,
+) -> None:
+    """Apply the repayments of a period to the card's month balances."""
+    payments = _collect_card_payments(card, period_start, period_end)
+    pre_period_debt = _pre_period_debt_for_card(card, payments, months)
+    _apply_payments_to_months(months, payments, pre_period_debt)
 
 
 def _build_payment_schedule(
@@ -1017,12 +1099,6 @@ def _build_receipt_category_chart(
         'values': [item['total'] for item in shares],
         'category_ids': [item['category_id'] for item in shares],
     }
-
-
-def _card_debt_for_balance(card: Account, balance: Decimal) -> Decimal:
-    """Задолженность по кредитной карте при заданном остатке счёта."""
-    limit = Decimal(card.limit_credit or 0)
-    return max(limit - balance, Decimal(0))
 
 
 def _card_limit_left(card: Account) -> Decimal:
@@ -1096,7 +1172,7 @@ def _card_debt_at(
         (m.delta for m in movements if m.moment > moment),
         Decimal(0),
     )
-    return _card_debt_for_balance(card, Decimal(card.balance) - later)
+    return card_debt_for_balance(card, Decimal(card.balance) - later)
 
 
 def _card_grace_summary(
@@ -1202,53 +1278,6 @@ def _payment_schedule_remaining_debt(
     )
 
 
-def compute_total_payment_schedule_debt(
-    accounts: QuerySet[Account],
-    account_service: AccountServiceProtocol,
-) -> Decimal:
-    """Sum ``remaining_debt`` from payment schedules across credit cards.
-
-    Builds the same payment schedule used in the detailed-statistics
-    table ("График платежей по беспроцентному периоду") for every
-    credit account in the queryset, then sums the per-month
-    ``remaining_debt`` values. The result matches the "Осталось"
-    column on the statistics page.
-
-    Args:
-        accounts: QuerySet of accounts to inspect.
-        account_service: Account service used for grace and debt
-            calculations.
-
-    Returns:
-        Non-negative Decimal representing total outstanding debt
-        across credit-card payment schedules.
-    """
-    today = timezone.now().date()
-    stats_filter = StatisticsFilters()
-    period_start, period_end = stats_filter.date_range(today)
-
-    credit_cards = accounts.filter(
-        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
-    )
-
-    total = Decimal(str(constants.ZERO))
-    for card in credit_cards:
-        months, history = _card_months_block(
-            card,
-            today,
-            stats_filter,
-            account_service=account_service,
-        )
-
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
-        schedule = _build_payment_schedule(months, history, card)
-        total += _payment_schedule_remaining_debt(schedule)
-
-    return total
-
-
 def _credit_cards_block(
     accounts: QuerySet[Account],
     stats_filter: StatisticsFilters,
@@ -1269,7 +1298,7 @@ def _credit_cards_block(
     )
 
     for card in credit_cards:
-        debt_now = _card_debt_for_balance(card, Decimal(card.balance))
+        debt_now = card_debt_for_balance(card, Decimal(card.balance))
         months, history = _card_months_block(
             card,
             today,
@@ -1277,18 +1306,28 @@ def _credit_cards_block(
             account_service=account_service,
         )
 
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
+        _apply_card_payments_for_period(
+            card,
+            months,
+            period_start,
+            period_end,
+        )
         schedule = _build_payment_schedule(months, history, card)
 
+        grace_months, grace_start = _card_grace_months(
+            card,
+            today,
+            account_service,
+        )
+        _apply_card_payments_for_period(card, grace_months, grace_start, today)
         movements_since = min(
-            [m['purchase_end'] for m in months] + [_previous_month_end(today)],
+            [m['purchase_end'] for m in grace_months]
+            + [_previous_month_end(today)],
         )
         movements = _card_balance_movements_after(card, movements_since)
         grace_summary = _card_grace_summary(
             card,
-            months,
+            grace_months,
             debt_now,
             movements,
             today,
@@ -1630,6 +1669,5 @@ __all__ = [
     '_statistics_alerts',
     '_summary_card_delta',
     '_summary_cards',
-    'compute_total_payment_schedule_debt',
     'get_user_detailed_statistics',
 ]

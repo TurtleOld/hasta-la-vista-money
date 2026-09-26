@@ -69,8 +69,10 @@ class CreditCalculationService:
     ) -> Decimal | None:
         """Calculate credit card debt for a given period.
 
-        Calculates the debt by summing expenses and receipts (purchases)
-        and subtracting income and returns for the specified period.
+        Calculates the period-scoped debt by summing expenses and receipts
+        (purchases) and subtracting income and returns within the period.
+        This is not the total card debt: that is the credit limit minus the
+        account balance (see ``card_debt_for_balance``).
         Optimized to use single aggregation query where possible.
 
         Args:

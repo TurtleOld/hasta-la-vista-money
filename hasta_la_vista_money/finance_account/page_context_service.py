@@ -11,10 +11,10 @@ from hasta_la_vista_money.finance_account.forms import (
     TransferMoneyAccountForm,
 )
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.detailed_statistics import (
-    compute_total_payment_schedule_debt,
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    compute_total_credit_debt,
 )
+from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from core.protocols.services import AccountServiceProtocol
@@ -177,19 +177,13 @@ class AccountPageContextService:
                 'family',
             )
             accounts_for_summary = accounts_in_group
-            total_credit_debt = compute_total_payment_schedule_debt(
-                accounts_in_group,
-                self.account_service,
-            )
+            total_credit_debt = compute_total_credit_debt(accounts_in_group)
         else:
             accounts_user = self.account_repository.get_by_user_with_related(
                 user,
             )
             accounts_for_summary = accounts_user
-            total_credit_debt = compute_total_payment_schedule_debt(
-                accounts_user,
-                self.account_service,
-            )
+            total_credit_debt = compute_total_credit_debt(accounts_user)
 
         debit_balances_in_group = self.account_service.get_balances_by_currency(
             accounts_for_summary.debit(),

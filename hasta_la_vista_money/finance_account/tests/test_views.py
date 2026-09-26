@@ -197,6 +197,37 @@ class TestAccountView(TestCase):
         )
 
 
+class TestAccountPageCreditDebt(TestCase):
+    """The account page reports credit debt from the account balance."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='creditpageuser',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.sberbank = Bank.objects.get(code='SBERBANK')
+        self.card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная СберКарта',
+            balance=Decimal('81529.43'),
+            limit_credit=Decimal('100000.00'),
+            currency='RUB',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            bank=self.sberbank,
+        )
+
+    def test_total_credit_debt_is_limit_minus_balance(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('finance_account:list'))
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(
+            response.context['total_credit_debt'],
+            Decimal('18470.57'),
+        )
+
+
 class TestFinancesView(TestCase):
     """Test cases for the combined finances view."""
 
