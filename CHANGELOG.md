@@ -1,5 +1,19 @@
 # История изменений
 
+## [2.20.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.19.1...v2.20.0) (2026-09-27)
+
+
+### Features
+
+* **finance_account:** forbid income on credit cards and track pending repayments ([#1061](https://github.com/TurtleOld/hasta-la-vista-money/issues/1061)) ([753384e](https://github.com/TurtleOld/hasta-la-vista-money/commit/753384e3160be00e091f745d57023d9d02f37e15))
+
+
+### Bug Fixes
+
+* **finance_account:** align credit card debt and grace block with the bank ([#1060](https://github.com/TurtleOld/hasta-la-vista-money/issues/1060)) ([72099bd](https://github.com/TurtleOld/hasta-la-vista-money/commit/72099bdc504ff105a765b0660a477e437f991c51))
+* **finance_account:** derive credit card debt from account balance in statistics ([#1058](https://github.com/TurtleOld/hasta-la-vista-money/issues/1058)) ([95518e1](https://github.com/TurtleOld/hasta-la-vista-money/commit/95518e106ca785513738aa04bd8359aa9894c260))
+* **users:** use local date for dashboard period boundaries ([#1062](https://github.com/TurtleOld/hasta-la-vista-money/issues/1062)) ([9782134](https://github.com/TurtleOld/hasta-la-vista-money/commit/9782134481ba787d14577503c49a80c18fdbbb44))
+
 ## [2.19.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.19.0...v2.19.1) (2026-09-23)
 
 
