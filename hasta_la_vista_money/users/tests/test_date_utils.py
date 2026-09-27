@@ -4,9 +4,10 @@ This module provides test cases for date utility functions including
 month calculations, period dates, and decimal conversions.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
+from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from hasta_la_vista_money.users.utils.date_utils import (
@@ -35,7 +36,7 @@ class DateUtilsTest(TestCase):
         """Test getting month start and end with None input."""
         month_start, _ = get_month_start_end(None)
 
-        today = timezone.now().date()
+        today = timezone.localdate()
         expected_start = today.replace(day=1)
         self.assertEqual(month_start, expected_start)
 
@@ -59,6 +60,18 @@ class DateUtilsTest(TestCase):
 
         self.assertIsInstance(period_dates['current_start'], datetime)
         self.assertIsInstance(period_dates['current_end'], datetime)
+
+    @override_settings(TIME_ZONE='Europe/Moscow')
+    def test_get_period_dates_uses_local_date(self) -> None:
+        """Test that current period ends on the local, not UTC, date."""
+        utc_now = datetime(2026, 9, 26, 21, 30, tzinfo=UTC)
+        with patch('django.utils.timezone.now', return_value=utc_now):
+            period_dates = get_period_dates('month')
+
+        self.assertEqual(
+            timezone.localtime(period_dates['current_end']).date(),
+            date(2026, 9, 27),
+        )
 
     def test_to_decimal(self) -> None:
         """Test conversion to Decimal."""
