@@ -276,6 +276,19 @@ SUCCESS_MESSAGE_UPDATE_SELLER: Final = _(
 INVALID_FILE_FORMAT: Final = _('Неверный формат файла или пустые данные')
 
 # ============================================================================
+# User Messages - Credit Card Income Ban
+# ============================================================================
+
+CREDIT_CARD_INCOME_BAN: Final = _(
+    'На кредитную карту нельзя внести доход. Погашение проводите переводом '
+    'со своего счёта, возврат покупки — чеком-возвратом.',
+)
+CREDIT_CARD_HAS_INCOME_BAN: Final = _(
+    'Сначала перенесите доходы на другой счёт или удалите их — на кредитной '
+    'карте доходов быть не может.',
+)
+
+# ============================================================================
 # Account Types
 # ============================================================================
 # Types of financial accounts
@@ -404,7 +417,6 @@ GRACE_PERIOD_MONTHS_SBERBANK: Final = 3
 GRACE_PERIOD_DAYS_RAIFFEISENBANK: Final = 110
 STATEMENT_DAY_NUMBER: Final = 2
 MIN_PAYMENT_PERCENTAGE: Final = 0.03
-SBERBANK_MIN_PAYMENT_PERCENTAGE: Final = 0.10
 PAYMENT_DUE_DAYS: Final = 20
 STATEMENT_DATES_COUNT: Final = 3
 

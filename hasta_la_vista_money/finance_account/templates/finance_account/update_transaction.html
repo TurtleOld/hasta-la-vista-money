@@ -42,6 +42,12 @@
                 {% endif %}
             {% endfor %}
 
+            {% if form.credit_card_transfer_url %}
+                <p class="finances-muted">
+                    <a href="{{ form.credit_card_transfer_url }}">{% translate 'Сделать перевод' %}</a>
+                </p>
+            {% endif %}
+
             <div class="composer-ft">
                 <div class="hint">{% translate 'Изменение пересчитает баланс счёта.' %}</div>
                 <div class="ft-actions">

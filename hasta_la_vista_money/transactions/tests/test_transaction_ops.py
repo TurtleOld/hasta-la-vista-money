@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
@@ -397,3 +398,209 @@ class CategoryServiceTest(TestCase):
         form = self._build_form('Новое', TransactionType.EXPENSE)
         updated = self.service.update_category(self.user, original, form)
         self.assertEqual(updated.name, 'Новое')
+
+
+class CreditCardIncomeBanServiceTest(TestCase):
+    """Income on a credit account is rejected across service operations."""
+
+    fixtures = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user = User.objects.get(pk=1)
+        self.card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитка',
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.debit = Account.objects.create(
+            user=self.user,
+            name_account='Дебет',
+            type_account=constants.ACCOUNT_TYPE_DEBIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Зарплата',
+            type=TransactionType.INCOME,
+        )
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Еда',
+            type=TransactionType.EXPENSE,
+        )
+        container = ApplicationContainer()
+        self.service = TransactionService(
+            account_service=container.core.account_service(),
+            transaction_repository=TransactionRepository(),
+        )
+
+    def _create_command(
+        self,
+        *,
+        account: Account,
+        amount: Decimal,
+        type_value: str,
+        category: Category | None = None,
+        transaction_date: date = date(2026, 4, 1),
+    ) -> CreateTransactionCommand:
+        return CreateTransactionCommand(
+            user=self.user,
+            account=account,
+            category=category
+            or (
+                self.income_category
+                if type_value == TransactionType.INCOME
+                else self.expense_category
+            ),
+            amount=amount,
+            transaction_date=transaction_date,
+            type_value=type_value,
+        )
+
+    def _update_command(
+        self,
+        *,
+        transaction_obj: Transaction,
+        account: Account,
+        amount: Decimal = Decimal('100.00'),
+        type_value: str = TransactionType.INCOME,
+        transaction_date: date = date(2026, 4, 2),
+    ) -> UpdateTransactionCommand:
+        return UpdateTransactionCommand(
+            user=self.user,
+            transaction_obj=transaction_obj,
+            account=account,
+            category=(
+                self.income_category
+                if type_value == TransactionType.INCOME
+                else self.expense_category
+            ),
+            amount=amount,
+            transaction_date=transaction_date,
+            type_value=type_value,
+        )
+
+    def test_add_income_to_credit_card_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.service.add_transaction(
+                self._create_command(
+                    account=self.card,
+                    amount=Decimal('199.00'),
+                    type_value=TransactionType.INCOME,
+                ),
+            )
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertFalse(
+            Transaction.objects.filter(account=self.card).exists(),
+        )
+
+    def test_update_income_to_credit_card_rejected(self) -> None:
+        income = self.service.add_transaction(
+            self._create_command(
+                account=self.debit,
+                amount=Decimal('100.00'),
+                type_value=TransactionType.INCOME,
+            ),
+        )
+        with self.assertRaises(ValidationError):
+            self.service.update_transaction(
+                self._update_command(
+                    transaction_obj=income,
+                    account=self.card,
+                ),
+            )
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1100.00'))
+
+    def test_historical_income_on_credit_card_cannot_be_edited(self) -> None:
+        income = Transaction.objects.create(
+            user=self.user,
+            account=self.card,
+            category=self.income_category,
+            amount=Decimal('199.00'),
+            date=datetime(2026, 4, 1, tzinfo=UTC),
+            type=TransactionType.INCOME,
+        )
+        with self.assertRaises(ValidationError):
+            self.service.update_transaction(
+                self._update_command(
+                    transaction_obj=income,
+                    account=self.card,
+                    amount=Decimal('250.00'),
+                ),
+            )
+
+    def test_historical_income_moved_to_debit_allowed(self) -> None:
+        income = Transaction.objects.create(
+            user=self.user,
+            account=self.card,
+            category=self.income_category,
+            amount=Decimal('199.00'),
+            date=datetime(2026, 4, 1, tzinfo=UTC),
+            type=TransactionType.INCOME,
+        )
+        self.card.balance = Decimal('1199.00')
+        self.card.save(update_fields=['balance'])
+        self.service.update_transaction(
+            self._update_command(
+                transaction_obj=income,
+                account=self.debit,
+                amount=Decimal('199.00'),
+            ),
+        )
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1199.00'))
+        income.refresh_from_db()
+        self.assertEqual(income.account_id, self.debit.pk)
+
+    def test_historical_income_on_credit_card_can_be_deleted(self) -> None:
+        income = Transaction.objects.create(
+            user=self.user,
+            account=self.card,
+            category=self.income_category,
+            amount=Decimal('199.00'),
+            date=datetime(2026, 4, 1, tzinfo=UTC),
+            type=TransactionType.INCOME,
+        )
+        self.card.balance = Decimal('1199.00')
+        self.card.save(update_fields=['balance'])
+        self.service.delete_transaction(
+            user=self.user,
+            transaction_obj=income,
+        )
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+
+    def test_copy_income_on_credit_card_rejected(self) -> None:
+        income = Transaction.objects.create(
+            user=self.user,
+            account=self.card,
+            category=self.income_category,
+            amount=Decimal('199.00'),
+            date=datetime(2026, 4, 1, tzinfo=UTC),
+            type=TransactionType.INCOME,
+        )
+        with self.assertRaises(ValidationError):
+            self.service.copy_transaction(
+                user=self.user,
+                transaction_id=income.pk,
+            )
+
+    def test_add_expense_to_credit_card_allowed(self) -> None:
+        self.service.add_transaction(
+            self._create_command(
+                account=self.card,
+                amount=Decimal('85.13'),
+                type_value=TransactionType.EXPENSE,
+            ),
+        )
+        self.card.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('914.87'))

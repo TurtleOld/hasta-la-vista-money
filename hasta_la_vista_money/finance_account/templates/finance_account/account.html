@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load i18n %}
 {% load comma %}
+{% load l10n %}
 {% load static %}
 {% load word_hash %}
 
@@ -136,6 +137,33 @@
                 <div id="account-cards-block">
                     {% include 'finance_account/_account_cards_block.html' %}
                 </div>
+
+                {% if pending_card_transfers %}
+                <section class="accounts-panel" id="pending-transfers">
+                    <div class="accounts-panel-hd">
+                        <h2>{% translate 'Непроведённые погашения из выписки' %}</h2>
+                    </div>
+                    {% for group in pending_card_transfers %}
+                        <div class="accounts-pending-card" id="pending-transfers-{{ group.account.pk }}">
+                            <p class="accounts-panel-hd"><strong>{{ group.account.name_account }}</strong></p>
+                            {% for item in group.rows %}
+                                <div class="accounts-pending-row">
+                                    <span>{{ item.row.transaction_date|date:'d.m.Y' }}</span>
+                                    <span>{{ item.row.amount|comma }} {{ group.account.currency }}</span>
+                                    <span>{% blocktranslate with days=item.days_left %}Осталось дней: {{ days }}{% endblocktranslate %}</span>
+                                    <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount|unlocalize }}&date={{ item.row.transaction_date|date:'Y-m-d' }}">
+                                        {% translate 'Сделать перевод' %}
+                                    </a>
+                                    <form method="post" action="{% url 'users:bank_statement_pending_transfer_dismiss' item.row.upload_id item.row.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit">{% translate 'Не погашение' %}</button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </section>
+                {% endif %}
             </section>
 
             {# ── Sidebar ──────────────────────────────────────── #}

@@ -51,7 +51,7 @@ def process_bank_statement_task(
 
     Returns:
         Словарь с ключами ``income_count``, ``expense_count``,
-        ``skipped_count``, ``total_count``.
+        ``skipped_count``, ``needs_transfer_count``, ``total_count``.
 
     Raises:
         BankStatementParseError: Если PDF не удалось разобрать.
@@ -114,6 +114,7 @@ def process_bank_statement_task(
             'income_count': result.income_count,
             'expense_count': result.expense_count,
             'skipped_count': result.skipped_count,
+            'needs_transfer_count': result.needs_transfer_count,
             'total_count': result.income_count + result.expense_count,
         }
 

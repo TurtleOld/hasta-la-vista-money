@@ -84,6 +84,33 @@ class TransactionFormTest(TestCase):
         )
         self.assertTrue(form.is_valid(), msg=form.errors)
 
+    def test_income_on_credit_card_rejected_with_transfer_link(self) -> None:
+        card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитка',
+            type_account='CreditCard',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        form = self._build_form(
+            type=TransactionType.INCOME,
+            category=self.income_category.pk,
+            account=card.pk,
+            amount='199.00',
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('account', form.errors)
+        self.assertIn(
+            'На кредитную карту нельзя внести доход',
+            str(form.errors['account']),
+        )
+        transfer_url = form.credit_card_transfer_url
+        if transfer_url is None:
+            self.fail('transfer url was not built')
+        self.assertIn('transfer-money', transfer_url)
+        self.assertIn(f'to_account={card.pk}', transfer_url)
+        self.assertIn('amount=199.00', transfer_url)
+
 
 class CategoryFormTest(TestCase):
     fixtures = ['users.yaml']

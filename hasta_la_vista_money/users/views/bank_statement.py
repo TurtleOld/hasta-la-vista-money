@@ -220,6 +220,7 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     'income_count': upload.income_count,
                     'expense_count': upload.expense_count,
                     'skipped_count': upload.skipped_count,
+                    'needs_transfer_count': upload.needs_transfer_count,
                     'error_message': upload.error_message,
                     'statement_closing_balance': _decimal_or_none(
                         upload.statement_closing_balance,
@@ -243,6 +244,7 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                         'imported': upload.imported_count,
                         'linked': upload.linked_count,
                         'awaiting_decision': (upload.awaiting_decision_count),
+                        'needs_transfer': upload.needs_transfer_count,
                         'expired': upload.expired_count,
                         'failed': upload.failed_count,
                     },
@@ -398,6 +400,7 @@ class BankStatementReconciliationBulkView(LoginRequiredMixin, View):
                 'imported_count',
                 'linked_count',
                 'awaiting_decision_count',
+                'needs_transfer_count',
                 'expired_count',
                 'failed_count',
             ],
@@ -409,6 +412,7 @@ class BankStatementReconciliationBulkView(LoginRequiredMixin, View):
                     'imported': upload.imported_count,
                     'linked': upload.linked_count,
                     'awaiting_decision': upload.awaiting_decision_count,
+                    'needs_transfer': upload.needs_transfer_count,
                     'expired': upload.expired_count,
                     'failed': upload.failed_count,
                 },
@@ -448,3 +452,32 @@ class BankStatementReconciliationRevisionView(LoginRequiredMixin, View):
                 args=[upload_id],
             ),
         )
+
+
+class BankStatementPendingTransferDismissView(LoginRequiredMixin, View):
+    """Close an unperformed repayment row without creating a movement."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        """Mark a pending repayment as not a repayment."""
+        get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        try:
+            _reconciliation_service(request).mark_not_payment(
+                row_id,
+                cast('User', request.user).pk,
+            )
+        except ReconciliationExpiredError:
+            return HttpResponse(status=410)
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        return redirect('finance_account:list')

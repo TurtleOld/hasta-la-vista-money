@@ -3,13 +3,13 @@ from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet, Sum
+from django.db.models import Min, Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -24,6 +24,10 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -33,13 +37,19 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    card_debt_for_balance,
+)
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    receipt_balance_delta,
+)
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementRow, User
 from hasta_la_vista_money.users.services.cache import (
     get_user_detailed_statistics_cache_key,
 )
@@ -83,12 +93,6 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
     _suggested_plan_categories,
     _sum_amount_for_period,
 )
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.services import (
-        GracePeriodInfoDict,
-    )
-
 
 # ---------------------------------------------------------------------------
 # TypedDicts (credit-card and output types)
@@ -155,11 +159,11 @@ class CardMonthDict(TypedDict):
     purchase_start: datetime
     purchase_end: datetime
     grace_end: datetime
-    debt_for_month: float
+    debt_for_month: Decimal
     is_overdue: bool
     days_until_due: int
-    payments_made: float
-    remaining_debt: float
+    payments_made: Decimal
+    remaining_debt: Decimal
     is_paid: bool
 
 
@@ -167,8 +171,8 @@ class CardHistoryDict(TypedDict):
     """Credit card history by month."""
 
     month: str
-    debt: float
-    final_debt: float
+    debt: Decimal
+    final_debt: Decimal
     grace_end: str
     is_overdue: bool
 
@@ -184,13 +188,31 @@ class PaymentScheduleItemDict(TypedDict):
     """Payment schedule item."""
 
     month: str
-    sum_expense: float
-    payments_made: float
-    remaining_debt: float
+    sum_expense: Decimal
+    payments_made: Decimal
+    remaining_debt: Decimal
     payment_due: str
     is_overdue: bool
     days_until_due: int
     is_paid: bool
+
+
+class _BalanceMovement(NamedTuple):
+    moment: datetime
+    delta: Decimal
+
+
+class CardGraceSummaryDict(TypedDict):
+    """Credit card grace period summary, as the bank app shows it."""
+
+    nearest_due_date: date | None
+    nearest_due_amount: Decimal
+    current_period_end: date | None
+    current_grace_end: date | None
+    current_purchases: Decimal
+    mandatory_payment: Decimal | None
+    mandatory_payment_due: date | None
+    mandatory_payment_unknown: bool
 
 
 class CreditCardDataDict(TypedDict, total=False):
@@ -199,15 +221,17 @@ class CreditCardDataDict(TypedDict, total=False):
     name: str
     limit: Decimal | None
     debt_now: Decimal | None
-    current_grace_info: 'GracePeriodInfoDict'
+    grace_summary: CardGraceSummaryDict
     history: list[CardHistoryDict]
     currency: str
     card_obj: Account
     limit_left: Decimal
     payment_schedule: list[PaymentScheduleItemDict]
+    schedule_debt: Decimal
+    schedule_mismatch: bool
     utilization_chart: dict[str, list[float] | list[str]]
     utilization_chart_id: str
-    minimum_payment_forecast: list[dict[str, float | int]]
+    pending_transfers_count: int
 
 
 class CreditCardSummaryDict(TypedDict):
@@ -676,7 +700,7 @@ def _build_single_card_month(
     card: Account,
     account_service: AccountServiceProtocol,
     now: datetime,
-) -> tuple[CardMonthDict, float]:
+) -> tuple[CardMonthDict, Decimal]:
     """Build data for single card month.
 
     Args:
@@ -717,7 +741,7 @@ def _build_single_card_month(
         Decimal(0),
     )
 
-    debt = float(exp_sum) + float(rcpt_expense) - float(rcpt_return)
+    debt = exp_sum + rcpt_expense - rcpt_return
     grace_end = _calculate_grace_period_end(
         card,
         purchase_start_date,
@@ -740,8 +764,8 @@ def _build_single_card_month(
         'debt_for_month': debt,
         'is_overdue': overdue,
         'days_until_due': days_left,
-        'payments_made': 0.0,
-        'remaining_debt': 0.0,
+        'payments_made': Decimal(0),
+        'remaining_debt': Decimal(0),
         'is_paid': False,
     }
 
@@ -755,7 +779,7 @@ def _build_single_card_month(
             purchase_start,
         )
         if schedule and 'final_debt' in schedule:
-            final_debt = float(schedule['final_debt'])
+            final_debt = Decimal(schedule['final_debt'])
 
     return month_data, final_debt
 
@@ -836,6 +860,73 @@ def _card_months_block(
     return months, history
 
 
+def _earliest_card_movement(card: Account) -> date | None:
+    """Earliest date of any movement on a credit card account.
+
+    Args:
+        card: Credit card account.
+
+    Returns:
+        Local date of the earliest transaction, receipt or transfer, or
+        None when the card has no movements.
+    """
+    transaction_date = Transaction.objects.filter(account=card).aggregate(
+        earliest=Min('date'),
+    )['earliest']
+    receipt_date = Receipt.objects.filter(account=card).aggregate(
+        earliest=Min('receipt_date'),
+    )['earliest']
+    transfer_date = TransferMoneyLog.objects.filter(
+        Q(to_account=card) | Q(from_account=card),
+    ).aggregate(earliest=Min('exchange_date'))['earliest']
+    moments: list[datetime] = [
+        moment
+        for moment in (transaction_date, receipt_date, transfer_date)
+        if isinstance(moment, datetime)
+    ]
+    if not moments:
+        return None
+    return timezone.localtime(min(moments)).date()
+
+
+def _card_grace_months(
+    card: Account,
+    today: date,
+    account_service: AccountServiceProtocol,
+) -> tuple[list[CardMonthDict], date]:
+    """Months for the grace block, ignoring the statistics filters.
+
+    The block mirrors the bank, so it must see every card movement:
+    debt predating the selected period or filed under a filtered-out
+    category still counts.
+
+    Args:
+        card: Credit card account.
+        today: Current date.
+        account_service: Account service for grace and debt calculations.
+
+    Returns:
+        Tuple of (months, period_start) covering all card movements up to
+        today.
+    """
+    month_start = today.replace(day=1)
+    earliest = _earliest_card_movement(card)
+    if earliest is None or earliest > month_start:
+        earliest = month_start
+    grace_filter = StatisticsFilters(
+        period='range',
+        date_from=earliest,
+        date_to=today,
+    )
+    months, _ = _card_months_block(
+        card,
+        today,
+        grace_filter,
+        account_service=account_service,
+    )
+    return months, earliest
+
+
 def _collect_card_payments(
     card: Account,
     period_start: date,
@@ -879,7 +970,7 @@ def _pre_period_debt_for_card(
     card: Account,
     payments: list[PaymentItemDict],
     months: list[CardMonthDict],
-) -> float:
+) -> Decimal:
     """Compute the credit-card debt that existed before the tracked period.
 
     Uses the current account balance as an anchor:
@@ -889,42 +980,59 @@ def _pre_period_debt_for_card(
     Payments are applied to this old debt first; only the surplus is
     available to reduce current-period month balances.
     """
-    limit = float(card.limit_credit or 0)
-    if limit <= constants.ZERO:
-        return constants.ZERO
-    total_income = sum(float(p['amount']) for p in payments)
-    total_expenses = sum(float(m['debt_for_month']) for m in months)
+    if Decimal(card.limit_credit or 0) <= constants.ZERO:
+        return Decimal(0)
+    total_income = sum((p['amount'] for p in payments), Decimal(0))
+    total_expenses = sum((m['debt_for_month'] for m in months), Decimal(0))
     return max(
-        limit - float(card.balance) + total_income - total_expenses,
-        constants.ZERO,
+        card_debt_for_balance(card, Decimal(card.balance))
+        + total_income
+        - total_expenses,
+        Decimal(0),
     )
 
 
 def _apply_payments_to_months(
     months: list[CardMonthDict],
     payments: list[PaymentItemDict],
-    pre_period_debt: float = 0.0,
+    pre_period_debt: Decimal = Decimal(0),
 ) -> None:
     for m in months:
-        debt = float(m['debt_for_month'])
+        debt = m['debt_for_month']
         if debt <= constants.ZERO:
-            m['payments_made'] = constants.ZERO
-            m['remaining_debt'] = constants.ZERO
+            m['payments_made'] = Decimal(0)
+            m['remaining_debt'] = Decimal(0)
             m['is_paid'] = True
             continue
         paid_before_due = sum(
-            float(p['amount']) for p in payments if p['date'] <= m['grace_end']
+            (p['amount'] for p in payments if p['date'] <= m['grace_end']),
+            Decimal(0),
         )
         prior_debt = pre_period_debt + sum(
-            float(prev['debt_for_month'])
-            for prev in months
-            if prev['grace_end'] < m['grace_end']
+            (
+                prev['debt_for_month']
+                for prev in months
+                if prev['grace_end'] < m['grace_end']
+            ),
+            Decimal(0),
         )
-        available_for_month = max(paid_before_due - prior_debt, constants.ZERO)
+        available_for_month = max(paid_before_due - prior_debt, Decimal(0))
         paid = min(available_for_month, debt)
         m['payments_made'] = paid
-        m['remaining_debt'] = max(debt - paid, constants.ZERO)
+        m['remaining_debt'] = debt - paid
         m['is_paid'] = m['remaining_debt'] <= constants.ZERO
+
+
+def _apply_card_payments_for_period(
+    card: Account,
+    months: list[CardMonthDict],
+    period_start: date,
+    period_end: date,
+) -> None:
+    """Apply the repayments of a period to the card's month balances."""
+    payments = _collect_card_payments(card, period_start, period_end)
+    pre_period_debt = _pre_period_debt_for_card(card, payments, months)
+    _apply_payments_to_months(months, payments, pre_period_debt)
 
 
 def _build_payment_schedule(
@@ -958,23 +1066,26 @@ def _build_payment_schedule(
 
 
 def _credit_card_utilization_chart(
-    history: list[CardHistoryDict],
-    limit: Decimal | None,
+    card: Account,
+    months: list[CardMonthDict],
+    movements: list[_BalanceMovement],
 ) -> dict[str, list[float] | list[str]]:
-    limit_value = float(limit or 0)
+    """Утилизация лимита: задолженность на конец месяца к лимиту, в %."""
+    limit = Decimal(card.limit_credit or 0)
     labels: list[str] = []
     values: list[float] = []
-    for item in history[-constants.MONTHS_IN_YEAR :]:
-        labels.append(item['month'])
-        if limit_value <= constants.ZERO:
+    for month in months[-constants.MONTHS_IN_YEAR :]:
+        labels.append(month['month'])
+        if limit <= constants.ZERO:
             values.append(constants.ZERO)
             continue
+        debt = _card_debt_at(card, month['purchase_end'], movements)
         values.append(
-            round(
-                max(item['final_debt'], constants.ZERO)
-                / limit_value
-                * constants.PERCENTAGE_MULTIPLIER,
-                2,
+            float(
+                (debt / limit * constants.PERCENTAGE_MULTIPLIER).quantize(
+                    constants.MIN_MONEY_AMOUNT,
+                    rounding=ROUND_HALF_UP,
+                ),
             ),
         )
     return {'labels': labels, 'values': values}
@@ -991,28 +1102,145 @@ def _build_receipt_category_chart(
     }
 
 
-def _minimum_payment_forecast(
-    debt: Decimal | None,
-) -> list[dict[str, float | int]]:
-    remaining = Decimal(str(max(debt or 0, constants.ZERO)))
-    if remaining <= constants.ZERO:
-        return []
-    forecast: list[dict[str, float | int]] = []
-    for month_number in range(constants.ONE, constants.MONTHS_IN_YEAR + 1):
-        payment = remaining * Decimal(
-            str(constants.SBERBANK_MIN_PAYMENT_PERCENTAGE),
+def _card_limit_left(card: Account) -> Decimal:
+    """Остаток лимита: остаток счёта в пределах от нуля до лимита."""
+    limit = Decimal(card.limit_credit or 0)
+    return min(max(Decimal(card.balance), Decimal(0)), limit)
+
+
+def _card_balance_movements_after(
+    card: Account,
+    since: datetime,
+) -> list[_BalanceMovement]:
+    """Все изменения остатка кредитного счёта после ``since``."""
+    movements = [
+        _BalanceMovement(
+            row['date'],
+            -row['amount']
+            if row['type'] == TransactionType.EXPENSE
+            else row['amount'],
         )
-        remaining = max(remaining - payment, Decimal(str(constants.ZERO)))
-        forecast.append(
-            {
-                'month': month_number,
-                'minimum_payment': float(payment),
-                'remaining_debt': float(remaining),
-            },
+        for row in Transaction.objects.filter(
+            account=card,
+            date__gt=since,
+        ).values('type', 'amount', 'date')
+    ]
+    movements.extend(
+        _BalanceMovement(
+            row['receipt_date'],
+            receipt_balance_delta(row['operation_type'], row['total_sum']),
         )
-        if remaining <= constants.ZERO:
-            break
-    return forecast
+        for row in Receipt.objects.filter(
+            account=card,
+            receipt_date__gt=since,
+        ).values('operation_type', 'total_sum', 'receipt_date')
+    )
+    transfers = TransferMoneyLog.objects.filter(exchange_date__gt=since)
+    movements.extend(
+        _BalanceMovement(row['exchange_date'], row['amount'])
+        for row in transfers.filter(to_account=card).values(
+            'amount',
+            'exchange_date',
+        )
+    )
+    movements.extend(
+        _BalanceMovement(row['exchange_date'], -row['amount'])
+        for row in transfers.filter(from_account=card).values(
+            'amount',
+            'exchange_date',
+        )
+    )
+    return movements
+
+
+def _previous_month_end(today: date) -> datetime:
+    return timezone.make_aware(
+        datetime.combine(today.replace(day=1) - timedelta(days=1), time.max),
+    )
+
+
+def _card_debt_at(
+    card: Account,
+    moment: datetime,
+    movements: list[_BalanceMovement],
+) -> Decimal:
+    """Задолженность по кредитной карте на момент ``moment``.
+
+    Остаток счёта на момент восстанавливается от текущего остатка
+    откатом всех движений, проведённых позже.
+    """
+    later = sum(
+        (m.delta for m in movements if m.moment > moment),
+        Decimal(0),
+    )
+    return card_debt_for_balance(card, Decimal(card.balance) - later)
+
+
+def _card_grace_summary(
+    card: Account,
+    months: list[CardMonthDict],
+    debt_now: Decimal,
+    movements: list[_BalanceMovement],
+    today: date,
+) -> CardGraceSummaryDict:
+    """Блок беспроцентного периода в том виде, как его показывает банк."""
+    bank = getattr(card.bank, 'code', None)
+    unpaid = [m for m in months if m['remaining_debt'] > constants.ZERO]
+    nearest = min(unpaid, key=lambda m: m['grace_end'], default=None)
+    summary: CardGraceSummaryDict = {
+        'nearest_due_date': None,
+        'nearest_due_amount': Decimal(0),
+        'current_period_end': None,
+        'current_grace_end': None,
+        'current_purchases': Decimal(0),
+        'mandatory_payment': None,
+        'mandatory_payment_due': None,
+        'mandatory_payment_unknown': False,
+    }
+    if nearest is not None:
+        summary['nearest_due_date'] = timezone.localtime(
+            nearest['grace_end'],
+        ).date()
+        summary['nearest_due_amount'] = (
+            debt_now
+            if bank == BANK_RAIFFEISENBANK
+            else nearest['remaining_debt']
+        )
+    if bank != BANK_SBERBANK:
+        return summary
+
+    current_month = today.strftime('%m.%Y')
+    current = next((m for m in months if m['month'] == current_month), None)
+    if current is not None:
+        summary['current_period_end'] = timezone.localtime(
+            current['purchase_end'],
+        ).date()
+        summary['current_grace_end'] = timezone.localtime(
+            current['grace_end'],
+        ).date()
+        summary['current_purchases'] = max(
+            current['debt_for_month'],
+            Decimal(0),
+        )
+
+    if any(m['is_overdue'] for m in unpaid):
+        summary['mandatory_payment_unknown'] = True
+        return summary
+    month_start = today.replace(day=1)
+    statement_debt = _card_debt_at(
+        card,
+        _previous_month_end(today),
+        movements,
+    )
+    mandatory_payment = (
+        statement_debt * Decimal(str(constants.MIN_PAYMENT_PERCENTAGE))
+    ).quantize(constants.MIN_MONEY_AMOUNT, rounding=ROUND_HALF_UP)
+    if mandatory_payment > constants.ZERO:
+        summary['mandatory_payment'] = mandatory_payment
+        summary['mandatory_payment_due'] = month_start.replace(
+            day=monthrange(today.year, today.month)[1],
+        )
+    return summary
 
 
 def _credit_cards_summary(
@@ -1020,13 +1248,12 @@ def _credit_cards_summary(
 ) -> CreditCardSummaryDict:
     overdue_count = 0
     expiring_count = 0
-    total_remaining_debt = Decimal(str(constants.ZERO))
+    total_remaining_debt = Decimal(0)
     for card in credit_cards:
+        total_remaining_debt += card.get('debt_now') or Decimal(0)
         for payment in card.get('payment_schedule', []):
-            remaining_debt = Decimal(str(payment['remaining_debt']))
-            if remaining_debt <= constants.ZERO:
+            if payment['remaining_debt'] <= constants.ZERO:
                 continue
-            total_remaining_debt += remaining_debt
             if payment['is_overdue']:
                 overdue_count += constants.ONE
             elif (
@@ -1052,53 +1279,6 @@ def _payment_schedule_remaining_debt(
     )
 
 
-def compute_total_payment_schedule_debt(
-    accounts: QuerySet[Account],
-    account_service: AccountServiceProtocol,
-) -> Decimal:
-    """Sum ``remaining_debt`` from payment schedules across credit cards.
-
-    Builds the same payment schedule used in the detailed-statistics
-    table ("График платежей по беспроцентному периоду") for every
-    credit account in the queryset, then sums the per-month
-    ``remaining_debt`` values. The result matches the "Осталось"
-    column on the statistics page.
-
-    Args:
-        accounts: QuerySet of accounts to inspect.
-        account_service: Account service used for grace and debt
-            calculations.
-
-    Returns:
-        Non-negative Decimal representing total outstanding debt
-        across credit-card payment schedules.
-    """
-    today = timezone.now().date()
-    stats_filter = StatisticsFilters()
-    period_start, period_end = stats_filter.date_range(today)
-
-    credit_cards = accounts.filter(
-        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
-    )
-
-    total = Decimal(str(constants.ZERO))
-    for card in credit_cards:
-        months, history = _card_months_block(
-            card,
-            today,
-            stats_filter,
-            account_service=account_service,
-        )
-
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
-        schedule = _build_payment_schedule(months, history, card)
-        total += _payment_schedule_remaining_debt(schedule)
-
-    return total
-
-
 def _credit_cards_block(
     accounts: QuerySet[Account],
     stats_filter: StatisticsFilters,
@@ -1106,15 +1286,20 @@ def _credit_cards_block(
 ) -> list[CreditCardDataDict]:
     out: list[CreditCardDataDict] = []
     today = timezone.now().date()
-    today_month = today.replace(day=1)
     period_start, period_end = stats_filter.date_range(today)
 
     credit_cards = accounts.filter(
         type_account__in=constants.CREDIT_ACCOUNT_TYPES,
     )
 
+    # The schedule sums to the card debt only when it spans every month up
+    # to today and is not narrowed down to some categories.
+    schedule_covers_debt = (
+        period_end >= today and not stats_filter.category_keys
+    )
+
     for card in credit_cards:
-        debt_now = account_service.get_credit_card_debt(card)
+        debt_now = card_debt_for_balance(card, Decimal(card.balance))
         months, history = _card_months_block(
             card,
             today,
@@ -1122,53 +1307,64 @@ def _credit_cards_block(
             account_service=account_service,
         )
 
-        payments = _collect_card_payments(card, period_start, period_end)
-        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
-        _apply_payments_to_months(months, payments, pre_period_debt)
+        _apply_card_payments_for_period(
+            card,
+            months,
+            period_start,
+            period_end,
+        )
         schedule = _build_payment_schedule(months, history, card)
 
-        current_info = account_service.calculate_grace_period_info(
+        grace_months, grace_start = _card_grace_months(
             card,
-            today_month,
+            today,
+            account_service,
         )
-        current_info['debt_for_month'] = Decimal(
-            str(
-                max(
-                    0,
-                    current_info.get('debt_for_month', 0),
-                ),
-            ),
+        _apply_card_payments_for_period(card, grace_months, grace_start, today)
+        movements_since = min(
+            [m['purchase_end'] for m in grace_months]
+            + [_previous_month_end(today)],
         )
-        current_info['final_debt'] = Decimal(
-            str(
-                max(
-                    0,
-                    current_info.get('final_debt', 0),
-                ),
-            ),
+        movements = _card_balance_movements_after(card, movements_since)
+        grace_summary = _card_grace_summary(
+            card,
+            grace_months,
+            debt_now,
+            movements,
+            today,
         )
 
-        limit_left = Decimal(str((card.limit_credit or 0) - (debt_now or 0)))
+        limit_left = _card_limit_left(card)
+        schedule_debt = _payment_schedule_remaining_debt(schedule)
 
         out.append(
             {
                 'name': card.name_account,
                 'limit': card.limit_credit,
                 'debt_now': debt_now,
-                'current_grace_info': current_info,
+                'grace_summary': grace_summary,
                 'history': history,
                 'currency': card.currency,
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
+                'schedule_debt': schedule_debt,
+                'schedule_mismatch': (
+                    schedule_covers_debt
+                    and Decimal(card.limit_credit or 0) > constants.ZERO
+                    and abs(schedule_debt - debt_now)
+                    > constants.MIN_MONEY_AMOUNT
+                ),
                 'utilization_chart': _credit_card_utilization_chart(
-                    history,
-                    card.limit_credit,
+                    card,
+                    months,
+                    movements,
                 ),
                 'utilization_chart_id': f'credit-utilization-{card.pk}',
-                'minimum_payment_forecast': _minimum_payment_forecast(
-                    _payment_schedule_remaining_debt(schedule),
-                ),
+                'pending_transfers_count': BankStatementRow.objects.filter(
+                    upload__account=card,
+                    decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+                ).count(),
             },
         )
     return out
@@ -1472,13 +1668,11 @@ __all__ = [
     '_credit_cards_block',
     '_credit_cards_summary',
     '_dates_amounts',
-    '_minimum_payment_forecast',
     '_paginate',
     '_payment_schedule_remaining_debt',
     '_pre_period_debt_for_card',
     '_statistics_alerts',
     '_summary_card_delta',
     '_summary_cards',
-    'compute_total_payment_schedule_debt',
     'get_user_detailed_statistics',
 ]

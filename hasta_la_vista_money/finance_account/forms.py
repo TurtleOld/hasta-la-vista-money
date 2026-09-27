@@ -41,6 +41,10 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_credit_fields_required,
     validate_different_accounts,
 )
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -195,8 +199,30 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
                 payment_due_date=cleaned_data.get('payment_due_date'),
                 grace_period_days=cleaned_data.get('grace_period_days'),
             )
+            self._validate_credit_type_change(cleaned_data)
 
         return cleaned_data or {}
+
+    def _validate_credit_type_change(
+        self,
+        cleaned_data: dict[str, Any],
+    ) -> None:
+        """Reject switching an account with incomes to a credit type."""
+        account = self.instance
+        type_account = cleaned_data.get('type_account')
+        if (
+            account.pk
+            and type_account in constants.CREDIT_ACCOUNT_TYPES
+            and account.type_account not in constants.CREDIT_ACCOUNT_TYPES
+            and Transaction.objects.filter(
+                account=account,
+                type=TransactionType.INCOME,
+            ).exists()
+        ):
+            self.add_error(
+                'type_account',
+                constants.CREDIT_CARD_HAS_INCOME_BAN,
+            )
 
     class Meta:
         model = Account
@@ -306,6 +332,11 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             help_text=_('Выберите счёт, на который будет зачислена сумма'),
             initial=to_account_initial,
         )
+
+        if self.initial.get('amount') is not None:
+            self.fields['amount'].initial = self.initial['amount']
+        if self.initial.get('exchange_date') is not None:
+            self.fields['exchange_date'].initial = self.initial['exchange_date']
 
         self.add_tailwind_classes()
 

@@ -63,7 +63,11 @@ class BankStatementRetentionService:
             unresolved = [
                 row
                 for row in rows
-                if row.decision == BankStatementRow.Decision.PENDING
+                if row.decision
+                in {
+                    BankStatementRow.Decision.PENDING,
+                    BankStatementRow.Decision.NEEDS_TRANSFER,
+                }
             ]
             unresolved_ids = [row.pk for row in unresolved]
             if unresolved_ids:
