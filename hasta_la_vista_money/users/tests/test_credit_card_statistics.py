@@ -183,7 +183,21 @@ class CreditCardStatisticsTest(TestCase):
         summary = self._card_data()['grace_summary']
 
         self.assertEqual(summary['current_purchases'], Decimal('85.13'))
-        self.assertEqual(summary['mandatory_payment'], Decimal('551.56'))
+        self.assertEqual(summary['mandatory_payment'], Decimal('501.56'))
+
+    def test_full_repayment_clears_mandatory_payment(self) -> None:
+        self._repay('18470.57', datetime(2026, 9, 26, 10, 0, tzinfo=UTC))
+        self.card.balance = Decimal('100000.00')
+        self.card.save(update_fields=['balance'])
+
+        card = self._card_data()
+        summary = card['grace_summary']
+
+        self.assertEqual(card['debt_now'], Decimal(0))
+        self.assertEqual(summary['current_purchases'], Decimal('85.13'))
+        self.assertIsNone(summary['mandatory_payment'])
+        self.assertIsNone(summary['mandatory_payment_due'])
+        self.assertFalse(summary['mandatory_payment_unknown'])
 
     def test_overdue_period_hides_mandatory_payment(self) -> None:
         summary = self._card_data(
