@@ -229,7 +229,7 @@ def get_period_comparison(
         else 0.0
     )
 
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     result = {
         'current': {
@@ -279,9 +279,9 @@ def get_drill_down_data(
         try:
             period_date = date.fromisoformat(date_str + '-01')
         except ValueError:
-            period_date = timezone.now().date()
+            period_date = timezone.localdate()
     else:
-        period_date = timezone.now().date()
+        period_date = timezone.localdate()
 
     month_start, month_end = get_month_start_end(period_date)
 

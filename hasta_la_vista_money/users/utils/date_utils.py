@@ -21,7 +21,7 @@ def get_month_start_end(period_date: date | None = None) -> tuple[date, date]:
         Tuple of (month_start, month_end).
     """
     if period_date is None:
-        period_date = timezone.now().date()
+        period_date = timezone.localdate()
 
     month_start = period_date.replace(day=1)
     last_day = (month_start + relativedelta(months=1) - timedelta(days=1)).day
@@ -42,7 +42,7 @@ def get_last_month_start_end(
         Tuple of (last_month_start, last_month_end).
     """
     if period_date is None:
-        period_date = timezone.now().date()
+        period_date = timezone.localdate()
 
     current_month_start = period_date.replace(day=1)
     last_month_start = (current_month_start - timedelta(days=1)).replace(day=1)
@@ -70,7 +70,7 @@ def get_period_dates(
         - 'previous_end': datetime of previous period end
     """
     if period_date is None:
-        period_date = timezone.now().date()
+        period_date = timezone.localdate()
 
     today_dt = timezone.make_aware(
         datetime.combine(period_date, time.max),
