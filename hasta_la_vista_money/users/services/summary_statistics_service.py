@@ -1227,14 +1227,24 @@ def _card_grace_summary(
         summary['mandatory_payment_unknown'] = True
         return summary
     month_start = today.replace(day=1)
-    statement_debt = _card_debt_at(
-        card,
-        _previous_month_end(today),
-        movements,
+    statement_moment = _previous_month_end(today)
+    statement_debt = _card_debt_at(card, statement_moment, movements)
+    # Пополнения карты после выписки засчитываются в обязательный платёж.
+    repaid = sum(
+        (
+            m.delta
+            for m in movements
+            if m.moment > statement_moment and m.delta > constants.ZERO
+        ),
+        Decimal(0),
     )
-    mandatory_payment = (
-        statement_debt * Decimal(str(constants.MIN_PAYMENT_PERCENTAGE))
-    ).quantize(constants.MIN_MONEY_AMOUNT, rounding=ROUND_HALF_UP)
+    mandatory_payment = min(
+        (
+            statement_debt * Decimal(str(constants.MIN_PAYMENT_PERCENTAGE))
+        ).quantize(constants.MIN_MONEY_AMOUNT, rounding=ROUND_HALF_UP)
+        - repaid,
+        debt_now,
+    )
     if mandatory_payment > constants.ZERO:
         summary['mandatory_payment'] = mandatory_payment
         summary['mandatory_payment_due'] = month_start.replace(
