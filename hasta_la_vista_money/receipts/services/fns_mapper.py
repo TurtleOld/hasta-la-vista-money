@@ -1,4 +1,4 @@
-"""Map FNS receipt JSON to the current pending receipt payload contract."""
+"""Map FNS receipt JSON to the receipt_data contract."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ class FNSReceiptMappingError(ValueError):
 
 def map_fns_receipt_to_receipt_data(payload: dict[str, Any]) -> dict[str, Any]:
     """Map an FNS ticket/receipt response to existing receipt_data fields."""
-    receipt = _extract_receipt(payload)
+    receipt = find_fns_receipt(payload)
+    if receipt is None:
+        raise FNSReceiptMappingError('FNS response has no receipt object')
     retail_place = _optional_text(receipt.get('retailPlace'))
     legal_name = _legal_name(receipt)
     seller_name = retail_place or legal_name or 'Неизвестный продавец'
@@ -41,7 +43,8 @@ def map_fns_receipt_to_receipt_data(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _extract_receipt(payload: dict[str, Any]) -> dict[str, Any]:
+def find_fns_receipt(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the receipt object from any known FNS response shape."""
     receipt = _as_dict(payload.get('receipt'))
     if receipt is not None:
         return receipt
@@ -60,7 +63,7 @@ def _extract_receipt(payload: dict[str, Any]) -> dict[str, Any]:
             if receipt is not None:
                 return receipt
 
-    raise FNSReceiptMappingError('FNS response has no receipt object')
+    return None
 
 
 def _extract_items(receipt: dict[str, Any]) -> list[dict[str, Any]]:
@@ -184,4 +187,8 @@ def _as_dict(value: Any) -> dict[str, Any] | None:
     return {str(key): item for key, item in value.items()}
 
 
-__all__ = ['FNSReceiptMappingError', 'map_fns_receipt_to_receipt_data']
+__all__ = [
+    'FNSReceiptMappingError',
+    'find_fns_receipt',
+    'map_fns_receipt_to_receipt_data',
+]

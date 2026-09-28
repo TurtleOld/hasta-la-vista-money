@@ -1,5 +1,4 @@
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -30,6 +29,7 @@ from django.forms import (
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters import widgets
+from django_stubs_ext import StrOrPromise
 from PIL import Image, UnidentifiedImageError
 
 if TYPE_CHECKING:
@@ -52,6 +52,29 @@ from hasta_la_vista_money.receipts.services.fns_qr import (
     QRCodeDecodeError,
     parse_fns_qr,
 )
+from hasta_la_vista_money.receipts.validators.product_line import (
+    ProductLineError,
+    check_product_line,
+)
+
+_PRODUCT_LINE_ERRORS: dict[ProductLineError, tuple[str, StrOrPromise]] = {
+    ProductLineError.NEGATIVE_PRICE: (
+        'price',
+        _('Цена не может быть отрицательной.'),
+    ),
+    ProductLineError.NON_POSITIVE_QUANTITY: (
+        'quantity',
+        _('Количество должно быть больше 0.'),
+    ),
+    ProductLineError.NEGATIVE_AMOUNT: (
+        'amount',
+        _('Сумма не может быть отрицательной.'),
+    ),
+    ProductLineError.AMOUNT_MISMATCH: (
+        'amount',
+        _('Сумма не совпадает с ценой и количеством.'),
+    ),
+}
 
 _INPUT_CLASSES = (
     'w-full rounded-xl border border-gray-300 dark:border-gray-600 '
@@ -380,25 +403,19 @@ class ProductForm(ModelForm[Product]):
         cleaned_data = super().clean()
         if cleaned_data is None:
             cleaned_data = {}
-        quantity = cleaned_data.get('quantity')
-        if quantity is not None and quantity <= constants.ZERO:
-            self.add_error(
-                'quantity',
-                _('Количество должно быть больше 0.'),
-            )
         price = cleaned_data.get('price')
-        if price is not None and price <= constants.ZERO:
-            self.add_error('price', _('Цена должна быть больше 0.'))
+        quantity = cleaned_data.get('quantity')
         amount = cleaned_data.get('amount')
-        if amount is not None and amount <= constants.ZERO:
-            self.add_error('amount', _('Сумма должна быть больше 0.'))
-        if price is not None and quantity is not None and amount is not None:
-            expected_amount = (price * quantity).quantize(Decimal('0.01'))
-            if amount != expected_amount:
-                self.add_error(
-                    'amount',
-                    _('Сумма не совпадает с ценой и количеством.'),
-                )
+        if price is None or quantity is None or amount is None:
+            return cleaned_data
+        error = check_product_line(
+            price=price,
+            quantity=quantity,
+            amount=amount,
+        )
+        if error is not None:
+            field, message = _PRODUCT_LINE_ERRORS[error]
+            self.add_error(field, message)
         return cleaned_data
 
 

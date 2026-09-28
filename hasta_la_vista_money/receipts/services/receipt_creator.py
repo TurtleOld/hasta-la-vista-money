@@ -25,6 +25,9 @@ from hasta_la_vista_money.receipts.models import (
     Receipt,
     Seller,
 )
+from hasta_la_vista_money.receipts.validators.product_line import (
+    check_product_line,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
@@ -379,28 +382,17 @@ class ReceiptCreatorService:
     ) -> None:
         if total_sum <= 0:
             raise ValueError('Receipt total must be greater than zero')
-        for product in products:
-            if (
-                product.price <= 0
-                or product.quantity <= 0
-                or product.amount <= 0
-            ):
-                raise ValueError('Product monetary values must be positive')
-            if product.quantity != product.quantity.to_integral_value():
-                # Weighed goods: the receipt's per-kg price is rounded to
-                # kopecks for display, so multiplying it back by the printed
-                # weight does not reliably reproduce the line's real sum.
-                # The FNS-reported amount is authoritative for these lines.
-                continue
-            expected_amount = (product.price * product.quantity).quantize(
-                Decimal('0.01'),
+        for index, product in enumerate(products):
+            error = check_product_line(
+                price=product.price,
+                quantity=product.quantity,
+                amount=product.amount,
             )
-            if abs(product.amount - expected_amount) > Decimal('0.01'):
+            if error is not None:
                 message = (
-                    'Product amount must match price multiplied by quantity: '
+                    f'Invalid product line: error={error} index={index} '
                     f'name={product.product_name!r} price={product.price} '
-                    f'quantity={product.quantity} amount={product.amount} '
-                    f'expected_amount={expected_amount}'
+                    f'quantity={product.quantity} amount={product.amount}'
                 )
                 raise ValueError(message)
 

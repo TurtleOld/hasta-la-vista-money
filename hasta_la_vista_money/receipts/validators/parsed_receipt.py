@@ -1,4 +1,4 @@
-"""Validation for parsed receipt payloads from receipt-inference."""
+"""Validation for receipt payloads mapped from FNS responses."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from hasta_la_vista_money.receipts.parsers.date_parser import (
 
 
 class ReceiptParseValidationError(ValueError):
-    """Raised when receipt-inference returns an invalid receipt payload.
+    """Raised when a mapped FNS receipt payload is invalid.
 
     ``user_message`` carries an end-user-facing explanation in Russian for the
-    pending-receipt card. When omitted, callers fall back to a generic message.
+    processing log. When omitted, callers fall back to a generic message.
     """
 
     def __init__(self, message: str, *, user_message: str | None = None):
@@ -136,7 +136,7 @@ RECEIPT_PARSE_SCHEMA: Final[dict[str, Any]] = {
 
 @dataclass(frozen=True)
 class ReceiptParseItem:
-    """Normalized receipt line item accepted by the review flow."""
+    """Normalized receipt line item accepted for receipt creation."""
 
     product_name: str
     category: str
@@ -195,10 +195,9 @@ class ReceiptParseResult:
 def validate_receipt_parse_payload(
     payload: dict[str, Any],
 ) -> ReceiptParseResult:
-    """Validate and normalize receipt-inference payload.
+    """Validate and normalize a receipt payload mapped from FNS.
 
-    The local inference service already normalizes most values, but this
-    pre-flight validation is the Django-side contract before ``mark_ready``.
+    This is the contract between the FNS mapper and receipt creation.
     """
     _validate_object_keys(payload, TOP_LEVEL_FIELDS, 'receipt')
     _validate_required_fields(payload, REQUIRED_TOP_LEVEL_FIELDS, 'receipt')

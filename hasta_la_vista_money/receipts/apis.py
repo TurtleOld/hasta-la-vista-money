@@ -290,13 +290,7 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             ReceiptAPIValidator: Validator instance for receipt data.
         """
         if self.validator is None:
-            request_with_container = cast('RequestWithContainer', self.request)
-            receipt_repository = (
-                request_with_container.container.receipts.receipt_repository()
-            )
-            self.validator = ReceiptAPIValidator(
-                receipt_repository=receipt_repository,
-            )
+            self.validator = ReceiptAPIValidator()
         return self.validator
 
     def _get_mapper(self) -> ReceiptAPIDataMapper:
