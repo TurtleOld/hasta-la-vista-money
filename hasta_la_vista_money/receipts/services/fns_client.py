@@ -12,6 +12,7 @@ import structlog
 from django.conf import settings
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.receipts.services.fns_mapper import find_fns_receipt
 from hasta_la_vista_money.receipts.services.fns_session_cache import (
     FNSSession,
     FNSSessionCache,
@@ -169,7 +170,7 @@ class FNSClient:
                 f'/tickets/{ticket_id}',
                 session=session,
             )
-            receipt = _extract_receipt(payload)
+            receipt = find_fns_receipt(payload)
             if receipt is not None:
                 return payload
             if attempt < self._poll_attempts - 1:
@@ -427,25 +428,6 @@ class FNSClient:
             raise FNSConfigurationError('FNS_PASSWORD is not configured')
         if not self._credentials.client_secret:
             raise FNSConfigurationError('FNS_CLIENT_SECRET is not configured')
-
-
-def _extract_receipt(payload: dict[str, Any]) -> dict[str, Any] | None:
-    document = payload.get('document')
-    if isinstance(document, dict):
-        receipt = _as_dict(document.get('receipt'))
-        if receipt is not None:
-            return receipt
-    ticket = payload.get('ticket')
-    if isinstance(ticket, dict):
-        document = ticket.get('document')
-        if isinstance(document, dict):
-            receipt = _as_dict(document.get('receipt'))
-            if receipt is not None:
-                return receipt
-    receipt = _as_dict(payload.get('receipt'))
-    if receipt is not None:
-        return receipt
-    return None
 
 
 def _required_text(payload: dict[str, Any], field: str) -> str:

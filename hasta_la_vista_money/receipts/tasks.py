@@ -33,10 +33,6 @@ from hasta_la_vista_money.receipts.protocols.services import (
 from hasta_la_vista_money.receipts.repositories.seller_repository import (
     SellerRepository,
 )
-from hasta_la_vista_money.receipts.services.ai_providers import (
-    ModelUnavailableError,
-    RateLimitExceededError,
-)
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
 )
@@ -79,10 +75,6 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 _PROCESSING_GRACE_MINUTES = 10
-_RATE_LIMIT_MESSAGE = _(
-    'Сервис распознавания перегружен запросами. '
-    'Попробуйте ещё раз через несколько минут.',
-)
 _MODEL_UNAVAILABLE_MESSAGE = _(
     'Сервис распознавания временно недоступен. '
     'Попробуйте ещё раз через несколько минут.',
@@ -124,12 +116,7 @@ _TIMEOUT_RECOVERY_MESSAGE = _(
 )
 _FAILURE_RULES = (
     (
-        RateLimitExceededError,
-        'receipt_processing_rate_limited',
-        _RATE_LIMIT_MESSAGE,
-    ),
-    (
-        (ModelUnavailableError, ConnectionError),
+        ConnectionError,
         'receipt_processing_model_unavailable',
         _MODEL_UNAVAILABLE_MESSAGE,
     ),
