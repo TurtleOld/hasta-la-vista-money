@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.forms import ProductForm
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     SellerCreateData,
@@ -150,3 +151,39 @@ class ReceiptCreatorFreeItemTests(TestCase):
                 ],
                 allow_insufficient_funds=True,
             )
+
+
+class ProductFormLineRuleTests(SimpleTestCase):
+    """Editing a receipt accepts every line the FNS intake accepts."""
+
+    def _form(self, price: str, quantity: str, amount: str) -> ProductForm:
+        return ProductForm(
+            data={
+                'product_name': 'Товар',
+                'price': price,
+                'quantity': quantity,
+                'amount': amount,
+            },
+        )
+
+    def test_accepts_free_line(self) -> None:
+        self.assertTrue(self._form('0.00', '1', '0.00').is_valid())
+
+    def test_accepts_weighed_line_with_reported_amount(self) -> None:
+        # 89.90 RUB/kg x 0.347 kg = 31.20, but the stored weight is 0.35.
+        self.assertTrue(self._form('89.90', '0.35', '31.20').is_valid())
+
+    def test_tolerates_one_kopeck_rounding(self) -> None:
+        self.assertTrue(self._form('33.33', '3', '100.00').is_valid())
+
+    def test_rejects_negative_price(self) -> None:
+        form = self._form('-1.00', '1', '0.00')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('price', form.errors)
+
+    def test_rejects_amount_mismatch_for_piece_goods(self) -> None:
+        form = self._form('10.00', '2', '25.00')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('amount', form.errors)
