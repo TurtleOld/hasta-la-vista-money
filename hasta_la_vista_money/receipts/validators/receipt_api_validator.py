@@ -3,14 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from core.repositories.protocols import ReceiptRepositoryProtocol
 
 
 @dataclass
@@ -29,17 +26,6 @@ class ReceiptAPIValidator:
     Validates request data, checks required fields, validates user and account,
     and checks for existing receipts.
     """
-
-    def __init__(
-        self,
-        receipt_repository: 'ReceiptRepositoryProtocol',
-    ) -> None:
-        """Initialize validator with required repositories.
-
-        Args:
-            receipt_repository: Repository for receipt operations
-        """
-        self.receipt_repository = receipt_repository
 
     def validate_json_data(
         self,
@@ -158,7 +144,6 @@ class ReceiptAPIValidator:
             except (ValueError, TypeError):
                 return False
 
-        # Use direct model query as repository doesn't have this specific filter
         return Receipt.objects.filter(
             user=user,
             receipt_date=receipt_date,
