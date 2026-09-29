@@ -353,17 +353,11 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
         request: HttpRequest,
         row: BankStatementRow,
     ) -> JsonResponse:
-        service = _reconciliation_service(request)
-        candidates = list(
-            service.current_candidates(row).values_list('pk', flat=True),
+        candidates = _reconciliation_service(request).current_candidates(row)
+        return JsonResponse(
+            {'candidates': list(candidates.values_list('pk', flat=True))},
+            status=409,
         )
-        candidates.extend(
-            service.current_transfer_candidates(row).values_list(
-                'pk',
-                flat=True,
-            ),
-        )
-        return JsonResponse({'candidates': candidates}, status=409)
 
 
 class BankStatementReconciliationBulkView(LoginRequiredMixin, View):

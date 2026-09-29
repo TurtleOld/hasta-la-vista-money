@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
@@ -37,11 +38,16 @@ from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementRow,
     BankStatementUpload,
+    User,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParser,
 )
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
+from hasta_la_vista_money.users.services.statement_transfer_matching import (
+    find_mirroring_transfers,
+    local_row_date,
+)
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -78,16 +84,10 @@ class StatementImportResult:
 
 @dataclass(frozen=True)
 class ProbableDuplicate:
-    """Movement already recorded that may mirror a statement row.
-
-    Exactly one of ``transaction``/``transfer`` is set; ``movement_pk``
-    keeps ordering stable across both kinds.
-    """
+    """Movement already recorded that may mirror a statement row."""
 
     description: str
-    movement_pk: int
-    transaction: Transaction | None = None
-    transfer: TransferMoneyLog | None = None
+    movement: Transaction | TransferMoneyLog
 
 
 class BankStatementImportService:
@@ -221,7 +221,7 @@ class BankStatementImportService:
                         created = False
                         candidates = []
                     else:
-                        candidates = self._find_probable_candidates(
+                        candidates = self._rank_probable_candidates(
                             account=upload.account,
                             user=upload.user,
                             type_value=type_value,
@@ -269,10 +269,14 @@ class BankStatementImportService:
                         if category_name not in existing_categories:
                             existing_categories.append(category_name)
 
-                        category, _ = Category.objects.get_or_create(
-                            user=upload.user,
-                            name=category_name[:250],
-                            type=type_value,
+                        category, _created_category = (
+                            Category.objects.get_or_create(
+                                user=upload.user,
+                                name=category_name[
+                                    : constants.TWO_HUNDRED_FIFTY
+                                ],
+                                type=type_value,
+                            )
                         )
                         Transaction.objects.create(
                             user=upload.user,
@@ -411,9 +415,9 @@ class BankStatementImportService:
             )
         first_transaction = next(
             (
-                candidate.transaction
+                candidate.movement
                 for candidate in candidates
-                if candidate.transaction is not None
+                if isinstance(candidate.movement, Transaction)
             ),
             None,
         )
@@ -422,7 +426,7 @@ class BankStatementImportService:
             if first_transaction is not None
             else candidates[0].description
         )
-        row, _ = BankStatementRow.objects.get_or_create(
+        row, _created = BankStatementRow.objects.get_or_create(
             upload=upload,
             source_row_position=row_position,
             defaults={
@@ -430,8 +434,12 @@ class BankStatementImportService:
                 'transaction_date': trans['date'],
                 'amount': abs(trans['amount']),
                 'description': clean_desc,
-                'candidate_description': candidate_description[:250],
-                'suggested_category': str(category_name)[:250],
+                'candidate_description': candidate_description[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                'suggested_category': str(category_name)[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
                 'source_ref': trans.get('source_ref') or None,
                 'candidate': first_transaction,
                 'match_calendar_date': match_calendar_date,
@@ -441,9 +449,19 @@ class BankStatementImportService:
             [
                 BankStatementCandidate(
                     row=row,
-                    transaction=candidate.transaction,
-                    transfer=candidate.transfer,
-                    description=candidate.description[:250],
+                    transaction=(
+                        candidate.movement
+                        if isinstance(candidate.movement, Transaction)
+                        else None
+                    ),
+                    transfer=(
+                        candidate.movement
+                        if isinstance(candidate.movement, TransferMoneyLog)
+                        else None
+                    ),
+                    description=candidate.description[
+                        : constants.TWO_HUNDRED_FIFTY
+                    ],
                     rank=rank,
                 )
                 for rank, candidate in enumerate(candidates)
@@ -470,11 +488,11 @@ class BankStatementImportService:
             logger.warning('category_classifier_failed', exc_info=True)
             return FALLBACK_CATEGORY
 
-    def _find_probable_candidates(
+    def _rank_probable_candidates(
         self,
         *,
         account: Account,
-        user: Any,
+        user: User,
         type_value: str,
         abs_amount: Decimal,
         trans_date: datetime,
@@ -485,10 +503,9 @@ class BankStatementImportService:
         candidates = [
             ProbableDuplicate(
                 description=self._candidate_description(transaction),
-                movement_pk=transaction.pk,
-                transaction=transaction,
+                movement=transaction,
             )
-            for transaction in self._find_probable_duplicates(
+            for transaction in self._find_transaction_duplicates(
                 account=account,
                 user=user,
                 type_value=type_value,
@@ -502,8 +519,7 @@ class BankStatementImportService:
         candidates.extend(
             ProbableDuplicate(
                 description=self._transfer_candidate_description(transfer),
-                movement_pk=transfer.pk,
-                transfer=transfer,
+                movement=transfer,
             )
             for transfer in self._find_transfer_duplicates(
                 account=account,
@@ -521,7 +537,7 @@ class BankStatementImportService:
                     description.casefold(),
                     candidate.description.casefold(),
                 ).ratio(),
-                candidate.movement_pk,
+                candidate.movement.pk,
             ),
         )
 
@@ -529,36 +545,20 @@ class BankStatementImportService:
         self,
         *,
         account: Account,
-        user: Any,
+        user: User,
         type_value: str,
         abs_amount: Decimal,
         trans_date: datetime,
     ) -> list[TransferMoneyLog]:
-        """Find transfers mirroring a statement row within one day.
-
-        Outgoing rows match the transfer source, incoming rows the
-        transfer target. A transfer already linked to another row on the
-        same account is a different end's mirror and is left to that row.
-        """
-        row_date = timezone.localtime(trans_date).date()
-        if type_value == TransactionType.EXPENSE:
-            direction: dict[str, Any] = {'from_account': account}
-        else:
-            direction = {'to_account': account}
-        occupied = BankStatementRow.objects.filter(
-            transfer__isnull=False,
-            upload__account=account,
-        ).values_list('transfer_id', flat=True)
+        """Return transfers mirroring the statement row within one day."""
         return list(
-            TransferMoneyLog.objects.filter(
+            find_mirroring_transfers(
+                account=account,
                 user=user,
+                transaction_type=type_value,
                 amount=abs_amount,
-                exchange_date__date__gte=row_date - timedelta(days=1),
-                exchange_date__date__lte=row_date + timedelta(days=1),
-                **direction,
-            )
-            .exclude(pk__in=occupied)
-            .order_by('exchange_date', 'pk'),
+                row_date=local_row_date(trans_date),
+            ),
         )
 
     def _transfer_candidate_description(
@@ -575,13 +575,20 @@ class BankStatementImportService:
             if transfer.to_account is not None
             else ''
         )
-        return f'Перевод: {source} → {target}'.strip(' →')[:250]
+        return (
+            _('Перевод: {source} → {target}')
+            .format(
+                source=source,
+                target=target,
+            )
+            .strip(' →')[: constants.TWO_HUNDRED_FIFTY]
+        )
 
-    def _find_probable_duplicates(
+    def _find_transaction_duplicates(
         self,
         *,
         account: Account,
-        user: Any,
+        user: User,
         type_value: str,
         abs_amount: Decimal,
         trans_date: datetime,

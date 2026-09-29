@@ -10,10 +10,7 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
     from config.containers import ApplicationContainer
-    from hasta_la_vista_money.finance_account.models import (
-        Account,
-        TransferMoneyLog,
-    )
+    from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.transactions.models import Transaction
     from hasta_la_vista_money.users.models import (
         BankStatementRow,
@@ -132,11 +129,6 @@ class BankStatementReconciliationServiceProtocol(Protocol):
         self,
         row: BankStatementRow,
     ) -> QuerySet[Transaction]: ...
-
-    def current_transfer_candidates(
-        self,
-        row: BankStatementRow,
-    ) -> QuerySet[TransferMoneyLog]: ...
 
     def refresh_outcome_counts(self, upload: BankStatementUpload) -> None: ...
 

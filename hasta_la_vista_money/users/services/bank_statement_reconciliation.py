@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -25,6 +25,10 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
     User,
+)
+from hasta_la_vista_money.users.services.statement_transfer_matching import (
+    find_mirroring_transfers,
+    local_row_date,
 )
 
 
@@ -439,11 +443,10 @@ class BankStatementReconciliationService:
             return self._transfer_is_current(row, transfer)
         return False
 
-    def _transaction_is_current(
-        self,
+    @staticmethod
+    def _movement_bounds(
         row: BankStatementRow,
-        candidate: Transaction,
-    ) -> bool:
+    ) -> tuple[str, Decimal, datetime] | None:
         transaction_type = row.transaction_type
         amount = row.amount
         transaction_date = row.transaction_date
@@ -452,7 +455,18 @@ class BankStatementReconciliationService:
             or amount is None
             or transaction_date is None
         ):
+            return None
+        return transaction_type, amount, transaction_date
+
+    def _transaction_is_current(
+        self,
+        row: BankStatementRow,
+        candidate: Transaction,
+    ) -> bool:
+        bounds = self._movement_bounds(row)
+        if bounds is None:
             return False
+        transaction_type, amount, transaction_date = bounds
         date_matches = candidate.date == transaction_date
         if row.match_calendar_date:
             date_matches = (
@@ -472,33 +486,20 @@ class BankStatementReconciliationService:
         row: BankStatementRow,
         transfer: TransferMoneyLog,
     ) -> bool:
-        transaction_type = row.transaction_type
-        amount = row.amount
-        transaction_date = row.transaction_date
-        if (
-            transaction_type is None
-            or amount is None
-            or transaction_date is None
-        ):
+        bounds = self._movement_bounds(row)
+        if bounds is None:
             return False
-        account_id = row.upload.account_id
-        if transfer.user_id != row.upload.user_id or transfer.amount != amount:
-            return False
-        if transaction_type == TransactionType.EXPENSE:
-            if transfer.from_account_id != account_id:
-                return False
-        elif transfer.to_account_id != account_id:
-            return False
-        row_date = timezone.localtime(transaction_date).date()
-        transfer_date = timezone.localtime(transfer.exchange_date).date()
-        if abs((transfer_date - row_date).days) > 1:
-            return False
+        transaction_type, amount, transaction_date = bounds
         return (
-            not BankStatementRow.objects.filter(
-                transfer=transfer,
-                upload__account_id=account_id,
+            find_mirroring_transfers(
+                account=row.upload.account,
+                user=row.upload.user,
+                transaction_type=transaction_type,
+                amount=amount,
+                row_date=local_row_date(transaction_date),
+                exclude_row_id=row.pk,
             )
-            .exclude(pk=row.pk)
+            .filter(pk=transfer.pk)
             .exists()
         )
 
@@ -506,15 +507,10 @@ class BankStatementReconciliationService:
         self,
         row: BankStatementRow,
     ) -> QuerySet[Transaction]:
-        transaction_type = row.transaction_type
-        amount = row.amount
-        transaction_date = row.transaction_date
-        if (
-            transaction_type is None
-            or amount is None
-            or transaction_date is None
-        ):
+        bounds = self._movement_bounds(row)
+        if bounds is None:
             return Transaction.objects.none()
+        transaction_type, amount, transaction_date = bounds
         candidates = Transaction.objects.filter(
             account=row.upload.account,
             user=row.upload.user,
@@ -523,51 +519,11 @@ class BankStatementReconciliationService:
         )
         if row.match_calendar_date:
             return candidates.filter(
-                date__date=timezone.localtime(transaction_date).date(),
+                date__date=local_row_date(transaction_date),
             ).order_by('date', 'pk')
         return candidates.filter(date=transaction_date).order_by(
             'date',
             'pk',
-        )
-
-    def current_transfer_candidates(
-        self,
-        row: BankStatementRow,
-    ) -> QuerySet[TransferMoneyLog]:
-        transaction_type = row.transaction_type
-        amount = row.amount
-        transaction_date = row.transaction_date
-        if (
-            transaction_type is None
-            or amount is None
-            or transaction_date is None
-        ):
-            return TransferMoneyLog.objects.none()
-        account = row.upload.account
-        transfers = TransferMoneyLog.objects.filter(
-            user=row.upload.user,
-            amount=amount,
-        )
-        if transaction_type == TransactionType.EXPENSE:
-            transfers = transfers.filter(from_account=account)
-        else:
-            transfers = transfers.filter(to_account=account)
-        row_date = timezone.localtime(transaction_date).date()
-        occupied = (
-            BankStatementRow.objects.filter(
-                transfer__isnull=False,
-                upload__account=account,
-            )
-            .exclude(pk=row.pk)
-            .values_list('transfer_id', flat=True)
-        )
-        return (
-            transfers.filter(
-                exchange_date__date__gte=row_date - timedelta(days=1),
-                exchange_date__date__lte=row_date + timedelta(days=1),
-            )
-            .exclude(pk__in=occupied)
-            .order_by('exchange_date', 'pk')
         )
 
     def _create_transaction(self, row: BankStatementRow) -> Transaction:
