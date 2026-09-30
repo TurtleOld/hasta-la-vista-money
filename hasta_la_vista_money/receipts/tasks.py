@@ -5,24 +5,26 @@ data. All inference, parsing and state transitions live here so the work
 survives the user closing the page.
 """
 
-import json
+import secrets
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any, cast
 
 import httpx
 import structlog
 from celery import shared_task
-from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.utils import timezone
-from django.utils.translation import gettext as _
 
 from config.containers import ApplicationContainer
 from core.repositories.protocols import ProductRepositoryProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import (
     ProductCategory,
+    ReceiptProcessingErrorCode,
     ReceiptProcessingLog,
+    ReceiptProcessingStage,
     ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.receipts.protocols.services import (
@@ -42,32 +44,25 @@ from hasta_la_vista_money.receipts.services.category_twin_detection import (
 from hasta_la_vista_money.receipts.services.external_category import (
     ExternalCategoryResponseError,
 )
-from hasta_la_vista_money.receipts.services.fns_client import (
-    FNSAuthenticationError,
-    FNSClient,
-    FNSConfigurationError,
-    FNSIntegrationError,
-    FNSMalformedResponseError,
-    FNSRateLimitError,
-    FNSTemporaryUnavailableError,
-    FNSTimeoutError,
-)
+from hasta_la_vista_money.receipts.services.fns_client import FNSClient
 from hasta_la_vista_money.receipts.services.fns_mapper import (
-    FNSReceiptMappingError,
     map_fns_receipt_to_receipt_data,
 )
 from hasta_la_vista_money.receipts.services.fns_qr import (
-    QRCodeDecodeError,
-    QRCodeError,
     QRCodeExtractor,
-    QRCodeNotFoundError,
     parse_fns_qr,
+)
+from hasta_la_vista_money.receipts.services.processing_errors import (
+    TIMEOUT_RECOVERY_MESSAGE,
+    ReceiptImageMissingError,
+    ReceiptProcessingError,
+    classify_processing_error,
+    processing_stage,
 )
 from hasta_la_vista_money.receipts.services.receipt_processing_service import (
     ReceiptProcessingService,
 )
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
-    ReceiptParseValidationError,
     validate_receipt_parse_payload,
 )
 from hasta_la_vista_money.users.models import User
@@ -75,84 +70,6 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 _PROCESSING_GRACE_MINUTES = 10
-_MODEL_UNAVAILABLE_MESSAGE = _(
-    'Сервис распознавания временно недоступен. '
-    'Попробуйте ещё раз через несколько минут.',
-)
-_TIMEOUT_MESSAGE = _(
-    'Распознавание заняло слишком много времени и было прервано. '
-    'Попробуйте ещё раз или загрузите более чёткое фото меньшего размера.',
-)
-_PARSE_FAILED_MESSAGE = _(
-    'Не удалось разобрать данные чека из ФНС. '
-    'Попробуйте загрузить более чёткое фото.',
-)
-_UNEXPECTED_MESSAGE = _(
-    'Произошла непредвиденная ошибка при обработке чека. Попробуйте ещё раз.',
-)
-_NO_QR_MESSAGE = _(
-    'Не удалось найти QR-код на изображении чека. '
-    'Загрузите более чёткое фото, где QR-код виден полностью.',
-)
-_BAD_QR_MESSAGE = _(
-    'QR-код на изображении не похож на QR-код кассового чека ФНС. '
-    'Проверьте фото и загрузите чек заново.',
-)
-_FNS_UNAVAILABLE_MESSAGE = _(
-    'Сервис ФНС временно недоступен. Попробуйте обработать чек позже.',
-)
-_FNS_RATE_LIMIT_MESSAGE = _(
-    'Сервис ФНС временно ограничил частоту запросов. '
-    'Попробуйте обработать чек через несколько минут.',
-)
-_FNS_AUTH_MESSAGE = _(
-    'Не удалось авторизоваться в ФНС. Проверьте настройки интеграции.',
-)
-_MISSING_FILE_MESSAGE = _(
-    'Файл изображения чека не найден. Загрузите чек заново.',
-)
-_TIMEOUT_RECOVERY_MESSAGE = _(
-    'Обработка прервана по таймауту. Попробуйте ещё раз.',
-)
-_FAILURE_RULES = (
-    (
-        ConnectionError,
-        'receipt_processing_model_unavailable',
-        _MODEL_UNAVAILABLE_MESSAGE,
-    ),
-    (QRCodeNotFoundError, 'receipt_processing_qr_not_found', _NO_QR_MESSAGE),
-    (QRCodeDecodeError, 'receipt_processing_qr_decode_failed', _BAD_QR_MESSAGE),
-    (
-        FNSRateLimitError,
-        'receipt_processing_fns_rate_limited',
-        _FNS_RATE_LIMIT_MESSAGE,
-    ),
-    (
-        (FNSAuthenticationError, FNSConfigurationError),
-        'receipt_processing_fns_auth_failed',
-        _FNS_AUTH_MESSAGE,
-    ),
-    (
-        (FNSTemporaryUnavailableError, FNSTimeoutError),
-        'receipt_processing_fns_unavailable',
-        _FNS_UNAVAILABLE_MESSAGE,
-    ),
-    (
-        (FNSMalformedResponseError, FNSReceiptMappingError),
-        'receipt_processing_fns_parse_failed',
-        _PARSE_FAILED_MESSAGE,
-    ),
-    (
-        FNSIntegrationError,
-        'receipt_processing_fns_failed',
-        _FNS_UNAVAILABLE_MESSAGE,
-    ),
-    (
-        (SoftTimeLimitExceeded, TimeoutError),
-        'receipt_processing_timed_out',
-        _TIMEOUT_MESSAGE,
-    ),
-)
 
 
 def _get_receipt_item_category_service() -> ReceiptItemCategoryService:
@@ -211,24 +128,55 @@ def _run_fns_pipeline_from_raw(
     image first) and the browser-camera-scan pipeline (which already has
     the decoded string and skips extraction entirely).
     """
-    fns_payload = FNSClient().fetch_receipt(raw_qr)
-    receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
-    receipt_data['items'] = (
-        _get_receipt_item_category_service().categorize_items(
-            user=log.user,
-            items=receipt_data.get('items', []),
-        )
-    )
+    with processing_stage(ReceiptProcessingStage.FNS):
+        fns_payload = FNSClient().fetch_receipt(raw_qr)
+    with processing_stage(ReceiptProcessingStage.MAP):
+        receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
+    _categorize_items(log, receipt_data)
+    _fill_retail_place(log, receipt_data)
+    with processing_stage(ReceiptProcessingStage.VALIDATE):
+        validated = validate_receipt_parse_payload(receipt_data).to_dict()
+    validated['_fns_raw'] = fns_payload
+    return validated
 
+
+@contextmanager
+def _best_effort(event: str, log: ReceiptProcessingLog) -> Iterator[None]:
+    try:
+        yield
+    except Exception:
+        logger.warning(
+            event,
+            processing_log_id=log.pk,
+            user_id=log.user.pk,
+            exc_info=True,
+        )
+
+
+def _categorize_items(
+    log: ReceiptProcessingLog,
+    receipt_data: dict[str, Any],
+) -> None:
+    with _best_effort('receipt_processing_categorization_failed', log):
+        receipt_data['items'] = (
+            _get_receipt_item_category_service().categorize_items(
+                user=log.user,
+                items=receipt_data.get('items', []),
+            )
+        )
+
+
+def _fill_retail_place(
+    log: ReceiptProcessingLog,
+    receipt_data: dict[str, Any],
+) -> None:
     inn = receipt_data.get('inn')
-    if inn and not receipt_data.get('retail_place'):
+    if not inn or receipt_data.get('retail_place'):
+        return
+    with _best_effort('receipt_processing_seller_lookup_failed', log):
         seller = SellerRepository().find_by_inn(user=log.user, inn=inn)
         if seller and seller.retail_place not in (None, '', 'Нет данных'):
             receipt_data['retail_place'] = seller.retail_place
-
-    validated = validate_receipt_parse_payload(receipt_data).to_dict()
-    validated['_fns_raw'] = fns_payload
-    return validated
 
 
 def _get_receipt_processing_service() -> ReceiptProcessingService:
@@ -244,48 +192,63 @@ def _run_processing_log_pipeline(
     task_id: str,
 ) -> dict[str, Any] | None:
     """Fetch and validate FNS data after claiming the fiscal identity."""
-    raw_qr = log.qr_raw
-    if not raw_qr:
-        if not log.image_file:
-            raise ValueError(str(_MISSING_FILE_MESSAGE))
-        with log.image_file.open('rb') as image_fp:
-            qr_data = QRCodeExtractor().extract(image_fp)
-        raw_qr = qr_data.raw
-        fiscal_key = qr_data.fiscal_key
-    else:
-        fiscal_key = log.fiscal_key or parse_fns_qr(raw_qr).fiscal_key
-    if not service.claim_fiscal_key(
-        log=log,
-        fiscal_key=fiscal_key,
-        task_id=task_id,
-    ):
+    with processing_stage(ReceiptProcessingStage.QR):
+        raw_qr = log.qr_raw
+        if not raw_qr:
+            if not log.image_file:
+                raise ReceiptImageMissingError
+            with log.image_file.open('rb') as image_fp:
+                qr_data = QRCodeExtractor().extract(image_fp)
+            raw_qr = qr_data.raw
+            fiscal_key = qr_data.fiscal_key
+        else:
+            fiscal_key = log.fiscal_key or parse_fns_qr(raw_qr).fiscal_key
+    with processing_stage(ReceiptProcessingStage.CLAIM):
+        claimed = service.claim_fiscal_key(
+            log=log,
+            fiscal_key=fiscal_key,
+            task_id=task_id,
+        )
+    if not claimed:
         return None
     return _run_fns_pipeline_from_raw(log, raw_qr)
 
 
-def _classify_failure(exc: Exception) -> tuple[str, str]:
-    """Map an exception to a (log_event, user-facing message) pair.
+def _retry_countdown(error: ReceiptProcessingError, retries: int) -> int:
+    if error.retry_after is not None:
+        return min(
+            error.retry_after,
+            constants.RECEIPT_PROCESSING_RETRY_MAX_COUNTDOWN_SECONDS,
+        )
+    jitter = secrets.randbelow(
+        constants.RECEIPT_PROCESSING_RETRY_JITTER_SECONDS + 1,
+    )
+    backoff = constants.RECEIPT_PROCESSING_RETRY_BASE_SECONDS * 2**retries
+    return int(backoff) + jitter
 
-    ``ReceiptParseValidationError`` may carry a Russian ``user_message`` with
-    a specific, actionable explanation (sum mismatch, missing items, etc.).
-    When present, it overrides the generic parse-failed fallback.
-    """
-    for exception_types, event, message in _FAILURE_RULES:
-        if isinstance(exc, exception_types):
-            return event, str(message)
-    if isinstance(exc, ReceiptParseValidationError) and exc.user_message:
-        return 'receipt_processing_parse_failed', exc.user_message
-    if isinstance(exc, json.JSONDecodeError | ValueError | TypeError):
-        return 'receipt_processing_parse_failed', str(_PARSE_FAILED_MESSAGE)
-    return 'receipt_processing_failed', str(_UNEXPECTED_MESSAGE)
+
+def _log_context(
+    log: ReceiptProcessingLog,
+    task_id: str,
+    error: ReceiptProcessingError,
+) -> dict[str, Any]:
+    return {
+        'processing_log_id': log.pk,
+        'user_id': log.user.pk,
+        'account_id': log.account.pk,
+        'task_id': task_id,
+        'fiscal_key': log.fiscal_key,
+        'error_code': str(error.code),
+        'error_stage': str(error.stage or ''),
+        'exc_type': type(error.cause).__name__,
+        **error.detail,
+    }
 
 
 @shared_task(  # type: ignore[untyped-decorator]
     bind=True,
     name='receipts.process_receipt_processing_log',
-    autoretry_for=(ConnectionError,),
-    max_retries=2,
-    retry_backoff=True,
+    max_retries=constants.RECEIPT_PROCESSING_MAX_RETRIES,
     acks_late=True,
 )
 def process_receipt_processing_log(
@@ -307,6 +270,12 @@ def process_receipt_processing_log(
         )
         return
     if log.status != ReceiptProcessingStatus.PROCESSING:
+        logger.info(
+            'receipt_processing_outcome_discarded',
+            processing_log_id=log.pk,
+            task_id=self.request.id,
+            status=log.status,
+        )
         return
 
     service = _get_receipt_processing_service()
@@ -315,23 +284,47 @@ def process_receipt_processing_log(
         receipt_data = _run_processing_log_pipeline(log, service, task_id)
         if receipt_data is None:
             return
-        service.complete(
-            log=log,
-            receipt_data=receipt_data,
-            task_id=task_id,
-        )
+        with processing_stage(ReceiptProcessingStage.CREATE):
+            service.complete(
+                log=log,
+                receipt_data=receipt_data,
+                task_id=task_id,
+            )
     except Exception as exc:
-        event, message = _classify_failure(exc)
-        service.mark_failed(log=log, error_message=message, task_id=task_id)
-        image_width = exc.width if isinstance(exc, QRCodeError) else None
-        image_height = exc.height if isinstance(exc, QRCodeError) else None
+        error = classify_processing_error(exc, stage=None)
+    else:
+        return
+
+    context = _log_context(log, task_id, error)
+    if error.retryable and self.request.retries < self.max_retries:
+        if service.record_retry(
+            log=log,
+            error_code=error.code,
+            error_stage=error.stage,
+            task_id=task_id,
+        ):
+            countdown = _retry_countdown(error, self.request.retries)
+            logger.warning(
+                'receipt_processing_retry_scheduled',
+                retries=self.request.retries,
+                countdown=countdown,
+                **context,
+            )
+            raise self.retry(exc=error.cause, countdown=countdown)
+    elif service.mark_failed(
+        log=log,
+        error_code=error.code,
+        error_stage=error.stage,
+        error_message=error.user_message,
+        task_id=task_id,
+    ):
         logger.warning(
-            event,
-            processing_log_id=processing_log_id,
-            error=str(exc),
-            image_width=image_width,
-            image_height=image_height,
+            'receipt_processing_failed',
+            exc_info=error.cause,
+            **context,
         )
+        return
+    logger.info('receipt_processing_outcome_discarded', **context)
 
 
 @shared_task(  # type: ignore[untyped-decorator]
@@ -440,12 +433,14 @@ def cleanup_stale_receipt_processing_logs() -> dict[str, int]:
         processing_started_at__lt=stuck_threshold,
     )
     for log in stuck:
-        service.mark_failed(
+        if service.mark_failed(
             log=log,
-            error_message=str(_TIMEOUT_RECOVERY_MESSAGE),
+            error_code=ReceiptProcessingErrorCode.TIMED_OUT,
+            error_stage=None,
+            error_message=str(TIMEOUT_RECOVERY_MESSAGE),
             task_id=log.task_id,
-        )
-        recovered += 1
+        ):
+            recovered += 1
     logger.info(
         'receipt_processing_log_cleanup',
         recovered=recovered,

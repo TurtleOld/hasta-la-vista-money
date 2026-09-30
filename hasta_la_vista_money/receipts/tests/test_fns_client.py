@@ -11,6 +11,7 @@ from django.test import SimpleTestCase, override_settings
 from hasta_la_vista_money.receipts.services.fns_client import (
     FNSClient,
     FNSCredentials,
+    FNSRateLimitError,
     FNSTemporaryUnavailableError,
     FNSTimeoutError,
 )
@@ -169,3 +170,16 @@ class FNSClientDiagnosticTests(SimpleTestCase):
         self.assertEqual(context['failure_stage'], 'authentication')
         self.assertEqual(context['exception_type'], 'ReadTimeout')
         self.assertGreaterEqual(context['duration_ms'], 0)
+
+    def test_rate_limit_carries_retry_after_seconds(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                status_code=429,
+                headers={'retry-after': '45'},
+                request=request,
+            )
+
+        with self.assertRaises(FNSRateLimitError) as raised:
+            self._client(handler).fetch_receipt('qr')
+
+        self.assertEqual(raised.exception.retry_after, 45)

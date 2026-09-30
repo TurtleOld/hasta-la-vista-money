@@ -9,6 +9,7 @@ from hasta_la_vista_money.receipts.views.list import (
     ReceiptView,
 )
 from hasta_la_vista_money.receipts.views.processing import (
+    ReceiptProcessingLogDeleteView,
     ReceiptProcessingLogRetryView,
     ReceiptProcessingNotificationView,
 )
@@ -35,6 +36,7 @@ __all__ = [
     'ReceiptCreateView',
     'ReceiptDeleteView',
     'ReceiptDetailView',
+    'ReceiptProcessingLogDeleteView',
     'ReceiptProcessingLogRetryView',
     'ReceiptProcessingNotificationView',
     'ReceiptUpdateView',

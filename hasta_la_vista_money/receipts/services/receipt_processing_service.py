@@ -14,7 +14,9 @@ from hasta_la_vista_money.finance_account.services import (
 )
 from hasta_la_vista_money.receipts.models import (
     Receipt,
+    ReceiptProcessingErrorCode,
     ReceiptProcessingLog,
+    ReceiptProcessingStage,
     ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.receipts.parsers.date_parser import ReceiptDateParser
@@ -76,6 +78,7 @@ class ReceiptProcessingService:
             fiscal_key=fiscal_key,
         )
 
+    @transaction.atomic
     def create_image_job(
         self,
         *,
@@ -84,6 +87,10 @@ class ReceiptProcessingService:
         image_file: Any,
         image_hash: str,
     ) -> ReceiptProcessingLog:
+        self.processing_log_repository.delete_failed(
+            user=user,
+            image_hash=image_hash,
+        )
         return self.processing_log_repository.create_image_job(
             user=user,
             account=account,
@@ -91,6 +98,7 @@ class ReceiptProcessingService:
             image_hash=image_hash,
         )
 
+    @transaction.atomic
     def create_qr_job(
         self,
         *,
@@ -100,6 +108,11 @@ class ReceiptProcessingService:
         image_hash: str,
         fiscal_key: str,
     ) -> ReceiptProcessingLog:
+        self.processing_log_repository.delete_failed(
+            user=user,
+            image_hash=image_hash,
+            fiscal_key=fiscal_key,
+        )
         return self.processing_log_repository.create_qr_job(
             user=user,
             account=account,
@@ -140,6 +153,11 @@ class ReceiptProcessingService:
         fiscal_key: str,
         task_id: str,
     ) -> bool:
+        self.processing_log_repository.delete_failed(
+            user=log.user,
+            fiscal_key=fiscal_key,
+            exclude=log,
+        )
         return self.processing_log_repository.claim_fiscal_key(
             log=log,
             fiscal_key=fiscal_key,
@@ -150,12 +168,31 @@ class ReceiptProcessingService:
         self,
         *,
         log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
         error_message: str,
         task_id: str,
-    ) -> None:
-        self.processing_log_repository.mark_failed(
+    ) -> bool:
+        return self.processing_log_repository.mark_failed(
             log=log,
+            error_code=error_code,
+            error_stage=error_stage,
             error_message=error_message,
+            task_id=task_id,
+        )
+
+    def record_retry(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
+        task_id: str,
+    ) -> bool:
+        return self.processing_log_repository.record_retry(
+            log=log,
+            error_code=error_code,
+            error_stage=error_stage,
             task_id=task_id,
         )
 
@@ -164,10 +201,19 @@ class ReceiptProcessingService:
         *,
         log: ReceiptProcessingLog,
         task_id: str,
-    ) -> None:
-        self.processing_log_repository.mark_duplicate(
+    ) -> bool:
+        return self.processing_log_repository.mark_duplicate(
             log=log,
             task_id=task_id,
+        )
+
+    def delete_finished(self, *, log: ReceiptProcessingLog) -> bool:
+        return self.processing_log_repository.delete_in_status(
+            log=log,
+            statuses=(
+                ReceiptProcessingStatus.FAILED,
+                ReceiptProcessingStatus.DUPLICATE,
+            ),
         )
 
     @transaction.atomic

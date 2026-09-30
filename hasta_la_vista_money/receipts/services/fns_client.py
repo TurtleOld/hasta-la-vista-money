@@ -47,6 +47,10 @@ class FNSUnauthorizedError(FNSIntegrationError):
 class FNSRateLimitError(FNSIntegrationError):
     """Raised when FNS rate-limits the family account."""
 
+    def __init__(self, message: str, *, retry_after: int | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
 
 class FNSTemporaryUnavailableError(FNSIntegrationError):
     """Raised when the FNS API is temporarily unavailable."""
@@ -67,6 +71,11 @@ class FNSCredentials:
     inn: str
     password: str
     client_secret: str
+
+
+def _retry_after_seconds(response: httpx.Response) -> int | None:
+    value = response.headers.get('Retry-After', '')
+    return int(value) if value.isdigit() else None
 
 
 class FNSClient:
@@ -248,7 +257,10 @@ class FNSClient:
         if response.is_success:
             return
         if response.status_code == HTTP_RATE_LIMIT:
-            raise FNSRateLimitError('FNS rate limit exceeded')
+            raise FNSRateLimitError(
+                'FNS rate limit exceeded',
+                retry_after=_retry_after_seconds(response),
+            )
         if response.status_code in {HTTP_UNAUTHORIZED, HTTP_FORBIDDEN}:
             if auth_request:
                 raise FNSAuthenticationError('FNS credentials rejected')
