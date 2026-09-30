@@ -1,5 +1,14 @@
 # История изменений
 
+## [2.20.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.20.0...v2.20.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **receipts:** accept free product lines and share line rule with edit form ([#1067](https://github.com/TurtleOld/hasta-la-vista-money/issues/1067)) ([ca20f8f](https://github.com/TurtleOld/hasta-la-vista-money/commit/ca20f8fc8e8e177c4dd29b4cec781c23013a8064))
+* **users:** match statement rows against recorded transfers ([#1068](https://github.com/TurtleOld/hasta-la-vista-money/issues/1068)) ([698d3d2](https://github.com/TurtleOld/hasta-la-vista-money/commit/698d3d2b41d8bc195dde386faf5dd6223530049e))
+* **users:** subtract repayments after statement from mandatory payment ([#1063](https://github.com/TurtleOld/hasta-la-vista-money/issues/1063)) ([73408bf](https://github.com/TurtleOld/hasta-la-vista-money/commit/73408bf4ae89b6fd323578b619730857ddf45ca5))
+
 ## [2.20.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.19.1...v2.20.0) (2026-09-27)
 
 
