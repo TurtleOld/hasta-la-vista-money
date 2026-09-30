@@ -19,6 +19,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptCreateView,
     ReceiptDeleteView,
     ReceiptDetailView,
+    ReceiptProcessingLogDeleteView,
     ReceiptProcessingLogRetryView,
     ReceiptProcessingNotificationView,
     ReceiptUpdateView,
@@ -95,6 +96,11 @@ urlpatterns = [
         'processing/<int:pk>/retry/',
         ReceiptProcessingLogRetryView.as_view(),
         name='processing_retry',
+    ),
+    path(
+        'processing/<int:pk>/delete/',
+        ReceiptProcessingLogDeleteView.as_view(),
+        name='processing_delete',
     ),
     path(
         'processing/notifications/',

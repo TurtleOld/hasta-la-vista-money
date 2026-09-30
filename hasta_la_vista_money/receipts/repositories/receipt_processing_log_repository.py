@@ -1,16 +1,21 @@
 """Data access for automatic receipt processing logs."""
 
+from collections.abc import Collection
+from functools import partial
 from typing import Any
 
-from django.db import IntegrityError
-from django.db.models import QuerySet
+from django.db import IntegrityError, transaction
+from django.db.models import Q, QuerySet
+from django.db.models.fields.files import FieldFile
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptImageHash,
+    ReceiptProcessingErrorCode,
     ReceiptProcessingLog,
+    ReceiptProcessingStage,
     ReceiptProcessingStatus,
 )
 from hasta_la_vista_money.users.models import User
@@ -33,7 +38,9 @@ class ReceiptProcessingLogRepository:
             ).first()
             if receipt is not None:
                 return receipt
-        logs = ReceiptProcessingLog.objects.filter(user=user)
+        logs = ReceiptProcessingLog.objects.filter(user=user).exclude(
+            status=ReceiptProcessingStatus.FAILED,
+        )
         if fiscal_key:
             log = logs.filter(fiscal_key=fiscal_key).first()
             if log is not None:
@@ -130,38 +137,51 @@ class ReceiptProcessingLogRepository:
         ).exists():
             self.mark_duplicate(log=log, task_id=task_id)
             return False
-        filters: dict[str, Any] = {
-            'pk': log.pk,
-            'status': ReceiptProcessingStatus.PROCESSING,
-        }
-        if log.task_id:
-            filters['task_id'] = task_id
         try:
-            return bool(
-                ReceiptProcessingLog.objects.filter(**filters).update(
-                    fiscal_key=fiscal_key,
-                ),
+            claimed = bool(
+                self._owned(log=log, task_id=task_id)
+                .filter(status=ReceiptProcessingStatus.PROCESSING)
+                .update(fiscal_key=fiscal_key),
             )
         except IntegrityError:
             self.mark_duplicate(log=log, task_id=task_id)
             return False
+        if claimed:
+            log.fiscal_key = fiscal_key
+        return claimed
 
     def mark_failed(
         self,
         *,
         log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
         error_message: str,
         task_id: str,
-    ) -> None:
-        filters: dict[str, Any] = {
-            'pk': log.pk,
-            'status': ReceiptProcessingStatus.PROCESSING,
-        }
-        if log.task_id:
-            filters['task_id'] = task_id
-        ReceiptProcessingLog.objects.filter(**filters).update(
-            status=ReceiptProcessingStatus.FAILED,
-            error_message=error_message,
+    ) -> bool:
+        return bool(
+            self._owned(log=log, task_id=task_id)
+            .filter(status=ReceiptProcessingStatus.PROCESSING)
+            .update(
+                status=ReceiptProcessingStatus.FAILED,
+                error_code=error_code,
+                error_stage=error_stage or '',
+                error_message=error_message,
+            ),
+        )
+
+    def record_retry(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
+        task_id: str,
+    ) -> bool:
+        return bool(
+            self._owned(log=log, task_id=task_id)
+            .filter(status=ReceiptProcessingStatus.PROCESSING)
+            .update(error_code=error_code, error_stage=error_stage or ''),
         )
 
     def mark_duplicate(
@@ -169,14 +189,70 @@ class ReceiptProcessingLogRepository:
         *,
         log: ReceiptProcessingLog,
         task_id: str,
+    ) -> bool:
+        return bool(
+            self._owned(log=log, task_id=task_id).update(
+                status=ReceiptProcessingStatus.DUPLICATE,
+                is_duplicate=True,
+            ),
+        )
+
+    def delete_in_status(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        statuses: Collection[ReceiptProcessingStatus],
+    ) -> bool:
+        deleted, _ = ReceiptProcessingLog.objects.filter(
+            pk=log.pk,
+            status__in=statuses,
+        ).delete()
+        if deleted:
+            self._delete_image_on_commit(log.image_file)
+        return bool(deleted)
+
+    def delete_failed(
+        self,
+        *,
+        user: User,
+        image_hash: str | None = None,
+        fiscal_key: str | None = None,
+        exclude: ReceiptProcessingLog | None = None,
     ) -> None:
+        lookup = Q()
+        if image_hash:
+            lookup |= Q(image_hash=image_hash)
+        if fiscal_key:
+            lookup |= Q(fiscal_key=fiscal_key)
+        if not lookup:
+            return
+        failed = ReceiptProcessingLog.objects.filter(
+            lookup,
+            user=user,
+            status=ReceiptProcessingStatus.FAILED,
+        )
+        if exclude is not None:
+            failed = failed.exclude(pk=exclude.pk)
+        images = [log.image_file for log in failed]
+        failed.delete()
+        for image in images:
+            self._delete_image_on_commit(image)
+
+    @staticmethod
+    def _delete_image_on_commit(image: FieldFile | None) -> None:
+        if image and image.name:
+            transaction.on_commit(partial(image.storage.delete, image.name))
+
+    @staticmethod
+    def _owned(
+        *,
+        log: ReceiptProcessingLog,
+        task_id: str,
+    ) -> QuerySet[ReceiptProcessingLog]:
         filters: dict[str, Any] = {'pk': log.pk}
         if log.task_id:
             filters['task_id'] = task_id
-        ReceiptProcessingLog.objects.filter(**filters).update(
-            status=ReceiptProcessingStatus.DUPLICATE,
-            is_duplicate=True,
-        )
+        return ReceiptProcessingLog.objects.filter(**filters)
 
     def get_for_completion(self, *, log_id: int) -> ReceiptProcessingLog:
         return (
@@ -198,8 +274,17 @@ class ReceiptProcessingLogRepository:
         log.receipt = receipt
         log.status = ReceiptProcessingStatus.COMPLETED
         log.error_message = ''
+        log.error_code = ''
+        log.error_stage = ''
         log.save(
-            update_fields=['image_file', 'receipt', 'status', 'error_message'],
+            update_fields=[
+                'image_file',
+                'receipt',
+                'status',
+                'error_message',
+                'error_code',
+                'error_stage',
+            ],
         )
 
     def reset_for_retry(
@@ -209,9 +294,17 @@ class ReceiptProcessingLogRepository:
     ) -> ReceiptProcessingLog:
         log.status = ReceiptProcessingStatus.PROCESSING
         log.error_message = ''
+        log.error_code = ''
+        log.error_stage = ''
         log.processing_started_at = timezone.now()
         log.save(
-            update_fields=['status', 'error_message', 'processing_started_at'],
+            update_fields=[
+                'status',
+                'error_message',
+                'error_code',
+                'error_stage',
+                'processing_started_at',
+            ],
         )
         return log
 

@@ -26,6 +26,7 @@ from hasta_la_vista_money.receipts.models import (
     Seller,
 )
 from hasta_la_vista_money.receipts.validators.product_line import (
+    ProductLineError,
     check_product_line,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
@@ -38,6 +39,37 @@ if TYPE_CHECKING:
         AccountRepository,
     )
     from hasta_la_vista_money.receipts.models import ProductCategory
+
+
+class ReceiptTotalError(ValueError):
+    """Raised when a receipt total is not a positive amount."""
+
+    def __init__(self, total_sum: Decimal) -> None:
+        super().__init__(f'Receipt total must be positive: {total_sum}')
+        self.total_sum = total_sum
+
+
+class ReceiptLineError(ValueError):
+    """Raised when a product line violates a line invariant."""
+
+    def __init__(
+        self,
+        *,
+        error: ProductLineError,
+        index: int,
+        price: Decimal,
+        quantity: Decimal,
+        amount: Decimal,
+    ) -> None:
+        super().__init__(
+            f'Invalid product line: error={error} index={index} '
+            f'price={price} quantity={quantity} amount={amount}',
+        )
+        self.error = error
+        self.index = index
+        self.price = price
+        self.quantity = quantity
+        self.amount = amount
 
 
 def receipt_balance_delta(
@@ -381,7 +413,7 @@ class ReceiptCreatorService:
         products: list[Product],
     ) -> None:
         if total_sum <= 0:
-            raise ValueError('Receipt total must be greater than zero')
+            raise ReceiptTotalError(total_sum)
         for index, product in enumerate(products):
             error = check_product_line(
                 price=product.price,
@@ -389,12 +421,13 @@ class ReceiptCreatorService:
                 amount=product.amount,
             )
             if error is not None:
-                message = (
-                    f'Invalid product line: error={error} index={index} '
-                    f'name={product.product_name!r} price={product.price} '
-                    f'quantity={product.quantity} amount={product.amount}'
+                raise ReceiptLineError(
+                    error=error,
+                    index=index,
+                    price=product.price,
+                    quantity=product.quantity,
+                    amount=product.amount,
                 )
-                raise ValueError(message)
 
 
 @dataclass

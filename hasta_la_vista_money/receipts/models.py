@@ -688,6 +688,34 @@ class ReceiptProcessingStatus(models.TextChoices):
     DUPLICATE = 'duplicate', _('Повторный чек')
 
 
+class ReceiptProcessingStage(models.TextChoices):
+    """Pipeline stage at which receipt processing stopped."""
+
+    QR = 'qr', _('Чтение QR-кода')
+    CLAIM = 'claim', _('Захват фискального ключа')
+    FNS = 'fns', _('Запрос в ФНС')
+    MAP = 'map', _('Разбор ответа ФНС')
+    VALIDATE = 'validate', _('Проверка данных чека')
+    CREATE = 'create', _('Проведение чека')
+
+
+class ReceiptProcessingErrorCode(models.TextChoices):
+    """Cause of a receipt processing error."""
+
+    IMAGE_MISSING = 'image_missing', _('Нет изображения чека')
+    QR_NOT_FOUND = 'qr_not_found', _('QR-код не найден')
+    QR_INVALID = 'qr_invalid', _('QR-код не похож на чек ФНС')
+    FNS_UNAVAILABLE = 'fns_unavailable', _('ФНС недоступна')
+    FNS_RATE_LIMITED = 'fns_rate_limited', _('ФНС ограничила частоту')
+    FNS_AUTH_FAILED = 'fns_auth_failed', _('Ошибка авторизации в ФНС')
+    FNS_BAD_RESPONSE = 'fns_bad_response', _('Неожиданный ответ ФНС')
+    RECEIPT_INVALID = 'receipt_invalid', _('Данные чека не прошли проверку')
+    LINE_INVALID = 'line_invalid', _('Некорректная товарная строка')
+    TOTAL_INVALID = 'total_invalid', _('Некорректная итоговая сумма')
+    TIMED_OUT = 'timed_out', _('Превышено время обработки')
+    UNEXPECTED = 'unexpected', _('Непредвиденная ошибка')
+
+
 class ReceiptProcessingLog(models.Model):
     """Audit log for a receipt processing attempt, without receipt payload."""
 
@@ -716,6 +744,18 @@ class ReceiptProcessingLog(models.Model):
     fiscal_key = models.CharField(max_length=255, null=True, blank=True)
     is_duplicate = models.BooleanField(default=False)
     error_message = models.TextField(blank=True, default='')
+    error_code = models.CharField(
+        max_length=32,
+        choices=ReceiptProcessingErrorCode.choices,
+        blank=True,
+        default='',
+    )
+    error_stage = models.CharField(
+        max_length=16,
+        choices=ReceiptProcessingStage.choices,
+        blank=True,
+        default='',
+    )
     task_id = models.CharField(max_length=64, blank=True, default='')
     receipt = models.OneToOneField(
         Receipt,

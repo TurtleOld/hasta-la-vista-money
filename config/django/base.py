@@ -171,6 +171,9 @@ TEMPLATES = [
                 'word_hash': 'hasta_la_vista_money.templatetags.generate_hash',
                 'dict_get': 'hasta_la_vista_money.templatetags.dict_get',
                 'index': 'hasta_la_vista_money.templatetags.index',
+                'issue_tracker': (
+                    'hasta_la_vista_money.templatetags.issue_tracker'
+                ),
             },
         },
     },
