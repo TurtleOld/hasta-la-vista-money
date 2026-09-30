@@ -294,7 +294,7 @@ class BankStatementRow(Model):
                 name='unique_statement_upload_row',
             ),
             UniqueConstraint(
-                fields=['transfer'],
+                fields=['transfer', 'transaction_type'],
                 condition=Q(transfer__isnull=False),
                 name='unique_statement_row_transfer',
             ),
@@ -322,6 +322,13 @@ class BankStatementCandidate(Model):
         blank=True,
         null=True,
     )
+    transfer = ForeignKey(
+        'finance_account.TransferMoneyLog',
+        on_delete=SET_NULL,
+        related_name='statement_candidate_links',
+        blank=True,
+        null=True,
+    )
     description = CharField(max_length=250)
     rank = PositiveIntegerField(default=0)
 
@@ -331,6 +338,11 @@ class BankStatementCandidate(Model):
             UniqueConstraint(
                 fields=['row', 'transaction'],
                 name='unique_statement_row_candidate',
+            ),
+            UniqueConstraint(
+                fields=['row', 'transfer'],
+                condition=Q(transfer__isnull=False),
+                name='unique_statement_row_transfer_candidate',
             ),
         ]
 
@@ -361,8 +373,22 @@ class BankStatementDecisionAudit(Model):
         blank=True,
         null=True,
     )
+    previous_transfer = ForeignKey(
+        'finance_account.TransferMoneyLog',
+        on_delete=SET_NULL,
+        related_name='previous_statement_decision_audits',
+        blank=True,
+        null=True,
+    )
     transaction = ForeignKey(
         'transactions.Transaction',
+        on_delete=SET_NULL,
+        related_name='statement_decision_audits',
+        blank=True,
+        null=True,
+    )
+    transfer = ForeignKey(
+        'finance_account.TransferMoneyLog',
         on_delete=SET_NULL,
         related_name='statement_decision_audits',
         blank=True,

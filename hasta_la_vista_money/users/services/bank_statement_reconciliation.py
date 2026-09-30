@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -25,6 +25,10 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
     User,
+)
+from hasta_la_vista_money.users.services.statement_transfer_matching import (
+    find_mirroring_transfers,
+    local_row_date,
 )
 
 
@@ -94,7 +98,11 @@ class BankStatementReconciliationService:
                 upload=upload,
                 decision=decision,
             )
-            .prefetch_related('candidates__transaction__category')
+            .prefetch_related(
+                'candidates__transaction__category',
+                'candidates__transfer__from_account',
+                'candidates__transfer__to_account',
+            )
             .order_by('transaction_date', 'pk')
         )
 
@@ -133,30 +141,38 @@ class BankStatementReconciliationService:
             if row.decision != decision:
                 raise ReconciliationDecisionConflictError(decision)
             if decision == BankStatementRow.Decision.LINKED:
-                candidate = self._validated_candidate(row, candidate_id)
-                if row.transaction_id != candidate.pk:
+                movement = self._validated_candidate(row, candidate_id)
+                if not self._row_links_movement(row, movement):
                     raise ReconciliationDecisionConflictError(candidate_id)
             return row
         if timezone.now() >= row.upload.expires_at:
             raise ReconciliationExpiredError(row_id)
 
         if decision == BankStatementRow.Decision.LINKED:
-            row.transaction = self._validated_candidate(row, candidate_id)
+            movement = self._validated_candidate(row, candidate_id)
+            self._link_movement(row, movement)
         elif decision == BankStatementRow.Decision.NEW:
             row.transaction = self._create_transaction(row)
+            row.transfer = None
         else:
             raise InvalidReconciliationDecisionError(decision)
 
         row.decision = decision
         row.decided_at = timezone.now()
         row.save(
-            update_fields=['transaction', 'decision', 'decided_at'],
+            update_fields=[
+                'transaction',
+                'transfer',
+                'decision',
+                'decided_at',
+            ],
         )
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=user_id,
             decision=decision,
             transaction=row.transaction,
+            transfer=row.transfer,
         )
         self.refresh_outcome_counts(upload)
         if not BankStatementRow.objects.filter(
@@ -202,15 +218,25 @@ class BankStatementReconciliationService:
             raise ReconciliationExpiredError(row_id)
 
         previous_transaction = row.transaction
+        previous_transfer = row.transfer
         row.transaction = self._create_transaction(row)
+        row.transfer = None
         row.decision = BankStatementRow.Decision.NEW
         row.decided_at = timezone.now()
-        row.save(update_fields=['transaction', 'decision', 'decided_at'])
+        row.save(
+            update_fields=[
+                'transaction',
+                'transfer',
+                'decision',
+                'decided_at',
+            ],
+        )
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=user_id,
             decision=row.decision,
             previous_transaction=previous_transaction,
+            previous_transfer=previous_transfer,
             transaction=row.transaction,
         )
         self.refresh_outcome_counts(upload)
@@ -288,9 +314,11 @@ class BankStatementReconciliationService:
             return row
         candidate_ids = [
             candidate.pk
-            for candidate in row.candidates.select_related('transaction')
-            if candidate.transaction is not None
-            and self._candidate_is_current(row, candidate.transaction)
+            for candidate in row.candidates.select_related(
+                'transaction',
+                'transfer',
+            )
+            if self._candidate_is_current(row, candidate)
         ]
         if len(candidate_ids) > 1:
             raise AmbiguousStatementCandidateError(row_id)
@@ -363,7 +391,7 @@ class BankStatementReconciliationService:
         self,
         row: BankStatementRow,
         candidate_id: int | None,
-    ) -> Transaction:
+    ) -> Transaction | TransferMoneyLog:
         if candidate_id is None:
             raise InvalidReconciliationDecisionError('candidate')
         candidate = (
@@ -371,25 +399,54 @@ class BankStatementReconciliationService:
                 pk=candidate_id,
                 row=row,
             )
-            .select_related('transaction')
+            .select_related('transaction', 'transfer')
             .first()
         )
-        if (
-            candidate is None
-            or candidate.transaction is None
-            or not self._candidate_is_current(
-                row,
-                candidate.transaction,
-            )
-        ):
+        if candidate is None or not self._candidate_is_current(row, candidate):
             raise StaleStatementCandidateError(candidate_id)
-        return candidate.transaction
+        movement = candidate.transaction or candidate.transfer
+        if movement is None:
+            raise StaleStatementCandidateError(candidate_id)
+        return movement
+
+    @staticmethod
+    def _row_links_movement(
+        row: BankStatementRow,
+        movement: Transaction | TransferMoneyLog,
+    ) -> bool:
+        if isinstance(movement, TransferMoneyLog):
+            return row.transfer_id == movement.pk
+        return row.transaction_id == movement.pk
+
+    @staticmethod
+    def _link_movement(
+        row: BankStatementRow,
+        movement: Transaction | TransferMoneyLog,
+    ) -> None:
+        if isinstance(movement, TransferMoneyLog):
+            row.transfer = movement
+            row.transaction = None
+        else:
+            row.transaction = movement
+            row.transfer = None
 
     def _candidate_is_current(
         self,
         row: BankStatementRow,
-        candidate: Transaction,
+        candidate: BankStatementCandidate,
     ) -> bool:
+        transaction = candidate.transaction
+        if transaction is not None:
+            return self._transaction_is_current(row, transaction)
+        transfer = candidate.transfer
+        if transfer is not None:
+            return self._transfer_is_current(row, transfer)
+        return False
+
+    @staticmethod
+    def _movement_bounds(
+        row: BankStatementRow,
+    ) -> tuple[str, Decimal, datetime] | None:
         transaction_type = row.transaction_type
         amount = row.amount
         transaction_date = row.transaction_date
@@ -398,7 +455,18 @@ class BankStatementReconciliationService:
             or amount is None
             or transaction_date is None
         ):
+            return None
+        return transaction_type, amount, transaction_date
+
+    def _transaction_is_current(
+        self,
+        row: BankStatementRow,
+        candidate: Transaction,
+    ) -> bool:
+        bounds = self._movement_bounds(row)
+        if bounds is None:
             return False
+        transaction_type, amount, transaction_date = bounds
         date_matches = candidate.date == transaction_date
         if row.match_calendar_date:
             date_matches = (
@@ -413,19 +481,36 @@ class BankStatementReconciliationService:
             and date_matches,
         )
 
+    def _transfer_is_current(
+        self,
+        row: BankStatementRow,
+        transfer: TransferMoneyLog,
+    ) -> bool:
+        bounds = self._movement_bounds(row)
+        if bounds is None:
+            return False
+        transaction_type, amount, transaction_date = bounds
+        return (
+            find_mirroring_transfers(
+                account=row.upload.account,
+                user=row.upload.user,
+                transaction_type=transaction_type,
+                amount=amount,
+                row_date=local_row_date(transaction_date),
+                exclude_row_id=row.pk,
+            )
+            .filter(pk=transfer.pk)
+            .exists()
+        )
+
     def current_candidates(
         self,
         row: BankStatementRow,
     ) -> QuerySet[Transaction]:
-        transaction_type = row.transaction_type
-        amount = row.amount
-        transaction_date = row.transaction_date
-        if (
-            transaction_type is None
-            or amount is None
-            or transaction_date is None
-        ):
+        bounds = self._movement_bounds(row)
+        if bounds is None:
             return Transaction.objects.none()
+        transaction_type, amount, transaction_date = bounds
         candidates = Transaction.objects.filter(
             account=row.upload.account,
             user=row.upload.user,
@@ -434,7 +519,7 @@ class BankStatementReconciliationService:
         )
         if row.match_calendar_date:
             return candidates.filter(
-                date__date=timezone.localtime(transaction_date).date(),
+                date__date=local_row_date(transaction_date),
             ).order_by('date', 'pk')
         return candidates.filter(date=transaction_date).order_by(
             'date',
@@ -598,6 +683,7 @@ class BankStatementReconciliationService:
         used_ids = set(
             BankStatementRow.objects.filter(
                 transfer__isnull=False,
+                upload__account=account,
             ).values_list('transfer_id', flat=True),
         )
         settled_upload_ids: set[int] = set()
