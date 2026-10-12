@@ -17,7 +17,9 @@ from hasta_la_vista_money.receipts.models import (
     Product,
     ProductCategory,
     Receipt,
+    ReceiptProcessingErrorCode,
     ReceiptProcessingLog,
+    ReceiptProcessingStage,
     Seller,
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -150,9 +152,22 @@ class ReceiptProcessingServiceProtocol(Protocol):
         self,
         *,
         log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
         error_message: str,
         task_id: str,
-    ) -> None: ...
+    ) -> bool: ...
+
+    def record_retry(
+        self,
+        *,
+        log: ReceiptProcessingLog,
+        error_code: ReceiptProcessingErrorCode,
+        error_stage: ReceiptProcessingStage | None,
+        task_id: str,
+    ) -> bool: ...
+
+    def delete_finished(self, *, log: ReceiptProcessingLog) -> bool: ...
 
     def complete(
         self,

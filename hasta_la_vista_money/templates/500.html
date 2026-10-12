@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load i18n %}
+{% load i18n issue_tracker %}
 {% load static %}
 
 {% block title %}{% translate '500 - Ошибка на сервере' %}{% endblock %}
@@ -42,7 +42,8 @@
                     <ul class="space-y-1 text-sm text-orange-800 dark:text-orange-300">
                         <li>• {% translate 'Обновите страницу через несколько минут' %}</li>
                         <li>• {% translate 'Проверьте, правильно ли введен адрес' %}</li>
-                        <li>• {% translate 'Если проблема сохраняется, сообщите о ней в <a class="text-orange-600 dark:text-orange-400 hover:underline" href="https://github.com/TurtleOld/hasta-la-vista-money/issues">issue</a>'|safe %}</li>
+                        {% issue_tracker_url as issues_url %}
+                        <li>• {% blocktranslate %}Если проблема сохраняется, сообщите о ней в <a class="text-orange-600 dark:text-orange-400 hover:underline" href="{{ issues_url }}">issue</a>{% endblocktranslate %}</li>
                     </ul>
                 </div>
             </div>
