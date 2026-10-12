@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n issue_tracker receipt_processing %}
 
 <article class="pending-card pending-card-{{ processing_log.status }}">
     <div class="pending-card-content">
@@ -6,23 +6,42 @@
             <div class="pending-card-body">
                 {% if processing_log.status == 'processing' %}
                     <h3 class="pending-card-title">{% translate 'Чек обрабатывается…' %}</h3>
-                    <p class="pending-card-text">{% translate 'После завершения чек появится в списке.' %}</p>
+                    {% if processing_log.error_code %}
+                        <p class="pending-card-text">{% translate 'Временная ошибка на стороне ФНС — повторим попытку автоматически.' %}</p>
+                    {% else %}
+                        <p class="pending-card-text">{% translate 'После завершения чек появится в списке.' %}</p>
+                    {% endif %}
                 {% elif processing_log.status == 'failed' %}
                     <h3 class="pending-card-title">{% translate 'Не удалось провести чек' %}</h3>
                     <p class="pending-card-error">{{ processing_log.error_message }}</p>
+                    {% if processing_log.error_code|reports_to_issue_tracker %}
+                        {% issue_tracker_url as issues_url %}
+                        <p class="pending-card-text">
+                            {% blocktranslate %}Если ошибка повторяется, <a href="{{ issues_url }}" target="_blank" rel="noopener">создайте issue</a>.{% endblocktranslate %}
+                        </p>
+                    {% endif %}
                 {% else %}
                     <h3 class="pending-card-title">{% translate 'Повторный чек' %}</h3>
                     <p class="pending-card-text">{% translate 'Новая операция не создана.' %}</p>
                 {% endif %}
             </div>
         </header>
-        {% if processing_log.status == 'failed' %}
+        {% if processing_log.status != 'processing' %}
             <footer class="pending-card-actions receipts-row-actions">
-                <form action="{% url 'receipts:processing_retry' processing_log.id %}" method="post">
+                {% if processing_log.status == 'failed' %}
+                    <form action="{% url 'receipts:processing_retry' processing_log.id %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="receipts-chip pending-card-retry">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            {% translate 'Повторить' %}
+                        </button>
+                    </form>
+                {% endif %}
+                <form action="{% url 'receipts:processing_delete' processing_log.id %}" method="post">
                     {% csrf_token %}
-                    <button type="submit" class="receipts-chip pending-card-retry">
-                        <i class="bi bi-arrow-clockwise"></i>
-                        {% translate 'Повторить' %}
+                    <button type="submit" class="receipts-chip">
+                        <i class="bi bi-trash"></i>
+                        {% translate 'Удалить' %}
                     </button>
                 </form>
             </footer>
