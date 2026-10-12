@@ -63,6 +63,37 @@ class ReceiptProcessingLogRetryView(LoginRequiredMixin, View):
         return redirect('receipts:list')
 
 
+class ReceiptProcessingLogDeleteView(LoginRequiredMixin, View):
+    """Delete a finished journal entry so the receipt can be entered again."""
+
+    http_method_names = ['post']
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        service = cast(
+            'RequestWithContainer',
+            request,
+        ).container.receipts.receipt_processing_service()
+        log = service.get_for_user(
+            user=cast('User', request.user),
+            log_id=cast('int', kwargs.get('pk')),
+        )
+        if log is None:
+            return redirect('receipts:list')
+        if service.delete_finished(log=log):
+            messages.success(request, _('Запись удалена.'))
+        else:
+            messages.error(
+                request,
+                _('Эту запись нельзя удалить.'),
+            )
+        return redirect('receipts:list')
+
+
 class ReceiptProcessingNotificationView(LoginRequiredMixin, View):
     """Return newly completed receipts for the scanner notification."""
 
