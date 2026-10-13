@@ -245,6 +245,9 @@ SUCCESS_INCOME_ADDED: Final = _('Операция дохода успешно д
 
 SUCCESS_MESSAGE_LOAN_CREATE: Final = _('Кредит успешно добавлен')
 SUCCESS_MESSAGE_LOAN_DELETE: Final = _('Кредит успешно удалён')
+UNSUCCESSFULLY_MESSAGE_LOAN_DELETE: Final = _(
+    'Кредит не может быть удалён: его счёт используется в операциях.',
+)
 SUCCESS_MESSAGE_PAYMENT_MAKE: Final = _('Платеж успешно внесён')
 
 # ============================================================================

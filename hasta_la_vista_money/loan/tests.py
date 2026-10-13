@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -21,6 +22,11 @@ from hasta_la_vista_money.loan.services.loan_calculation import (
 from hasta_la_vista_money.loan.tasks import (
     calculate_annuity_loan,
     calculate_differentiated_loan,
+)
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -81,6 +87,13 @@ class TestLoan(TestCase):
             ),
             period_loan=constants.TEST_PERIOD_LONG,
             type_loan=type_loan,
+        )
+
+    def _create_other_user(self, username: str) -> User:
+        """Create a user who does not own the fixture loans."""
+        return User.objects.create_user(
+            username=username,
+            password='test-pass',
         )
 
     def _get_loan_form_data(
@@ -288,10 +301,56 @@ class TestLoan(TestCase):
         """Test LoanDeleteView functionality."""
         self.client.force_login(self.user)
         test_loan = self._create_test_loan()
+        account_pk = test_loan.account.pk
         response = self.client.post(
             reverse_lazy('loan:delete', args=[test_loan.pk]),
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertFalse(Loan.objects.filter(pk=test_loan.pk).exists())
+        self.assertFalse(Account.objects.filter(pk=account_pk).exists())
+
+    def test_loan_delete_view_rejects_foreign_loan(self) -> None:
+        """Test LoanDeleteView does not delete another user's loan."""
+        test_loan = self._create_test_loan()
+        account_pk = test_loan.account.pk
+        other_user = self._create_other_user('loan-delete-intruder')
+
+        self.client.force_login(other_user)
+        response = self.client.post(
+            reverse_lazy('loan:delete', args=[test_loan.pk]),
+        )
+
+        self.assertEqual(response.status_code, constants.NOT_FOUND)
+        self.assertTrue(Loan.objects.filter(pk=test_loan.pk).exists())
+        self.assertTrue(Account.objects.filter(pk=account_pk).exists())
+
+    def test_loan_delete_view_keeps_loan_when_account_protected(
+        self,
+    ) -> None:
+        """Test LoanDeleteView rolls back when the loan account is in use."""
+        test_loan = self._create_test_loan()
+        account_pk = test_loan.account.pk
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=test_loan.account,
+            category=Category.objects.get(pk=1),
+            date=timezone.now(),
+            amount=Decimal(constants.TEST_PAYMENT_AMOUNT),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse_lazy('loan:delete', args=[test_loan.pk]),
+        )
+
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertTrue(Loan.objects.filter(pk=test_loan.pk).exists())
+        self.assertTrue(Account.objects.filter(pk=account_pk).exists())
+        self.assertEqual(
+            [str(message) for message in get_messages(response.wsgi_request)],
+            [str(constants.UNSUCCESSFULLY_MESSAGE_LOAN_DELETE)],
+        )
 
     def test_payment_make_create_view_post(self) -> None:
         """Test PaymentMakeCreateView POST request."""
@@ -310,10 +369,7 @@ class TestLoan(TestCase):
 
     def test_payment_make_create_view_rejects_foreign_account(self) -> None:
         """Test payment creation rejects accounts owned by another user."""
-        other_user = User.objects.create_user(
-            username='loan-other-user',
-            password='test-pass',
-        )
+        other_user = self._create_other_user('loan-other-user')
         foreign_account = Account.objects.create(
             user=other_user,
             name_account='Foreign payment account',
