@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,12 @@ from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import (
+    DEFAULT_FAMILY_GROUP_NAME,
+    DEFAULT_FAMILY_GROUP_PREFIX,
+)
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
@@ -24,8 +31,10 @@ from hasta_la_vista_money.users.services.groups import (
     delete_group,
     get_family_groups,
     get_groups_not_for_user,
+    get_or_create_default_family_group,
     get_or_create_family_invite,
     get_user_groups,
+    user_can_manage_group,
     user_has_group_access,
 )
 from hasta_la_vista_money.users.services.registration import (
@@ -142,6 +151,102 @@ class GroupsServiceTest(TestCase):
             FamilyGroupMembership.Role.OWNER,
         )
         self.assertIn(invite.token, family_groups[0]['invite_url'] or '')
+
+
+class DefaultFamilyGroupIsolationTest(TestCase):
+    """Default family groups must be personal, never shared by name."""
+
+    def setUp(self) -> None:
+        self.alice: UserType = User.objects.create_user(
+            username='alice',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.mallory: UserType = User.objects.create_user(
+            username='mallory',
+            password='testpass123',  # nosec B106: test-only password
+        )
+
+    def test_independent_users_get_different_groups(self) -> None:
+        alice_group = get_or_create_default_family_group(self.alice)
+        mallory_group = get_or_create_default_family_group(self.mallory)
+
+        self.assertNotEqual(alice_group.pk, mallory_group.pk)
+        self.assertNotIn(mallory_group, self.alice.groups.all())
+        self.assertNotIn(alice_group, self.mallory.groups.all())
+
+    def test_taken_default_name_is_not_reused(self) -> None:
+        squatted = Group.objects.create(
+            name=f'{DEFAULT_FAMILY_GROUP_PREFIX}{self.mallory.pk}',
+        )
+        self.alice.groups.add(squatted)
+
+        mallory_group = get_or_create_default_family_group(self.mallory)
+
+        self.assertNotEqual(mallory_group.pk, squatted.pk)
+        self.assertNotIn(squatted, self.mallory.groups.all())
+        self.assertTrue(user_can_manage_group(self.mallory, mallory_group))
+
+    def test_viewer_is_not_promoted_to_owner(self) -> None:
+        alice_group = get_or_create_default_family_group(self.alice)
+        invite = get_or_create_family_invite(alice_group, self.alice)
+        accept_family_invite(self.mallory, invite.token)
+
+        mallory_group = get_or_create_default_family_group(self.mallory)
+
+        self.assertNotEqual(mallory_group.pk, alice_group.pk)
+        self.assertEqual(
+            FamilyGroupMembership.objects.get(
+                group=alice_group,
+                user=self.mallory,
+            ).role,
+            FamilyGroupMembership.Role.VIEWER,
+        )
+        self.assertFalse(user_can_manage_group(self.mallory, alice_group))
+        self.assertTrue(user_can_manage_group(self.mallory, mallory_group))
+
+    def test_family_scope_does_not_expose_other_user_accounts(self) -> None:
+        alice_account = Account.objects.create(
+            user=self.alice,
+            name_account='Alice Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        alice_group = get_or_create_default_family_group(self.alice)
+        mallory_group = get_or_create_default_family_group(self.mallory)
+        account_service = (
+            ApplicationContainer().finance_account.account_service()
+        )
+
+        for group_id in ('family', str(mallory_group.pk), str(alice_group.pk)):
+            with self.subTest(group_id=group_id):
+                accounts = account_service.get_accounts_for_user_or_group(
+                    self.mallory,
+                    group_id,
+                )
+                self.assertNotIn(alice_account, accounts)
+
+    def test_personal_default_group_cannot_be_deleted(self) -> None:
+        alice_group = get_or_create_default_family_group(self.alice)
+
+        form = GroupDeleteForm(
+            data={'group': alice_group.pk},
+            current_user=self.alice,
+        )
+        self.assertFalse(form.is_valid())
+
+        form.cleaned_data = {'group': alice_group}
+        delete_group(form)  # type: ignore[arg-type]
+        self.assertTrue(Group.objects.filter(pk=alice_group.pk).exists())
+
+    def test_reserved_family_group_names_cannot_be_created(self) -> None:
+        for name in (
+            DEFAULT_FAMILY_GROUP_NAME,
+            f'{DEFAULT_FAMILY_GROUP_PREFIX}999',
+        ):
+            with self.subTest(name=name):
+                form = GroupCreateForm(data={'name': name})
+                self.assertFalse(form.is_valid())
+                self.assertIn('name', form.errors)
 
 
 class InviteExpiryTest(TestCase):
