@@ -8,6 +8,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ProductForm
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
+    ReceiptLineError,
     SellerCreateData,
 )
 from hasta_la_vista_money.receipts.validators.product_line import (
@@ -117,7 +118,7 @@ class ReceiptCreatorFreeItemTests(TestCase):
         self.assertEqual(free_line.amount, Decimal('0.00'))
         self.assertEqual(receipt.product.count(), 2)
 
-    def test_rejects_negative_line_with_its_name(self) -> None:
+    def test_rejects_negative_line_with_its_position(self) -> None:
         user = User.objects.create_user(
             username='creator-negative-item-user',
             password='pass',  # nosec B106: test-only password
@@ -130,7 +131,7 @@ class ReceiptCreatorFreeItemTests(TestCase):
         )
         service = ApplicationContainer().receipts.receipt_creator_service()
 
-        with self.assertRaisesMessage(ValueError, "'Скидка'"):
+        with self.assertRaises(ReceiptLineError) as raised:
             service.create_receipt_with_products(
                 user=user,
                 account=account,
@@ -151,6 +152,13 @@ class ReceiptCreatorFreeItemTests(TestCase):
                 ],
                 allow_insufficient_funds=True,
             )
+
+        self.assertEqual(raised.exception.index, 0)
+        self.assertEqual(
+            raised.exception.error,
+            ProductLineError.NEGATIVE_PRICE,
+        )
+        self.assertNotIn('Скидка', str(raised.exception))
 
 
 class ProductFormLineRuleTests(SimpleTestCase):
