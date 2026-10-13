@@ -97,6 +97,9 @@ class UpdateUserView(
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
 
+    def get_object(self, queryset: Any = None) -> User:
+        return cast('User', self.request.user)
+
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
         form.instance = cast('User', self.request.user)
