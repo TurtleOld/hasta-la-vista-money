@@ -48,12 +48,9 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     success_message = constants.SUCCESS_MESSAGE_LOGIN
     redirect_authenticated_user = True
 
-    def get_success_url(self) -> str:
-        """Return the URL to redirect to after successful login."""
-        next_url = self.request.GET.get('next') or self.request.POST.get('next')
-        if next_url:
-            return next_url
-        return '/finance_account/'
+    def get_default_redirect_url(self) -> str:
+        """Return the URL used when `next` is missing or not allowed."""
+        return str(reverse_lazy('finance_account:list'))
 
     def dispatch(
         self,
