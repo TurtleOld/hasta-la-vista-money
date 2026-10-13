@@ -3,19 +3,24 @@ from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.models import Group
+from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money.constants import (
+    DEFAULT_FAMILY_GROUP_NAME,
+    DEFAULT_FAMILY_GROUP_PREFIX,
+    DEFAULT_FAMILY_GROUP_SUFFIX_BYTES,
+)
 from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
     FamilyInvite,
     User,
 )
-
-DEFAULT_FAMILY_GROUP_NAME = 'Семья'
 
 
 class GroupDict(TypedDict):
@@ -100,30 +105,55 @@ def create_group(form: ModelForm[Group]) -> Group:
 def get_or_create_default_family_group(user: User) -> Group:
     """Return the user's primary family group and ensure owner role exists."""
 
-    owner_membership = (
+    owner_membership = _get_first_owner_membership(user)
+    if owner_membership is not None:
+        return owner_membership.group
+
+    with transaction.atomic():
+        # Serialize concurrent first requests of the same user so that only
+        # one default family group is created.
+        User.objects.select_for_update().filter(pk=user.pk).exists()
+        owner_membership = _get_first_owner_membership(user)
+        if owner_membership is not None:
+            return owner_membership.group
+
+        group = _create_default_family_group(user)
+        user.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+    return group
+
+
+def _get_first_owner_membership(user: User) -> FamilyGroupMembership | None:
+    return (
         FamilyGroupMembership.objects.filter(
             user=user,
             role=FamilyGroupMembership.Role.OWNER,
         )
         .select_related('group')
+        .order_by('pk')
         .first()
     )
-    if owner_membership is not None:
-        return owner_membership.group
 
-    group = user.groups.filter(name=DEFAULT_FAMILY_GROUP_NAME).first()
-    if group is None:
-        group, _created = Group.objects.get_or_create(
-            name=DEFAULT_FAMILY_GROUP_NAME,
-        )
-        user.groups.add(group)
 
-    FamilyGroupMembership.objects.update_or_create(
-        group=group,
-        user=user,
-        defaults={'role': FamilyGroupMembership.Role.OWNER},
-    )
-    return group
+def _create_default_family_group(user: User) -> Group:
+    """Create a new family group whose unique name is bound to the user.
+
+    Existing groups are never looked up by name: ``Group.name`` is unique,
+    so reusing a group by name would merge unrelated users into one family.
+    """
+
+    name = f'{DEFAULT_FAMILY_GROUP_PREFIX}{user.pk}'
+    try:
+        with transaction.atomic():
+            return Group.objects.create(name=name)
+    except IntegrityError:
+        # The name is taken by a legacy group: never reuse it.
+        suffix = secrets.token_hex(DEFAULT_FAMILY_GROUP_SUFFIX_BYTES)
+        return Group.objects.create(name=f'{name}-{suffix}')
 
 
 def delete_group(form: ModelForm[Group]) -> None:
@@ -133,9 +163,25 @@ def delete_group(form: ModelForm[Group]) -> None:
         form: Validated group form with 'group' in cleaned_data.
     """
     group = form.cleaned_data['group']
-    if group.name == DEFAULT_FAMILY_GROUP_NAME:
+    if is_default_family_group_name(group.name):
         return
     group.delete()
+
+
+def is_default_family_group_name(name: str) -> bool:
+    """Return whether name is reserved for a default family group."""
+
+    return name == DEFAULT_FAMILY_GROUP_NAME or name.startswith(
+        DEFAULT_FAMILY_GROUP_PREFIX,
+    )
+
+
+def default_family_group_names_q() -> Q:
+    """Return a filter matching groups reserved as default family groups."""
+
+    return Q(name=DEFAULT_FAMILY_GROUP_NAME) | Q(
+        name__startswith=DEFAULT_FAMILY_GROUP_PREFIX,
+    )
 
 
 def add_user_to_group(request: HttpRequest, user: User, group: Group) -> None:

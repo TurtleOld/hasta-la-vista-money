@@ -13,7 +13,9 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
+    default_family_group_names_q,
     get_or_create_default_family_group,
+    is_default_family_group_name,
     remove_user_from_group,
 )
 from hasta_la_vista_money.users.timezones import get_available_timezones
@@ -244,6 +246,15 @@ class GroupCreateForm(ModelForm[Group]):
             },
         }
 
+    def clean_name(self) -> str:
+        """Reject names reserved for default family groups."""
+        name: str = self.cleaned_data['name']
+        if is_default_family_group_name(name):
+            raise forms.ValidationError(
+                constants.ERROR_MESSAGE_RESERVED_GROUP_NAME,
+            )
+        return name
+
 
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
@@ -261,7 +272,7 @@ class GroupDeleteForm(forms.Form):
                 return
             group_field.queryset = Group.objects.filter(
                 id__in=owner_group_ids,
-            ).exclude(name='Семья')
+            ).exclude(default_family_group_names_q())
 
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
