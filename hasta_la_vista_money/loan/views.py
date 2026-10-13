@@ -110,7 +110,7 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
 
         filtered_queryset = self.get_queryset()
         total_loan_amount = filtered_queryset.aggregate(
-            total=Sum('loan_amount')
+            total=Sum('loan_amount'),
         )['total'] or Decimal(0)
         total_loans_count = filtered_queryset.count()
         has_any_loans = user.loan_users.exists()
@@ -250,15 +250,23 @@ class LoanDeleteView(
     success_message = constants.SUCCESS_MESSAGE_LOAN_DELETE
     no_permission_url = reverse_lazy('login')
 
+    def get_queryset(self) -> QuerySet[Loan]:
+        user = cast('User', self.request.user)
+        return Loan.objects.filter(user=user)
+
     def form_valid(self, form: Any) -> Any:
-        loan = self.get_object()
-        account = loan.account
-        loan.delete()
-        try:
-            account.delete()
-        except ProtectedError:
-            logger.exception('Account %s is protected', account.name_account)
-        return super().form_valid(form)
+        account = self.object.account
+        with transaction.atomic():
+            response = super().form_valid(form)
+            try:
+                with transaction.atomic():
+                    account.delete()
+            except ProtectedError:
+                logger.exception(
+                    'Account %s is protected',
+                    account.name_account,
+                )
+        return response
 
 
 class PaymentMakeCreateView(

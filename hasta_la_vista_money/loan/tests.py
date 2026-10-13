@@ -288,10 +288,31 @@ class TestLoan(TestCase):
         """Test LoanDeleteView functionality."""
         self.client.force_login(self.user)
         test_loan = self._create_test_loan()
+        account_pk = test_loan.account.pk
         response = self.client.post(
             reverse_lazy('loan:delete', args=[test_loan.pk]),
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertFalse(Loan.objects.filter(pk=test_loan.pk).exists())
+        self.assertFalse(Account.objects.filter(pk=account_pk).exists())
+
+    def test_loan_delete_view_rejects_foreign_loan(self) -> None:
+        """Test LoanDeleteView does not delete another user's loan."""
+        test_loan = self._create_test_loan()
+        account_pk = test_loan.account.pk
+        other_user = User.objects.create_user(
+            username='loan-delete-intruder',
+            password='test-pass',
+        )
+
+        self.client.force_login(other_user)
+        response = self.client.post(
+            reverse_lazy('loan:delete', args=[test_loan.pk]),
+        )
+
+        self.assertEqual(response.status_code, constants.NOT_FOUND)
+        self.assertTrue(Loan.objects.filter(pk=test_loan.pk).exists())
+        self.assertTrue(Account.objects.filter(pk=account_pk).exists())
 
     def test_payment_make_create_view_post(self) -> None:
         """Test PaymentMakeCreateView POST request."""
