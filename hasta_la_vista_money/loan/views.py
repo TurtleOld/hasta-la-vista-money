@@ -9,7 +9,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db import transaction
 from django.db.models import QuerySet, Sum
 from django.db.models.deletion import ProtectedError
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -241,32 +241,52 @@ class LoanCreateView(
 
 class LoanDeleteView(
     LoginRequiredMixin,
-    SuccessMessageMixin[Any],
     DeleteView[Loan, Any],
 ):
     template_name = 'loan/loan.html'
     model = Loan
     success_url = reverse_lazy('loan:list')
-    success_message = constants.SUCCESS_MESSAGE_LOAN_DELETE
     no_permission_url = reverse_lazy('login')
 
     def get_queryset(self) -> QuerySet[Loan]:
+        """Limit deletion to loans owned by the current user.
+
+        Returns:
+            QuerySet[Loan]: Loans of the request user; others yield 404.
+        """
         user = cast('User', self.request.user)
         return Loan.objects.filter(user=user)
 
-    def form_valid(self, form: Any) -> Any:
-        account = self.object.account
-        with transaction.atomic():
-            response = super().form_valid(form)
-            try:
-                with transaction.atomic():
-                    account.delete()
-            except ProtectedError:
-                logger.exception(
-                    'Account %s is protected',
-                    account.name_account,
-                )
-        return response
+    def form_valid(self, form: Any) -> HttpResponse:
+        """Delete the loan together with its account, all or nothing.
+
+        If the account is still referenced by other records, the loan
+        deletion is rolled back and the user gets an error message.
+
+        Args:
+            form: Validated confirmation form.
+
+        Returns:
+            HttpResponse: Redirect to the loan list.
+        """
+        loan = self.object
+        account = loan.account
+        try:
+            with transaction.atomic():
+                loan.delete()
+                account.delete()
+        except ProtectedError:
+            logger.exception(
+                'Account %s is protected',
+                account.name_account,
+            )
+            messages.error(
+                self.request,
+                constants.UNSUCCESSFULLY_MESSAGE_LOAN_DELETE,
+            )
+            return redirect(str(self.success_url))
+        messages.success(self.request, constants.SUCCESS_MESSAGE_LOAN_DELETE)
+        return redirect(str(self.success_url))
 
 
 class PaymentMakeCreateView(
