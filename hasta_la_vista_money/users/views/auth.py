@@ -15,6 +15,7 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, View
 
@@ -51,7 +52,11 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful login."""
         next_url = self.request.GET.get('next') or self.request.POST.get('next')
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
             return next_url
         return '/finance_account/'
 
