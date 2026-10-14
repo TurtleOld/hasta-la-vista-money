@@ -40,6 +40,7 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_credit_fields_required,
     validate_different_accounts,
+    validate_same_currency,
 )
 from hasta_la_vista_money.transactions.models import (
     Transaction,
@@ -442,6 +443,12 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             if from_account and to_account:
                 try:
                     validate_different_accounts(from_account, to_account)
+                except ValidationError as e:
+                    self.add_error('to_account', e.message)
+
+            if from_account and to_account:
+                try:
+                    validate_same_currency(from_account, to_account)
                 except ValidationError as e:
                     self.add_error('to_account', e.message)
 

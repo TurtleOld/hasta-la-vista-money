@@ -16,6 +16,7 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
 from hasta_la_vista_money.finance_account.validators import (
     validate_different_accounts,
     validate_positive_amount,
+    validate_same_currency,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -76,6 +77,7 @@ class TransferService:
         """
         validate_positive_amount(amount)
         validate_different_accounts(from_account, to_account)
+        validate_same_currency(from_account, to_account)
         if from_account.user_id != user.pk or to_account.user_id != user.pk:
             raise PermissionDenied(
                 _('У вас нет прав на операции с этими счетами.'),
@@ -132,7 +134,8 @@ class TransferService:
 
         Raises:
             PermissionDenied: If the transfer does not belong to the user.
-            ValidationError: If one of transfer accounts was already deleted.
+            ValidationError: If one of transfer accounts was already deleted,
+                or if either side is a deposit account.
         """
         try:
             transfer_log = (
@@ -147,18 +150,28 @@ class TransferService:
                 _('Перевод не найден или недоступен.'),
             ) from error
 
-        if transfer_log.from_account is None or transfer_log.to_account is None:
+        from_account = transfer_log.from_account
+        to_account = transfer_log.to_account
+        if from_account is None or to_account is None:
             raise ValidationError(
                 _(
                     'Нельзя удалить перевод: один из счетов уже удалён.',
                 ),
             )
 
+        if from_account.is_deposit or to_account.is_deposit:
+            raise ValidationError(
+                _(
+                    'Нельзя удалить перевод: одна из сторон является вкладом. '
+                    'Используйте сервис вкладов.',
+                ),
+            )
+
         with audit_operation(kind=AuditOperationKind.TRANSFER):
             self._balance_service.apply_account_deltas(
                 {
-                    transfer_log.from_account.pk: transfer_log.amount,
-                    transfer_log.to_account.pk: -transfer_log.amount,
+                    from_account.pk: transfer_log.amount,
+                    to_account.pk: -transfer_log.amount,
                 },
             )
             self.transfer_money_log_repository.delete_log(transfer_log)

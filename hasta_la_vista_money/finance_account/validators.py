@@ -73,6 +73,31 @@ def validate_different_accounts(
         )
 
 
+def validate_same_currency(
+    from_account: 'Account | None',
+    to_account: 'Account | None',
+) -> None:
+    """Validate that both transfer accounts use the same currency.
+
+    Transfers move money in a single currency without conversion, so source
+    and destination accounts must share the same currency.
+
+    Args:
+        from_account: The source account.
+        to_account: The destination account.
+
+    Raises:
+        ValidationError: If the accounts use different currencies.
+    """
+    if from_account is None or to_account is None:
+        return
+    if from_account.currency != to_account.currency:
+        raise ValidationError(
+            _('Нельзя переводить деньги между счетами в разных валютах.'),
+            code='different_currencies',
+        )
+
+
 def validate_credit_fields_required(
     type_account: str | None,
     bank: 'Bank | str | None' = None,

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
+from django.contrib.messages import get_messages
 from django.core.handlers.wsgi import WSGIRequest
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
@@ -492,6 +493,42 @@ class TestFinancesView(TestCase):
         self.assertEqual(self.other_account.balance, Decimal('1000.00'))
         self.assertFalse(
             TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+
+    def test_transfer_delete_view_rejects_deposit_side(self) -> None:
+        """Deleting a deposit-backed transfer shows an error, not a 500."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Deposit',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=deposit_account,
+            to_account=self.other_account,
+            amount=Decimal('90.00'),
+            exchange_date=timezone.now(),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('finance_account:transfer_delete', args=[transfer.pk]),
+        )
+
+        self.assertRedirects(response, reverse('finances'))
+        deposit_account.refresh_from_db()
+        self.other_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('1000.00'))
+        self.assertEqual(self.other_account.balance, Decimal('1000.00'))
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+        stored_messages = [str(m) for m in get_messages(response.wsgi_request)]
+        self.assertTrue(
+            any('вкладом' in message for message in stored_messages),
+            stored_messages,
         )
 
     def test_finances_filter_accepts_explicit_date_range(self) -> None:

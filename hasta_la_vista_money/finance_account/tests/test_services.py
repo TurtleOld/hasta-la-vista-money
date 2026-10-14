@@ -598,3 +598,110 @@ class TestTransferService(TestCase):
         self.from_account.refresh_from_db()
         self.assertEqual(deposit_account.balance, Decimal('5000.00'))
         self.assertEqual(self.from_account.balance, Decimal('1000.00'))
+
+    def test_transfer_rejects_different_currencies(self) -> None:
+        """Transfers between accounts of different currencies are rejected."""
+        foreign_account: Account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('500.00'),
+                currency='USD',
+            ),
+        )
+        with self.assertRaises(ValidationError):
+            self.transfer_service.transfer_money(
+                from_account=self.from_account,
+                to_account=foreign_account,
+                amount=Decimal('100.00'),
+                user=self.user,
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
+                notes='Cross-currency',
+            )
+
+        self.from_account.refresh_from_db()
+        foreign_account.refresh_from_db()
+        self.assertEqual(self.from_account.balance, Decimal('1000.00'))
+        self.assertEqual(foreign_account.balance, Decimal('500.00'))
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(user=self.user).exists(),
+        )
+
+    def test_delete_transfer_rejects_deposit_as_source(self) -> None:
+        """Deposit withdrawals cannot be deleted as plain transfers."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.from_account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        transfer_log = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=deposit_account,
+            to_account=self.to_account,
+            amount=Decimal('100.00'),
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            notes='Частичное снятие тела вклада',
+        )
+
+        with self.assertRaises(ValidationError):
+            self.transfer_service.delete_transfer(
+                transfer_id=transfer_log.pk,
+                user=self.user,
+            )
+
+        deposit_account.refresh_from_db()
+        self.to_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
+        self.assertEqual(self.to_account.balance, Decimal('500.00'))
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=transfer_log.pk).exists(),
+        )
+
+    def test_delete_transfer_rejects_deposit_as_destination(self) -> None:
+        """Deposit funding cannot be deleted as a plain transfer."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.from_account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        transfer_log = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.from_account,
+            to_account=deposit_account,
+            amount=Decimal('100.00'),
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            notes='Пополнение тела вклада',
+        )
+
+        with self.assertRaises(ValidationError):
+            self.transfer_service.delete_transfer(
+                transfer_id=transfer_log.pk,
+                user=self.user,
+            )
+
+        deposit_account.refresh_from_db()
+        self.from_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
+        self.assertEqual(self.from_account.balance, Decimal('1000.00'))
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=transfer_log.pk).exists(),
+        )
