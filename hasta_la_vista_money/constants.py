@@ -14,7 +14,7 @@ Constants are organized by domain for better maintainability:
 - Configuration values
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Final
 
@@ -258,6 +258,7 @@ SUCCESS_MESSAGE_PAYMENT_MAKE: Final = _('Платеж успешно внесё�
 DEFAULT_FAMILY_GROUP_NAME: Final = 'Семья'
 DEFAULT_FAMILY_GROUP_PREFIX: Final = f'{DEFAULT_FAMILY_GROUP_NAME} #'
 DEFAULT_FAMILY_GROUP_SUFFIX_BYTES: Final = 4
+FAMILY_INVITE_TTL: Final = timedelta(days=7)
 ERROR_MESSAGE_RESERVED_GROUP_NAME: Final = _(
     'Это название зарезервировано для семейной группы по умолчанию.',
 )

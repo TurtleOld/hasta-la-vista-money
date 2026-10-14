@@ -6,7 +6,7 @@ from django.http import (
     HttpRequest,
     HttpResponse,
 )
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -23,6 +23,7 @@ from hasta_la_vista_money.users.services.groups import (
     accept_family_invite,
     create_group,
     delete_group,
+    get_active_family_invite,
     remove_user_from_group,
     user_can_manage_group,
 )
@@ -164,14 +165,44 @@ class DeleteUserFromGroupView(
 
 
 class JoinFamilyGroupView(View):
-    """Join a family group by share link."""
+    """Confirm and accept a family group invite.
 
-    def get(self, request: HttpRequest, token: str) -> HttpResponse:
+    Joining is a state-changing action, so a plain GET only renders a
+    confirmation page. Membership changes exclusively through a
+    CSRF-protected POST.
+    """
+
+    template_name = 'users/join_family_group.html'
+
+    def _resolve_user(self, request: HttpRequest) -> User | None:
         if not request.user.is_authenticated:
-            return redirect('users:groups:register_by_invite', token=token)
+            return None
         user = request.user
         if not isinstance(user, User):
             raise PermissionDenied
+        return user
+
+    def get(self, request: HttpRequest, token: str) -> HttpResponse:
+        user = self._resolve_user(request)
+        if user is None:
+            return redirect('users:groups:register_by_invite', token=token)
+        invite = get_active_family_invite(token)
+        if invite is None:
+            messages.error(
+                request,
+                _('Ссылка приглашения недействительна или истекла.'),
+            )
+            return redirect('users:profile', pk=user.pk)
+        return render(
+            request,
+            self.template_name,
+            {'invite': invite, 'token': token},
+        )
+
+    def post(self, request: HttpRequest, token: str) -> HttpResponse:
+        user = self._resolve_user(request)
+        if user is None:
+            return redirect('users:groups:register_by_invite', token=token)
         group = accept_family_invite(user, token)
         if group is None:
             messages.error(
@@ -184,4 +215,4 @@ class JoinFamilyGroupView(View):
                 _('Вы присоединились к семейной группе «%(group)s».')
                 % {'group': group.name},
             )
-        return redirect('users:profile', pk=request.user.pk)
+        return redirect('users:profile', pk=user.pk)
