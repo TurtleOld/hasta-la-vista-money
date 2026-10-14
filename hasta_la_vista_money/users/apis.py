@@ -1,10 +1,9 @@
 """DRF API views for users app."""
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
-    OpenApiParameter,
     OpenApiResponse,
     extend_schema,
 )
@@ -18,28 +17,18 @@ from rest_framework.views import APIView
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
-from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.groups import (
-    get_groups_not_for_user,
-    get_user_groups,
-)
+from hasta_la_vista_money.users.services.groups import get_user_groups
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 @extend_schema(
     tags=['users'],
     summary='Получить группы пользователя',
     description=(
-        'Получить список всех групп, в которых состоит указанный пользователь'
+        'Получить список групп, в которых состоит текущий пользователь'
     ),
-    parameters=[
-        OpenApiParameter(
-            name='user_id',
-            type=int,
-            location=OpenApiParameter.QUERY,
-            description='ID пользователя',
-            required=False,
-        ),
-    ],
     responses={
         200: OpenApiResponse(
             description='Список групп пользователя',
@@ -64,7 +53,7 @@ from hasta_la_vista_money.users.services.groups import (
 class UserGroupsAPIView(APIView):
     """API view for getting user groups.
 
-    Returns list of groups that the specified user belongs to.
+    Returns list of groups that the current user belongs to.
     """
 
     schema = AutoSchema()
@@ -83,18 +72,8 @@ class UserGroupsAPIView(APIView):
         Returns:
             Response with user groups list.
         """
-        user_id = request.query_params.get('user_id')
-
-        if user_id:
-            try:
-                user = User.objects.get(pk=int(user_id))
-                groups = get_user_groups(user)
-            except (User.DoesNotExist, ValueError):
-                groups = []
-        else:
-            # Если user_id не указан, возвращаем группы текущего пользователя
-            user = cast('User', request.user)
-            groups = get_user_groups(user)
+        user = cast('User', request.user)
+        groups = get_user_groups(user)
 
         return Response({'groups': groups}, status=status.HTTP_200_OK)
 
@@ -103,17 +82,8 @@ class UserGroupsAPIView(APIView):
     tags=['users'],
     summary='Получить доступные группы',
     description=(
-        'Получить список групп, в которых не состоит указанный пользователь'
+        'Группы системы не перечисляются: всегда возвращается пустой список'
     ),
-    parameters=[
-        OpenApiParameter(
-            name='user_id',
-            type=int,
-            location=OpenApiParameter.QUERY,
-            description='ID пользователя',
-            required=False,
-        ),
-    ],
     responses={
         200: OpenApiResponse(
             description='Список доступных групп',
@@ -138,7 +108,7 @@ class UserGroupsAPIView(APIView):
 class AvailableGroupsAPIView(APIView):
     """API view for getting available groups for user.
 
-    Returns list of groups that the specified user does not belong to.
+    Groups of other users are never enumerated, so the list is always empty.
     """
 
     schema = AutoSchema()
@@ -157,16 +127,6 @@ class AvailableGroupsAPIView(APIView):
         Returns:
             Response with available groups list.
         """
-        user_id = request.query_params.get('user_id')
-
-        if user_id:
-            try:
-                user = User.objects.get(pk=int(user_id))
-                groups = get_groups_not_for_user(user)
-            except (User.DoesNotExist, ValueError):
-                groups = []
-        else:
-            user = cast('User', request.user)
-            groups = get_groups_not_for_user(user)
+        groups: list[dict[str, Any]] = []
 
         return Response({'groups': groups}, status=status.HTTP_200_OK)
