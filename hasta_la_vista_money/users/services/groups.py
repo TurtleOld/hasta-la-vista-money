@@ -60,27 +60,6 @@ def get_user_groups(user: User) -> list[GroupDict]:
     )
 
 
-def get_groups_not_for_user(user: User) -> list[GroupDict]:
-    """Get groups not assigned to user.
-
-    Args:
-        user: User to check groups for.
-
-    Returns:
-        List of GroupDict with groups not assigned to user.
-    """
-    return cast(
-        'list[GroupDict]',
-        list(
-            Group.objects.exclude(
-                id__in=user.groups.values_list('id', flat=True),
-            )
-            .prefetch_related('user_set')
-            .values('id', 'name'),
-        ),
-    )
-
-
 def create_group(form: ModelForm[Group]) -> Group:
     """Create a new group.
 

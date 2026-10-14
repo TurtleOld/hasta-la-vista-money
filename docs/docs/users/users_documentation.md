@@ -202,7 +202,6 @@ urlpatterns = [
 
 ### `services/groups.py`
 - `get_user_groups()` - получение групп пользователя
-- `get_groups_not_for_user()` - получение доступных групп
 - `create_group()` - создание группы
 - `delete_group()` - удаление группы
 - `add_user_to_group()` - добавление пользователя в группу

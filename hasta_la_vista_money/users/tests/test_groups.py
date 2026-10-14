@@ -30,7 +30,6 @@ from hasta_la_vista_money.users.services.groups import (
     create_group,
     delete_group,
     get_family_groups,
-    get_groups_not_for_user,
     get_or_create_default_family_group,
     get_or_create_family_invite,
     get_user_groups,
@@ -67,12 +66,10 @@ class GroupsServiceTest(TestCase):
         self.user: UserType = user
         self.group: Group = Group.objects.create(name='TestGroup')
 
-    def test_get_user_groups_and_not_for_user(self) -> None:
+    def test_get_user_groups(self) -> None:
         self.user.groups.add(self.group)
         user_groups: list[GroupDict] = get_user_groups(self.user)
         self.assertTrue(any(g['name'] == 'TestGroup' for g in user_groups))
-        not_for_user: list[GroupDict] = get_groups_not_for_user(self.user)
-        self.assertFalse(any(g['name'] == 'TestGroup' for g in not_for_user))
 
     def test_create_and_delete_group(self) -> None:
         form: GroupCreateForm = GroupCreateForm(data={'name': 'NewGroup'})
