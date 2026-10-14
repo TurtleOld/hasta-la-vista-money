@@ -142,6 +142,24 @@ class TestAccountAPI(TestCase):
             Account.objects.filter(name_account='Deposit bypass').exists(),
         )
 
+    def test_account_api_patch_balance_does_not_change_balance(self) -> None:
+        """PATCH must not rewrite the balance via the account API."""
+        url = reverse(
+            'finance_account:api_detail',
+            kwargs={'pk': self.account.pk},
+        )
+        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
+
+        response = self.client.patch(
+            url,
+            {'balance': '999999.00'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
     def test_account_api_filter_by_user(self) -> None:
         """Test account API filtering by user."""
         other_user = User.objects.create_user(

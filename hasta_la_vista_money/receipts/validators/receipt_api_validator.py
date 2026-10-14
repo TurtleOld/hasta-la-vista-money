@@ -94,13 +94,17 @@ class ReceiptAPIValidator:
             )
 
         try:
-            account = Account.objects.get(id=account_id, user=user)
+            account = Account.objects.available_for_regular_operations().get(
+                id=account_id,
+                user=user,
+            )
         except Account.DoesNotExist:
             return ValidationResult(
                 is_valid=False,
                 error=(
-                    f'Account with id {account_id} does not exist '
-                    f'or does not belong to user {user_id}'
+                    f'Account with id {account_id} does not exist, '
+                    f'does not belong to user {user_id}, '
+                    f'or is not available for regular operations'
                 ),
             )
 
