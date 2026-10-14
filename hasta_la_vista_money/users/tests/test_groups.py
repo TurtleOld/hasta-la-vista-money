@@ -7,13 +7,14 @@ from django.contrib.auth.models import Group
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest, HttpResponse
-from django.test import RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import (
     DEFAULT_FAMILY_GROUP_NAME,
     DEFAULT_FAMILY_GROUP_PREFIX,
+    FAMILY_INVITE_TTL,
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.forms import (
@@ -33,6 +34,7 @@ from hasta_la_vista_money.users.services.groups import (
     get_or_create_default_family_group,
     get_or_create_family_invite,
     get_user_groups,
+    remove_user_from_group,
     user_can_manage_group,
     user_has_group_access,
 )
@@ -50,6 +52,15 @@ User = get_user_model()
 
 def _dummy_get_response(_request: HttpRequest) -> HttpResponse:
     return HttpResponse()
+
+
+def _messages_request() -> HttpRequest:
+    factory: RequestFactory = RequestFactory()
+    request: HttpRequest = factory.get('/')
+    SessionMiddleware(_dummy_get_response).process_request(request)
+    request.session.save()
+    MessageMiddleware(_dummy_get_response).process_request(request)
+    return request
 
 
 class GroupsServiceTest(TestCase):
@@ -365,3 +376,168 @@ class RegisterByInviteViewTest(TestCase):
             f'/users/groups/join/{self.invite.token}/',
             fetch_redirect_response=False,
         )
+
+
+class FamilyInviteTtlTest(TestCase):
+    """Family invites expire and rotate when members are removed."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        owner = User.objects.first()
+        if owner is None:
+            self.fail('No user found in fixtures')
+        self.owner: UserType = owner
+        self.group: Group = Group.objects.create(name='TtlGroup')
+        self.owner.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.owner,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+    def test_new_invite_receives_default_ttl(self) -> None:
+        invite = get_or_create_family_invite(self.group, self.owner)
+
+        expires_at = invite.expires_at
+        if expires_at is None:
+            self.fail('expires_at was not set for a new invite')
+
+        expected = timezone.now() + FAMILY_INVITE_TTL
+        self.assertLessEqual(abs(expires_at - expected), timedelta(minutes=1))
+
+    def test_expired_active_invite_is_not_reused(self) -> None:
+        invite = get_or_create_family_invite(self.group, self.owner)
+        invite.expires_at = timezone.now() - timedelta(minutes=1)
+        invite.save(update_fields=['expires_at'])
+
+        refreshed = get_or_create_family_invite(self.group, self.owner)
+
+        self.assertNotEqual(refreshed.pk, invite.pk)
+        refreshed_expires = refreshed.expires_at
+        if refreshed_expires is None:
+            self.fail('expires_at was not set for a refreshed invite')
+        self.assertGreater(refreshed_expires, timezone.now())
+
+    def test_removing_member_rotates_active_invite(self) -> None:
+        member: UserType = User.objects.create_user(
+            username='removed-member',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        invite = get_or_create_family_invite(self.group, self.owner)
+        accept_family_invite(member, invite.token)
+        self.assertIn(self.group, member.groups.all())
+
+        remove_user_from_group(_messages_request(), member, self.group)
+        self.assertNotIn(self.group, member.groups.all())
+
+        other: UserType = User.objects.create_user(
+            username='other-member',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.assertIsNone(accept_family_invite(other, invite.token))
+        self.assertNotIn(self.group, other.groups.all())
+
+        new_invite = get_or_create_family_invite(self.group, self.owner)
+        self.assertNotEqual(new_invite.token, invite.token)
+        self.assertTrue(new_invite.is_active)
+
+
+class JoinFamilyGroupViewTest(TestCase):
+    """GET must not mutate membership; only a CSRF-protected POST joins."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        owner = User.objects.first()
+        if owner is None:
+            self.fail('No user found in fixtures')
+        self.owner: UserType = owner
+        self.group: Group = Group.objects.create(name='JoinGroup')
+        self.owner.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.owner,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        self.invite = get_or_create_family_invite(self.group, self.owner)
+        self.joiner: UserType = User.objects.create_user(
+            username='joiner',
+            email='joiner@example.com',
+            password='testpass123',  # nosec B106: test-only password
+        )
+
+    def _url(self) -> str:
+        return f'/users/groups/join/{self.invite.token}/'
+
+    def _profile_url(self) -> str:
+        return f'/users/profile/{self.joiner.pk}/'
+
+    def test_get_shows_confirmation_without_joining(self) -> None:
+        self.client.force_login(self.joiner)
+
+        response = self.client.get(self._url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.group.name)
+        self.assertContains(response, self.owner.username)
+        self.assertNotIn(self.group, self.joiner.groups.all())
+        self.assertFalse(
+            FamilyGroupMembership.objects.filter(
+                group=self.group,
+                user=self.joiner,
+            ).exists(),
+        )
+
+    def test_post_joins_group(self) -> None:
+        self.client.force_login(self.joiner)
+
+        response = self.client.post(self._url())
+
+        self.assertRedirects(response, self._profile_url())
+        self.assertIn(self.group, self.joiner.groups.all())
+        self.assertTrue(
+            FamilyGroupMembership.objects.filter(
+                group=self.group,
+                user=self.joiner,
+                role=FamilyGroupMembership.Role.VIEWER,
+            ).exists(),
+        )
+
+    def test_expired_token_is_rejected(self) -> None:
+        self.invite.expires_at = timezone.now() - timedelta(minutes=1)
+        self.invite.save(update_fields=['expires_at'])
+        self.client.force_login(self.joiner)
+
+        for method in ('get', 'post'):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(self._url())
+                self.assertRedirects(response, self._profile_url())
+                self.assertNotIn(self.group, self.joiner.groups.all())
+
+    def test_expired_token_shows_clear_message(self) -> None:
+        self.invite.expires_at = timezone.now() - timedelta(minutes=1)
+        self.invite.save(update_fields=['expires_at'])
+        self.client.force_login(self.joiner)
+
+        response = self.client.get(self._url(), follow=True)
+
+        self.assertContains(response, 'недействительна или истекла')
+
+    def test_unauthenticated_user_is_redirected_to_registration(self) -> None:
+        response = self.client.get(self._url())
+
+        self.assertRedirects(
+            response,
+            f'/users/groups/register/{self.invite.token}/',
+            fetch_redirect_response=False,
+        )
+
+    def test_post_without_csrf_token_is_rejected(self) -> None:
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.joiner)
+
+        response = client.post(self._url())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(self.group, self.joiner.groups.all())

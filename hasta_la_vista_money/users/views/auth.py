@@ -33,7 +33,10 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.services.auth import login_user
-from hasta_la_vista_money.users.services.groups import accept_family_invite
+from hasta_la_vista_money.users.services.groups import (
+    accept_family_invite,
+    get_active_family_invite,
+)
 from hasta_la_vista_money.users.services.password import set_user_password
 from hasta_la_vista_money.users.services.registration import (
     register_invited_user,
@@ -207,14 +210,7 @@ class RegisterByInviteView(View):
     template_name = 'users/register_by_invite.html'
 
     def _get_invite(self, token: str) -> FamilyInvite | None:
-        invite = (
-            FamilyInvite.objects.filter(token=token, is_active=True)
-            .select_related('group')
-            .first()
-        )
-        if invite is None or invite.is_expired():
-            return None
-        return invite
+        return get_active_family_invite(token)
 
     def get(
         self,

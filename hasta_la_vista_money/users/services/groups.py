@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from typing_extensions import TypedDict
 
@@ -15,6 +16,7 @@ from hasta_la_vista_money.constants import (
     DEFAULT_FAMILY_GROUP_NAME,
     DEFAULT_FAMILY_GROUP_PREFIX,
     DEFAULT_FAMILY_GROUP_SUFFIX_BYTES,
+    FAMILY_INVITE_TTL,
 )
 from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
@@ -206,6 +208,7 @@ def remove_user_from_group(
         return
     user.groups.remove(group)
     FamilyGroupMembership.objects.filter(group=group, user=user).delete()
+    rotate_family_invites(group)
     messages.success(request, _('Пользователь успешно удалён из группы.'))
 
 
@@ -293,13 +296,14 @@ def get_or_create_family_invite(
     created_by: User,
     role: str = FamilyGroupMembership.Role.VIEWER,
 ) -> FamilyInvite:
-    """Create or reuse an active invite link for a family group owner."""
+    """Create or reuse a non-expired active invite link for a group owner."""
 
     invite = FamilyInvite.objects.filter(
         group=group,
         created_by=created_by,
         role=role,
         is_active=True,
+        expires_at__gt=timezone.now(),
     ).first()
     if invite:
         return invite
@@ -308,21 +312,41 @@ def get_or_create_family_invite(
         created_by=created_by,
         role=role,
         token=secrets.token_urlsafe(32),
+        expires_at=timezone.now() + FAMILY_INVITE_TTL,
+    )
+
+
+def get_active_family_invite(token: str) -> FamilyInvite | None:
+    """Return an active, non-expired invite for the given token."""
+
+    return (
+        FamilyInvite.objects.filter(
+            token=token,
+            is_active=True,
+            expires_at__gt=timezone.now(),
+        )
+        .select_related('group', 'created_by')
+        .first()
+    )
+
+
+def rotate_family_invites(group: Group) -> None:
+    """Deactivate the active invite links of a group.
+
+    The next ``get_or_create_family_invite`` request issues a fresh token, so
+    that members removed from the group cannot reuse an old share link.
+    """
+
+    FamilyInvite.objects.filter(group=group, is_active=True).update(
+        is_active=False,
     )
 
 
 def accept_family_invite(user: User, token: str) -> Group | None:
     """Accept a family invite and return joined group if token is valid."""
 
-    invite = (
-        FamilyInvite.objects.filter(
-            token=token,
-            is_active=True,
-        )
-        .select_related('group')
-        .first()
-    )
-    if invite is None or invite.is_expired():
+    invite = get_active_family_invite(token)
+    if invite is None:
         return None
     user.groups.add(invite.group)
     membership = FamilyGroupMembership.objects.filter(
