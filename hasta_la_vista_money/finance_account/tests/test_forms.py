@@ -655,3 +655,33 @@ class TestTransferMoneyAccountForm(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('to_account', form.errors)
         self.assertIn('from_account', form.errors)
+
+    def test_form_rejects_different_currencies(self) -> None:
+        """Form rejects transfers between accounts of different currencies."""
+        usd_account = Account.objects.create(
+            user=self.user,
+            name_account='USD Account',
+            balance=Decimal('500.00'),
+            currency='USD',
+        )
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': usd_account.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
+            'notes': 'Cross-currency',
+        }
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['to_account'],
+            ['Нельзя переводить деньги между счетами в разных валютах.'],
+        )
