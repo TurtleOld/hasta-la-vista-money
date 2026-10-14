@@ -912,6 +912,49 @@ class TestReceiptAPIs(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_receipt_create_api_rejects_deposit_account(self) -> None:
+        deposit = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад через API',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        url = reverse_lazy('receipts:receipt_api_create')
+        data: dict[str, Any] = {
+            'user': self.user.pk,
+            'finance_account': deposit.pk,
+            'receipt_date': '2023-06-29T21:24:00Z',
+            'total_sum': '500.00',
+            'number_receipt': '99999',
+            'operation_type': 1,
+            'seller': {
+                'name_seller': 'Продавец вклада',
+                'retail_place_address': 'ул. Вклада, 1',
+                'retail_place': 'Магазин Вклада',
+            },
+            'product': [
+                {
+                    'product_name': 'Продукт вклада',
+                    'price': '500.00',
+                    'quantity': '1',
+                    'amount': '500.00',
+                },
+            ],
+        }
+        response = self.client.post(
+            url,
+            json.dumps(data),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        deposit.refresh_from_db()
+        self.assertEqual(deposit.balance, Decimal('1000.00'))
+        self.assertFalse(
+            Receipt.objects.filter(number_receipt='99999').exists(),
+        )
+
     def test_receipt_create_api_duplicate(self) -> None:
         url = reverse_lazy('receipts:receipt_api_create')
         data = {
