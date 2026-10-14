@@ -149,6 +149,21 @@ class TestAccountSerializer(TestCase):
                 f'Field {field_name} should be writable',
             )
 
+    def test_balance_and_currency_read_only_on_update(self) -> None:
+        """Balance and currency must not be writable when updating."""
+        serializer = AccountSerializer(
+            self.account,
+            data={'balance': '999999.00', 'currency': 'USD'},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        serializer.save()
+
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.50'))
+        self.assertEqual(self.account.currency, 'RUB')
+
     def test_account_serializer_multiple_accounts(self) -> None:
         """Test AccountSerializer with multiple accounts."""
         account2 = Account.objects.create(

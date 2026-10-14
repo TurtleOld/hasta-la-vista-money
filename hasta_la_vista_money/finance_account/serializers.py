@@ -78,6 +78,22 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
 
         return bool(obj.user_id != user_id)
 
+    def get_fields(
+        self,
+    ) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
+        """Return serializer fields for the current operation.
+
+        When updating an existing account, ``balance`` and ``currency`` are
+        made read-only: the balance may only change through
+        ``BalanceService`` and the balance-audit chain, never by a direct
+        account API write. Initial values remain settable on create.
+        """
+        fields = super().get_fields()
+        if self.instance is not None:
+            fields['balance'].read_only = True
+            fields['currency'].read_only = True
+        return fields
+
     def create(self, validated_data: dict[str, Any]) -> Account:
         """Override create to set user from request."""
         request: Any = self.context.get('request')
