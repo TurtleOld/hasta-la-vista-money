@@ -147,6 +147,13 @@ class BalanceHistoryServiceTests(TestCase):
             effective_on=self.moment.date() + timedelta(days=1),
             destination_account=self.account,
         )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=deposit_account,
+            to_account=self.account,
+            amount=Decimal('400.00'),
+            exchange_date=self.moment + timedelta(days=1),
+        )
         service = (
             ApplicationContainer().finance_account.balance_history_service()
         )
