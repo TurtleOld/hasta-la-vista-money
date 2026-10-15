@@ -1,12 +1,15 @@
+import importlib
 import logging
+from types import ModuleType
 from typing import Any
 
 from django.urls import include, path
 
 import config.settings.debug_toolbar.settings as debug_toolbar_settings
 
+debug_toolbar: ModuleType | None
 try:
-    import debug_toolbar
+    debug_toolbar = importlib.import_module('debug_toolbar')
 except ImportError:
     debug_toolbar = None
 
