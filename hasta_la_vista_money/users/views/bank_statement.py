@@ -34,10 +34,8 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.protocols.services import (
+    BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
-)
-from hasta_la_vista_money.users.services.bank_statement_import import (
-    is_restartable_upload,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     InvalidReconciliationDecisionError,
@@ -52,6 +50,17 @@ if TYPE_CHECKING:
 
 def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
+
+
+def _import_service(
+    request: HttpRequest,
+) -> BankStatementImportServiceProtocol:
+    """Resolve statement import through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'BankStatementImportServiceProtocol',
+        request_with_container.container.users.bank_statement_import_service(),
+    )
 
 
 def _reconciliation_service(
@@ -117,13 +126,9 @@ class BankStatementUploadView(
 
             logger.info('Created upload record with id=%d', upload.pk)
 
-            restart = not created and is_restartable_upload(upload)
-            if restart:
-                upload.status = BankStatementUpload.Status.PENDING
-                upload.error_message = ''
-                upload.save(
-                    update_fields=['status', 'error_message', 'updated_at'],
-                )
+            restart = not created and _import_service(
+                self.request,
+            ).restart_if_stale(upload)
 
             if created or restart:
                 task_runner = cast(

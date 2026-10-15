@@ -134,13 +134,16 @@ def process_bank_statement_task(
 
     except BankStatementParseError as e:
         logger.exception('Failed to parse bank statement')
-        _mark_upload_failed(upload_id, f'Ошибка парсинга: {e!s}')
+        _mark_upload_failed(upload_id, f'{_("Ошибка парсинга")}: {e!s}')
         raise
 
     except RETRYABLE_ERRORS as e:
         logger.exception('Transient error processing bank statement')
         if self.request.retries >= self.max_retries:
-            _mark_upload_failed(upload_id, f'Непредвиденная ошибка: {e!s}')
+            _mark_upload_failed(
+                upload_id,
+                f'{_("Непредвиденная ошибка")}: {e!s}',
+            )
         raise self.retry(
             exc=e,
             countdown=constants.STATEMENT_IMPORT_RETRY_DELAY_SECONDS,
@@ -148,7 +151,7 @@ def process_bank_statement_task(
 
     except Exception as e:
         logger.exception('Unexpected error processing bank statement')
-        _mark_upload_failed(upload_id, f'Непредвиденная ошибка: {e!s}')
+        _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
         raise
 
 

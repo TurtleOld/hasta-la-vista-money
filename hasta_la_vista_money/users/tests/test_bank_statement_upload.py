@@ -5169,6 +5169,32 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(result['skipped_count'], 0)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_rerun_with_reset_cursor_relies_on_unique_constraints(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """Even a lost cursor cannot duplicate rows or the balance."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+        process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=0,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            status=BankStatementUpload.Status.PROCESSING,
+        )
+        process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('46000.00'))
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_status_is_not_failed_while_retry_is_pending(
         self,
         mock_camelot: MagicMock,

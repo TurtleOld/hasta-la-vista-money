@@ -61,22 +61,6 @@ logger = logging.getLogger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 
 
-def is_restartable_upload(upload: BankStatementUpload) -> bool:
-    """Можно ли заново поставить в очередь уже существующую загрузку.
-
-    Да, если импорт упал либо завис в обработке дольше порога.
-    """
-    if upload.status == BankStatementUpload.Status.FAILED:
-        return True
-    if upload.status not in {
-        BankStatementUpload.Status.PROCESSING,
-        BankStatementUpload.Status.PENDING,
-    }:
-        return False
-    stale_after = timedelta(minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES)
-    return timezone.now() - upload.updated_at > stale_after
-
-
 @dataclass(frozen=True)
 class StatementImportResult:
     """Итог одного прогона импорта банковской выписки.
@@ -112,6 +96,44 @@ class BankStatementImportService:
     def __init__(self, classifier: CategoryClassifier) -> None:
         """Инициализировать сервис категоризатором операций."""
         self.classifier = classifier
+
+    def restart_if_stale(self, upload: BankStatementUpload) -> bool:
+        """Вернуть упавшую или зависшую загрузку в очередь.
+
+        Перезапускается FAILED-загрузка и PENDING/PROCESSING, не
+        обновлявшаяся дольше ``STATEMENT_UPLOAD_STALE_MINUTES``. Переход
+        условный (по статусу и ``updated_at``), поэтому из двух
+        параллельных запросов перезапуск выигрывает только один.
+
+        Returns:
+            ``True``, если загрузку нужно поставить в очередь заново.
+        """
+        stale_after = timedelta(
+            minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
+        )
+        in_flight = {
+            BankStatementUpload.Status.PENDING,
+            BankStatementUpload.Status.PROCESSING,
+        }
+        if upload.status == BankStatementUpload.Status.FAILED:
+            pass
+        elif (
+            upload.status not in in_flight
+            or timezone.now() - upload.updated_at <= stale_after
+        ):
+            return False
+        restarted = BankStatementUpload.objects.filter(
+            pk=upload.pk,
+            status=upload.status,
+            updated_at=upload.updated_at,
+        ).update(
+            status=BankStatementUpload.Status.PENDING,
+            error_message='',
+            updated_at=timezone.now(),
+        )
+        if restarted:
+            upload.refresh_from_db()
+        return bool(restarted)
 
     def import_statement(
         self,
@@ -201,6 +223,13 @@ class BankStatementImportService:
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:
+                row_date = (
+                    trans['date'].date()
+                    if isinstance(trans['date'], datetime)
+                    else trans['date']
+                )
+                period_from = min(period_from or row_date, row_date)
+                period_to = max(period_to or row_date, row_date)
                 continue
             with transaction.atomic():
                 amount = trans['amount']
