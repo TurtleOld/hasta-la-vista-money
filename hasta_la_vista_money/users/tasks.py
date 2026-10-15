@@ -4,9 +4,11 @@ import logging
 from typing import Any
 
 from celery import shared_task
+from django.db import InterfaceError, OperationalError
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -20,6 +22,8 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 
 logger = logging.getLogger(__name__)
 
+RETRYABLE_ERRORS = (OperationalError, InterfaceError, OSError)
+
 
 def _cleanup_expired_bank_statements() -> dict[str, int]:
     """Remove expired statement data and return the number cleaned."""
@@ -32,7 +36,12 @@ cleanup_expired_bank_statements = shared_task(
 )(_cleanup_expired_bank_statements)
 
 
-@shared_task(bind=True, max_retries=3)  # type: ignore[untyped-decorator]
+@shared_task(  # type: ignore[untyped-decorator]
+    bind=True,
+    max_retries=constants.STATEMENT_IMPORT_MAX_RETRIES,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
 def process_bank_statement_task(
     self: Any,
     upload_id: int,
@@ -95,6 +104,7 @@ def process_bank_statement_task(
             update_fields=[
                 'status',
                 'progress',
+                'updated_at',
                 'statement_closing_balance',
                 'account_balance_after',
                 'balance_discrepancy',
@@ -124,31 +134,41 @@ def process_bank_statement_task(
 
     except BankStatementParseError as e:
         logger.exception('Failed to parse bank statement')
-        try:
-            upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = BankStatementUpload.Status.FAILED
-            upload.failed_count = 1
-            upload.error_message = f'Ошибка парсинга: {e!s}'
-            upload.save(
-                update_fields=['status', 'failed_count', 'error_message'],
-            )
-        except BankStatementUpload.DoesNotExist:
-            pass
+        _mark_upload_failed(upload_id, f'Ошибка парсинга: {e!s}')
         raise
+
+    except RETRYABLE_ERRORS as e:
+        logger.exception('Transient error processing bank statement')
+        if self.request.retries >= self.max_retries:
+            _mark_upload_failed(upload_id, f'Непредвиденная ошибка: {e!s}')
+        raise self.retry(
+            exc=e,
+            countdown=constants.STATEMENT_IMPORT_RETRY_DELAY_SECONDS,
+        ) from e
 
     except Exception as e:
         logger.exception('Unexpected error processing bank statement')
-        try:
-            upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = BankStatementUpload.Status.FAILED
-            upload.failed_count = 1
-            upload.error_message = f'Непредвиденная ошибка: {e!s}'
-            upload.save(
-                update_fields=['status', 'failed_count', 'error_message'],
-            )
-        except BankStatementUpload.DoesNotExist:
-            pass
-        raise self.retry(exc=e, countdown=60) from e
+        _mark_upload_failed(upload_id, f'Непредвиденная ошибка: {e!s}')
+        raise
+
+
+def _mark_upload_failed(upload_id: int, message: str) -> None:
+    """Перевести загрузку в FAILED с текстом ошибки."""
+    try:
+        upload = BankStatementUpload.objects.get(id=upload_id)
+    except BankStatementUpload.DoesNotExist:
+        return
+    upload.status = BankStatementUpload.Status.FAILED
+    upload.failed_count = 1
+    upload.error_message = message
+    upload.save(
+        update_fields=[
+            'status',
+            'failed_count',
+            'error_message',
+            'updated_at',
+        ],
+    )
 
 
 def _initialize_upload(
@@ -163,13 +183,14 @@ def _initialize_upload(
     """
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
-    upload.progress = 0
     upload.failed_count = 0
+    upload.error_message = ''
     upload.save(
         update_fields=[
             'status',
             'celery_task_id',
-            'progress',
             'failed_count',
+            'error_message',
+            'updated_at',
         ],
     )
