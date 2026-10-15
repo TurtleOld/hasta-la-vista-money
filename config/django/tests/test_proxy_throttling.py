@@ -1,11 +1,13 @@
 from typing import Final
 
 from axes.handlers.proxy import AxesProxyHandler
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.http import HttpRequest
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from rest_framework.settings import api_settings
 from rest_framework.test import APIRequestFactory
 from rest_framework.throttling import AnonRateThrottle
 
@@ -45,7 +47,6 @@ class ClientIpTest(TestCase):
 @override_settings(
     AXES_ENABLED=True,
     AXES_FAILURE_LIMIT=FAILURE_LIMIT,
-    AXES_CLIENT_IP_CALLABLE='hasta_la_vista_money.core.client_ip.get_client_ip',
     TRUSTED_PROXY_COUNT=1,
 )
 class AxesLockoutTest(TestCase):
@@ -89,6 +90,16 @@ class AxesLockoutTest(TestCase):
 
 
 class DrfThrottleIdentTest(TestCase):
+    def test_num_proxies_matches_trusted_proxy_count(self) -> None:
+        self.assertEqual(
+            settings.REST_FRAMEWORK['NUM_PROXIES'],
+            settings.TRUSTED_PROXY_COUNT,
+        )
+        self.assertEqual(
+            api_settings.NUM_PROXIES,
+            settings.TRUSTED_PROXY_COUNT,
+        )
+
     def _ident(self) -> str:
         request = APIRequestFactory().get(
             '/',
