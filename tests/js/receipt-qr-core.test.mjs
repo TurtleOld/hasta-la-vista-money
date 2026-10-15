@@ -10,7 +10,10 @@ import {
   frameMetrics,
   magnificationRegion,
   measureQR,
+  PHOTO_MAGNIFICATION,
+  createPhotoButton,
   parseQRVersion,
+  photoButton,
   pickCamera,
   rankCameras,
   scanHints,
@@ -908,4 +911,92 @@ test('hints: a foreign QR read restarts the 4 s not-found timer', () => {
       .hint.id;
   assert.equal(at(4400), 'idle');
   assert.equal(at(4500), 'notFound');
+});
+
+test('photoButton appears exactly 5 s after the camera opened', () => {
+  const state = createPhotoButton(1000);
+  const before = photoButton(state, 'tick', 5999);
+  assert.equal(before.visible, false);
+  const at = photoButton(before.state, 'tick', 6000);
+  assert.equal(at.visible, true);
+});
+
+test('photoButton stays visible once shown', () => {
+  let result = photoButton(createPhotoButton(0), 'tick', 5000);
+  result = photoButton(result.state, 'tick', 60000);
+  assert.equal(result.visible, true);
+});
+
+test('photoButton resets after a successful read', () => {
+  let result = photoButton(createPhotoButton(0), 'tick', 5000);
+  result = photoButton(result.state, 'read', 5100);
+  assert.equal(result.visible, false);
+  assert.equal(photoButton(result.state, 'tick', 10099).visible, false);
+  assert.equal(photoButton(result.state, 'tick', 10100).visible, true);
+});
+
+test('photo magnification keeps the source resolution of the crop', () => {
+  // 222 px QR -> 6 px/module, crop with padding stays below 1200 px.
+  const region = magnificationRegion(
+    squarePosition(1000, 1000, 222),
+    5,
+    { width: 4000, height: 3000 },
+    PHOTO_MAGNIFICATION,
+  );
+  assert.equal(region.scale, 1);
+});
+
+test('photo magnification never upscales a small QR', () => {
+  const region = magnificationRegion(
+    squarePosition(1000, 1000, 74),
+    5,
+    { width: 4000, height: 3000 },
+    PHOTO_MAGNIFICATION,
+  );
+  assert.equal(region.scale, 1);
+});
+
+test('photo magnification shrinks a crop over 1200 px', () => {
+  const region = magnificationRegion(
+    squarePosition(500, 500, 1400),
+    5,
+    { width: 4000, height: 3000 },
+    PHOTO_MAGNIFICATION,
+  );
+  const longest = Math.max(region.width, region.height);
+  assert.ok(Math.abs(longest * region.scale - 1200) < 1e-6);
+});
+
+test('photo magnification floors the shrink at minPxPerModule', () => {
+  assert.equal(PHOTO_MAGNIFICATION.minPxPerModule, 3);
+  // 1400 px QR -> 37.8 px/module; the 1200 px cap would give ~25 px/module.
+  const region = magnificationRegion(
+    squarePosition(500, 500, 1400),
+    5,
+    { width: 4000, height: 3000 },
+    { ...PHOTO_MAGNIFICATION, minPxPerModule: 30 },
+  );
+  assert.ok(Math.abs(region.scale * (1400 / 37) - 30) < 1e-6);
+});
+
+test('scanFrames passes region options to the magnification', async () => {
+  const frames = [{ image: { width: 4000, height: 3000 }, x: 0, y: 0 }];
+  const regions = [];
+  let calls = 0;
+  await scanFrames({
+    frames,
+    frameSize: { width: 4000, height: 3000 },
+    regionOptions: PHOTO_MAGNIFICATION,
+    decode: async () => {
+      calls += 1;
+      return calls === 1
+        ? [{ text: '', position: squarePosition(1000, 1000, 74), version: 5 }]
+        : [{ text: 'ok' }];
+    },
+    magnify: async (image, region) => {
+      regions.push(region);
+      return image;
+    },
+  });
+  assert.equal(regions[0].scale, 1);
 });

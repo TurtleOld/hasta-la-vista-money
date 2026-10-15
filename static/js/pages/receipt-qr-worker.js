@@ -1,6 +1,7 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 
 import {
+  PHOTO_MAGNIFICATION,
   frameMetrics,
   parseQRVersion,
   scanFrames,
@@ -35,8 +36,8 @@ function initializeDecoder(wasmUrl) {
   return decoderReady;
 }
 
-async function decodeImage(image) {
-  const results = await readBarcodes(image, READER_OPTIONS);
+async function decodeImage(image, options = READER_OPTIONS) {
+  const results = await readBarcodes(image, options);
   return results.map((result) => ({
     text: result.isValid === false ? '' : result.text,
     position: result.position,
@@ -68,6 +69,49 @@ function magnifyImage(image, region) {
   return context.getImageData(0, 0, width, height);
 }
 
+async function scanImages({
+  frames,
+  frameWidth,
+  frameHeight,
+  options,
+  regionOptions,
+}) {
+  await decoderReady;
+  let decodeMs = 0;
+  const result = await scanFrames({
+    frames,
+    frameSize: { width: frameWidth, height: frameHeight },
+    regionOptions,
+    decode: async (image) => {
+      const startedAt = performance.now();
+      try {
+        return await decodeImage(image, options);
+      } finally {
+        decodeMs += performance.now() - startedAt;
+      }
+    },
+    magnify: magnifyImage,
+  });
+  const metrics = frameMetrics(frames[0].image);
+  return { type: 'scan-result', ...result, ...metrics, decodeMs };
+}
+
+async function photoToImageData(blob) {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0);
+    return context.getImageData(0, 0, bitmap.width, bitmap.height);
+  } finally {
+    bitmap.close();
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 self.addEventListener('message', async (event) => {
   const { type } = event.data;
 
@@ -78,41 +122,45 @@ self.addEventListener('message', async (event) => {
     } catch (error) {
       self.postMessage({
         type: 'initialize-error',
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       });
     }
     return;
   }
 
-  if (type !== 'scan') {
+  if (type === 'scan') {
+    try {
+      self.postMessage(
+        await scanImages({
+          frames: event.data.frames,
+          frameWidth: event.data.frameWidth,
+          frameHeight: event.data.frameHeight,
+          options: READER_OPTIONS,
+        }),
+      );
+    } catch (error) {
+      self.postMessage({ type: 'scan-error', message: errorMessage(error) });
+    }
     return;
   }
 
-  try {
-    await decoderReady;
-    let decodeMs = 0;
-    const result = await scanFrames({
-      frames: event.data.frames,
-      frameSize: {
-        width: event.data.frameWidth,
-        height: event.data.frameHeight,
-      },
-      decode: async (image) => {
-        const startedAt = performance.now();
-        try {
-          return await decodeImage(image);
-        } finally {
-          decodeMs += performance.now() - startedAt;
-        }
-      },
-      magnify: magnifyImage,
-    });
-    const metrics = frameMetrics(event.data.frames[0].image);
-    self.postMessage({ type: 'scan-result', ...result, ...metrics, decodeMs });
-  } catch (error) {
-    self.postMessage({
-      type: 'scan-error',
-      message: error instanceof Error ? error.message : String(error),
-    });
+  if (type === 'scan-photo') {
+    try {
+      const image = await photoToImageData(event.data.blob);
+      const result = await scanImages({
+        frames: [{ image, x: 0, y: 0 }],
+        frameWidth: image.width,
+        frameHeight: image.height,
+        options: { ...READER_OPTIONS, tryDownscale: true },
+        regionOptions: PHOTO_MAGNIFICATION,
+      });
+      self.postMessage({ ...result, source: 'photo' });
+    } catch (error) {
+      self.postMessage({
+        type: 'scan-error',
+        source: 'photo',
+        message: errorMessage(error),
+      });
+    }
   }
 });

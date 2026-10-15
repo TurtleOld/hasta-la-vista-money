@@ -122,6 +122,7 @@
                  x-data="receiptQRScanPage"
                  data-worker-url="{% static 'js/dist/pages/receipt-qr-worker.js' %}"
                  data-wasm-url="{% static 'js/dist/vendor/zxing_reader.wasm' %}"
+                 data-upload-url="{% url 'receipts:upload' %}"
                  data-notifications-url="{% url 'receipts:processing_notifications' %}"
                  data-message-camera-unavailable="{% translate 'Камера или распознавание QR недоступны в этом браузере. Используйте вкладку «Файл».' %}"
                  data-message-camera-policy-blocked="{% translate 'Доступ к камере заблокирован настройками сайта. Используйте вкладку «Файл».' %}"
@@ -140,6 +141,9 @@
                  data-hint-found="{% translate 'QR-код найден, распознаю…' %}"
                  data-hint-not-found="{% translate 'QR-код обычно внизу чека — наведите на него' %}"
                  data-hint-idle="{% translate 'Наведите камеру на QR-код чека' %}"
+                 data-message-photo-recognizing="{% translate 'Распознаю фото…' %}"
+                 data-message-photo-not-found="{% translate 'Не удалось прочитать фото — поднесите ближе или добавьте света' %}"
+                 data-message-photo-upload-failed="{% translate 'Не удалось отправить фото на сервер. Попробуйте ещё раз или используйте вкладку «Файл».' %}"
                  data-message-preparing="{% translate 'Подготовка сканера…' %}"
                  data-message-scanning="{% translate 'Сканер готов. Поместите QR-код внутрь рамки.' %}">
                 <form method="post" action="{% url 'receipts:scan_qr' %}" id="scanQrForm" x-ref="scanForm">
@@ -178,6 +182,21 @@
                         </div>
                         <canvas x-ref="canvas" class="hidden"></canvas>
                     </div>
+
+                    <input type="file"
+                           class="hidden"
+                           accept="image/*"
+                           capture="environment"
+                           x-ref="photoInput">
+                    <button type="button"
+                            class="receipts-button receipts-button-secondary receipts-scan-photo"
+                            x-show="photoVisible"
+                            x-bind:disabled="photoBusy"
+                            x-on:click="takePhoto()"
+                            x-cloak>
+                        <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+                        {% translate 'Сделать фото' %}
+                    </button>
 
                     <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                     <div class="receipts-upload-error" x-show="noticeMessage" x-text="noticeMessage" x-cloak></div>

@@ -2725,6 +2725,18 @@ msgstr "Preparing the scanner…"
 msgid "Сканер готов. Поместите QR-код внутрь рамки."
 msgstr "The scanner is ready. Place the QR code inside the frame."
 
+msgid "Распознаю фото…"
+msgstr "Reading the photo…"
+
+msgid "Не удалось прочитать фото — поднесите ближе или добавьте света"
+msgstr "Could not read the photo — move closer or add more light"
+
+msgid "Не удалось отправить фото на сервер. Попробуйте ещё раз или используйте вкладку «Файл»."
+msgstr "Could not send the photo to the server. Try again or use the “File” tab."
+
+msgid "Сделать фото"
+msgstr "Take photo"
+
 msgid "Включить фонарик"
 msgstr "Turn flashlight on"
 
