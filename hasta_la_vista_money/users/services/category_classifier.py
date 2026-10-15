@@ -1,9 +1,10 @@
-import logging
 from typing import Protocol, runtime_checkable
+
+import structlog
 
 from core.services.external_model import ExternalModelTransport
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _SYSTEM_PROMPT = (
     'Ты помощник по категоризации финансовых операций. '

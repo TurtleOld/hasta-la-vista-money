@@ -277,8 +277,8 @@ class LoanDeleteView(
                 account.delete()
         except ProtectedError:
             logger.exception(
-                'Account %s is protected',
-                account.name_account,
+                'loan_account_protected',
+                account_id=account.pk,
             )
             messages.error(
                 self.request,

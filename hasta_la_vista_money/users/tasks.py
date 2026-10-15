@@ -1,8 +1,8 @@
 """Celery tasks for user-related async operations."""
 
-import logging
 from typing import Any
 
+import structlog
 from celery import shared_task
 from django.db import InterfaceError, OperationalError
 from django.utils.translation import gettext_lazy as _
@@ -20,7 +20,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 RETRYABLE_ERRORS = (OperationalError, InterfaceError)
 
@@ -66,8 +66,8 @@ def process_bank_statement_task(
         BankStatementParseError: Если PDF не удалось разобрать.
     """
     logger.info(
-        'Starting bank statement processing task for upload_id=%d',
-        upload_id,
+        'bank_statement_task_started',
+        upload_id=upload_id,
     )
 
     try:
@@ -113,11 +113,12 @@ def process_bank_statement_task(
         BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
-            'Completed: %d income, %d expenses, %d skipped, discrepancy=%s',
-            result.income_count,
-            result.expense_count,
-            result.skipped_count,
-            upload.balance_discrepancy,
+            'bank_statement_task_completed',
+            upload_id=upload_id,
+            income=result.income_count,
+            expenses=result.expense_count,
+            skipped=result.skipped_count,
+            discrepancy=str(upload.balance_discrepancy),
         )
 
         return {
@@ -129,16 +130,25 @@ def process_bank_statement_task(
         }
 
     except BankStatementUpload.DoesNotExist:
-        logger.exception('Upload with id=%d not found', upload_id)
+        logger.exception(
+            'bank_statement_upload_not_found',
+            upload_id=upload_id,
+        )
         raise
 
     except BankStatementParseError as e:
-        logger.exception('Failed to parse bank statement')
+        logger.exception(
+            'bank_statement_parse_failed',
+            upload_id=upload_id,
+        )
         _mark_upload_failed(upload_id, f'{_("Ошибка парсинга")}: {e!s}')
         raise
 
     except RETRYABLE_ERRORS as e:
-        logger.exception('Transient error processing bank statement')
+        logger.exception(
+            'bank_statement_task_transient_error',
+            upload_id=upload_id,
+        )
         if self.request.retries >= self.max_retries:
             _mark_upload_failed(
                 upload_id,
@@ -150,7 +160,10 @@ def process_bank_statement_task(
         ) from e
 
     except Exception as e:
-        logger.exception('Unexpected error processing bank statement')
+        logger.exception(
+            'bank_statement_task_unexpected_error',
+            upload_id=upload_id,
+        )
         _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
         raise
 

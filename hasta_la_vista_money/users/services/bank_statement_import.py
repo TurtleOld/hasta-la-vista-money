@@ -9,12 +9,12 @@ Celery-задачей ``process_bank_statement_task``, которая остаё
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
+import structlog
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
         CategoryClassifier,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 
 
@@ -150,7 +150,11 @@ class BankStatementImportService:
         Raises:
             BankStatementParseError: Если PDF не удалось разобрать.
         """
-        logger.info('Processing upload: %s', upload.pdf_file.path)
+        logger.info(
+            'bank_statement_import_started',
+            upload_id=upload.pk,
+            user_id=upload.user_id,
+        )
         parser = BankStatementParser(upload.pdf_file.path)
         parse_result = parser.parse()
         transactions = parse_result.transactions
@@ -158,7 +162,11 @@ class BankStatementImportService:
         upload.total_transactions = len(transactions)
         upload.save(update_fields=['total_transactions'])
 
-        logger.info('Found %d transactions to process', len(transactions))
+        logger.info(
+            'bank_statement_transactions_found',
+            upload_id=upload.pk,
+            transactions=len(transactions),
+        )
 
         existing_categories = list(
             Category.objects.filter(user=upload.user)
@@ -387,10 +395,11 @@ class BankStatementImportService:
 
             if (idx + 1) % batch_size == 0 or idx == total - 1:
                 logger.info(
-                    'Progress: %d/%d transactions (%d%%)',
-                    idx + 1,
-                    total,
-                    upload.progress,
+                    'bank_statement_import_progress',
+                    upload_id=upload.pk,
+                    processed=idx + 1,
+                    total=total,
+                    progress=upload.progress,
                 )
 
         record_statement_import_summary(

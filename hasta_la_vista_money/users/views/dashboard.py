@@ -1,5 +1,5 @@
 import json
-import logging
+import sys
 import traceback
 from collections.abc import Mapping
 from decimal import Decimal
@@ -7,6 +7,7 @@ from operator import itemgetter
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from urllib.parse import urlencode
 
+import structlog
 from dateutil.parser import parse as parse_date
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet, Sum
@@ -53,7 +54,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from hasta_la_vista_money.core.types import RequestWithContainer
-import sys
+
+logger = structlog.get_logger(__name__)
 
 
 def _views_module() -> Any:
@@ -538,8 +540,7 @@ class DashboardDataView(LoginRequiredMixin, View):
         ) as e:
             error_msg = str(e)
             traceback_str = traceback.format_exc()
-            logger = logging.getLogger(__name__)
-            logger.exception('Dashboard data loading error')
+            logger.exception('dashboard_data_loading_failed')
             return JsonResponse(
                 {
                     'error': f'Internal server error: {error_msg}',
