@@ -424,7 +424,8 @@
   transform: scale(0.97);
 }
 
-.finances-chip {
+.finances-chip,
+.finances-chip.finances-date-chip {
   background: transparent;
   border: 1px solid var(--finances-border);
   border-radius: 0.65rem;
