@@ -81,9 +81,10 @@ LOGGING = {
             'handlers': ['json_file', 'console'],
             'level': 'INFO',
         },
-        'myproject': {  # Замените на имя вашего Django-проекта
+        'hasta_la_vista_money': {
             'handlers': ['json_file', 'console'],
-            'level': 'INFO',
+            'level': LOG_LEVEL,  # noqa: F405
+            'propagate': False,
         },
     },
 }

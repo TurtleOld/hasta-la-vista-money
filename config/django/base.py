@@ -670,6 +670,8 @@ logs_dir = BASE_DIR / 'logs'
 if not logs_dir.exists():
     logs_dir.mkdir()
 
+LOG_LEVEL: str = config('LOG_LEVEL', default='INFO').upper()
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -700,6 +702,11 @@ LOGGING = {
         'django_structlog': {
             'handlers': ['console', 'flat_line_file'],
             'level': 'WARNING',
+        },
+        'hasta_la_vista_money': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': LOG_LEVEL,
+            'propagate': False,
         },
     },
 }

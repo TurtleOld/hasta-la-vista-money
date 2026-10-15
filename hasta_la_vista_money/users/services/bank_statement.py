@@ -9,7 +9,6 @@ Supports multiple bank formats with auto-detection:
 
 from __future__ import annotations
 
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -20,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import camelot
+import structlog
 from django.utils import timezone
 from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from hasta_la_vista_money.users.models import User
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -297,17 +297,21 @@ class _GenericBankParser(BaseBankStatementParser):
             BankStatementParseError: При любой ошибке парсинга.
         """
         try:
-            logger.info('Starting PDF parsing (generic): %s', self.pdf_path)
+            logger.info('bank_statement_parse_started', parser='generic')
             try:
                 full_text = extract_text(str(self.pdf_path))
             except Exception:
                 full_text = ''
             tables = self._read_tables()
-            logger.info('Found %d tables in PDF', len(tables))
+            logger.info('bank_statement_tables_found', tables=len(tables))
             transactions: list[dict[str, Any]] = []
 
             for idx, table in enumerate(tables):
-                logger.info('Processing table %d/%d', idx + 1, len(tables))
+                logger.info(
+                    'bank_statement_table_processing',
+                    table=idx + 1,
+                    tables=len(tables),
+                )
                 table_df = table.df
                 if len(
                     table_df.columns,
@@ -316,9 +320,9 @@ class _GenericBankParser(BaseBankStatementParser):
                 ):
                     parsed = self._parse_table(table_df)
                     logger.info(
-                        'Extracted %d transactions from table %d',
-                        len(parsed),
-                        idx + 1,
+                        'bank_statement_table_extracted',
+                        transactions=len(parsed),
+                        table=idx + 1,
                     )
                     transactions.extend(parsed)
 
@@ -329,14 +333,15 @@ class _GenericBankParser(BaseBankStatementParser):
             closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
-                'Parsing complete. Total: %d transactions, closing_balance=%s',
-                len(transactions),
-                closing_balance,
+                'bank_statement_parse_completed',
+                parser='generic',
+                transactions=len(transactions),
+                closing_balance=str(closing_balance),
             )
         except BankStatementParseError:
             raise
         except Exception as e:
-            logger.exception('Failed to parse PDF: %s', self.pdf_path)
+            logger.exception('bank_statement_parse_failed')
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
@@ -373,7 +378,11 @@ class _GenericBankParser(BaseBankStatementParser):
                 if trans:
                     transactions.append(trans)
             except ValueError as e:
-                logger.warning('Failed to parse row %s: %s', row_idx, e)
+                logger.warning(
+                    'bank_statement_row_parse_failed',
+                    row=row_idx,
+                    error=str(e),
+                )
         return transactions
 
     def _parse_transaction_row(
@@ -495,7 +504,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
         Returns:
             ``StatementParseResult`` со списком операций и конечным остатком.
         """
-        logger.info('Starting PDF parsing (Raiffeisen): %s', self.pdf_path)
+        logger.info('bank_statement_parse_started', parser='raiffeisen')
         return super().parse()
 
     def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
@@ -555,17 +564,21 @@ class _SberbankParser(BaseBankStatementParser):
             BankStatementParseError: При любой ошибке парсинга.
         """
         try:
-            logger.info('Starting PDF parsing (Sberbank): %s', self.pdf_path)
+            logger.info('bank_statement_parse_started', parser='sberbank')
             try:
                 full_text = extract_text(str(self.pdf_path))
             except Exception:
                 full_text = ''
             tables = self._read_tables()
-            logger.info('Found %d tables in PDF', len(tables))
+            logger.info('bank_statement_tables_found', tables=len(tables))
             transactions: list[dict[str, Any]] = []
 
             for idx, table in enumerate(tables):
-                logger.info('Processing table %d/%d', idx + 1, len(tables))
+                logger.info(
+                    'bank_statement_table_processing',
+                    table=idx + 1,
+                    tables=len(tables),
+                )
                 table_df = table.df
                 if len(
                     table_df.columns,
@@ -574,9 +587,9 @@ class _SberbankParser(BaseBankStatementParser):
                 ):
                     parsed = self._parse_table(table_df)
                     logger.info(
-                        'Extracted %d transactions from table %d',
-                        len(parsed),
-                        idx + 1,
+                        'bank_statement_table_extracted',
+                        transactions=len(parsed),
+                        table=idx + 1,
                     )
                     transactions.extend(parsed)
 
@@ -587,14 +600,15 @@ class _SberbankParser(BaseBankStatementParser):
             closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
-                'Parsing complete. Total: %d (after dedup), closing_balance=%s',
-                len(transactions),
-                closing_balance,
+                'bank_statement_parse_completed',
+                parser='sberbank',
+                transactions=len(transactions),
+                closing_balance=str(closing_balance),
             )
         except BankStatementParseError:
             raise
         except Exception as e:
-            logger.exception('Failed to parse PDF: %s', self.pdf_path)
+            logger.exception('bank_statement_parse_failed')
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
@@ -654,11 +668,11 @@ class _SberbankParser(BaseBankStatementParser):
         merged_col = num_cols == MIN_SBERBANK_COLUMNS
         data_start = self._find_data_start_row(df)
         logger.debug(
-            'Data starts at row %d, table has %d rows x %d cols (merged=%s)',
-            data_start,
-            len(df),
-            num_cols,
-            merged_col,
+            'bank_statement_table_layout',
+            data_start=data_start,
+            rows=len(df),
+            columns=num_cols,
+            merged=merged_col,
         )
         i = data_start
 
@@ -929,7 +943,7 @@ class _OzonBankParser(BaseBankStatementParser):
     def parse(self) -> StatementParseResult:
         """Parse purchases, refunds, and tips from an Ozon statement."""
         try:
-            logger.info('Starting PDF parsing (Ozon): %s', self.pdf_path)
+            logger.info('bank_statement_parse_started', parser='ozon')
             tables = self._read_tables()
             transactions: list[dict[str, Any]] = []
             operation_rows = 0
@@ -947,14 +961,15 @@ class _OzonBankParser(BaseBankStatementParser):
 
             transactions = _dedup_transactions(transactions)
             logger.info(
-                'Ozon parsing complete: %d importable of %d operations',
-                len(transactions),
-                operation_rows,
+                'bank_statement_parse_completed',
+                parser='ozon',
+                transactions=len(transactions),
+                operations=operation_rows,
             )
         except BankStatementParseError:
             raise
         except Exception as e:
-            logger.exception('Failed to parse Ozon PDF: %s', self.pdf_path)
+            logger.exception('bank_statement_parse_failed', parser='ozon')
             error_msg = f'Не удалось обработать PDF Ozon: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
@@ -1017,9 +1032,8 @@ class _OzonBankParser(BaseBankStatementParser):
         category = self._category_for_description(description)
         if category is None:
             logger.warning(
-                'Skipping unsupported Ozon operation %s: %s',
-                source_ref,
-                description,
+                'bank_statement_ozon_operation_skipped',
+                source_ref=source_ref,
             )
             return None
 
@@ -1110,34 +1124,41 @@ def _create_parser(pdf_path: Path) -> BaseBankStatementParser:
         text = _extract_pdf_text_for_detection(pdf_path)
     except (OSError, ValueError, PDFSyntaxError) as e:
         logger.warning(
-            'Could not extract text for bank detection '
-            '(using generic parser): %s',
-            e,
+            'bank_statement_detection_text_unavailable',
+            error=str(e),
         )
         text = ''
 
     if RAIFFEISEN_BANK_NAME in text:
-        logger.info('Detected bank: Raiffeisen')
+        logger.info('bank_statement_bank_detected', bank='raiffeisen')
         return _RaiffeisenBankParser(pdf_path)
 
     if SBERBANK_CREDIT_CARD_TITLE in text:
-        logger.info('Detected bank: Sberbank credit card')
+        logger.info('bank_statement_bank_detected', bank='sberbank')
         return _SberbankParser(pdf_path)
 
     if OZON_BANK_NAME in text and OZON_STATEMENT_TITLE in text:
-        logger.info('Detected bank: Ozon')
+        logger.info('bank_statement_bank_detected', bank='ozon')
         return _OzonBankParser(pdf_path)
 
     # Fallback: column-header-based detection
     if 'Поступления' in text and '№ П/П' in text:
-        logger.info('Detected bank: Raiffeisen (via column headers)')
+        logger.info(
+            'bank_statement_bank_detected',
+            bank='raiffeisen',
+            via='column_headers',
+        )
         return _RaiffeisenBankParser(pdf_path)
 
     if 'КАТЕГОРИЯ' in text and 'ОСТАТОК СРЕДСТВ' in text:
-        logger.info('Detected bank: Sberbank (via column headers)')
+        logger.info(
+            'bank_statement_bank_detected',
+            bank='sberbank',
+            via='column_headers',
+        )
         return _SberbankParser(pdf_path)
 
-    logger.info('Unknown bank format, using generic parser')
+    logger.info('bank_statement_bank_unknown')
     return _GenericBankParser(pdf_path)
 
 

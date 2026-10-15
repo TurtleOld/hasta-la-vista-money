@@ -1,8 +1,8 @@
 import importlib
-import logging
 from types import ModuleType
 from typing import Any
 
+import structlog
 from django.urls import include, path
 
 import config.settings.debug_toolbar.settings as debug_toolbar_settings
@@ -13,7 +13,7 @@ try:
 except ImportError:
     debug_toolbar = None
 
-logger = logging.getLogger('configuration')
+logger = structlog.get_logger('configuration')
 
 
 def show_toolbar() -> bool:
@@ -40,7 +40,7 @@ def show_toolbar() -> bool:
         return False
 
     if debug_toolbar is None:
-        logger.info('No installation found for: django_debug_toolbar')
+        logger.info('debug_toolbar_not_installed')
         return False
 
     return True
@@ -58,7 +58,7 @@ class DebugToolbarSetup:
         middleware_position: int | None = None,
     ) -> tuple[list[str], list[str]]:
         _show_toolbar: bool = show_toolbar()
-        logger.info('Django Debug Toolbar in use: %s', _show_toolbar)
+        logger.info('debug_toolbar_in_use', enabled=_show_toolbar)
 
         if not _show_toolbar:
             return installed_apps, middleware

@@ -1,9 +1,9 @@
-import logging
 import sys
 from decimal import Decimal
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -46,6 +46,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+
+
+logger = structlog.get_logger(__name__)
 
 
 def _views_module() -> Any:
@@ -96,7 +99,6 @@ class BankStatementUploadView(
 
     def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
         """Process uploaded PDF file asynchronously."""
-        logger = logging.getLogger(__name__)
         user = cast('User', self.request.user)
         pdf_file = form.cleaned_data['pdf_file']
         account = form.cleaned_data['account']
@@ -108,9 +110,9 @@ class BankStatementUploadView(
 
         try:
             logger.info(
-                'Creating bank statement upload for user %s, account %s',
-                user.username,
-                account.name_account,
+                'bank_statement_upload_creating',
+                user_id=user.pk,
+                account_id=account.pk,
             )
 
             # Create upload record
@@ -124,7 +126,11 @@ class BankStatementUploadView(
                 },
             )
 
-            logger.info('Created upload record with id=%d', upload.pk)
+            logger.info(
+                'bank_statement_upload_created',
+                upload_id=upload.pk,
+                user_id=user.pk,
+            )
 
             restart = not created and _import_service(
                 self.request,
@@ -136,7 +142,11 @@ class BankStatementUploadView(
                     _views_module().process_bank_statement_task,
                 )
                 task = task_runner.delay(upload.pk)
-                logger.info('Started background task with id=%s', task.id)
+                logger.info(
+                    'bank_statement_task_enqueued',
+                    upload_id=upload.pk,
+                    task_id=task.id,
+                )
             else:
                 messages.warning(
                     self.request,
@@ -150,8 +160,10 @@ class BankStatementUploadView(
                 messages.success(self.request, str(self.success_message))
 
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.exception('Error creating upload record')
+            logger.exception(
+                'bank_statement_upload_failed',
+                user_id=user.pk,
+            )
             messages.error(
                 self.request,
                 f'Произошла ошибка при загрузке файла: {e!s}',
