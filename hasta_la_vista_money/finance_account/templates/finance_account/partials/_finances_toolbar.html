@@ -50,8 +50,7 @@
     <div class="finances-pop-wrap">
         {% comment %}
         A native date input, not a custom calendar popup: it opens the
-        OS/browser's own picker on tap with zero positioning or binding
-        logic of our own to get wrong on some device we can't test on.
+        OS/browser's own picker via showPicker, with native click fallback.
         {% endcomment %}
         <label class="finances-chip finances-date-chip {% if finances_filter.selected_date %}is-active{% endif %}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

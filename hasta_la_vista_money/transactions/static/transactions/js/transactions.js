@@ -110,6 +110,20 @@ document.addEventListener('alpine:init', () => {
   }
 
   document.addEventListener('click', (event) => {
+    const dateNative = event.target.closest('[data-finances-date-native]');
+    if (dateNative) {
+      closePops();
+      if (typeof dateNative.showPicker === 'function') {
+        try {
+          dateNative.showPicker();
+          event.preventDefault();
+        } catch {
+          // Keep the native click action if the browser rejects showPicker.
+        }
+      }
+      return;
+    }
+
     const popButton = event.target.closest('[data-finances-pop-button]');
     if (popButton) {
       const name = popButton.dataset.financesPopButton;
