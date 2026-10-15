@@ -8,12 +8,17 @@ from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.commands import (
+    CloseMaturedDepositCommand,
     FundDepositCommand,
     ReverseDepositEventCommand,
     TopUpDepositCommand,
     WithdrawDepositCommand,
 )
-from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
+from hasta_la_vista_money.deposits.models import (
+    Deposit,
+    DepositCapitalizationEvent,
+    DepositTerm,
+)
 from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
@@ -170,3 +175,40 @@ class DepositBalanceHistoryTests(TestCase):
 
         self._expect(_moment(2026, 2, 5), '400.00', '600.00', '0.00')
         self._expect(_moment(2026, 2, 15), '500.00', '500.00', '0.00')
+
+    def test_closure_and_its_reversal_move_principal_and_interest(
+        self,
+    ) -> None:
+        DepositTerm.objects.filter(pk=self.deposit.current_term.pk).update(
+            matures_on=date(2026, 1, 2),
+        )
+        closed = self.deposit_service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=self.user,
+                deposit_id=self.deposit.pk,
+                destination=(
+                    DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                ),
+                destination_account_id=self.destination.pk,
+                principal=Decimal('500.00'),
+                gross=Decimal('100.00'),
+                withholding=Decimal('10.00'),
+                net=Decimal('90.00'),
+                posting_on=date(2026, 1, 3),
+                value_on=date(2026, 1, 3),
+            ),
+        )
+        self.deposit_service.reverse_deposit_event(
+            ReverseDepositEventCommand(
+                user=self.user,
+                deposit_id=self.deposit.pk,
+                event_kind='principal',
+                event_id=closed.principal_event.pk,
+                reason='Ошибка.',
+                reversed_on=date(2026, 1, 5),
+            ),
+        )
+
+        self._expect(_moment(2026, 1, 2), '500.00', '500.00', '0.00')
+        self._expect(_moment(2026, 1, 4), '500.00', '0.00', '590.00')
+        self._expect(_moment(2026, 1, 6), '500.00', '500.00', '0.00')

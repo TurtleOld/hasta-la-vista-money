@@ -70,17 +70,23 @@ class DepositMovementSource:
         reversal event carries the original's type and accounts, so its
         movement is the original's with the opposite sign.
         """
-        events = DepositPrincipalEvent.objects.filter(
-            Q(source_account=account)
-            | Q(destination_account=account)
-            | Q(deposit__account=account),
-            effective_on__gte=since,
-        ).exclude(
-            Q(type=DepositPrincipalEvent.Type.WITHDRAWAL)
-            | Q(
-                reversal_of__isnull=False,
-                type__in=_TRANSFER_LOGGED_REVERSAL_TYPES,
-            ),
+        events = (
+            DepositPrincipalEvent.objects.select_related(
+                'deposit',
+            )
+            .filter(
+                Q(source_account=account)
+                | Q(destination_account=account)
+                | Q(deposit__account=account),
+                effective_on__gte=since,
+            )
+            .exclude(
+                Q(type=DepositPrincipalEvent.Type.WITHDRAWAL)
+                | Q(
+                    reversal_of__isnull=False,
+                    type__in=_TRANSFER_LOGGED_REVERSAL_TYPES,
+                ),
+            )
         )
         movements: list[FinancialMovement] = []
         for event in events:
@@ -119,7 +125,7 @@ class DepositMovementSource:
         return [
             FinancialMovement(
                 effective_on=event.posting_on,
-                delta=event.net,
+                delta=-event.net if event.reversal_of_id else event.net,
                 description='Капитализация процентов',
             )
             for event in (*capitalized_on_own_account, *paid_to_own_account)
