@@ -11,8 +11,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-hlvm}
-    ports:
-      - "5432:5432"
     restart: always
     networks:
       - default
@@ -26,8 +24,6 @@ services:
     image: redis:8.6.3-alpine
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     networks:
       - default
@@ -88,8 +84,6 @@ services:
       - staticfiles_data:/app/staticfiles
       - media_data:/app/media
       - nginx_config_data:/app/nginx-runtime
-    ports:
-      - "8001:8001"
     env_file:
       - .env
     environment:
