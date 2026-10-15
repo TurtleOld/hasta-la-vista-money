@@ -35,6 +35,7 @@ from hasta_la_vista_money.constants import (
     DEFAULT_TIMEZONE_NAME,
     STATEMENT_RETENTION_DAYS,
 )
+from hasta_la_vista_money.core.upload_paths import bank_statement_upload_to
 
 
 def bank_statement_expires_at() -> datetime:
@@ -149,7 +150,7 @@ class BankStatementUpload(Model):
         related_name='bank_statement_uploads',
     )
     account = ForeignKey('finance_account.Account', on_delete=CASCADE)
-    pdf_file = FileField(upload_to='bank_statements/')
+    pdf_file = FileField(upload_to=bank_statement_upload_to)
     file_hash = CharField(max_length=64, blank=True, default='')
     status = CharField(
         max_length=25,
