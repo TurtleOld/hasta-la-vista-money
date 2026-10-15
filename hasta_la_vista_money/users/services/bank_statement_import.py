@@ -318,6 +318,7 @@ class BankStatementImportService:
                         created = True
 
                     if created:
+                        # The bank is the source of truth: no funds check.
                         upload.account = BalanceService().apply_balance_delta(
                             upload.account,
                             balance_change,

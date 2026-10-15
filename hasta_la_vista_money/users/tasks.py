@@ -22,7 +22,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 
 logger = logging.getLogger(__name__)
 
-RETRYABLE_ERRORS = (OperationalError, InterfaceError, OSError)
+RETRYABLE_ERRORS = (OperationalError, InterfaceError)
 
 
 def _cleanup_expired_bank_statements() -> dict[str, int]:
