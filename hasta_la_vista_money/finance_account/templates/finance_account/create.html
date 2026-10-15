@@ -584,6 +584,10 @@
                 if (type === 'income' || type === 'expense') {
                     this.type = type;
                 }
+                const amount = params.get('amount');
+                if (amount && /^\d+(?:\.\d{1,2})?$/.test(amount)) {
+                    this.amount = amount;
+                }
                 const categoryId = params.get('category');
                 if (categoryId) {
                     const btn = document.querySelector(
