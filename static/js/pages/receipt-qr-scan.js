@@ -1,12 +1,134 @@
 import {
   calculateCenteredScanRegion,
   isFNSReceiptQR,
+  pickCamera,
   shouldScanFullFrame,
 } from '../receipt-qr-core.mjs';
 
 const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
 const WORKER_START_TIMEOUT_MS = 10000;
+const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
+const IDEAL_WIDTH = 1920;
+const IDEAL_HEIGHT = 1080;
+const CAMERA_MISSING_ERRORS = ['NotFoundError', 'OverconstrainedError'];
+
+function readSavedCameraId() {
+  try {
+    return window.localStorage.getItem(CAMERA_STORAGE_KEY);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveCameraId(deviceId) {
+  try {
+    window.localStorage.setItem(CAMERA_STORAGE_KEY, deviceId);
+  } catch (_error) {
+    // Storage may be unavailable (private mode); the choice is just not kept.
+  }
+}
+
+function forgetCameraId() {
+  try {
+    window.localStorage.removeItem(CAMERA_STORAGE_KEY);
+  } catch (_error) {
+    // Nothing to forget when storage is unavailable.
+  }
+}
+
+function videoConstraints(deviceId) {
+  return {
+    video: {
+      ...(deviceId
+        ? { deviceId: { exact: deviceId } }
+        : { facingMode: { ideal: 'environment' } }),
+      width: { ideal: IDEAL_WIDTH },
+      height: { ideal: IDEAL_HEIGHT },
+      resizeMode: { ideal: 'crop-and-scale' },
+    },
+  };
+}
+
+function safeCapabilities(track) {
+  try {
+    return track.getCapabilities?.() || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function hasContinuousFocus(stream) {
+  const capabilities = safeCapabilities(stream.getVideoTracks()[0]);
+  return (capabilities?.focusMode || []).includes('continuous');
+}
+
+async function probeBackCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cameras = [];
+  for (const device of devices) {
+    if (device.kind !== 'videoinput' || !device.deviceId) {
+      continue;
+    }
+    let probe = null;
+    try {
+      probe = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: device.deviceId } },
+      });
+      cameras.push({
+        deviceId: device.deviceId,
+        label: device.label,
+        capabilities: safeCapabilities(probe.getVideoTracks()[0]),
+      });
+    } catch (error) {
+      console.warn('receipt QR scan: camera probe failed', error);
+    } finally {
+      probe?.getTracks().forEach((track) => track.stop());
+    }
+  }
+  return cameras;
+}
+
+async function openStream() {
+  const savedId = readSavedCameraId();
+  if (savedId) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(
+        videoConstraints(savedId),
+      );
+      if (hasContinuousFocus(stream)) {
+        return stream;
+      }
+      stream.getTracks().forEach((track) => track.stop());
+    } catch (error) {
+      if (!CAMERA_MISSING_ERRORS.includes(error?.name)) {
+        throw error;
+      }
+    }
+    forgetCameraId();
+  }
+
+  // Labels and capabilities are only readable after permission is granted.
+  const primer = await navigator.mediaDevices.getUserMedia(
+    videoConstraints(null),
+  );
+  primer.getTracks().forEach((track) => track.stop());
+
+  let deviceId = null;
+  try {
+    deviceId = pickCamera(await probeBackCameras(), null);
+  } catch (error) {
+    console.warn('receipt QR scan: camera discovery failed', error);
+  }
+  if (!deviceId) {
+    return navigator.mediaDevices.getUserMedia(videoConstraints(null));
+  }
+  const stream = await navigator.mediaDevices.getUserMedia(
+    videoConstraints(deviceId),
+  );
+  saveCameraId(deviceId);
+  return stream;
+}
 
 function messagesFrom(element) {
   return {
@@ -89,6 +211,8 @@ function registerReceiptQRScanPage(Alpine) {
       workerBusy: false,
       scanTimer: null,
       lastFullFrameTime: 0,
+      lastTapPoint: null,
+      lastTapTime: 0,
       torchAvailable: false,
       torchEnabled: false,
       zoomAvailable: false,
@@ -160,14 +284,7 @@ function registerReceiptQRScanPage(Alpine) {
         }
 
         try {
-          this.stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: 'environment' },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-              resizeMode: { ideal: 'crop-and-scale' },
-            },
-          });
+          this.stream = await openStream();
         } catch (error) {
           console.error('receipt QR scan: camera startup failed', error);
           this.errorMessage = describeCameraError(error, this.messages);
@@ -341,16 +458,12 @@ function registerReceiptQRScanPage(Alpine) {
         }
         const track = this.getVideoTrack();
         const video = this.$refs.video;
-        if (!track?.getCapabilities || !video) {
+        if (!track || !video) {
           return;
         }
-        let capabilities;
-        try {
-          capabilities = track.getCapabilities();
-        } catch (_error) {
-          return;
-        }
-        if (!capabilities.pointsOfInterest) {
+        if (
+          !navigator.mediaDevices.getSupportedConstraints().pointsOfInterest
+        ) {
           return;
         }
         const rect = video.getBoundingClientRect();
@@ -358,12 +471,12 @@ function registerReceiptQRScanPage(Alpine) {
           x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
           y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
         };
-        const advanced = { pointsOfInterest: [point] };
-        if ((capabilities.focusMode || []).includes('single-shot')) {
-          advanced.focusMode = 'single-shot';
-        }
+        this.lastTapPoint = point;
+        this.lastTapTime = performance.now();
         try {
-          await track.applyConstraints({ advanced: [advanced] });
+          await track.applyConstraints({
+            advanced: [{ pointsOfInterest: [point] }],
+          });
         } catch (error) {
           console.warn('receipt QR scan: point focus unavailable', error);
         }
@@ -398,7 +511,16 @@ function registerReceiptQRScanPage(Alpine) {
 
         const region = calculateCenteredScanRegion(canvas.width, canvas.height);
         const frames = [
-          context.getImageData(region.x, region.y, region.width, region.height),
+          {
+            image: context.getImageData(
+              region.x,
+              region.y,
+              region.width,
+              region.height,
+            ),
+            x: region.x,
+            y: region.y,
+          },
         ];
         const now = performance.now();
         if (
@@ -408,14 +530,26 @@ function registerReceiptQRScanPage(Alpine) {
             FULL_FRAME_INTERVAL_MS,
           )
         ) {
-          frames.push(context.getImageData(0, 0, canvas.width, canvas.height));
+          frames.push({
+            image: context.getImageData(0, 0, canvas.width, canvas.height),
+            x: 0,
+            y: 0,
+          });
           this.lastFullFrameTime = now;
         }
 
         this.workerBusy = true;
         this.noticeMessage = '';
-        const transfer = frames.map((frame) => frame.data.buffer);
-        this.worker.postMessage({ type: 'scan', frames }, transfer);
+        const transfer = frames.map((frame) => frame.image.data.buffer);
+        this.worker.postMessage(
+          {
+            type: 'scan',
+            frames,
+            frameWidth: canvas.width,
+            frameHeight: canvas.height,
+          },
+          transfer,
+        );
       },
 
       submitDecoded(rawValue) {

@@ -35,6 +35,21 @@ jobs:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: reviewdog -conf=.reviewdog.yml
 
+  js:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: actions/setup-node@v6.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint:js
+      - run: npm run format:js:check
+      - run: npm run test:js
+
   build:
     runs-on: ubuntu-latest
     env:
