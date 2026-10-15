@@ -9,15 +9,18 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+from celery.exceptions import Retry
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import OperationalError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
@@ -5056,3 +5059,261 @@ class TestOzonBankStatement(TestCase):
                 type=TransactionType.EXPENSE,
             ).exists(),
         )
+
+
+class TestBankStatementImportReliability(TestCase):
+    """Import must survive worker loss, retries and bank-truth balances."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Тестовый счет',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def _create_upload(self) -> BankStatementUpload:
+        return BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'statement.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+        )
+
+    def _mock_table(self, mock_camelot: MagicMock) -> None:
+        mock_df = pd.DataFrame(
+            {
+                0: ['', '01.01.2024 10:00', '1', '2'],
+                1: ['', '', '', ''],
+                2: ['', '', 'Большая покупка', 'Зарплата'],
+                3: ['', '', '', ''],
+                4: ['', '', '', ''],
+                5: ['', '', '-5000,00 ₽', '+50000,00 ₽'],
+                6: ['', '', '', ''],
+            },
+        )
+        mock_table = MagicMock()
+        mock_table.df = mock_df
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_expense_above_balance_is_imported_without_retries(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A statement row larger than the balance does not abort import."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+
+        with patch.object(process_bank_statement_task, 'retry') as retry:
+            result = process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        retry.assert_not_called()
+        self.assertEqual(result['expense_count'], 1)
+        self.assertEqual(result['income_count'], 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('46000.00'))
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_rerun_after_second_row_failure_counts_first_row_once(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """First row committed, second failed: rerun finishes with 1+1."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+        service = ApplicationContainer().users.bank_statement_import_service()
+        real = service._classify_category
+        outcomes: list[Any] = [None, RuntimeError('worker died')]
+
+        def flaky(*args: Any, **kwargs: Any) -> str:
+            outcome = outcomes.pop(0)
+            if outcome is not None:
+                raise outcome
+            return cast('str', real(*args, **kwargs))
+
+        with (
+            patch.object(service, '_classify_category', side_effect=flaky),
+            self.assertRaises(RuntimeError),
+        ):
+            service.import_statement(upload)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+
+        upload.refresh_from_db()
+        upload.status = BankStatementUpload.Status.PROCESSING
+        upload.save(update_fields=['status'])
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('46000.00'))
+        self.assertEqual(result['income_count'], 1)
+        self.assertEqual(result['expense_count'], 1)
+        self.assertEqual(result['skipped_count'], 0)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_rerun_with_reset_cursor_relies_on_unique_constraints(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """Even a lost cursor cannot duplicate rows or the balance."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+        process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=0,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            status=BankStatementUpload.Status.PROCESSING,
+        )
+        process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('46000.00'))
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_status_is_not_failed_while_retry_is_pending(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A transient error keeps PROCESSING until retries run out."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementImportService.import_statement',
+                side_effect=OperationalError('db gone'),
+            ),
+            patch.object(
+                process_bank_statement_task,
+                'retry',
+                side_effect=Retry(),
+            ),
+            self.assertRaises(Retry),
+        ):
+            process_bank_statement_task.apply(
+                args=[upload.pk],
+                throw=True,
+            ).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_deterministic_error_fails_without_retry(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """Non-transient errors are marked FAILED immediately."""
+        self._mock_table(mock_camelot)
+        upload = self._create_upload()
+
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementImportService.import_statement',
+                side_effect=ValueError('bad row'),
+            ),
+            patch.object(process_bank_statement_task, 'retry') as retry,
+        ):
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        retry.assert_not_called()
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+
+    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    def test_reupload_of_failed_statement_restarts_task(
+        self,
+        mock_task: MagicMock,
+    ) -> None:
+        """Uploading the same file after FAILED enqueues the task again."""
+        mock_task.delay.return_value = MagicMock(id='task-id')
+        pdf = b'%PDF-1.4 same content'
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash=sha256(pdf).hexdigest(),
+            status=BankStatementUpload.Status.FAILED,
+            pdf_file=SimpleUploadedFile('s.pdf', pdf),
+        )
+
+        self.client.post(
+            reverse('users:bank_statement_upload'),
+            {
+                'account': self.account.pk,
+                'pdf_file': SimpleUploadedFile(
+                    's.pdf',
+                    pdf,
+                    content_type='application/pdf',
+                ),
+            },
+        )
+
+        mock_task.delay.assert_called_once_with(upload.pk)
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
+
+    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    def test_reupload_of_stale_processing_restarts_but_fresh_does_not(
+        self,
+        mock_task: MagicMock,
+    ) -> None:
+        """Only PROCESSING uploads older than the threshold are restarted."""
+        mock_task.delay.return_value = MagicMock(id='task-id')
+        pdf = b'%PDF-1.4 other content'
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash=sha256(pdf).hexdigest(),
+            status=BankStatementUpload.Status.PROCESSING,
+            pdf_file=SimpleUploadedFile('s.pdf', pdf),
+        )
+
+        def post() -> None:
+            self.client.post(
+                reverse('users:bank_statement_upload'),
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        's.pdf',
+                        pdf,
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+
+        post()
+        mock_task.delay.assert_not_called()
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            updated_at=timezone.now()
+            - timedelta(minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES + 1),
+        )
+        post()
+        mock_task.delay.assert_called_once_with(upload.pk)

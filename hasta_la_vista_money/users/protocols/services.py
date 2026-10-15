@@ -144,6 +144,8 @@ class BankStatementRetentionServiceProtocol(Protocol):
 class BankStatementImportServiceProtocol(Protocol):
     """Protocol for the unified bank statement import pipeline."""
 
+    def restart_if_stale(self, upload: BankStatementUpload) -> bool: ...
+
     def import_statement(
         self,
         upload: BankStatementUpload,

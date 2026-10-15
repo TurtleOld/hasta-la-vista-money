@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
@@ -97,6 +97,44 @@ class BankStatementImportService:
         """Инициализировать сервис категоризатором операций."""
         self.classifier = classifier
 
+    def restart_if_stale(self, upload: BankStatementUpload) -> bool:
+        """Вернуть упавшую или зависшую загрузку в очередь.
+
+        Перезапускается FAILED-загрузка и PENDING/PROCESSING, не
+        обновлявшаяся дольше ``STATEMENT_UPLOAD_STALE_MINUTES``. Переход
+        условный (по статусу и ``updated_at``), поэтому из двух
+        параллельных запросов перезапуск выигрывает только один.
+
+        Returns:
+            ``True``, если загрузку нужно поставить в очередь заново.
+        """
+        stale_after = timedelta(
+            minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
+        )
+        in_flight = {
+            BankStatementUpload.Status.PENDING,
+            BankStatementUpload.Status.PROCESSING,
+        }
+        if upload.status == BankStatementUpload.Status.FAILED:
+            pass
+        elif (
+            upload.status not in in_flight
+            or timezone.now() - upload.updated_at <= stale_after
+        ):
+            return False
+        restarted = BankStatementUpload.objects.filter(
+            pk=upload.pk,
+            status=upload.status,
+            updated_at=upload.updated_at,
+        ).update(
+            status=BankStatementUpload.Status.PENDING,
+            error_message='',
+            updated_at=timezone.now(),
+        )
+        if restarted:
+            upload.refresh_from_db()
+        return bool(restarted)
+
     def import_statement(
         self,
         upload: BankStatementUpload,
@@ -171,16 +209,28 @@ class BankStatementImportService:
             Кортеж ``(income_count, expense_count, skipped_count,
             needs_transfer_count)``.
         """
-        income_count = 0
-        expense_count = 0
-        skipped_count = 0
-        needs_transfer_count = 0
+        # Counters and cursor are saved atomically with each row, so a
+        # rerun resumes where the previous run stopped.
+        income_count = upload.income_count
+        expense_count = upload.expense_count
+        skipped_count = upload.skipped_count
+        needs_transfer_count = upload.needs_transfer_count
+        resume_from = upload.processed_transactions
         batch_size = 10
         total = len(transactions)
         period_from: date | None = None
         period_to: date | None = None
 
         for idx, trans in enumerate(transactions):
+            if idx < resume_from:
+                row_date = (
+                    trans['date'].date()
+                    if isinstance(trans['date'], datetime)
+                    else trans['date']
+                )
+                period_from = min(period_from or row_date, row_date)
+                period_to = max(period_to or row_date, row_date)
+                continue
             with transaction.atomic():
                 amount = trans['amount']
                 description = trans['description']
@@ -297,9 +347,11 @@ class BankStatementImportService:
                         created = True
 
                     if created:
+                        # The bank is the source of truth: no funds check.
                         upload.account = BalanceService().apply_balance_delta(
                             upload.account,
                             balance_change,
+                            check_funds=False,
                         )
                         if type_value == TransactionType.INCOME:
                             income_count += 1
@@ -315,14 +367,12 @@ class BankStatementImportService:
                         if period_to is None or row_date > period_to:
                             period_to = row_date
 
-            upload.processed_transactions = idx + 1
-            upload.income_count = income_count
-            upload.expense_count = expense_count
-            upload.skipped_count = skipped_count
-            upload.needs_transfer_count = needs_transfer_count
-            upload.progress = int((idx + 1) / total * 100)
-
-            if (idx + 1) % batch_size == 0 or idx == total - 1:
+                upload.processed_transactions = idx + 1
+                upload.income_count = income_count
+                upload.expense_count = expense_count
+                upload.skipped_count = skipped_count
+                upload.needs_transfer_count = needs_transfer_count
+                upload.progress = int((idx + 1) / total * 100)
                 upload.save(
                     update_fields=[
                         'processed_transactions',
@@ -331,8 +381,11 @@ class BankStatementImportService:
                         'skipped_count',
                         'needs_transfer_count',
                         'progress',
+                        'updated_at',
                     ],
                 )
+
+            if (idx + 1) % batch_size == 0 or idx == total - 1:
                 logger.info(
                     'Progress: %d/%d transactions (%d%%)',
                     idx + 1,

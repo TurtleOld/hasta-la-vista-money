@@ -34,6 +34,7 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.protocols.services import (
+    BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
@@ -49,6 +50,17 @@ if TYPE_CHECKING:
 
 def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
+
+
+def _import_service(
+    request: HttpRequest,
+) -> BankStatementImportServiceProtocol:
+    """Resolve statement import through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'BankStatementImportServiceProtocol',
+        request_with_container.container.users.bank_statement_import_service(),
+    )
 
 
 def _reconciliation_service(
@@ -114,7 +126,11 @@ class BankStatementUploadView(
 
             logger.info('Created upload record with id=%d', upload.pk)
 
-            if created:
+            restart = not created and _import_service(
+                self.request,
+            ).restart_if_stale(upload)
+
+            if created or restart:
                 task_runner = cast(
                     'Any',
                     _views_module().process_bank_statement_task,
@@ -130,7 +146,7 @@ class BankStatementUploadView(
             # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
 
-            if created:
+            if created or restart:
                 messages.success(self.request, str(self.success_message))
 
         except Exception as e:
