@@ -480,8 +480,7 @@
   white-space: nowrap;
 }
 
-/* The input stays real and on top so a tap always opens the native OS
-   picker — reliably, with no JS deciding whether/when to open it. Its own
+/* The input stays real and on top for native interaction. Its own
    text is just hidden: the browser renders that text (mm/dd/yyyy, dd.mm.yyyy,
    ...) per OS/browser locale, which we can't control, so .finances-date-chip-label
    shows our own dd.mm.yyyy text instead, kept in sync by transactions.js. */
@@ -493,6 +492,20 @@
   opacity: 0;
   padding: 0;
   position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+/* Keep the native picker target over the whole chip as a fallback when
+   showPicker is unavailable or rejected by the browser. */
+.finances-date-chip-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  height: 100%;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  width: 100%;
 }
 
 .finances-pop {
