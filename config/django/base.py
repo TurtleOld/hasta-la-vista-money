@@ -12,7 +12,6 @@ from csp.constants import NONCE, SELF
 from decouple import config
 from django.core.exceptions import ImproperlyConfigured
 
-import hasta_la_vista_money.api.schema  # noqa: F401
 from config.django.sessions import *  # noqa: F403
 from config.django.validator_env import EnvironmentValidator
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
@@ -323,6 +322,15 @@ AXES_COOLOFF_TIME = 1
 AXES_LOCKOUT_TEMPLATE = None
 AXES_VERBOSE = False
 AXES_ENABLE_ADMIN = False
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+
+# Number of reverse proxies in front of Django (0 when exposed directly).
+TRUSTED_PROXY_COUNT = config(
+    'TRUSTED_PROXY_COUNT',
+    default=0 if DEBUG else 1,
+    cast=int,
+)
+AXES_CLIENT_IP_CALLABLE = 'hasta_la_vista_money.core.client_ip.get_client_ip'
 if IS_TESTING:
     AXES_ENABLED = False
 if not DEBUG:
@@ -494,6 +502,7 @@ REST_FRAMEWORK = {
         'user': '1000/hour',
         'login': '5/min',
     },
+    'NUM_PROXIES': TRUSTED_PROXY_COUNT,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
