@@ -19,6 +19,35 @@ const AUTOZOOM_COOLDOWN_MS = 600;
 const AUTOZOOM_SETTLE_MS = 300;
 const DEFAULT_ZOOM_STEP = 0.1;
 
+const HINT_WARMUP_MS = 800;
+const HINT_HOLD_MS = 400;
+const HINT_MIN_DWELL_MS = 1500;
+const HINT_SETTLE_MS = 300;
+const HINT_WRONG_QR_MS = 3000;
+const HINT_NOT_FOUND_MS = 4000;
+const HINT_SHARPNESS_WINDOW_MS = 3000;
+const HINT_DARK_ENTER = 40;
+const HINT_DARK_EXIT = 55;
+const HINT_BLUR_ENTER = 0.35;
+const HINT_BLUR_EXIT = 0.5;
+const HINT_MIN_PX_PER_MODULE = 3;
+const HINT_MIN_SHARE = 0.25;
+const HINT_MAX_SHARE = 0.7;
+
+// Order is priority: the first active condition wins.
+const HINT_PRIORITY = [
+  'wrongQr',
+  'dark',
+  'blurry',
+  'tooSmall',
+  'tooLarge',
+  'found',
+  'notFound',
+  'idle',
+];
+const HINT_IMMEDIATE = new Set(['wrongQr', 'notFound', 'idle']);
+const HINT_MEASURED = ['dark', 'blurry', 'tooSmall', 'tooLarge'];
+
 export function calculateCenteredScanRegion(width, height, ratio = 0.72) {
   const boundedRatio = Math.min(1, Math.max(0.1, ratio));
   const size = Math.max(1, Math.floor(Math.min(width, height) * boundedRatio));
@@ -347,5 +376,173 @@ export function autozoomStep(state, measurement, now) {
   return {
     state: { ...next, zoom, streak: 0, changedAt: now },
     zoom,
+  };
+}
+
+export function createScanHints(now) {
+  return {
+    startedAt: now,
+    active: {},
+    since: {},
+    samples: [],
+    relativeSharpness: 1,
+    lastQrAt: now,
+    wrongQrUntil: -Infinity,
+    settleUntil: -Infinity,
+    shown: { id: 'idle', since: -Infinity },
+  };
+}
+
+function hintKey(id, observation) {
+  if (id === 'dark') {
+    const torch = observation.torch;
+    return torch?.available && !torch.on ? 'darkTorch' : 'dark';
+  }
+  return id;
+}
+
+/**
+ * Live hint reducer. `observation`:
+ * `{brightness, sharpness, qr: {pxPerModule, share} | null,
+ *   wrongQr: boolean, zoomStepped: boolean,
+ *   zoom: {available, atMin, atMax}, torch: {available, on}}`
+ * where `wrongQr` means a non-receipt QR was read in this very frame.
+ * Returns `{state, hint: {id, key}}`.
+ */
+export function scanHints(state, observation, now) {
+  const qr = observation.qr;
+  const zoom = observation.zoom || { available: false };
+  const settleUntil = observation.zoomStepped
+    ? now + HINT_SETTLE_MS
+    : state.settleUntil;
+  const settling = now < settleUntil;
+  const wrongQrUntil = observation.wrongQr
+    ? now + HINT_WRONG_QR_MS
+    : state.wrongQrUntil;
+
+  let samples = state.samples;
+  let relativeSharpness = state.relativeSharpness;
+  if (!settling) {
+    samples = [
+      ...samples.filter((item) => now - item.at < HINT_SHARPNESS_WINDOW_MS),
+      { at: now, value: observation.sharpness },
+    ];
+    const peak = Math.max(...samples.map((item) => item.value));
+    relativeSharpness = peak > 0 ? observation.sharpness / peak : 1;
+  }
+
+  const was = state.active;
+  let measured;
+  if (settling) {
+    measured = {};
+    for (const id of HINT_MEASURED) {
+      measured[id] = Boolean(was[id]);
+    }
+  } else {
+    const small =
+      qr &&
+      (qr.pxPerModule != null
+        ? qr.pxPerModule < HINT_MIN_PX_PER_MODULE
+        : qr.share < HINT_MIN_SHARE);
+    measured = {
+      dark: was.dark
+        ? observation.brightness <= HINT_DARK_EXIT
+        : observation.brightness < HINT_DARK_ENTER,
+      blurry: was.blurry
+        ? relativeSharpness <= HINT_BLUR_EXIT
+        : relativeSharpness < HINT_BLUR_ENTER,
+      tooSmall: Boolean(small) && (!zoom.available || zoom.atMax === true),
+      tooLarge:
+        Boolean(qr) &&
+        qr.share > HINT_MAX_SHARE &&
+        (!zoom.available || zoom.atMin === true),
+    };
+  }
+
+  const lastQrAt = qr || observation.wrongQr ? now : state.lastQrAt;
+  const active = {
+    wrongQr: now < wrongQrUntil,
+    ...measured,
+    found: Boolean(qr),
+    notFound: !qr && now - lastQrAt >= HINT_NOT_FOUND_MS,
+    idle: true,
+  };
+  const since = {};
+  for (const id of HINT_PRIORITY) {
+    since[id] = active[id] ? (state.since[id] ?? now) : null;
+  }
+
+  const warm = now - state.startedAt < HINT_WARMUP_MS;
+  const candidate = HINT_PRIORITY.find(
+    (id) =>
+      active[id] &&
+      (HINT_IMMEDIATE.has(id) || (!warm && now - since[id] >= HINT_HOLD_MS)),
+  );
+
+  let shown = state.shown;
+  if (
+    candidate !== shown.id &&
+    (candidate === 'wrongQr' || now - shown.since >= HINT_MIN_DWELL_MS)
+  ) {
+    shown = { id: candidate, since: now };
+  }
+
+  return {
+    state: {
+      ...state,
+      active,
+      since,
+      samples,
+      relativeSharpness,
+      lastQrAt,
+      wrongQrUntil,
+      settleUntil,
+      shown,
+    },
+    hint: { id: shown.id, key: hintKey(shown.id, observation) },
+  };
+}
+
+const METRICS_STEP = 4;
+
+/**
+ * Mean brightness (0-255) and variance of the Laplacian over RGBA pixel data,
+ * sampled on a grid with a step of 4 pixels.
+ */
+export function frameMetrics({ data, width, height }) {
+  const luma = (x, y) => {
+    const offset = (y * width + x) * 4;
+    return (
+      0.299 * data[offset] + 0.587 * data[offset + 1] + 0.114 * data[offset + 2]
+    );
+  };
+  let brightnessSum = 0;
+  let brightnessCount = 0;
+  let laplacianSum = 0;
+  let laplacianSquares = 0;
+  let laplacianCount = 0;
+  for (let y = METRICS_STEP; y < height - METRICS_STEP; y += METRICS_STEP) {
+    for (let x = METRICS_STEP; x < width - METRICS_STEP; x += METRICS_STEP) {
+      const center = luma(x, y);
+      brightnessSum += center;
+      brightnessCount += 1;
+      const laplacian =
+        luma(x - METRICS_STEP, y) +
+        luma(x + METRICS_STEP, y) +
+        luma(x, y - METRICS_STEP) +
+        luma(x, y + METRICS_STEP) -
+        4 * center;
+      laplacianSum += laplacian;
+      laplacianSquares += laplacian * laplacian;
+      laplacianCount += 1;
+    }
+  }
+  if (!brightnessCount) {
+    return { brightness: 0, sharpness: 0 };
+  }
+  const mean = laplacianSum / laplacianCount;
+  return {
+    brightness: brightnessSum / brightnessCount,
+    sharpness: laplacianSquares / laplacianCount - mean * mean,
   };
 }

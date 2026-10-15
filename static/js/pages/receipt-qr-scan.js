@@ -2,15 +2,18 @@ import {
   autozoomStep,
   calculateCenteredScanRegion,
   createAutozoomState,
+  createScanHints,
   isFNSReceiptQR,
   measureQR,
   pickCamera,
+  scanHints,
   shouldScanFullFrame,
   zoomLimit,
 } from '../receipt-qr-core.mjs';
 
 const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
+const WRONG_QR_RESCAN_DELAY_MS = 500;
 const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
 const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
@@ -145,7 +148,17 @@ function messagesFrom(element) {
     cameraConstraints: element.dataset.messageCameraConstraints,
     cameraGeneric: element.dataset.messageCameraGeneric,
     decoderUnavailable: element.dataset.messageDecoderUnavailable,
-    invalidQR: element.dataset.messageInvalidQr,
+    hints: {
+      wrongQr: element.dataset.hintWrongQr,
+      dark: element.dataset.hintDark,
+      darkTorch: element.dataset.hintDarkTorch,
+      blurry: element.dataset.hintBlurry,
+      tooSmall: element.dataset.hintTooSmall,
+      tooLarge: element.dataset.hintTooLarge,
+      found: element.dataset.hintFound,
+      notFound: element.dataset.hintNotFound,
+      idle: element.dataset.hintIdle,
+    },
     preparing: element.dataset.messagePreparing,
     scanning: element.dataset.messageScanning,
   };
@@ -211,6 +224,9 @@ function registerReceiptQRScanPage(Alpine) {
       noticeMessage: '',
       noticeLink: '',
       statusMessage: '',
+      hintText: '',
+      hintState: null,
+      zoomStepped: false,
       stream: null,
       worker: null,
       workerBusy: false,
@@ -311,6 +327,8 @@ function registerReceiptQRScanPage(Alpine) {
           return;
         }
         this.statusMessage = this.messages.scanning;
+        this.hintState = createScanHints(performance.now());
+        this.hintText = this.messages.hints.idle;
         this.scheduleScan(0);
       },
 
@@ -368,16 +386,43 @@ function registerReceiptQRScanPage(Alpine) {
           this.scheduleScan();
           return;
         }
-        if (!message.value) {
-          this.scheduleScan();
-          return;
-        }
-        if (!isFNSReceiptQR(message.value)) {
-          this.noticeMessage = this.messages.invalidQR;
-          this.scheduleScan(500);
+        const wrongQr =
+          Boolean(message.value) && !isFNSReceiptQR(message.value);
+        this.updateHint(message, wrongQr);
+        if (!message.value || wrongQr) {
+          this.scheduleScan(wrongQr ? WRONG_QR_RESCAN_DELAY_MS : undefined);
           return;
         }
         this.submitDecoded(message.value);
+      },
+
+      updateHint(message, wrongQr) {
+        if (!this.hintState) {
+          return;
+        }
+        const result = scanHints(
+          this.hintState,
+          {
+            brightness: message.brightness,
+            sharpness: message.sharpness,
+            qr:
+              message.detection && this.frameSize
+                ? measureQR(message.detection, this.frameSize)
+                : null,
+            wrongQr,
+            zoomStepped: this.zoomStepped,
+            zoom: {
+              available: this.zoomLimit !== 'unavailable',
+              atMin: this.zoomLimit === 'min',
+              atMax: this.zoomLimit === 'max',
+            },
+            torch: { available: this.torchAvailable, on: this.torchEnabled },
+          },
+          performance.now(),
+        );
+        this.zoomStepped = false;
+        this.hintState = result.state;
+        this.hintText = this.messages.hints[result.hint.key];
       },
 
       async configureCamera() {
@@ -459,6 +504,7 @@ function registerReceiptQRScanPage(Alpine) {
         if (step.zoom === null) {
           return;
         }
+        this.zoomStepped = true;
         await this.applyZoom(step.zoom);
         const tapIsFresh =
           this.lastTapPoint && now - this.lastTapTime < TAP_POINT_TTL_MS;
@@ -537,9 +583,9 @@ function registerReceiptQRScanPage(Alpine) {
 
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        this.frameSize = { width: canvas.width, height: canvas.height };
         const context = canvas.getContext('2d', { willReadFrequently: true });
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        this.frameSize = { width: canvas.width, height: canvas.height };
 
         const region = calculateCenteredScanRegion(canvas.width, canvas.height);
         const frames = [
@@ -608,6 +654,9 @@ function registerReceiptQRScanPage(Alpine) {
         this.frameSize = null;
         this.zoomLimit = 'unavailable';
         this.statusMessage = '';
+        this.hintText = '';
+        this.hintState = null;
+        this.zoomStepped = false;
         if (!preserveError) {
           this.errorMessage = '';
         }

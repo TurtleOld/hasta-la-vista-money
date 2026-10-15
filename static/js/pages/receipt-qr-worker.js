@@ -1,6 +1,10 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 
-import { parseQRVersion, scanFrames } from '../receipt-qr-core.mjs';
+import {
+  frameMetrics,
+  parseQRVersion,
+  scanFrames,
+} from '../receipt-qr-core.mjs';
 
 const READER_OPTIONS = {
   formats: ['QRCode'],
@@ -103,7 +107,8 @@ self.addEventListener('message', async (event) => {
       },
       magnify: magnifyImage,
     });
-    self.postMessage({ type: 'scan-result', ...result, decodeMs });
+    const metrics = frameMetrics(event.data.frames[0].image);
+    self.postMessage({ type: 'scan-result', ...result, ...metrics, decodeMs });
   } catch (error) {
     self.postMessage({
       type: 'scan-error',
