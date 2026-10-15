@@ -1,7 +1,7 @@
 .PHONY: lint format pre-commit pre-commit-install pre-commit-update \
         transprepare transcompile shell install install-prod migrate \
         docker-build docker-build-prod docker-test-prod docker-up \
-        gettext staticfiles start secretkey test coverage \
+        gettext staticfiles start secretkey test test-js coverage \
         rabbitmq rabbitmq-stop rabbitmq-management export-api-schema \
         help check build-js watch-js build-front
 
@@ -87,6 +87,9 @@ print('SECRET_KEY already present, skipping') if re.search(r'^SECRET_KEY=',conte
 test:
 	@if [ -n "$$CI" ]; then uv run python manage.py test -v 2; else docker compose up --wait db && docker compose run --build --rm --no-deps hlvm-server python manage.py test -v 2; fi
 
+test-js:
+	@npm run test:js
+
 coverage:
 	@if [ -n "$$CI" ]; then uv run python -m coverage run manage.py test -v 2 && uv run python -m coverage xml && uv run python -m coverage report; else docker compose up --wait db && docker compose run --build --rm --no-deps hlvm-server python -m coverage run manage.py test -v 2 && docker compose run --build --rm --no-deps hlvm-server python -m coverage xml && docker compose run --build --rm --no-deps hlvm-server python -m coverage report; fi
 
@@ -109,4 +112,4 @@ check:
 	@uv run mypy . && uv run pyright
 
 help:
-	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js / build-front\\n  test / coverage\\n  export-api-schema\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"
+	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js / build-front\\n  test / test-js / coverage\\n  export-api-schema\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"

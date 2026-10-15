@@ -1,14 +1,17 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 
+import { parseQRVersion, scanFrames } from '../receipt-qr-core.mjs';
+
 const READER_OPTIONS = {
   formats: ['QRCode'],
-  maxNumberOfSymbols: 1,
+  returnErrors: true,
+  maxNumberOfSymbols: 2,
   binarizer: 'LocalAverage',
   tryHarder: true,
-  tryRotate: true,
+  tryRotate: false,
   tryInvert: true,
   tryDownscale: true,
-  tryDenoise: true,
+  tryDenoise: false,
   textMode: 'Plain',
 };
 
@@ -28,15 +31,37 @@ function initializeDecoder(wasmUrl) {
   return decoderReady;
 }
 
-async function decodeFrames(frames) {
-  for (const frame of frames) {
-    const results = await readBarcodes(frame, READER_OPTIONS);
-    const result = results.find((item) => item.text);
-    if (result) {
-      return result.text;
-    }
-  }
-  return '';
+async function decodeImage(image) {
+  const results = await readBarcodes(image, READER_OPTIONS);
+  return results.map((result) => ({
+    text: result.isValid === false ? '' : result.text,
+    position: result.position,
+    version: parseQRVersion(result.extra),
+  }));
+}
+
+function magnifyImage(image, region) {
+  const source = new OffscreenCanvas(image.width, image.height);
+  source.getContext('2d').putImageData(image, 0, 0);
+
+  const width = Math.max(1, Math.round(region.width * region.scale));
+  const height = Math.max(1, Math.round(region.height * region.scale));
+  const target = new OffscreenCanvas(width, height);
+  const context = target.getContext('2d', { willReadFrequently: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(
+    source,
+    region.x,
+    region.y,
+    region.width,
+    region.height,
+    0,
+    0,
+    width,
+    height,
+  );
+  return context.getImageData(0, 0, width, height);
 }
 
 self.addEventListener('message', async (event) => {
@@ -61,8 +86,24 @@ self.addEventListener('message', async (event) => {
 
   try {
     await decoderReady;
-    const value = await decodeFrames(event.data.frames);
-    self.postMessage({ type: 'scan-result', value });
+    let decodeMs = 0;
+    const result = await scanFrames({
+      frames: event.data.frames,
+      frameSize: {
+        width: event.data.frameWidth,
+        height: event.data.frameHeight,
+      },
+      decode: async (image) => {
+        const startedAt = performance.now();
+        try {
+          return await decodeImage(image);
+        } finally {
+          decodeMs += performance.now() - startedAt;
+        }
+      },
+      magnify: magnifyImage,
+    });
+    self.postMessage({ type: 'scan-result', ...result, decodeMs });
   } catch (error) {
     self.postMessage({
       type: 'scan-error',
