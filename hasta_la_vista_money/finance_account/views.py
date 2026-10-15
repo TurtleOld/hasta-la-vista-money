@@ -718,7 +718,7 @@ class TransactionUpdateView(
 
 
 class TransactionCopyView(LoginRequiredMixin, View):
-    """Copy a unified transaction and return to finances."""
+    """Open a prefilled creation form without posting a transaction."""
 
     def post(
         self,
@@ -726,34 +726,20 @@ class TransactionCopyView(LoginRequiredMixin, View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
-        transaction_id = kwargs.get('pk')
-        if transaction_id is None:
-            messages.error(request, _('Некорректный идентификатор операции.'))
-            return redirect('finances')
-        try:
-            svc = request.container.transactions.transaction_service()
-            new_transaction = svc.copy_transaction(
-                user=request.user,
-                transaction_id=int(transaction_id),
-            )
-            messages.success(
-                request,
-                _('Операция скопирована. Отредактируйте данные и сохраните.'),
-            )
-            return redirect(
-                reverse(
-                    'finance_account:transaction_change',
-                    kwargs={'pk': new_transaction.pk},
-                ),
-            )
-        except (
-            ValueError,
-            TypeError,
-            PermissionDenied,
-            ValidationError,
-        ) as error:
-            messages.error(request, str(error))
-        return redirect('finances')
+        original = get_object_or_404(
+            Transaction,
+            pk=kwargs['pk'],
+            user=request.user,
+        )
+        params = {
+            'type': original.type,
+            'category': original.category_id,
+            'account': original.account_id,
+            'amount': str(original.amount),
+        }
+        return HttpResponseRedirect(
+            f'{reverse("finances_create")}?{urlencode(params)}',
+        )
 
 
 class TransactionDeleteView(LoginRequiredMixin, View):
