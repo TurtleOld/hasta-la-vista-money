@@ -2692,8 +2692,32 @@ msgstr "Could not start the camera. Use the File tab."
 msgid "Не удалось загрузить модуль распознавания QR. Обновите страницу или используйте вкладку «Файл»."
 msgstr "Could not load the QR recognition module. Refresh the page or use the File tab."
 
-msgid "Это не QR-код кассового чека. Наведите камеру на QR-код чека."
-msgstr "This is not a receipt QR code. Point the camera at the receipt QR code."
+msgid "Это не QR-код кассового чека"
+msgstr "This is not a receipt QR code"
+
+msgid "Темно — добавьте света"
+msgstr "Too dark — add more light"
+
+msgid "Темно — включите фонарик"
+msgstr "Too dark — turn on the flashlight"
+
+msgid "Нечётко — держите телефон неподвижно"
+msgstr "Blurry — hold the phone still"
+
+msgid "Поднесите телефон ближе к QR-коду"
+msgstr "Move the phone closer to the QR code"
+
+msgid "Отодвиньте телефон — QR-код не помещается"
+msgstr "Move the phone back — the QR code does not fit"
+
+msgid "QR-код найден, распознаю…"
+msgstr "QR code found, reading…"
+
+msgid "QR-код обычно внизу чека — наведите на него"
+msgstr "The QR code is usually at the bottom of the receipt — point at it"
+
+msgid "Наведите камеру на QR-код чека"
+msgstr "Point the camera at the receipt QR code"
 
 msgid "Подготовка сканера…"
 msgstr "Preparing the scanner…"

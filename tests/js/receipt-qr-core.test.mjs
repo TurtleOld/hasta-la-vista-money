@@ -6,11 +6,14 @@ import {
   calculateCenteredScanRegion,
   createAutozoomState,
   isFNSReceiptQR,
+  createScanHints,
+  frameMetrics,
   magnificationRegion,
   measureQR,
   parseQRVersion,
   pickCamera,
   rankCameras,
+  scanHints,
   scanFrames,
   shouldScanFullFrame,
   zoomCorridor,
@@ -608,4 +611,301 @@ test('zoomLimit reports the corridor edges and missing zoom', () => {
   assert.equal(zoomLimit(createAutozoomState(ZOOM_CAPS)), null);
   const low = createAutozoomState({ zoom: { min: 2, max: 8, step: 0.1 } });
   assert.equal(zoomLimit(low), 'min');
+});
+
+const HINT_BASE = {
+  brightness: 140,
+  sharpness: 100,
+  qr: null,
+  wrongQr: false,
+  zoomStepped: false,
+  zoom: { available: false },
+  torch: { available: false, on: false },
+};
+
+function runHints(steps, { start = 0, stepMs = 100 } = {}) {
+  let state = createScanHints(start);
+  let result = null;
+  for (const [index, observation] of steps.entries()) {
+    result = scanHints(
+      state,
+      { ...HINT_BASE, ...observation },
+      start + index * stepMs,
+    );
+    state = result.state;
+  }
+  return result;
+}
+
+function repeat(observation, count) {
+  return Array.from({ length: count }, () => observation);
+}
+
+// A scenario that starts at t=0 and holds one observation for `ms`,
+// sampled every 100 ms; returns the hint at the end.
+function holdHint(observation, ms) {
+  return runHints(repeat(observation, ms / 100 + 1)).hint;
+}
+
+test('hints: default is shown during warmup even with a dark frame', () => {
+  assert.equal(holdHint({ brightness: 10 }, 700).id, 'idle');
+});
+
+test('hints: a condition becomes a candidate only after 400 ms', () => {
+  // Warmup ends at 800 ms; the dark condition starts counting from t=0.
+  assert.equal(holdHint({ brightness: 10 }, 800).id, 'dark');
+  const steps = [...repeat({}, 8), ...repeat({ brightness: 10 }, 4)];
+  // Dark begins at t=800 (index 8); at t=1100 it has held 300 ms.
+  assert.equal(runHints(steps).hint.id, 'idle');
+  // At t=1200 it has held 400 ms.
+  assert.equal(runHints([...steps, { brightness: 10 }]).hint.id, 'dark');
+});
+
+test('hints: dark enters below 40 and leaves above 55', () => {
+  const dark = (brightness) =>
+    runHints([...repeat({ brightness: 10 }, 10), ...repeat({ brightness }, 20)])
+      .hint.id;
+  assert.equal(holdHint({ brightness: 40 }, 1000).id, 'idle');
+  assert.equal(holdHint({ brightness: 39 }, 1000).id, 'dark');
+  assert.equal(dark(55), 'dark');
+  assert.equal(dark(56), 'idle');
+});
+
+test('hints: dark text depends on the torch', () => {
+  const torchOff = { available: true, on: false };
+  const torchOn = { available: true, on: true };
+  assert.equal(
+    holdHint({ brightness: 10, torch: torchOff }, 1000).key,
+    'darkTorch',
+  );
+  assert.equal(holdHint({ brightness: 10, torch: torchOn }, 1000).key, 'dark');
+  assert.equal(holdHint({ brightness: 10 }, 1000).key, 'dark');
+});
+
+test('hints: torch toggle changes the text without delay', () => {
+  const dark = { brightness: 10 };
+  const result = runHints([
+    ...repeat({ ...dark, torch: { available: true, on: false } }, 12),
+    { ...dark, torch: { available: true, on: true } },
+  ]);
+  assert.equal(result.hint.id, 'dark');
+  assert.equal(result.hint.key, 'dark');
+});
+
+test('hints: blur below 35% of the 3 s peak, leaves above 50%', () => {
+  const blur = (value, tail = 20) =>
+    runHints([
+      ...repeat({ sharpness: 100 }, 5),
+      ...repeat({ sharpness: value }, tail),
+    ]).hint.id;
+  assert.equal(blur(35), 'idle');
+  assert.equal(blur(34), 'blurry');
+  const recover = (value) =>
+    runHints([
+      ...repeat({ sharpness: 100 }, 5),
+      ...repeat({ sharpness: 10 }, 10),
+      ...repeat({ sharpness: value }, 12),
+    ]).hint.id;
+  assert.equal(recover(50), 'blurry');
+  assert.equal(recover(51), 'idle');
+});
+
+test('hints: the sharpness peak is forgotten after 3 s', () => {
+  const steps = [{ sharpness: 100 }, ...repeat({ sharpness: 30 }, 40)];
+  assert.equal(runHints(steps).hint.id, 'idle');
+});
+
+test('hints: too small needs px/module below 3 and exhausted zoom', () => {
+  const qr = (pxPerModule) => ({ pxPerModule, share: 0.4 });
+  assert.equal(holdHint({ qr: qr(3) }, 1000).id, 'found');
+  assert.equal(holdHint({ qr: qr(2.99) }, 1000).id, 'tooSmall');
+  const zoom = (atMax) => ({ available: true, atMin: false, atMax });
+  assert.equal(holdHint({ qr: qr(2), zoom: zoom(false) }, 1000).id, 'found');
+  assert.equal(holdHint({ qr: qr(2), zoom: zoom(true) }, 1000).id, 'tooSmall');
+});
+
+test('hints: without Version small means share below 0.25', () => {
+  const qr = (share) => ({ pxPerModule: null, share });
+  assert.equal(holdHint({ qr: qr(0.25) }, 1000).id, 'found');
+  assert.equal(holdHint({ qr: qr(0.24) }, 1000).id, 'tooSmall');
+});
+
+test('hints: too large needs share above 0.7 and exhausted zoom', () => {
+  const qr = (share) => ({ pxPerModule: 10, share });
+  assert.equal(holdHint({ qr: qr(0.7) }, 1000).id, 'found');
+  assert.equal(holdHint({ qr: qr(0.71) }, 1000).id, 'tooLarge');
+  const zoom = (atMin) => ({ available: true, atMin, atMax: false });
+  assert.equal(holdHint({ qr: qr(0.9), zoom: zoom(false) }, 1000).id, 'found');
+  assert.equal(
+    holdHint({ qr: qr(0.9), zoom: zoom(true) }, 1000).id,
+    'tooLarge',
+  );
+});
+
+test('hints: found is shown for a detection without text', () => {
+  assert.equal(
+    holdHint({ qr: { pxPerModule: 8, share: 0.4 } }, 1000).id,
+    'found',
+  );
+});
+
+test('hints: not found appears after 4 s without a QR', () => {
+  assert.equal(holdHint({}, 3900).id, 'idle');
+  assert.equal(holdHint({}, 4000).id, 'notFound');
+});
+
+test('hints: not found waits 4 s since the last detection', () => {
+  const qr = { pxPerModule: 8, share: 0.4 };
+  const lost = (ms) =>
+    runHints([...repeat({ qr }, 10), ...repeat({}, ms / 100)]).hint.id;
+  // The last detection is at t=900.
+  assert.equal(lost(3900), 'idle');
+  assert.equal(lost(4000), 'notFound');
+});
+
+test('hints: priority order picks the first active condition', () => {
+  const qr = { pxPerModule: 1, share: 0.9 };
+  const all = {
+    brightness: 10,
+    sharpness: 100,
+    qr,
+    zoom: { available: false },
+  };
+  const blurSteps = [
+    { sharpness: 100 },
+    ...repeat({ ...all, sharpness: 1 }, 20),
+  ];
+  assert.equal(runHints(blurSteps).hint.id, 'dark');
+  assert.equal(
+    runHints([
+      { sharpness: 100 },
+      ...repeat({ ...all, brightness: 140, sharpness: 1 }, 20),
+    ]).hint.id,
+    'blurry',
+  );
+  assert.equal(
+    runHints(repeat({ ...all, brightness: 140 }, 20)).hint.id,
+    'tooSmall',
+  );
+  assert.equal(
+    runHints(
+      repeat(
+        { ...all, brightness: 140, qr: { pxPerModule: 10, share: 0.9 } },
+        20,
+      ),
+    ).hint.id,
+    'tooLarge',
+  );
+  assert.equal(
+    runHints(
+      repeat(
+        { ...all, brightness: 140, qr: { pxPerModule: 10, share: 0.4 } },
+        20,
+      ),
+    ).hint.id,
+    'found',
+  );
+});
+
+test('hints: wrong QR wins immediately, even during warmup', () => {
+  const result = runHints([{ brightness: 10 }, { wrongQr: true }]);
+  assert.equal(result.hint.id, 'wrongQr');
+});
+
+test('hints: wrong QR stays 3 s after the last read', () => {
+  const read = [{ wrongQr: true }];
+  const after = (ms) => runHints([...read, ...repeat({}, ms / 100)]).hint.id;
+  assert.equal(after(2900), 'wrongQr');
+  assert.equal(after(3000), 'idle');
+});
+
+test('hints: wrong QR over a shown hint ignores the minimum dwell', () => {
+  const steps = [
+    ...repeat({ brightness: 10 }, 12),
+    { brightness: 10, wrongQr: true },
+  ];
+  assert.equal(runHints(steps).hint.id, 'wrongQr');
+});
+
+test('hints: a shown hint stays at least 1.5 s', () => {
+  // Dark is shown from t=800 and the light comes back right away.
+  const steps = (length) => [
+    ...repeat({ brightness: 10 }, 9),
+    ...repeat({ brightness: 140 }, length - 9),
+  ];
+  // Last frame at t=2200: only 1400 ms have passed.
+  assert.equal(runHints(steps(23)).hint.id, 'dark');
+  // Last frame at t=2300: exactly 1500 ms.
+  assert.equal(runHints(steps(24)).hint.id, 'idle');
+});
+
+test('hints: measurements are frozen for 300 ms after a zoom step', () => {
+  const dark = { brightness: 10 };
+  const bright = { brightness: 140 };
+  const beforeStep = repeat(dark, 12);
+  // Frozen frames keep the previous state even though the frame is bright.
+  const frozen = runHints([
+    ...beforeStep,
+    { ...bright, zoomStepped: true },
+    ...repeat(bright, 2),
+  ]);
+  assert.equal(frozen.state.active.dark, true);
+  // The step at index 12 (t=1200) freezes until t=1500 (exclusive).
+  const thawed = runHints([
+    ...beforeStep,
+    { ...bright, zoomStepped: true },
+    ...repeat(bright, 3),
+  ]);
+  assert.equal(thawed.state.active.dark, false);
+});
+
+test('hints: frozen sharpness does not enter the peak window', () => {
+  const frozen = runHints([
+    { sharpness: 100 },
+    { sharpness: 5, zoomStepped: true },
+    { sharpness: 5 },
+  ]);
+  assert.equal(frozen.state.samples.length, 1);
+});
+
+function solidImage(width, height, value) {
+  return {
+    width,
+    height,
+    data: new Uint8ClampedArray(width * height * 4).fill(value),
+  };
+}
+
+test('frameMetrics: a flat image has its brightness and no sharpness', () => {
+  const metrics = frameMetrics(solidImage(64, 64, 100));
+  assert.ok(Math.abs(metrics.brightness - 100) < 1e-9);
+  assert.equal(metrics.sharpness, 0);
+});
+
+test('frameMetrics: a checkerboard is sharper than a flat image', () => {
+  const image = solidImage(64, 64, 0);
+  for (let y = 0; y < 64; y += 1) {
+    for (let x = 0; x < 64; x += 1) {
+      if (((x >> 2) + (y >> 2)) % 2 === 0) {
+        image.data.fill(255, (y * 64 + x) * 4, (y * 64 + x) * 4 + 3);
+      }
+    }
+  }
+  assert.ok(frameMetrics(image).sharpness > 1000);
+});
+
+test('frameMetrics: an image smaller than the grid is safe', () => {
+  assert.deepEqual(frameMetrics(solidImage(4, 4, 10)), {
+    brightness: 0,
+    sharpness: 0,
+  });
+});
+
+test('hints: a foreign QR read restarts the 4 s not-found timer', () => {
+  // The read is at t=2000; not-found may appear only from t=6000 (6500 after the idle dwell).
+  const at = (ms) =>
+    runHints([...repeat({}, 20), { wrongQr: true }, ...repeat({}, ms / 100)])
+      .hint.id;
+  assert.equal(at(4400), 'idle');
+  assert.equal(at(4500), 'notFound');
 });

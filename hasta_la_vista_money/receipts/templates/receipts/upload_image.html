@@ -131,7 +131,15 @@
                  data-message-camera-constraints="{% translate 'Не удалось подключиться к камере с нужными параметрами. Используйте вкладку «Файл».' %}"
                  data-message-camera-generic="{% translate 'Не удалось запустить камеру. Используйте вкладку «Файл».' %}"
                  data-message-decoder-unavailable="{% translate 'Не удалось загрузить модуль распознавания QR. Обновите страницу или используйте вкладку «Файл».' %}"
-                 data-message-invalid-qr="{% translate 'Это не QR-код кассового чека. Наведите камеру на QR-код чека.' %}"
+                 data-hint-wrong-qr="{% translate 'Это не QR-код кассового чека' %}"
+                 data-hint-dark="{% translate 'Темно — добавьте света' %}"
+                 data-hint-dark-torch="{% translate 'Темно — включите фонарик' %}"
+                 data-hint-blurry="{% translate 'Нечётко — держите телефон неподвижно' %}"
+                 data-hint-too-small="{% translate 'Поднесите телефон ближе к QR-коду' %}"
+                 data-hint-too-large="{% translate 'Отодвиньте телефон — QR-код не помещается' %}"
+                 data-hint-found="{% translate 'QR-код найден, распознаю…' %}"
+                 data-hint-not-found="{% translate 'QR-код обычно внизу чека — наведите на него' %}"
+                 data-hint-idle="{% translate 'Наведите камеру на QR-код чека' %}"
                  data-message-preparing="{% translate 'Подготовка сканера…' %}"
                  data-message-scanning="{% translate 'Сканер готов. Поместите QR-код внутрь рамки.' %}">
                 <form method="post" action="{% url 'receipts:scan_qr' %}" id="scanQrForm" x-ref="scanForm">
@@ -150,6 +158,12 @@
                          x-on:pointerup="focusAt($event)">
                         <video x-ref="video" class="receipts-scan-video" autoplay playsinline muted></video>
                         <div class="receipts-scan-frame" aria-hidden="true"></div>
+                        <div class="receipts-scan-hint"
+                             role="status"
+                             aria-live="polite"
+                             x-show="hintText && !errorMessage"
+                             x-text="hintText"
+                             x-cloak></div>
                         <div class="receipts-scan-controls">
                             <button type="button"
                                     class="receipts-scan-control"
