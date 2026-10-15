@@ -7,6 +7,17 @@ const MAX_MAGNIFIED_SIDE = 1200;
 const DEFAULT_QR_VERSION = 5;
 const MIN_PADDING_MODULES = 4;
 const PADDING_RATIO = 0.15;
+const AUTOZOOM_MIN = 1.5;
+const AUTOZOOM_MAX = 3;
+const AUTOZOOM_START = 2;
+const AUTOZOOM_FACTOR = 1.25;
+const AUTOZOOM_MIN_PX_PER_MODULE = 3;
+const AUTOZOOM_MIN_SHARE = 0.25;
+const AUTOZOOM_MAX_SHARE = 0.7;
+const AUTOZOOM_STREAK = 3;
+const AUTOZOOM_COOLDOWN_MS = 600;
+const AUTOZOOM_SETTLE_MS = 300;
+const DEFAULT_ZOOM_STEP = 0.1;
 
 export function calculateCenteredScanRegion(width, height, ratio = 0.72) {
   const boundedRatio = Math.min(1, Math.max(0.1, ratio));
@@ -232,4 +243,109 @@ export async function scanFrames({ frames, frameSize, decode, magnify }) {
     }
   }
   return { value: '', detection, magnified };
+}
+
+export function zoomCorridor(capabilities) {
+  const zoom = capabilities?.zoom;
+  if (
+    !zoom ||
+    typeof zoom.min !== 'number' ||
+    typeof zoom.max !== 'number' ||
+    zoom.max <= zoom.min
+  ) {
+    return null;
+  }
+  const step = zoom.step > 0 ? zoom.step : DEFAULT_ZOOM_STEP;
+  const steps = (value) => (value - zoom.min) / step;
+  const snap = (count) => roundZoom(zoom.min + count * step);
+  const min = snap(Math.ceil(steps(Math.max(AUTOZOOM_MIN, zoom.min)) - 1e-9));
+  const max = snap(Math.floor(steps(Math.min(AUTOZOOM_MAX, zoom.max)) + 1e-9));
+  return min > max ? null : { min, max, step, base: zoom.min };
+}
+
+function roundZoom(value) {
+  return Number(value.toFixed(4));
+}
+
+function fitZoom(corridor, value) {
+  const bounded = Math.min(corridor.max, Math.max(corridor.min, value));
+  const steps = Math.round((bounded - corridor.base) / corridor.step);
+  const snapped = roundZoom(corridor.base + steps * corridor.step);
+  return Math.min(corridor.max, Math.max(corridor.min, snapped));
+}
+
+export function measureQR(detection, frameSize) {
+  const bounds = positionBounds(detection.position);
+  const side = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+  const version = detection.version;
+  return {
+    pxPerModule: version ? side / (17 + 4 * version) : null,
+    share: side / Math.min(frameSize.width, frameSize.height),
+    center: {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    },
+  };
+}
+
+export function createAutozoomState(capabilities) {
+  const corridor = zoomCorridor(capabilities);
+  return {
+    corridor,
+    zoom: corridor ? fitZoom(corridor, AUTOZOOM_START) : null,
+    direction: null,
+    streak: 0,
+    changedAt: null,
+  };
+}
+
+export function zoomLimit(state) {
+  if (!state?.corridor) {
+    return 'unavailable';
+  }
+  if (state.zoom >= state.corridor.max) {
+    return 'max';
+  }
+  return state.zoom <= state.corridor.min ? 'min' : null;
+}
+
+function zoomDirection(measurement) {
+  if (measurement.share > AUTOZOOM_MAX_SHARE) {
+    return 'out';
+  }
+  const small =
+    measurement.pxPerModule === null
+      ? measurement.share < AUTOZOOM_MIN_SHARE
+      : measurement.pxPerModule < AUTOZOOM_MIN_PX_PER_MODULE;
+  return small ? 'in' : null;
+}
+
+export function autozoomStep(state, measurement, now) {
+  if (!state.corridor) {
+    return { state, zoom: null };
+  }
+  if (state.changedAt !== null && now - state.changedAt < AUTOZOOM_SETTLE_MS) {
+    return { state, zoom: null };
+  }
+  const direction = measurement ? zoomDirection(measurement) : null;
+  if (!direction) {
+    return { state: { ...state, direction: null, streak: 0 }, zoom: null };
+  }
+  const streak = direction === state.direction ? state.streak + 1 : 1;
+  const next = { ...state, direction, streak };
+  const ready =
+    streak >= AUTOZOOM_STREAK &&
+    (state.changedAt === null || now - state.changedAt >= AUTOZOOM_COOLDOWN_MS);
+  if (!ready) {
+    return { state: next, zoom: null };
+  }
+  const factor = direction === 'in' ? AUTOZOOM_FACTOR : 1 / AUTOZOOM_FACTOR;
+  const zoom = fitZoom(state.corridor, state.zoom * factor);
+  if (zoom === state.zoom) {
+    return { state: { ...next, streak: 0 }, zoom: null };
+  }
+  return {
+    state: { ...next, zoom, streak: 0, changedAt: now },
+    zoom,
+  };
 }

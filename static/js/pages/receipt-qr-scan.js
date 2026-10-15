@@ -1,13 +1,18 @@
 import {
+  autozoomStep,
   calculateCenteredScanRegion,
+  createAutozoomState,
   isFNSReceiptQR,
+  measureQR,
   pickCamera,
   shouldScanFullFrame,
+  zoomLimit,
 } from '../receipt-qr-core.mjs';
 
 const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
 const WORKER_START_TIMEOUT_MS = 10000;
+const TAP_POINT_TTL_MS = 3000;
 const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
 const IDEAL_WIDTH = 1920;
 const IDEAL_HEIGHT = 1080;
@@ -215,11 +220,9 @@ function registerReceiptQRScanPage(Alpine) {
       lastTapTime: 0,
       torchAvailable: false,
       torchEnabled: false,
-      zoomAvailable: false,
-      zoomMin: 1,
-      zoomMax: 1,
-      zoomStep: 0.1,
-      zoomValue: 1,
+      autozoom: null,
+      frameSize: null,
+      zoomLimit: 'unavailable',
 
       init() {
         this.messages = messagesFrom(this.$el);
@@ -354,6 +357,9 @@ function registerReceiptQRScanPage(Alpine) {
         }
         this.workerBusy = false;
 
+        if (message.type === 'scan-result' && !message.value) {
+          this.runAutozoom(message.detection);
+        }
         if (message.type === 'scan-error') {
           console.warn(
             'receipt QR scan: frame decoding failed',
@@ -387,19 +393,10 @@ function registerReceiptQRScanPage(Alpine) {
         }
 
         this.torchAvailable = capabilities.torch === true;
-        const zoom = capabilities.zoom;
-        if (
-          zoom &&
-          typeof zoom.min === 'number' &&
-          typeof zoom.max === 'number' &&
-          zoom.max > zoom.min
-        ) {
-          const settings = track.getSettings?.() || {};
-          this.zoomAvailable = true;
-          this.zoomMin = zoom.min;
-          this.zoomMax = zoom.max;
-          this.zoomStep = zoom.step || 0.1;
-          this.zoomValue = settings.zoom || zoom.min;
+        this.autozoom = createAutozoomState(capabilities);
+        this.zoomLimit = zoomLimit(this.autozoom);
+        if (this.autozoom.zoom !== null) {
+          await this.applyZoom(this.autozoom.zoom);
         }
 
         const focusModes = capabilities.focusMode || [];
@@ -435,21 +432,61 @@ function registerReceiptQRScanPage(Alpine) {
         }
       },
 
-      async applyZoom() {
+      async applyZoom(zoom) {
         const track = this.getVideoTrack();
-        if (!track || !this.zoomAvailable) {
-          return;
+        if (!track) {
+          return false;
         }
-        const zoom = Number(this.zoomValue);
         try {
           await track.applyConstraints({ advanced: [{ zoom }] });
+          return true;
         } catch (error) {
           console.warn('receipt QR scan: zoom unavailable', error);
+          return false;
         }
       },
 
-      zoomLabel() {
-        return `${Number(this.zoomValue).toFixed(1)}×`;
+      async runAutozoom(detection) {
+        if (!this.autozoom || !this.frameSize) {
+          return;
+        }
+        const frameSize = this.frameSize;
+        const measurement = detection ? measureQR(detection, frameSize) : null;
+        const now = performance.now();
+        const step = autozoomStep(this.autozoom, measurement, now);
+        this.autozoom = step.state;
+        this.zoomLimit = zoomLimit(step.state);
+        if (step.zoom === null) {
+          return;
+        }
+        await this.applyZoom(step.zoom);
+        const tapIsFresh =
+          this.lastTapPoint && now - this.lastTapTime < TAP_POINT_TTL_MS;
+        if (tapIsFresh) {
+          await this.applyPointOfInterest(this.lastTapPoint);
+        } else if (measurement) {
+          await this.applyPointOfInterest({
+            x: measurement.center.x / frameSize.width,
+            y: measurement.center.y / frameSize.height,
+          });
+        }
+      },
+
+      async applyPointOfInterest(point) {
+        const track = this.getVideoTrack();
+        if (
+          !track ||
+          !navigator.mediaDevices.getSupportedConstraints().pointsOfInterest
+        ) {
+          return;
+        }
+        try {
+          await track.applyConstraints({
+            advanced: [{ pointsOfInterest: [point] }],
+          });
+        } catch (error) {
+          console.warn('receipt QR scan: point focus unavailable', error);
+        }
       },
 
       async focusAt(event) {
@@ -473,13 +510,7 @@ function registerReceiptQRScanPage(Alpine) {
         };
         this.lastTapPoint = point;
         this.lastTapTime = performance.now();
-        try {
-          await track.applyConstraints({
-            advanced: [{ pointsOfInterest: [point] }],
-          });
-        } catch (error) {
-          console.warn('receipt QR scan: point focus unavailable', error);
-        }
+        await this.applyPointOfInterest(point);
       },
 
       scheduleScan(delay = SCAN_INTERVAL_MS) {
@@ -508,6 +539,7 @@ function registerReceiptQRScanPage(Alpine) {
         canvas.height = video.videoHeight;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        this.frameSize = { width: canvas.width, height: canvas.height };
 
         const region = calculateCenteredScanRegion(canvas.width, canvas.height);
         const frames = [
@@ -572,7 +604,9 @@ function registerReceiptQRScanPage(Alpine) {
         this.workerBusy = false;
         this.torchAvailable = false;
         this.torchEnabled = false;
-        this.zoomAvailable = false;
+        this.autozoom = null;
+        this.frameSize = null;
+        this.zoomLimit = 'unavailable';
         this.statusMessage = '';
         if (!preserveError) {
           this.errorMessage = '';

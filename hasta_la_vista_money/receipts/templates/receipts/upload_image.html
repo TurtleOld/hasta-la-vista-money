@@ -165,17 +165,6 @@
                         <canvas x-ref="canvas" class="hidden"></canvas>
                     </div>
 
-                    <label class="receipts-scan-zoom" x-show="zoomAvailable" x-cloak>
-                        <span>{% translate 'Приближение' %}</span>
-                        <input type="range"
-                               x-bind:min="zoomMin"
-                               x-bind:max="zoomMax"
-                               x-bind:step="zoomStep"
-                               x-model="zoomValue"
-                               x-on:input.debounce.100ms="applyZoom()">
-                        <output x-text="zoomLabel()"></output>
-                    </label>
-
                     <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                     <div class="receipts-upload-error" x-show="noticeMessage" x-text="noticeMessage" x-cloak></div>
                     <a class="receipts-button receipts-button-primary"

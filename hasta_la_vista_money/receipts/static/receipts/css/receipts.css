@@ -1306,26 +1306,6 @@
   color: #111827;
 }
 
-.receipts-scan-zoom {
-  align-items: center;
-  display: grid;
-  font-size: 0.85rem;
-  font-weight: 600;
-  gap: 0.75rem;
-  grid-template-columns: auto minmax(0, 1fr) 3rem;
-  margin-top: 0.75rem;
-}
-
-.receipts-scan-zoom input {
-  accent-color: var(--receipts-accent);
-  width: 100%;
-}
-
-.receipts-scan-zoom output {
-  color: var(--receipts-muted);
-  text-align: right;
-}
-
 /* Review */
 .receipt-review-form {
   display: grid;

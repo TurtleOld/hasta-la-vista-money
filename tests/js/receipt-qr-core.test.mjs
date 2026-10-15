@@ -2,14 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  autozoomStep,
   calculateCenteredScanRegion,
+  createAutozoomState,
   isFNSReceiptQR,
   magnificationRegion,
+  measureQR,
   parseQRVersion,
   pickCamera,
   rankCameras,
   scanFrames,
   shouldScanFullFrame,
+  zoomCorridor,
+  zoomLimit,
 } from '../../static/js/receipt-qr-core.mjs';
 
 test('calculateCenteredScanRegion returns a centered square', () => {
@@ -411,4 +416,196 @@ test('scanFrames returns an empty result when nothing is found', async () => {
   });
   assert.deepEqual(result, { value: '', detection: null, magnified: false });
   assert.deepEqual(calls, ['decode:center']);
+});
+
+const ZOOM_CAPS = { zoom: { min: 1, max: 8, step: 0.1 } };
+const ZOOM_FRAME = { width: 1920, height: 1080 };
+
+function small() {
+  return { pxPerModule: 2.9, share: 0.1, center: { x: 1, y: 1 } };
+}
+
+function large() {
+  return { pxPerModule: 20, share: 0.71, center: { x: 1, y: 1 } };
+}
+
+function fine() {
+  return { pxPerModule: 3, share: 0.7, center: { x: 1, y: 1 } };
+}
+
+test('zoomCorridor intersects [1.5; 3] with the camera range', () => {
+  assert.deepEqual(zoomCorridor(ZOOM_CAPS), {
+    min: 1.5,
+    max: 3,
+    step: 0.1,
+    base: 1,
+  });
+  const narrow = zoomCorridor({ zoom: { min: 1, max: 2.55, step: 0.5 } });
+  assert.equal(narrow.min, 1.5);
+  assert.equal(narrow.max, 2.5);
+  assert.equal(zoomCorridor({ zoom: { min: 2, max: 8, step: 0.1 } }).min, 2);
+});
+
+test('zoomCorridor is null without usable zoom', () => {
+  assert.equal(zoomCorridor(null), null);
+  assert.equal(zoomCorridor({}), null);
+  assert.equal(zoomCorridor({ zoom: { min: 1, max: 1, step: 0.1 } }), null);
+  assert.equal(zoomCorridor({ zoom: { min: 3, max: 2, step: 0.1 } }), null);
+  assert.equal(zoomCorridor({ zoom: { min: 4, max: 8, step: 0.1 } }), null);
+});
+
+test('measureQR returns px per module, share and center', () => {
+  const measurement = measureQR(
+    { position: squarePosition(100, 200, 210), version: 1 },
+    ZOOM_FRAME,
+  );
+  assert.equal(measurement.pxPerModule, 10);
+  assert.equal(measurement.share, 210 / 1080);
+  assert.deepEqual(measurement.center, { x: 205, y: 305 });
+});
+
+test('measureQR has no px per module without Version', () => {
+  const measurement = measureQR(
+    { position: squarePosition(0, 0, 100), version: null },
+    ZOOM_FRAME,
+  );
+  assert.equal(measurement.pxPerModule, null);
+});
+
+test('createAutozoomState starts at 2x clamped into the corridor', () => {
+  assert.equal(createAutozoomState(ZOOM_CAPS).zoom, 2);
+  const high = createAutozoomState({ zoom: { min: 2.5, max: 8, step: 0.1 } });
+  assert.equal(high.zoom, 2.5);
+  assert.equal(createAutozoomState({}).zoom, null);
+});
+
+test('autozoomStep returns null without zoom', () => {
+  const state = createAutozoomState({});
+  for (let i = 0; i < 5; i += 1) {
+    assert.equal(autozoomStep(state, small(), i * 1000).zoom, null);
+  }
+});
+
+test('autozoomStep zooms in x1.25 after 3 consistent small measurements', () => {
+  let state = createAutozoomState(ZOOM_CAPS);
+  let step = autozoomStep(state, small(), 0);
+  assert.equal(step.zoom, null);
+  step = autozoomStep(step.state, small(), 100);
+  assert.equal(step.zoom, null);
+  step = autozoomStep(step.state, small(), 200);
+  assert.equal(step.zoom, 2.5);
+  assert.equal(step.state.zoom, 2.5);
+});
+
+test('autozoomStep zooms out /1.25 on large share', () => {
+  let step = { state: createAutozoomState(ZOOM_CAPS) };
+  for (let i = 0; i < 3; i += 1) {
+    step = autozoomStep(step.state, large(), i * 100);
+  }
+  assert.equal(step.zoom, 1.6);
+});
+
+test('autozoomStep thresholds: boundary values do not trigger', () => {
+  let step = { state: createAutozoomState(ZOOM_CAPS) };
+  for (let i = 0; i < 6; i += 1) {
+    step = autozoomStep(step.state, fine(), i * 1000);
+    assert.equal(step.zoom, null);
+  }
+});
+
+test('autozoomStep without Version zooms in only below share 0.25', () => {
+  const measure = (share) => ({
+    pxPerModule: null,
+    share,
+    center: { x: 0, y: 0 },
+  });
+  const run = (share) => {
+    let step = { state: createAutozoomState(ZOOM_CAPS) };
+    for (let i = 0; i < 3; i += 1) {
+      step = autozoomStep(step.state, measure(share), i * 100);
+    }
+    return step.zoom;
+  };
+  assert.equal(run(0.24), 2.5);
+  assert.equal(run(0.25), null);
+  assert.equal(run(0.26), null);
+});
+
+test('autozoomStep needs the same condition 3 times in a row', () => {
+  let step = autozoomStep(createAutozoomState(ZOOM_CAPS), small(), 0);
+  step = autozoomStep(step.state, small(), 100);
+  step = autozoomStep(step.state, fine(), 200);
+  step = autozoomStep(step.state, small(), 300);
+  step = autozoomStep(step.state, small(), 400);
+  assert.equal(step.zoom, null);
+  step = autozoomStep(step.state, small(), 500);
+  assert.equal(step.zoom, 2.5);
+});
+
+test('autozoomStep does not change zoom when QR is not found', () => {
+  let step = autozoomStep(createAutozoomState(ZOOM_CAPS), small(), 0);
+  step = autozoomStep(step.state, small(), 100);
+  step = autozoomStep(step.state, null, 200);
+  step = autozoomStep(step.state, small(), 300);
+  assert.equal(step.zoom, null);
+  assert.equal(step.state.zoom, 2);
+});
+
+test('autozoomStep ignores measurements for 300 ms and waits 600 ms', () => {
+  let step = { state: createAutozoomState(ZOOM_CAPS) };
+  for (let i = 0; i < 3; i += 1) {
+    step = autozoomStep(step.state, small(), i * 100);
+  }
+  assert.equal(step.state.changedAt, 200);
+  // within 300 ms of the change: ignored, streak does not grow
+  step = autozoomStep(step.state, small(), 300);
+  step = autozoomStep(step.state, small(), 499);
+  assert.equal(step.state.streak, 0);
+  // after 300 ms they count, but the next change waits until 600 ms
+  step = autozoomStep(step.state, small(), 500);
+  step = autozoomStep(step.state, small(), 600);
+  step = autozoomStep(step.state, small(), 799);
+  assert.equal(step.zoom, null);
+  step = autozoomStep(step.state, small(), 800);
+  assert.equal(step.zoom, 3);
+});
+
+test('autozoomStep clamps to the corridor and does not jitter at the edge', () => {
+  let step = { state: createAutozoomState(ZOOM_CAPS) };
+  let now = 0;
+  const zooms = [];
+  for (let i = 0; i < 30; i += 1) {
+    step = autozoomStep(step.state, small(), now);
+    now += 400;
+    if (step.zoom !== null) {
+      zooms.push(step.zoom);
+    }
+  }
+  assert.deepEqual(zooms, [2.5, 3]);
+  assert.equal(zoomLimit(step.state), 'max');
+});
+
+test('autozoomStep rounds to the camera step', () => {
+  const caps = { zoom: { min: 1, max: 8, step: 0.5 } };
+  let step = { state: createAutozoomState(caps) };
+  for (let i = 0; i < 3; i += 1) {
+    step = autozoomStep(step.state, small(), i * 100);
+  }
+  // 2 * 1.25 = 2.5 is on the grid; 2.5 / 1.25 = 2, then 1.6 -> 1.5
+  assert.equal(step.zoom, 2.5);
+  for (let i = 0; i < 3; i += 1) {
+    step = autozoomStep(step.state, large(), 1000 + i * 100);
+  }
+  assert.equal(step.zoom, 2);
+  for (let i = 0; i < 3; i += 1) {
+    step = autozoomStep(step.state, large(), 2000 + i * 100);
+  }
+  assert.equal(step.zoom, 1.5);
+});
+
+test('zoomLimit reports the corridor edges and missing zoom', () => {
+  assert.equal(zoomLimit(createAutozoomState({})), 'unavailable');
+  assert.equal(zoomLimit(createAutozoomState(ZOOM_CAPS)), null);
+  const low = createAutozoomState({ zoom: { min: 2, max: 8, step: 0.1 } });
+  assert.equal(zoomLimit(low), 'min');
 });
