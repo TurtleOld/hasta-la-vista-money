@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountQuerySet
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import user_has_group_access
 
@@ -104,14 +104,14 @@ class AccountRepository:
         """
         return Account.objects.by_user(user)
 
-    def get_by_user_with_related(self, user: User) -> QuerySet[Account]:
+    def get_by_user_with_related(self, user: User) -> AccountQuerySet:
         """Get all accounts for a user with user relation optimized.
 
         Args:
             user: User instance to filter by.
 
         Returns:
-            QuerySet[Account]: QuerySet with select_related('user')
+            AccountQuerySet: QuerySet with select_related('user')
                 optimization.
         """
         return Account.objects.by_user_with_related(user)
@@ -120,7 +120,7 @@ class AccountRepository:
         self,
         user: User,
         group_id: str | None = None,
-    ) -> QuerySet[Account]:
+    ) -> AccountQuerySet:
         """Get accounts for user or group.
 
         Group ID parameter semantics:
@@ -133,9 +133,13 @@ class AccountRepository:
             group_id: Group ID or 'my' for filtering, None for all available.
 
         Returns:
-            QuerySet[Account]: QuerySet of accounts according to filter.
+            AccountQuerySet: QuerySet of accounts according to filter.
         """
-        user_accounts = Account.objects.filter(user=user).select_related('user')
+        user_accounts = (
+            Account.objects.get_queryset()
+            .filter(user=user)
+            .select_related('user')
+        )
         result = user_accounts
 
         if group_id is None or group_id == 'my':
@@ -151,12 +155,13 @@ class AccountRepository:
             ).distinct()
             if users_in_owned_groups.exists():
                 result = (
-                    Account.objects.filter(user__in=users_in_owned_groups)
+                    Account.objects.get_queryset()
+                    .filter(user__in=users_in_owned_groups)
                     .select_related('user')
                     .distinct()
                 )
         elif not user_has_group_access(user, group_id):
-            result = Account.objects.none()
+            result = Account.objects.get_queryset().none()
         elif not FamilyGroupMembership.objects.filter(
             user=user,
             group_id=group_id,
@@ -169,7 +174,8 @@ class AccountRepository:
             ).distinct()
             if users_in_group.exists():
                 result = (
-                    Account.objects.filter(user__in=users_in_group)
+                    Account.objects.get_queryset()
+                    .filter(user__in=users_in_group)
                     .select_related('user')
                     .distinct()
                 )

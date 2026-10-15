@@ -50,6 +50,7 @@ from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.users.views import AuthRequest
 
 
@@ -108,7 +109,8 @@ class TestAccountView(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse('finance_account:list'))
 
-        account_service = response.wsgi_request.container.core.account_service()
+        request = cast('RequestWithContainer', response.wsgi_request)
+        account_service = request.container.core.account_service()
         accounts = Account.objects.by_user(self.user)
         self.assertEqual(
             response.context['sum_all_accounts_in_group'],
