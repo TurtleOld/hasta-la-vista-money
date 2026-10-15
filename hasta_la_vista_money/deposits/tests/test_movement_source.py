@@ -68,7 +68,7 @@ class DepositMovementSourceTests(TestCase):
         self.assertEqual(movements[0].effective_on, date(2026, 1, 10))
         self.assertEqual(movements[0].delta, Decimal('-500.00'))
 
-    def test_withdrawal_to_account_is_a_positive_movement(self) -> None:
+    def test_withdrawal_is_left_to_its_transfer_log(self) -> None:
         DepositPrincipalEvent.objects.create(
             deposit=self.deposit,
             type=DepositPrincipalEvent.Type.WITHDRAWAL,
@@ -82,8 +82,7 @@ class DepositMovementSourceTests(TestCase):
             since=date(2026, 1, 1),
         )
 
-        self.assertEqual(len(movements), 1)
-        self.assertEqual(movements[0].delta, Decimal('300.00'))
+        self.assertEqual(movements, [])
 
     def test_capitalization_onto_deposit_account_is_a_positive_movement(
         self,

@@ -10,7 +10,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptProcessingLog,
@@ -444,6 +448,13 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             amount=Decimal('900.00'),
             effective_on=(timezone.now() - timedelta(days=1)).date(),
             destination_account=self.account,
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=deposit_account,
+            to_account=self.account,
+            amount=Decimal('900.00'),
+            exchange_date=timezone.now() - timedelta(days=1),
         )
         # Balance right after the receipt was 800 - 900 = -100 (a real
         # shortfall). The withdrawal above returned 900 to the account the
