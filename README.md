@@ -201,6 +201,8 @@ FNS_INN, FNS_PASSWORD, FNS_CLIENT_SECRET  # для обработки чеков
 
 Redis используется для кеширования, сессий, rate limiting и брокера задач Celery.
 
+> В `docker-compose.prod.yaml` PostgreSQL, Redis и приложение доступны только внутри docker-сети. Наружу опубликованы только порты Nginx (80 и 443).
+
 Что кешируется:
 
 - Дерево категорий (TTL: 5 минут)
