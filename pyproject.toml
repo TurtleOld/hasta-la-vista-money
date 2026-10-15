@@ -285,3 +285,6 @@ replace = "current_version = {new_version}"
 [tool.bumpversion."file:pyproject.toml"]
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
+
+[tool.bandit]
+exclude_dirs = ['.venv', 'node_modules', 'tests']
