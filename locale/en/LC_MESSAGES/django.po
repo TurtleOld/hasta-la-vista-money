@@ -2707,9 +2707,6 @@ msgstr "Turn flashlight on"
 msgid "Выключить фонарик"
 msgstr "Turn flashlight off"
 
-msgid "Приближение"
-msgstr "Zoom"
-
 msgid "Держите QR-код целиком внутри рамки. Если фокус не срабатывает — коснитесь изображения."
 msgstr "Keep the entire QR code inside the frame. Tap the image if it does not focus."
 
