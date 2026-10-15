@@ -18,6 +18,9 @@ from django.utils.translation import gettext_lazy as _
 from pgvector.django import HnswIndex, VectorField
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.upload_paths import (
+    receipt_processing_upload_to,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -735,7 +738,7 @@ class ReceiptProcessingLog(models.Model):
         default=ReceiptProcessingStatus.PROCESSING,
     )
     image_file = models.FileField(
-        upload_to='receipt_processing_logs/',
+        upload_to=receipt_processing_upload_to,
         null=True,
         blank=True,
     )
