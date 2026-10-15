@@ -3,7 +3,9 @@ from typing import Literal, ParamSpec, TypeVar, cast
 import structlog
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
+from django.middleware.csrf import CsrfViewMiddleware
 from django.utils.translation import gettext_lazy as _
+from rest_framework import exceptions
 from rest_framework.request import Request
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
@@ -46,7 +48,6 @@ class CookieJWTAuthentication(JWTAuthentication):
             if not isinstance(user, User):
                 self._raise_invalid_user_type(user)
                 return None
-            return user, validated_token
         except TypeError:
             raise
         except (
@@ -64,6 +65,21 @@ class CookieJWTAuthentication(JWTAuthentication):
                 path=request.path,
             )
             return None
+        self.enforce_csrf(request)
+        return user, validated_token
+
+    def enforce_csrf(self, request: Request) -> None:
+        """Run Django's CSRF check for cookie-based authentication."""
+
+        def get_response(_: HttpRequest) -> HttpResponse:
+            return HttpResponse()
+
+        check = CsrfViewMiddleware(get_response)
+        check.process_request(request)
+        reason = check.process_view(request, get_response, (), {})
+        if reason:
+            message = f'CSRF Failed: {reason}'
+            raise exceptions.PermissionDenied(message)
 
     def _authenticate_from_header(
         self,
