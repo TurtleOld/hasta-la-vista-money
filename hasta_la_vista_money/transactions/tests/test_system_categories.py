@@ -99,6 +99,16 @@ class SystemCategoryTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('category', form.errors)
 
+    def test_quick_create_refuses_system_category_name(self) -> None:
+        response = self.client.post(
+            reverse('finance_account:quick_category'),
+            data={
+                'type': 'expense',
+                'name': constants.BALANCE_ADJUSTMENT_CATEGORY_NAME,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_admin_makes_system_category_read_only(self) -> None:
         model_admin = admin.site._registry[Category]
         request = RequestFactory().get('/')

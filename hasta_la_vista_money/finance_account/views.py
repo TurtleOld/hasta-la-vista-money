@@ -2262,6 +2262,14 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
             name=name,
             type=category_type,
         ).first()
+        if existing is not None and existing.system_kind:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': str(_('Это название зарезервировано системой')),
+                },
+                status=400,
+            )
         if existing is not None:
             return JsonResponse(
                 {'ok': True, 'id': existing.pk, 'name': existing.name},
