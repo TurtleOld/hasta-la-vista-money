@@ -195,7 +195,7 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
         deposit = get_object_or_404(
-            service.get_user_deposits(user),
+            service.get_readable_deposits(user),
             pk=self.kwargs['pk'],
         )
         context['deposit'] = deposit

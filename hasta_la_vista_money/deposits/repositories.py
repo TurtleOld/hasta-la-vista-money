@@ -55,8 +55,11 @@ class DepositRepository:
         return DepositPrincipalEvent.objects.create(**kwargs)
 
     def get_by_user(self, user: User) -> QuerySet[Deposit]:
+        return self.get_by_users([user])
+
+    def get_by_users(self, users: list[User]) -> QuerySet[Deposit]:
         return (
-            Deposit.objects.filter(account__user=user)
+            Deposit.objects.filter(account__user__in=users)
             .select_related('account', 'bank')
             .prefetch_related(
                 'terms__rate_periods',

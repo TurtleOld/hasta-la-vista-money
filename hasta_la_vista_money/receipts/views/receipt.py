@@ -35,6 +35,7 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.views.base import BaseView
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import readable_users
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
@@ -336,7 +337,9 @@ class ReceiptDetailView(
         request = cast('RequestWithContainer', self.request)
         receipt_repository = request.container.receipts.receipt_repository()
         receipt = (
-            receipt_repository.get_by_user_with_related(self.request.user)
+            receipt_repository.get_by_users_with_related(
+                readable_users(cast('User', self.request.user), 'family'),
+            )
             .filter(pk=self.kwargs['pk'])
             .first()
         )
