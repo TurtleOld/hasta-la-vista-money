@@ -128,6 +128,11 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         super().__init__(*args, **kwargs)
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
         self.setup_date_fields()
+        if self.instance.pk:
+            # Balance moves only via movements; currency only while empty.
+            del self.fields['balance']
+            if self.instance.has_movements():
+                del self.fields['currency']
         if self.request_user is not None:
             bank_field = cast(
                 'ModelChoiceField[Bank]',

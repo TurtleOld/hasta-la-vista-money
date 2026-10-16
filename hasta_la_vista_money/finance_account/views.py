@@ -2000,7 +2000,8 @@ class ChangeAccountView(
                 raise TypeError('User must be authenticated')
             account.user = request.user
             with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
-                account.save()
+                # Only form fields: a concurrent balance change must survive.
+                account.save(update_fields=[*form.fields, 'updated_at'])
             messages.success(request, self.success_message)
             return HttpResponseRedirect(str(self.get_success_url()))
         except ValidationError as e:

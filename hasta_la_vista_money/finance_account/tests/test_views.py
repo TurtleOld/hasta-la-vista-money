@@ -1007,6 +1007,66 @@ class TestChangeAccountView(TestCase):
         response = self.client.post(url, data, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
+    def _post_change(self, **extra: object) -> None:
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('finance_account:change', args=[self.account.pk]),
+            {
+                'name_account': 'Renamed',
+                'type_account': self.account.type_account,
+                **extra,
+            },
+        )
+        self.account.refresh_from_db()
+
+    def _add_movement(self) -> None:
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=Category.objects.create(
+                user=self.user,
+                name='Food',
+                type=TransactionType.EXPENSE,
+            ),
+            amount=Decimal('10.00'),
+            date=timezone.now(),
+        )
+
+    def test_change_account_post_keeps_balance_changed_after_get(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse('finance_account:change', args=[self.account.pk])
+        form = self.client.get(url).context['add_account_form']
+        self.assertNotIn('balance', form.fields)
+
+        Account.objects.filter(pk=self.account.pk).update(
+            balance=Decimal('777.00'),
+        )
+        self._post_change(balance='1.00', currency='RUB')
+
+        self.assertEqual(self.account.name_account, 'Renamed')
+        self.assertEqual(self.account.balance, Decimal('777.00'))
+
+    def test_change_account_without_movements_changes_currency(self) -> None:
+        self._post_change(currency='EUR')
+
+        self.assertEqual(self.account.currency, 'EUR')
+
+    def test_change_account_with_movements_hides_and_keeps_currency(
+        self,
+    ) -> None:
+        self._add_movement()
+        old_currency = self.account.currency
+        url = reverse('finance_account:change', args=[self.account.pk])
+        self.client.force_login(self.user)
+        form = self.client.get(url).context['add_account_form']
+        self.assertNotIn('currency', form.fields)
+
+        self._post_change(currency='EUR' if old_currency != 'EUR' else 'USD')
+
+        self.assertEqual(self.account.name_account, 'Renamed')
+        self.assertEqual(self.account.currency, old_currency)
+
     def test_change_account_view_get_context_data(self) -> None:
         """Test get_context_data method."""
         view = ChangeAccountView()

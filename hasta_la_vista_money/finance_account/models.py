@@ -298,6 +298,21 @@ class Account(TimeStampedModel):
     def is_archived(self) -> bool:
         return self.archived_at is not None
 
+    def has_movements(self) -> bool:
+        """Whether anything is already posted to or from this account."""
+        return any(
+            getattr(self, relation).exists()
+            for relation in (
+                'transactions',
+                'from_account',
+                'to_account',
+                'receipt_accounts',
+                'loan_accounts',
+                'payment_make_loan_accounts',
+                'bankstatementupload_set',
+            )
+        )
+
 
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
     """
