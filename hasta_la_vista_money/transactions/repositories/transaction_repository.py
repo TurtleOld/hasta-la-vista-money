@@ -132,6 +132,10 @@ class TransactionRepository:
         """Filter transactions by arbitrary criteria."""
         return Transaction.objects.filter(**kwargs)
 
+    def filter_analytical(self, **kwargs: object) -> QuerySet[Transaction]:
+        """Filter transactions for analytics, without balance adjustments."""
+        return Transaction.objects.without_adjustments().filter(**kwargs)
+
     def filter_with_select_related(
         self,
         *related_fields: str,

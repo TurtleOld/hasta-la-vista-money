@@ -265,14 +265,13 @@ class BudgetService:
         start_date, end_date = _month_range(months)
         scope_users = _scope_users(user, users)
         rows = (
-            self.transaction_repository.filter(
+            self.transaction_repository.filter_analytical(
                 user__in=scope_users,
                 type=type_value,
                 category_id__in=category_ids,
                 date__gte=start_date,
                 date__lte=end_date,
             )
-            .without_adjustments()
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
             .annotate(total=Sum('amount'))
