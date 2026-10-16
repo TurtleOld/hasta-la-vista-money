@@ -1,17 +1,23 @@
+import pickle
 from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.paginator import Page
+from django.db import connection
+from django.db.models import Model, QuerySet
 from django.http import QueryDict
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
@@ -129,43 +135,144 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
     def test_get_user_detailed_statistics_uses_cached_value(self) -> None:
         container = ApplicationContainer()
         stats_filter = StatisticsFilters()
+
+        first = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
         cache_key = get_user_detailed_statistics_cache_key(
             self.user.pk,
             stats_filter.cache_suffix,
         )
-        cached_stats = cast(
-            'UserDetailedStatisticsDict',
-            {
-                'months_data': [],
-                'top_expense_categories': [],
-                'top_income_categories': [],
-                'receipt_info_by_month': [],
-                'income_expense': [],
-                'transfer_money_log': [],
-                'accounts': [],
-                'balances_by_currency': {},
-                'delta_by_currency': {},
-                'chart_combined': {},
-                'user': self.user,
-                'credit_cards_data': [],
-                'statistics_filter': stats_filter,
-                'statistics_period_choices': [],
-                'statistics_account_choices': [],
-                'statistics_currency_choices': [],
-                'statistics_category_choices': [],
-                'statistics_member_choices': [],
-                'statistics_members': [self.user],
-            },
-        )
-        cache.set(cache_key, cached_stats, 600)
+        cached = cache.get(cache_key)
+        if cached is None:
+            self.fail('Aggregates were not cached')
+        cached['months_data'] = []
+        cache.set(cache_key, cached, 600)
 
-        stats = get_user_detailed_statistics(
+        second = get_user_detailed_statistics(
             self.user,
             container=container,
             stats_filter=stats_filter,
         )
 
-        self.assertEqual(stats, cached_stats)
+        self.assertEqual(second['months_data'], [])
+        self.assertTrue(first['months_data'])
+
+    def test_cache_suffix_ignores_table_page_sort_and_search(self) -> None:
+        base = StatisticsFilters(period='12')
+        tables = StatisticsFilters(
+            period='12',
+            operations_page=3,
+            transfers_page=2,
+            receipts_page=2,
+            operations_sort='amount',
+            transfers_sort='-amount',
+            receipts_sort='total_sum',
+            operations_search='salary',
+            transfers_search='sber',
+            receipts_search='market',
+        )
+        other_period = StatisticsFilters(period='3')
+
+        self.assertEqual(base.cache_suffix, tables.cache_suffix)
+        self.assertNotEqual(base.cache_suffix, other_period.cache_suffix)
+        self.assertNotEqual(base.query_string, tables.query_string)
+
+    def test_cached_value_has_no_querysets_or_pages(self) -> None:
+        stats_filter = StatisticsFilters(receipts_page=2)
+        get_user_detailed_statistics(
+            self.user,
+            container=ApplicationContainer(),
+            stats_filter=stats_filter,
+        )
+        cached = cache.get(
+            get_user_detailed_statistics_cache_key(
+                self.user.pk,
+                stats_filter.cache_suffix,
+            ),
+        )
+        if cached is None:
+            self.fail('Aggregates were not cached')
+
+        pickle.dumps(cached)
+        for key in (
+            'receipt_page',
+            'income_expense_page',
+            'transfer_money_log',
+            'transfer_money_log_page',
+            'accounts',
+            'statistics_account_choices',
+            'statistics_members',
+            'statistics_filter',
+            'user',
+        ):
+            self.assertNotIn(key, cached)
+        self.assertEqual(self._forbidden_types(cached), [])
+
+    def test_table_page_change_does_not_recompute_aggregates(self) -> None:
+        container = ApplicationContainer()
+        first_filter = StatisticsFilters(period='12')
+        get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=first_filter,
+        )
+
+        with CaptureQueriesContext(connection) as warm_queries:
+            get_user_detailed_statistics(
+                self.user,
+                container=container,
+                stats_filter=first_filter,
+            )
+        with CaptureQueriesContext(connection) as page_queries:
+            stats = get_user_detailed_statistics(
+                self.user,
+                container=container,
+                stats_filter=StatisticsFilters(
+                    period='12',
+                    receipts_page=2,
+                    operations_page=2,
+                    transfers_page=2,
+                    receipts_sort='total_sum',
+                ),
+            )
+
+        self.assertEqual(stats['receipt_page'].number, 1)
+        self.assertLessEqual(
+            len(page_queries),
+            len(warm_queries) + constants.ONE,
+        )
+        aggregate_tables = {
+            'transactions_transaction',
+            'budget_planning',
+        }
+        for query in page_queries.captured_queries:
+            sql = query['sql']
+            if 'GROUP BY' in sql:
+                self.assertFalse(
+                    any(table in sql for table in aggregate_tables),
+                    sql,
+                )
+
+    def _forbidden_types(self, value: object, path: str = '') -> list[str]:
+        if isinstance(value, dict):
+            found: list[str] = []
+            for key, item in value.items():
+                found += self._forbidden_types(item, f'{path}.{key}')
+            return found
+        if isinstance(value, list | tuple | set):
+            found = []
+            for index, item in enumerate(value):
+                found += self._forbidden_types(item, f'{path}[{index}]')
+            return found
+        if isinstance(
+            value,
+            QuerySet | Page | Model | StatisticsFilters,
+        ):
+            return [f'{path}: {type(value).__name__}']
+        return []
 
     def test_statistics_filters_include_server_side_search_fields(self) -> None:
         query = QueryDict(
