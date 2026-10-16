@@ -204,7 +204,7 @@ export function magnificationRegion(
   if (longest * scale > maxSide) {
     scale = Math.max(maxSide / longest, minPxPerModule / modulePx);
   }
-  return { x, y, width, height, scale: Math.min(scale, maxScale) };
+  return { x, y, width, height, scale };
 }
 
 // A full-resolution photo: crop at the source resolution, shrink only when
@@ -527,18 +527,21 @@ export function createPhotoButton(now) {
 }
 
 /**
- * Reducer for the "take photo" button. Events: `tick` and `read` (a
- * successful read restarts the wait). Once shown, the button stays visible
- * until the next read.
+ * Reducer for the "take photo" button, called on every scan tick. Once shown,
+ * the button stays visible until the scan stops.
  */
-export function photoButton(state, event, now) {
-  if (event === 'read') {
-    const next = createPhotoButton(now);
-    return { state: next, visible: false };
-  }
+export function photoButton(state, now) {
   const visible =
     state.visible || now - state.openedAt >= PHOTO_BUTTON_DELAY_MS;
   return { state: { ...state, visible }, visible };
+}
+
+/**
+ * An invalid upload re-renders the form with 200 and no redirect, so only a
+ * redirected successful response means the receipt was accepted.
+ */
+export function isPhotoUploadAccepted(response) {
+  return Boolean(response.ok && response.redirected);
 }
 
 const METRICS_STEP = 4;

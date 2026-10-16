@@ -5,6 +5,7 @@ import {
   createPhotoButton,
   createScanHints,
   isFNSReceiptQR,
+  isPhotoUploadAccepted,
   measureQR,
   photoButton,
   pickCamera,
@@ -20,6 +21,7 @@ const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
 const PHOTO_WORKER_TIMEOUT_MS = 8000;
 const PHOTO_OUTCOME_HINT_MS = 3000;
+const PHOTO_PICKER_FOCUS_GRACE_MS = 1000;
 const PHOTO_FILE_NAME = 'receipt.jpg';
 const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
 const IDEAL_WIDTH = 1920;
@@ -220,15 +222,27 @@ async function captureWithImageCapture(track) {
 
 function pickPhotoFile(input) {
   return new Promise((resolve) => {
+    let done = false;
     const finish = () => {
+      if (done) {
+        return;
+      }
+      done = true;
       input.removeEventListener('change', finish);
       input.removeEventListener('cancel', finish);
+      window.removeEventListener('focus', onFocus);
       const file = input.files?.[0] || null;
       input.value = '';
       resolve(file);
     };
+    // Browsers without the `cancel` event fire nothing when the picker is
+    // dismissed; the page regaining focus is the only signal. `change` can
+    // arrive after `focus`, so wait a moment before giving up.
+    const onFocus = () =>
+      window.setTimeout(finish, PHOTO_PICKER_FOCUS_GRACE_MS);
     input.addEventListener('change', finish);
     input.addEventListener('cancel', finish);
+    window.addEventListener('focus', onFocus);
     input.click();
   });
 }
@@ -446,26 +460,14 @@ function registerReceiptQRScanPage(Alpine) {
           this.scheduleScan(wrongQr ? WRONG_QR_RESCAN_DELAY_MS : undefined);
           return;
         }
-        this.markRead();
         this.submitDecoded(message.value);
-      },
-
-      markRead() {
-        if (this.photoState) {
-          this.photoState = photoButton(
-            this.photoState,
-            'read',
-            performance.now(),
-          ).state;
-          this.photoVisible = false;
-        }
       },
 
       tickPhotoButton(now) {
         if (!this.photoState) {
           return;
         }
-        const result = photoButton(this.photoState, 'tick', now);
+        const result = photoButton(this.photoState, now);
         this.photoState = result.state;
         this.photoVisible = result.visible;
       },
@@ -749,7 +751,7 @@ function registerReceiptQRScanPage(Alpine) {
           return;
         }
         if (!blob) {
-          this.resumeLive();
+          await this.resumeLive();
           return;
         }
 
@@ -766,7 +768,6 @@ function registerReceiptQRScanPage(Alpine) {
         }
 
         if (message.value && isFNSReceiptQR(message.value)) {
-          this.markRead();
           this.submitDecoded(message.value);
           return;
         }
@@ -775,14 +776,22 @@ function registerReceiptQRScanPage(Alpine) {
           : this.messages.photoNotFound;
         await sleep(PHOTO_OUTCOME_HINT_MS);
         if (this.stream) {
-          this.resumeLive();
+          await this.resumeLive();
         }
       },
 
-      resumeLive() {
+      async resumeLive() {
+        // The system camera app can end the stream while the page is in the
+        // background; reopen the camera instead of scanning a dead video.
+        if (this.getVideoTrack()?.readyState !== 'live') {
+          this.stop({ preserveError: true });
+          await this.start();
+          return;
+        }
         this.photoBusy = false;
         this.hintState = createScanHints(performance.now());
         this.hintText = this.messages.hints.idle;
+        this.$refs.video?.play().catch(() => {});
         this.scheduleScan(0);
       },
 
@@ -814,12 +823,12 @@ function registerReceiptQRScanPage(Alpine) {
         if (!this.stream) {
           return;
         }
-        this.errorMessage = this.messages.photoUploadFailed;
         if (workerReady) {
-          this.resumeLive();
+          await this.resumeLive();
         } else {
           this.stop({ preserveError: true });
         }
+        this.errorMessage = this.messages.photoUploadFailed;
       },
 
       async uploadPhoto(blob) {
@@ -835,8 +844,7 @@ function registerReceiptQRScanPage(Alpine) {
           credentials: 'same-origin',
           headers: { 'X-CSRFToken': token },
         });
-        // An invalid upload re-renders the page with 200 and no redirect.
-        if (!response.ok || !response.redirected) {
+        if (!isPhotoUploadAccepted(response)) {
           throw new Error(`photo upload failed: ${response.status}`);
         }
         return response;

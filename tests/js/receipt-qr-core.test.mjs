@@ -8,6 +8,7 @@ import {
   isFNSReceiptQR,
   createScanHints,
   frameMetrics,
+  isPhotoUploadAccepted,
   magnificationRegion,
   measureQR,
   PHOTO_MAGNIFICATION,
@@ -915,24 +916,16 @@ test('hints: a foreign QR read restarts the 4 s not-found timer', () => {
 
 test('photoButton appears exactly 5 s after the camera opened', () => {
   const state = createPhotoButton(1000);
-  const before = photoButton(state, 'tick', 5999);
+  const before = photoButton(state, 5999);
   assert.equal(before.visible, false);
-  const at = photoButton(before.state, 'tick', 6000);
+  const at = photoButton(before.state, 6000);
   assert.equal(at.visible, true);
 });
 
 test('photoButton stays visible once shown', () => {
-  let result = photoButton(createPhotoButton(0), 'tick', 5000);
-  result = photoButton(result.state, 'tick', 60000);
+  let result = photoButton(createPhotoButton(0), 5000);
+  result = photoButton(result.state, 60000);
   assert.equal(result.visible, true);
-});
-
-test('photoButton resets after a successful read', () => {
-  let result = photoButton(createPhotoButton(0), 'tick', 5000);
-  result = photoButton(result.state, 'read', 5100);
-  assert.equal(result.visible, false);
-  assert.equal(photoButton(result.state, 'tick', 10099).visible, false);
-  assert.equal(photoButton(result.state, 'tick', 10100).visible, true);
 });
 
 test('photo magnification keeps the source resolution of the crop', () => {
@@ -999,4 +992,10 @@ test('scanFrames passes region options to the magnification', async () => {
     },
   });
   assert.equal(regions[0].scale, 1);
+});
+
+test('photo upload is accepted only after a successful redirect', () => {
+  assert.equal(isPhotoUploadAccepted({ ok: true, redirected: true }), true);
+  assert.equal(isPhotoUploadAccepted({ ok: true, redirected: false }), false);
+  assert.equal(isPhotoUploadAccepted({ ok: false, redirected: true }), false);
 });
