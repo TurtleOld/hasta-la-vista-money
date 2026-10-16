@@ -1,5 +1,7 @@
+from collections import defaultdict
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from unittest import mock
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth import get_user_model
@@ -8,7 +10,8 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from hasta_la_vista_money.budget.models import Budget
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -16,6 +19,9 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.services.monthly_statistics_service import (
     _budgets_data,
+)
+from hasta_la_vista_money.users.services.summary_statistics_service import (
+    _build_single_card_month,
 )
 
 User = get_user_model()
@@ -101,3 +107,40 @@ class BudgetsDataQueriesTest(TestCase):
         Transaction.objects.all().delete()
         many = self._count_queries(12)
         self.assertEqual(few, many)
+
+
+class RaiffeisenScheduleCallsTest(TestCase):
+    def test_schedule_is_calculated_once_per_card_month(self) -> None:
+        user = User.objects.create_user(username='raiff-user')
+        card = Account.objects.create(
+            user=user,
+            name_account='Raiffeisen',
+            balance=Decimal('0.00'),
+            limit_credit=Decimal('100000.00'),
+            currency='RUB',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            bank=Bank.objects.get(code='RAIFFAISENBANK'),
+        )
+        month = date(2026, 3, 1)
+        grace_end = datetime(2026, 5, 20, tzinfo=UTC)
+        account_service = mock.Mock()
+        schedule_mock = (
+            account_service.calculate_raiffeisenbank_payment_schedule
+        )
+        schedule_mock.return_value = {
+            'grace_end_date': grace_end,
+            'final_debt': Decimal('90.00'),
+        }
+
+        month_data, final_debt = _build_single_card_month(
+            month,
+            {month: Decimal('100.00')},
+            defaultdict(lambda: defaultdict(Decimal)),
+            card,
+            account_service,
+            datetime(2026, 4, 1, tzinfo=UTC),
+        )
+
+        self.assertEqual(schedule_mock.call_count, 1)
+        self.assertEqual(month_data['grace_end'], grace_end)
+        self.assertEqual(final_debt, Decimal('90.00'))
