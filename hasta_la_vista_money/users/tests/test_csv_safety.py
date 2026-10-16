@@ -4,13 +4,14 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.urls import reverse
 
+from hasta_la_vista_money.constants import CSV_FORMULA_PREFIXES
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.export import escape_csv_cell
 
 
 class EscapeCsvCellTest(TestCase):
     def test_formula_prefixes_are_escaped(self) -> None:
-        for prefix in ('=', '+', '-', '@', '\t', '\r'):
+        for prefix in CSV_FORMULA_PREFIXES:
             with self.subTest(prefix=prefix):
                 self.assertEqual(
                     escape_csv_cell(f'{prefix}SUM(A1)'),
