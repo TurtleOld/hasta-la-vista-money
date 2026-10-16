@@ -67,6 +67,7 @@ from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
+from hasta_la_vista_money.users.services.groups import readable_users
 
 
 @dataclass(frozen=True)
@@ -730,6 +731,11 @@ class DepositService:
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]:
         return self.deposit_repository.get_by_user(user)
+
+    def get_readable_deposits(self, user: User) -> QuerySet[Deposit]:
+        return self.deposit_repository.get_by_users(
+            readable_users(user, 'family'),
+        )
 
     def get_user_deposit_overview(self, user: User) -> DepositOverview:
         deposits = tuple(self.get_user_deposits(user))

@@ -7,6 +7,7 @@ transactions for the user.
 
 from typing import TYPE_CHECKING, Any, cast
 
+from django.db.models import QuerySet
 from django.utils.dateparse import parse_date
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -252,7 +253,11 @@ class TransactionRetrieveAPIView(
     authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
-    queryset = Transaction.objects.select_related('category', 'account', 'user')
+
+    def get_queryset(self) -> QuerySet[Transaction]:
+        return Transaction.objects.filter(
+            user__in=readable_users(cast('User', self.request.user), 'family'),
+        ).select_related('category', 'account', 'user')
 
     def retrieve(
         self,
