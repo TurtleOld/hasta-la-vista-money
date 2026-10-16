@@ -10,6 +10,9 @@ from decimal import Decimal
 from django.db.models import QuerySet
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_RAIFFEISENBANK,
+)
 from hasta_la_vista_money.finance_account.models import Account
 
 
@@ -25,6 +28,17 @@ def card_debt_for_balance(account: Account, balance: Decimal) -> Decimal:
     """
     limit = Decimal(account.limit_credit or 0)
     return max(limit - balance, Decimal(0))
+
+
+def split_withdrawal_total(
+    bank_code: str,
+    total: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Split withdrawals into (in grace period, cash debt) for a bank."""
+    if bank_code != BANK_RAIFFEISENBANK:
+        return Decimal(0), total
+    in_grace = min(total, constants.RAIFFEISEN_GRACE_CASH_LIMIT)
+    return in_grace, total - in_grace
 
 
 def compute_total_credit_debt(accounts: QuerySet[Account]) -> Decimal:

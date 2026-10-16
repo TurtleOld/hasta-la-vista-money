@@ -22,6 +22,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    split_withdrawal_total,
+)
 from hasta_la_vista_money.finance_account.services.types import (
     PaymentScheduleStatementDict,
     RaiffeisenbankScheduleDict,
@@ -29,6 +32,9 @@ from hasta_la_vista_money.finance_account.services.types import (
 from hasta_la_vista_money.transactions.models import TransactionType
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.repositories import (
+        TransferMoneyLogRepository,
+    )
     from hasta_la_vista_money.receipts.repositories import ReceiptRepository
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
         TransactionRepository,
@@ -46,15 +52,18 @@ class CreditCalculationService:
         self,
         transaction_repository: 'TransactionRepository',
         receipt_repository: 'ReceiptRepository',
+        transfer_money_log_repository: 'TransferMoneyLogRepository',
     ) -> None:
         """Initialize CreditCalculationService.
 
         Args:
             transaction_repository: Repository for transaction data access.
             receipt_repository: Repository for receipt data access.
+            transfer_money_log_repository: Repository for transfer logs.
         """
         self.transaction_repository = transaction_repository
         self.receipt_repository = receipt_repository
+        self.transfer_money_log_repository = transfer_money_log_repository
 
     def get_credit_card_debt(
         self,
@@ -81,22 +90,7 @@ class CreditCalculationService:
         if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
             return None
 
-        start_date_dt: datetime | None = None
-        end_date_dt: datetime | None = None
-
-        if start_date and end_date:
-            if isinstance(start_date, datetime):
-                start_date_dt = start_date
-            elif isinstance(start_date, date):
-                start_date_dt = timezone.make_aware(
-                    datetime.combine(start_date, time.min),
-                )
-            if isinstance(end_date, datetime):
-                end_date_dt = end_date
-            elif isinstance(end_date, date):
-                end_date_dt = timezone.make_aware(
-                    datetime.combine(end_date, time.max),
-                )
+        start_date_dt, end_date_dt = self._period_bounds(start_date, end_date)
 
         expenses_queryset = self.transaction_repository.filter(
             account=account,
@@ -159,10 +153,65 @@ class CreditCalculationService:
             or 0
         )
 
-        result = (total_expense + total_receipt_expense) - (
-            total_income + total_receipt_return + total_transfer_payments
+        grace_withdrawals, cash_debt = self._split_withdrawals(
+            account,
+            start_date_dt,
+            end_date_dt,
+        )
+        # Repayments close the cash debt first: it accrues interest at once.
+        repaid_purchases = max(
+            Decimal(str(total_income + total_transfer_payments)) - cash_debt,
+            Decimal(str(constants.ZERO)),
+        )
+        result = (
+            total_expense
+            + total_receipt_expense
+            + grace_withdrawals
+            - total_receipt_return
+            - repaid_purchases
         )
         return max(Decimal(str(result)), Decimal(str(constants.ZERO)))
+
+    @staticmethod
+    def _period_bounds(
+        start_date: date | datetime | None,
+        end_date: date | datetime | None,
+    ) -> tuple[datetime | None, datetime | None]:
+        start_date_dt: datetime | None = None
+        end_date_dt: datetime | None = None
+        if start_date and end_date:
+            if isinstance(start_date, datetime):
+                start_date_dt = start_date
+            elif isinstance(start_date, date):
+                start_date_dt = timezone.make_aware(
+                    datetime.combine(start_date, time.min),
+                )
+            if isinstance(end_date, datetime):
+                end_date_dt = end_date
+            elif isinstance(end_date, date):
+                end_date_dt = timezone.make_aware(
+                    datetime.combine(end_date, time.max),
+                )
+        return start_date_dt, end_date_dt
+
+    def _split_withdrawals(
+        self,
+        account: Account,
+        start_date_dt: datetime | None,
+        end_date_dt: datetime | None,
+    ) -> tuple[Decimal, Decimal]:
+        """Split withdrawals into (in grace period, cash debt)."""
+        queryset = self.transfer_money_log_repository.filter(
+            from_account=account,
+        )
+        if start_date_dt and end_date_dt:
+            queryset = queryset.filter(
+                exchange_date__range=(start_date_dt, end_date_dt),
+            )
+        total = Decimal(
+            str(queryset.aggregate(total=Sum('amount'))['total'] or 0),
+        )
+        return split_withdrawal_total(account.bank.code, total)
 
     def get_credit_card_payments(
         self,

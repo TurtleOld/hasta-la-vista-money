@@ -16,7 +16,11 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_DEBIT_CARD,
 )
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.services.credit_debt import (
     card_debt_for_balance,
     compute_total_credit_debt,
@@ -184,3 +188,96 @@ class CardDebtForBalanceTest(TestCase):
             card_debt_for_balance(card, card.balance),
             Decimal('6000.00'),
         )
+
+
+class CashWithdrawalDebtTest(TestCase):
+    """FIN-14: cash withdrawals are debt without a grace period."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='cashuser',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.debit = Account.objects.create(
+            user=self.user,
+            name_account='Дебетовая карта',
+            balance=Decimal('0.00'),
+            currency='RUB',
+            type_account=ACCOUNT_TYPE_DEBIT_CARD,
+            bank=Bank.objects.get(code='SBERBANK'),
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Покупки',
+            type=TransactionType.EXPENSE,
+        )
+        self.account_service = (
+            ApplicationContainer().finance_account.account_service()
+        )
+
+    def _card(self, bank_code: str = 'SBERBANK') -> Account:
+        return Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта',
+            balance=Decimal('0.00'),
+            limit_credit=Decimal('200000.00'),
+            currency='RUB',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            bank=Bank.objects.get(code=bank_code),
+        )
+
+    def _purchase(self, card: Account, amount: str) -> None:
+        Transaction.objects.create(
+            user=self.user,
+            account=card,
+            category=self.category,
+            amount=Decimal(amount),
+            date=datetime(2026, 8, 2, 12, 0, tzinfo=UTC),
+            type=TransactionType.EXPENSE,
+        )
+
+    def _transfer(self, source: Account, target: Account, amount: str) -> None:
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=source,
+            to_account=target,
+            amount=Decimal(amount),
+            exchange_date=datetime(2026, 8, 5, 12, 0, tzinfo=UTC),
+        )
+
+    def _grace_debt(self, card: Account) -> Decimal | None:
+        debt: Decimal | None = self.account_service.get_credit_card_debt(
+            card,
+            date(2026, 8, 1),
+            date(2026, 8, 31),
+        )
+        return debt
+
+    def test_withdrawal_is_not_in_grace_debt(self) -> None:
+        card = self._card()
+        self._purchase(card, '10000.00')
+        self._transfer(card, self.debit, '5000.00')
+
+        self.assertEqual(self._grace_debt(card), Decimal('10000.00'))
+
+    def test_repayment_closes_cash_debt_before_purchases(self) -> None:
+        card = self._card()
+        self._purchase(card, '10000.00')
+        self._transfer(card, self.debit, '5000.00')
+        self._transfer(self.debit, card, '5000.00')
+
+        self.assertEqual(self._grace_debt(card), Decimal('10000.00'))
+
+    def test_repayment_surplus_reduces_purchase_debt(self) -> None:
+        card = self._card()
+        self._purchase(card, '10000.00')
+        self._transfer(card, self.debit, '5000.00')
+        self._transfer(self.debit, card, '8000.00')
+
+        self.assertEqual(self._grace_debt(card), Decimal('7000.00'))
+
+    def test_raiffeisenbank_withdrawal_up_to_limit_is_in_grace(self) -> None:
+        card = self._card('RAIFFAISENBANK')
+        self._transfer(card, self.debit, '60000.00')
+
+        self.assertEqual(self._grace_debt(card), Decimal('50000.00'))

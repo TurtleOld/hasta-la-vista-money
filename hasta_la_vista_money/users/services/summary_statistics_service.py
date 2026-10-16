@@ -39,6 +39,7 @@ from hasta_la_vista_money.finance_account.prepare import (
 )
 from hasta_la_vista_money.finance_account.services.credit_debt import (
     card_debt_for_balance,
+    split_withdrawal_total,
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -165,6 +166,7 @@ class CardMonthDict(TypedDict):
     payments_made: Decimal
     remaining_debt: Decimal
     is_paid: bool
+    cash_debt: Decimal
 
 
 class CardHistoryDict(TypedDict):
@@ -182,6 +184,13 @@ class PaymentItemDict(TypedDict):
 
     amount: Decimal
     date: date | datetime
+
+
+class CashWithdrawalItemDict(TypedDict):
+    """Cash withdrawn from a credit card in a month, outside grace."""
+
+    month: str
+    amount: Decimal
 
 
 class PaymentScheduleItemDict(TypedDict):
@@ -228,6 +237,7 @@ class CreditCardDataDict(TypedDict, total=False):
     card_obj_id: int
     limit_left: Decimal
     payment_schedule: list[PaymentScheduleItemDict]
+    cash_withdrawals: list[CashWithdrawalItemDict]
     schedule_debt: Decimal
     schedule_mismatch: bool
     utilization_chart: dict[str, list[float] | list[str]]
@@ -774,6 +784,7 @@ def _build_single_card_month(
         'payments_made': Decimal(0),
         'remaining_debt': Decimal(0),
         'is_paid': False,
+        'cash_debt': Decimal(0),
     }
 
     final_debt = debt
@@ -832,6 +843,26 @@ def _card_months_block(
         receipts_by_month,
     )
 
+    withdrawals_by_month = (
+        TransferMoneyLog.objects.by_date_range(period_start, period_end)
+        .filter(from_account=card)
+        .annotate(month=TruncMonth('exchange_date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+    )
+    cash_by_month: dict[date, Decimal] = {}
+    for item in withdrawals_by_month:
+        month_date = item['month'].date().replace(day=1)
+        grace_part, cash_part = split_withdrawal_total(
+            card.bank.code,
+            Decimal(str(item['total'] or 0)),
+        )
+        # The grace part of withdrawals counts as month debt like purchases.
+        expenses_dict[month_date] = (
+            expenses_dict.get(month_date, Decimal(0)) + grace_part
+        )
+        cash_by_month[month_date] = cash_part
+
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
 
@@ -844,6 +875,7 @@ def _card_months_block(
             account_service,
             now,
         )
+        month_data['cash_debt'] = cash_by_month.get(month_date, Decimal(0))
         months.append(month_data)
 
         history.append(
@@ -1357,6 +1389,11 @@ def _credit_cards_block(
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
+                'cash_withdrawals': [
+                    {'month': m['month'], 'amount': m['cash_debt']}
+                    for m in months
+                    if m['cash_debt'] > constants.ZERO
+                ],
                 'schedule_debt': schedule_debt,
                 'schedule_mismatch': (
                     schedule_covers_debt
