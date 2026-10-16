@@ -100,9 +100,6 @@ class CookieJWTAuthentication(JWTAuthentication):
                     has_auth_meta_key='HTTP_AUTHORIZATION' in request.META
                     or 'Authorization' in request.META,
                     auth_header_present=auth_header_raw is not None,
-                    auth_header_prefix=auth_header_raw[:30]
-                    if auth_header_raw
-                    else None,
                     all_meta_keys_with_auth=[
                         k for k in request.META if 'AUTH' in k.upper()
                     ],
@@ -113,7 +110,6 @@ class CookieJWTAuthentication(JWTAuthentication):
             logger.warning(
                 'Failed to extract raw token from header',
                 path=request.path,
-                header_prefix=header[:50] if header else None,
             )
             return None
 
