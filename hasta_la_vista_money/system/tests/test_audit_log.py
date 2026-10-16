@@ -2,7 +2,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.apps import apps
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -1380,3 +1382,42 @@ class StatementImportOperationTests(TestCase):
             operation.title,
             'Массовое изменение · 13 записей',
         )
+
+
+class AuditFeedQueryCountTests(TestCase):
+    """The feed resolves its lookups once per page, not once per operation."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username='audit-queries')
+
+    def _make_operations(self, count: int) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            balance=Decimal('100.00'),
+        )
+        AuditLog.objects.filter(user=self.user).delete()
+        for index in range(count):
+            with audit_operation(AuditOperationKind.ACCOUNT_EDIT):
+                account.balance = Decimal(200 + index)
+                account.save()
+
+    def _feed_query_count(self) -> int:
+        with CaptureQueriesContext(connection) as captured:
+            page = list_operations(
+                AuditLog.objects.filter(user=self.user),
+                page=1,
+                page_size=30,
+            )
+        self.assertEqual(len(page.operations), self.operations_expected)
+        return len(captured)
+
+    def test_query_count_does_not_grow_with_operations(self) -> None:
+        self._make_operations(3)
+        self.operations_expected = 3
+        few = self._feed_query_count()
+
+        self._make_operations(30)
+        self.operations_expected = 30
+        many = self._feed_query_count()
+
+        self.assertEqual(many, few)

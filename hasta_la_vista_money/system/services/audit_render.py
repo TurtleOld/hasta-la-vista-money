@@ -119,10 +119,23 @@ def _entry_header(entry: AuditLog) -> str:
     return str(label)
 
 
-def render_entries(entries: Sequence[AuditLog]) -> list[RenderedEntry]:
-    """Render a page of audit entries, resolving lookups in batches."""
+def build_read_context(entries: Sequence[AuditLog]) -> 'ReadContext':
+    """Resolve the lookups for ``entries`` once, to share between renders."""
+    return _ReadContext([(entry, _raw_sides(entry)) for entry in entries])
+
+
+def render_entries(
+    entries: Sequence[AuditLog],
+    context: 'ReadContext | None' = None,
+) -> list[RenderedEntry]:
+    """Render a page of audit entries, resolving lookups in batches.
+
+    ``context`` must cover every entry given; without it one is built
+    from ``entries`` alone.
+    """
     raw_pages = [(entry, _raw_sides(entry)) for entry in entries]
-    context = _ReadContext(raw_pages)
+    if context is None:
+        context = _ReadContext(raw_pages)
     return [_render_entry(entry, sides, context) for entry, sides in raw_pages]
 
 
@@ -301,6 +314,9 @@ class _ReadContext:
             account_ids,
         )
         self._currency_by_account = dict(rows)
+
+
+ReadContext = _ReadContext
 
 
 def _values_list(
