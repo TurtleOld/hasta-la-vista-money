@@ -7,6 +7,7 @@ including filtering and CRUD operations.
 from collections.abc import Iterable
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, QuerySet
 
 from hasta_la_vista_money import constants
@@ -20,6 +21,9 @@ from hasta_la_vista_money.receipts.product_category_constants import (
     normalize_product_name,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_circle_statistics_cache,
+)
 
 
 class ProductRepository:
@@ -147,10 +151,15 @@ class ProductRepository:
         to_category: ProductCategory,
     ) -> int:
         """Reassign the owner's product rows from one category to another."""
-        return Product.objects.filter(
+        updated = Product.objects.filter(
             user=user,
             category=from_category,
         ).update(category=to_category)
+        # update() skips signals, so reset the statistics cache by hand
+        transaction.on_commit(
+            lambda: invalidate_user_circle_statistics_cache(user.pk),
+        )
+        return updated
 
     def count_by_categories(
         self,
