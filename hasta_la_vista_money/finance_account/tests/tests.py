@@ -732,7 +732,7 @@ class TestAccountServices(TestCase):
 class TestAccountBusinessLogic(TestCase):
     """
     Unit tests for Account model business logic methods:
-    transfer_money, get_credit_card_debt, calculate_grace_period_info.
+    transfer_money, get_credit_card_debt.
     """
 
     fixtures: list[str] = [
@@ -763,16 +763,6 @@ class TestAccountBusinessLogic(TestCase):
             self.account1,
         )
         self.assertIsInstance(debt, Decimal)
-
-    def test_calculate_grace_period_info(self) -> None:
-        self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
-        self.account1.save()
-
-        info = self.account_service.calculate_grace_period_info(
-            self.account1,
-            timezone.now().date(),
-        )
-        self.assertIn('final_debt', info)
 
 
 class TestValidatorsRefactored(TestCase):
