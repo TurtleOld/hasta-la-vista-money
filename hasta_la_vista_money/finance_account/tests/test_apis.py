@@ -4,10 +4,16 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -141,6 +147,46 @@ class TestAccountAPI(TestCase):
         self.assertFalse(
             Account.objects.filter(name_account='Deposit bypass').exists(),
         )
+
+    def test_account_api_patch_currency_without_movements(self) -> None:
+        url = reverse(
+            'finance_account:api_detail',
+            kwargs={'pk': self.account.pk},
+        )
+        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
+
+        response = self.client.patch(url, {'currency': 'USD'}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.currency, 'USD')
+
+    def test_account_api_patch_currency_with_movements_is_rejected(
+        self,
+    ) -> None:
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=Category.objects.create(
+                user=self.user,
+                name='Food',
+                type=TransactionType.EXPENSE,
+            ),
+            amount=Decimal('10.00'),
+            date=timezone.now(),
+        )
+        url = reverse(
+            'finance_account:api_detail',
+            kwargs={'pk': self.account.pk},
+        )
+        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
+
+        response = self.client.patch(url, {'currency': 'USD'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.currency, 'RUB')
 
     def test_account_api_patch_balance_does_not_change_balance(self) -> None:
         """PATCH must not rewrite the balance via the account API."""

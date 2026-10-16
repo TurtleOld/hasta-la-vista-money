@@ -83,15 +83,14 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
     ) -> dict[str, serializers.Field[Any, Any, Any, Any]]:
         """Return serializer fields for the current operation.
 
-        When updating an existing account, ``balance`` and ``currency`` are
-        made read-only: the balance may only change through
+        When updating an existing account, ``balance`` is made read-only:
+        it may only change through
         ``BalanceService`` and the balance-audit chain, never by a direct
         account API write. Initial values remain settable on create.
         """
         fields = super().get_fields()
         if self.instance is not None:
             fields['balance'].read_only = True
-            fields['currency'].read_only = True
         return fields
 
     def create(self, validated_data: dict[str, Any]) -> Account:
@@ -110,6 +109,17 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
 
         validated_data['user'] = user
         return super().create(validated_data)
+
+    def validate_currency(self, value: str) -> str:
+        if (
+            self.instance is not None
+            and value != self.instance.currency
+            and self.instance.has_movements()
+        ):
+            raise serializers.ValidationError(
+                _('Валюту счёта с движениями изменить нельзя.'),
+            )
+        return value
 
     def validate_type_account(self, value: str) -> str:
         if value == constants.ACCOUNT_TYPE_DEPOSIT:
