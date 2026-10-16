@@ -7,6 +7,9 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.currencies import (
+    get_default_currency,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import (
@@ -148,6 +151,14 @@ class TestLoan(TestCase):
         self.assertTrue(
             Loan.objects.filter(loan_amount=data['loan_amount']).exists(),
         )
+
+    def test_create_loan_account_uses_iso_currency(self) -> None:
+        """New loan creates credit account with ISO default currency."""
+        self.client.force_login(self.user)
+        data = self._get_loan_form_data('Annuity')
+        self.client.post(reverse_lazy('loan:create'), data)
+        loan = Loan.objects.get(loan_amount=data['loan_amount'])
+        self.assertEqual(loan.account.currency, get_default_currency())
 
     def test_create_differentiated_loan(self) -> None:
         """Test differentiated loan creation."""
