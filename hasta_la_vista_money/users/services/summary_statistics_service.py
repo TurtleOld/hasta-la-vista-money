@@ -1,7 +1,7 @@
 import json
 from calendar import monthrange
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
@@ -633,7 +633,7 @@ def _calculate_grace_period_end(
     card: Account,
     purchase_start_date: date,
     purchase_end: datetime,
-    account_service: AccountServiceProtocol,
+    raiffeisen_schedule: Mapping[str, Any] | None = None,
 ) -> datetime:
     """Calculate grace period end date.
 
@@ -641,7 +641,8 @@ def _calculate_grace_period_end(
         card: Account (credit card) instance.
         purchase_start_date: Purchase period start date.
         purchase_end: Purchase period end datetime.
-        account_service: Account service for payment schedule calculations.
+        raiffeisen_schedule: Payment schedule of the card for the month,
+            already calculated for Raiffeisenbank cards.
 
     Returns:
         Grace period end datetime.
@@ -661,13 +662,9 @@ def _calculate_grace_period_end(
                 time.max,
             ),
         )
-    if bank == 'RAIFFAISENBANK':
-        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
-            card,
-            purchase_start_date,
-        )
-        if schedule and 'grace_end_date' in schedule:
-            return schedule['grace_end_date']
+    if bank == BANK_RAIFFEISENBANK:
+        if raiffeisen_schedule and 'grace_end_date' in raiffeisen_schedule:
+            return cast('datetime', raiffeisen_schedule['grace_end_date'])
         return purchase_end
     return purchase_end
 
@@ -743,11 +740,20 @@ def _build_single_card_month(
     )
 
     debt = exp_sum + rcpt_expense - rcpt_return
+    is_raiffeisen = getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK
+    schedule = (
+        account_service.calculate_raiffeisenbank_payment_schedule(
+            card,
+            purchase_start,
+        )
+        if is_raiffeisen
+        else None
+    )
     grace_end = _calculate_grace_period_end(
         card,
         purchase_start_date,
         purchase_end,
-        account_service,
+        schedule,
     )
 
     days_left = (
@@ -771,16 +777,8 @@ def _build_single_card_month(
     }
 
     final_debt = debt
-    if (
-        getattr(card.bank, 'code', None) == 'RAIFFAISENBANK'
-        and debt > constants.ZERO
-    ):
-        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
-            card,
-            purchase_start,
-        )
-        if schedule and 'final_debt' in schedule:
-            final_debt = Decimal(schedule['final_debt'])
+    if schedule and debt > constants.ZERO and 'final_debt' in schedule:
+        final_debt = Decimal(schedule['final_debt'])
 
     return month_data, final_debt
 
@@ -1046,7 +1044,7 @@ def _build_payment_schedule(
         if m['debt_for_month'] <= constants.ZERO:
             continue
         due = m['grace_end'].strftime('%d.%m.%Y')
-        if getattr(card.bank, 'code', None) == 'RAIFFAISENBANK':
+        if getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK:
             for h in history:
                 if h['month'] == m['month']:
                     due = h['grace_end']
