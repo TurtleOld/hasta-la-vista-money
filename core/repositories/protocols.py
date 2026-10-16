@@ -48,22 +48,6 @@ class TransactionRepositoryProtocol(Protocol):
         """
         ...
 
-    def get_by_user_and_group(
-        self,
-        user: 'User',
-        group_id: str | None = None,
-    ) -> QuerySet['Transaction']:
-        """Get transactions for user or group.
-
-        Args:
-            user: User instance.
-            group_id: Optional group ID.
-
-        Returns:
-            QuerySet of transactions.
-        """
-        ...
-
     def create_transaction(self, **kwargs: object) -> 'Transaction':
         """Create a new transaction.
 

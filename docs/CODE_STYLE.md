@@ -368,7 +368,7 @@ def process_payment(account: Account, amount: Decimal) -> bool:
 
 ### Импорты
 
-Используйте `isort` для сортировки импортов. Порядок:
+Сортировка импортов — правило `I` в `ruff` (`ruff check --select I --fix`); отдельный `isort` не используется. Порядок:
 
 1. Стандартная библиотека Python
 2. Django и сторонние библиотеки

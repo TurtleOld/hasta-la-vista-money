@@ -38,6 +38,7 @@ from hasta_la_vista_money.authentication.authentication import (
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.finance_account.models import Account
+
 from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
 from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
@@ -57,6 +58,10 @@ from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    member_groups,
+    readable_users,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -542,13 +547,8 @@ class ReceiptsByGroupAPIView(APIView):
             receipt_queryset = receipt_repository.filter(pk__in=[])
             user_groups = []
         else:
-            user = User.objects.prefetch_related('groups').get(
-                pk=request.user.pk,
-            )
-            account_service = (
-                request_with_container.container.core.account_service()
-            )
-            users_in_group = account_service.get_users_for_group(user, group_id)
+            user = request.user
+            users_in_group = readable_users(user, group_id)
 
             if users_in_group:
                 receipt_queryset = receipt_repository.get_by_users(
@@ -559,7 +559,7 @@ class ReceiptsByGroupAPIView(APIView):
 
             user_groups = [
                 {'id': group.pk, 'name': group.name}
-                for group in user.groups.all()
+                for group in member_groups(user)
             ]
 
         receipts = (

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.finance_account.models import Account
+
 from django.shortcuts import get_object_or_404
 from django.views.generic import (
     ListView,
@@ -36,6 +37,10 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.views.base import BaseView
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    member_groups,
+    readable_users,
+)
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
@@ -55,11 +60,7 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         request = self.get_request_with_container()
         receipt_repository = request.container.receipts.receipt_repository()
         group_id = request.GET.get('group_id') or 'my'
-        account_service = request.container.core.account_service()
-        users_in_group = account_service.get_users_for_group(
-            request.user,
-            group_id,
-        )
+        users_in_group = readable_users(cast('User', request.user), group_id)
         if users_in_group:
             return cast(
                 'QuerySet[Receipt, Receipt]',
@@ -92,14 +93,13 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         account_repository = (
             request.container.finance_account.account_repository()
         )
-        account_service = request.container.core.account_service()
-        users_in_group = account_service.get_users_for_group(user, group_id)
+        users_in_group = readable_users(user, group_id)
 
         if users_in_group:
             return (
                 receipt_repository.get_by_users_with_related(users_in_group),
                 seller_repository.unique_by_name_for_users(users_in_group),
-                account_repository.get_by_user_and_group(user, group_id),
+                account_repository.get_by_users(users_in_group),
             )
         return (
             receipt_repository.filter(pk__in=[]),
@@ -236,7 +236,7 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['receipt_form'] = receipt_form
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
-        context['user_groups'] = user.groups.all()
+        context['user_groups'] = member_groups(user)
         context['selected_group_id'] = group_id
         context['pagination_querystring'] = pagination_querystring
         context['group_querystring'] = group_querystring

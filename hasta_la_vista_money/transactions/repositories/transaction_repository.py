@@ -47,30 +47,6 @@ class TransactionRepository:
             qs = qs.filter(type=type_value)
         return qs
 
-    def get_by_user_and_group(
-        self,
-        user: User,
-        group_id: str | None = None,
-        type_value: str | None = None,
-    ) -> QuerySet[Transaction]:
-        """Return transactions filtered by user or group membership."""
-        if not group_id or group_id == 'my':
-            return self.get_by_user(user, type_value=type_value)
-
-        user_with_groups = User.objects.prefetch_related('groups').get(
-            pk=user.pk,
-        )
-        if user_with_groups.groups.filter(id=group_id).exists():
-            group_users = list(User.objects.filter(groups__id=group_id))
-            qs = Transaction.objects.filter(
-                user__in=group_users,
-            ).select_related('user', 'category', 'account')
-            if type_value is not None:
-                qs = qs.filter(type=type_value)
-            return qs
-
-        return Transaction.objects.none()
-
     def get_by_period(
         self,
         user: User,

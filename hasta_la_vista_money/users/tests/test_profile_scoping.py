@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 
 GROUPS_URL = '/api/users/groups/'
 AVAILABLE_GROUPS_URL = '/api/users/available-groups/'
@@ -25,6 +25,14 @@ class ProfileAndGroupsScopingTest(TestCase):
         self.other_group = Group.objects.create(name='other-group')
         self.user.groups.add(self.own_group)
         self.other.groups.add(self.other_group)
+        FamilyGroupMembership.objects.create(
+            group=self.own_group,
+            user=self.user,
+        )
+        FamilyGroupMembership.objects.create(
+            group=self.other_group,
+            user=self.other,
+        )
         self.client.force_login(self.user)
         self.api_client = APIClient()
         self.api_client.force_authenticate(user=self.user)

@@ -15,6 +15,10 @@ from hasta_la_vista_money.finance_account.services.credit_debt import (
     compute_total_credit_debt,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    member_groups,
+    readable_users,
+)
 
 if TYPE_CHECKING:
     from core.protocols.services import AccountServiceProtocol
@@ -108,7 +112,7 @@ class AccountPageContextService:
         """
         context: dict[str, Any] = {
             'accounts': accounts,
-            'user_groups': user.groups.all(),
+            'user_groups': member_groups(user),
         }
 
         context.update(self._build_forms_context(user))
@@ -171,19 +175,10 @@ class AccountPageContextService:
             accounts,
         )
 
-        if user.groups.exists():
-            accounts_in_group = self.account_repository.get_by_user_and_group(
-                user,
-                'family',
-            )
-            accounts_for_summary = accounts_in_group
-            total_credit_debt = compute_total_credit_debt(accounts_in_group)
-        else:
-            accounts_user = self.account_repository.get_by_user_with_related(
-                user,
-            )
-            accounts_for_summary = accounts_user
-            total_credit_debt = compute_total_credit_debt(accounts_user)
+        accounts_for_summary = self.account_repository.get_by_users(
+            readable_users(user, 'family'),
+        )
+        total_credit_debt = compute_total_credit_debt(accounts_for_summary)
 
         debit_balances_in_group = self.account_service.get_balances_by_currency(
             accounts_for_summary.debit(),

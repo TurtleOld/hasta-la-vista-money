@@ -4,7 +4,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.contrib.auth.models import Group
 from django.db.models import QuerySet, Sum
 
 from hasta_la_vista_money import constants
@@ -22,9 +21,9 @@ from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
     RaiffeisenbankScheduleDict,
 )
-from hasta_la_vista_money.users.models import FamilyGroupMembership, User
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
-    user_has_group_access,
+    readable_users,
 )
 
 if TYPE_CHECKING:
@@ -95,63 +94,6 @@ class AccountService:
         """
         return self.account_repository.get_by_id_and_user(account_id, user)
 
-    def get_users_for_group(
-        self,
-        user: User,
-        group_id: str | None = None,
-    ) -> list[User]:
-        """Get list of users for a specific group or user.
-
-        Common logic for group filtering used across the application.
-        Handles 'my', None, and group ID cases.
-
-        Args:
-            user: Current user instance.
-            group_id: Optional group ID filter:
-                - 'my' or None: return only current user
-                - group ID (str): return all users in the group
-
-        Returns:
-            List of User instances for the specified group or user.
-
-        Raises:
-            Group.DoesNotExist: If group_id is provided but group doesn't
-                exist (should be handled by caller).
-        """
-        if not group_id or group_id == 'my':
-            return [user]
-
-        if group_id == 'family':
-            group_ids = FamilyGroupMembership.objects.filter(
-                user=user,
-                role=FamilyGroupMembership.Role.OWNER,
-            ).values_list('group_id', flat=True)
-            users = User.objects.filter(
-                family_memberships__group_id__in=group_ids,
-            ).distinct()
-            return list(users) or [user]
-
-        if not user_has_group_access(user, group_id):
-            return []
-
-        try:
-            group = Group.objects.get(pk=group_id)
-        except Group.DoesNotExist:
-            return []
-        else:
-            is_owner = FamilyGroupMembership.objects.filter(
-                group=group,
-                user=user,
-                role=FamilyGroupMembership.Role.OWNER,
-            ).exists()
-            if not is_owner:
-                return [user]
-            return list(
-                User.objects.filter(
-                    family_memberships__group=group,
-                ).distinct(),
-            )
-
     def get_accounts_for_user_or_group(
         self,
         user: User,
@@ -166,7 +108,9 @@ class AccountService:
         Returns:
             QuerySet of accounts for user or group.
         """
-        return self.account_repository.get_by_user_and_group(user, group_id)
+        return self.account_repository.get_by_users(
+            readable_users(user, group_id),
+        )
 
     def get_balances_by_currency(
         self,

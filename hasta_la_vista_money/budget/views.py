@@ -24,8 +24,11 @@ from hasta_la_vista_money.budget.services.budget import (
 )
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category
-from hasta_la_vista_money.users.models import FamilyGroupMembership, User
-from hasta_la_vista_money.users.services.groups import get_family_groups
+from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    get_family_groups,
+    readable_users,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -52,39 +55,15 @@ def _normalize_budget_scope(value: str | None) -> str:
     return 'my'
 
 
-def _owned_family_group_ids(user: User) -> list[int]:
-    return list(
-        FamilyGroupMembership.objects.filter(
-            user=user,
-            role=FamilyGroupMembership.Role.OWNER,
-        ).values_list('group_id', flat=True),
-    )
-
-
-def _family_users_for_budget(user: User) -> list[User]:
-    group_ids = _owned_family_group_ids(user)
-    if not group_ids:
-        return [user]
-    return list(
-        User.objects.filter(family_memberships__group_id__in=group_ids)
-        .distinct()
-        .order_by('username'),
-    ) or [user]
-
-
 def _scope_choices(
     user: User,
     request: Any,
 ) -> list[BudgetScopeChoiceDict]:
     family_groups = get_family_groups(user, request)
-    has_owned_family = any(
-        group['role'] == FamilyGroupMembership.Role.OWNER
-        for group in family_groups
-    )
     choices: list[BudgetScopeChoiceDict] = [
         {'value': 'my', 'label': 'Мой бюджет'},
     ]
-    if has_owned_family:
+    if family_groups:
         choices.append({'value': 'family', 'label': 'Семья'})
     return choices
 
@@ -103,9 +82,7 @@ def _resolve_budget_scope(
     scope = _normalize_budget_scope(raw_scope)
     if scope not in allowed_scopes:
         scope = 'my'
-    scope_users = (
-        _family_users_for_budget(user) if scope == 'family' else [user]
-    )
+    scope_users = readable_users(user, scope)
     return scope, scope_users, choices
 
 
