@@ -14,6 +14,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
+    owned_group_ids,
     remove_user_from_group,
 )
 from hasta_la_vista_money.users.timezones import get_available_timezones
@@ -252,10 +253,6 @@ class GroupDeleteForm(forms.Form):
         current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         if isinstance(current_user, User):
-            owner_group_ids = FamilyGroupMembership.objects.filter(
-                user=current_user,
-                role=FamilyGroupMembership.Role.OWNER,
-            ).values_list('group_id', flat=True)
             group_field = self.fields['group']
             if not isinstance(group_field, forms.ModelChoiceField):
                 return
@@ -267,7 +264,7 @@ class GroupDeleteForm(forms.Form):
                 .values_list('group_id', flat=True)
             )
             group_field.queryset = Group.objects.filter(
-                id__in=owner_group_ids,
+                id__in=owned_group_ids(current_user),
             ).exclude(id__in=other_owner_group_ids)
 
     group = forms.ModelChoiceField(
@@ -314,12 +311,7 @@ class UserGroupBaseForm(forms.Form):
     ) -> QuerySet[Group]:
         """Limit groups to the ones the current user owns."""
         if isinstance(self.current_user, User):
-            return queryset.filter(
-                id__in=FamilyGroupMembership.objects.filter(
-                    user=self.current_user,
-                    role=FamilyGroupMembership.Role.OWNER,
-                ).values_list('group_id', flat=True),
-            )
+            return queryset.filter(id__in=owned_group_ids(self.current_user))
         return queryset if self.user_instance else queryset.none()
 
     user = forms.ModelChoiceField(

@@ -3,6 +3,7 @@ from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.models import Group
+from django.db.models import QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.urls import reverse
@@ -108,6 +109,15 @@ def add_user_to_group(request: HttpRequest, user: User, group: Group) -> None:
     messages.success(request, _('Пользователь успешно добавлен в группу.'))
 
 
+def owned_group_ids(user: User) -> QuerySet[FamilyGroupMembership, int]:
+    """Return IDs of the groups where user is an owner."""
+
+    return FamilyGroupMembership.objects.filter(
+        user=user,
+        role=FamilyGroupMembership.Role.OWNER,
+    ).values_list('group_id', flat=True)
+
+
 def remove_user_from_group(
     request: HttpRequest,
     user: User,
@@ -124,6 +134,18 @@ def remove_user_from_group(
         messages.error(
             request,
             _('Пользователь не состоит в выбранной группе.'),
+        )
+        return
+    owner_ids = set(
+        FamilyGroupMembership.objects.filter(
+            group=group,
+            role=FamilyGroupMembership.Role.OWNER,
+        ).values_list('user_id', flat=True),
+    )
+    if owner_ids == {user.pk}:
+        messages.error(
+            request,
+            _('Нельзя удалить последнего владельца группы.'),
         )
         return
     user.groups.remove(group)

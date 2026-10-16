@@ -36,6 +36,7 @@ from hasta_la_vista_money.users.services.groups import (
     get_or_create_family_invite,
     get_user_groups,
     remove_user_from_group,
+    user_can_manage_group,
     user_has_group_access,
 )
 from hasta_la_vista_money.users.services.registration import (
@@ -274,6 +275,39 @@ class ExplicitFamilyGroupTest(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertTrue(Group.objects.filter(pk=group.pk).exists())
+
+    def test_group_forms_list_only_owned_groups(self) -> None:
+        alice_group = self._make_group(self.alice, 'Alice family')
+        mallory_group = self._make_group(self.mallory, 'Mallory family')
+
+        for form_class in (AddUserToGroupForm, DeleteUserFromGroupForm):
+            with self.subTest(form=form_class.__name__):
+                form = form_class(current_user=self.alice)
+                groups = form.fields['group'].queryset  # type: ignore[attr-defined]
+                self.assertIn(alice_group, groups)
+                self.assertNotIn(mallory_group, groups)
+
+    def test_last_owner_cannot_be_removed_from_group(self) -> None:
+        group = self._make_group(self.alice)
+
+        remove_user_from_group(_messages_request(), self.alice, group)
+
+        self.assertTrue(user_can_manage_group(self.alice, group))
+        self.assertIn(group, self.alice.groups.all())
+
+    def test_owner_can_be_removed_when_another_owner_exists(self) -> None:
+        group = self._make_group(self.alice)
+        self.mallory.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.mallory,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+        remove_user_from_group(_messages_request(), self.alice, group)
+
+        self.assertNotIn(group, self.alice.groups.all())
+        self.assertTrue(user_can_manage_group(self.mallory, group))
 
     def test_invite_does_not_change_existing_role(self) -> None:
         group = self._make_group(self.alice)
