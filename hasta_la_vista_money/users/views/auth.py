@@ -1,7 +1,7 @@
 from typing import Any
 
 from django.contrib import messages
-from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
@@ -21,6 +21,7 @@ from django.views.generic import CreateView, View
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
+    get_refresh_token_from_cookie,
     set_auth_cookies,
 )
 from hasta_la_vista_money.users.forms import (
@@ -32,7 +33,10 @@ from hasta_la_vista_money.users.models import (
     FamilyInvite,
     User,
 )
-from hasta_la_vista_money.users.services.auth import login_user
+from hasta_la_vista_money.users.services.auth import (
+    blacklist_refresh_token,
+    login_user,
+)
 from hasta_la_vista_money.users.services.groups import (
     accept_family_invite,
     get_active_family_invite,
@@ -167,6 +171,7 @@ class LogoutUser(LogoutView, SuccessMessageMixin[BaseForm]):
             messages.SUCCESS,
             constants.SUCCESS_MESSAGE_LOGOUT,
         )
+        blacklist_refresh_token(get_refresh_token_from_cookie(request))
         response = super().dispatch(request, *args, **kwargs)
         return clear_auth_cookies(response)
 
@@ -265,22 +270,15 @@ class RegisterByInviteView(View):
 
 class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
     template_name = 'users/set_password.html'
-    form_class = SetPasswordForm
+    form_class = PasswordChangeForm
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        user = get_object_or_404(User, pk=self.request.user.pk)
-        if self.request.method == 'POST':
-            context['form_password'] = SetPasswordForm(
-                user=user,
-                data=self.request.POST,
-            )
-            context['user'] = user
-        else:
-            context['form_password'] = SetPasswordForm(user=user)
+        context['user'] = get_object_or_404(User, pk=self.request.user.pk)
+        context['form_password'] = context['form']
         return context
 
-    def form_valid(self, form: SetPasswordForm) -> HttpResponse:  # type: ignore[type-arg]
+    def form_valid(self, form: PasswordChangeForm) -> HttpResponse:
         set_user_password(form, self.request)
         messages.success(
             self.request,
