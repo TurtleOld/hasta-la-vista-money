@@ -18,6 +18,23 @@ Issues и спеки живут как markdown-файлы в `.scratch/<feature
 
 Single-context: `CONTEXT.md` и `docs/adr/` в корне репозитория. См. `docs/agents/domain.md`.
 
+### Порядок работы со скиллами
+
+`grilling` → `tdd` → `ponytail` (режим `full`).
+
+Ponytail применяется внутри слоёв проекта, а не против них: он не отменяет
+service/repository/protocol/DI из раздела «Архитектура проекта». Режим `ultra`
+не использовать.
+
+Выполнение тикета из `.scratch/<feature>/`:
+
+1. `tdd` — сначала тест, который падает.
+2. Код — минимальный, в режиме ponytail `full`.
+3. `ponytail-review` — лишний код и риски под нагрузкой.
+4. `code-review` — стандарты и соответствие спеке.
+
+Баг: `diagnosing-bugs` вместо `grilling`, дальше с шага 1.
+
 ---
 
 ## 📋 О проекте

@@ -2,13 +2,15 @@
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
 from django.core.handlers.wsgi import WSGIRequest
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 
@@ -1273,3 +1275,183 @@ class TestQuickBankCreateView(TestCase):
         self.assertTrue(
             Bank.objects.filter(pk=bank.pk, user=self.user).exists(),
         )
+
+
+class TestFinancesPagination(TestCase):
+    """Finances page paginates mixed sources in the database."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='pagination-user',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Card',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.other_account = Account.objects.create(
+            user=self.user,
+            name_account='Cash',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
+        )
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+        self.seller = Seller.objects.create(user=self.user, name_seller='Shop')
+        self.base = timezone.now().replace(microsecond=0)
+        self.client.force_login(self.user)
+
+    def _populate(self, count: int) -> None:
+        for index in range(count):
+            moment = self.base - timedelta(minutes=index * 4)
+            Transaction.objects.create(
+                type=TransactionType.INCOME,
+                user=self.user,
+                account=self.account,
+                category=self.income_category,
+                amount=Decimal('100.00'),
+                date=moment,
+            )
+            Transaction.objects.create(
+                type=TransactionType.EXPENSE,
+                user=self.user,
+                account=self.account,
+                category=self.expense_category,
+                amount=Decimal('30.00'),
+                date=moment - timedelta(minutes=1),
+            )
+            Receipt.objects.create(
+                user=self.user,
+                account=self.account,
+                seller=self.seller,
+                receipt_date=moment - timedelta(minutes=2),
+                operation_type=1,
+                total_sum=Decimal('20.00'),
+            )
+            TransferMoneyLog.objects.create(
+                user=self.user,
+                from_account=self.account,
+                to_account=self.other_account,
+                amount=Decimal('10.00'),
+                exchange_date=moment - timedelta(minutes=3),
+            )
+
+    def _get(self, **params: str) -> dict[str, Any]:
+        response = self.client.get(
+            reverse('finances'),
+            {'period': 'all', **params},
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        return cast('dict[str, Any]', response.context)
+
+    def test_pages_are_ordered_across_mixed_sources(self) -> None:
+        self._populate(8)  # 32 rows -> 4 pages
+
+        last_page = 4
+        keys: list[str] = []
+        for page in range(1, last_page + 1):
+            context = self._get(page=str(page))
+            page_keys = [tx.key for tx in context['transactions']]
+            self.assertEqual(
+                len(page_keys),
+                constants.PAGINATE_BY_DEFAULT if page < last_page else 2,
+            )
+            keys.extend(page_keys)
+
+        self.assertEqual(len(set(keys)), 32)
+        sources = [key.split('-')[0] for key in keys]
+        self.assertEqual(
+            sources[:8],
+            ['income', 'expense', 'receipt', 'transfer'] * 2,
+        )
+
+    def test_page_order_matches_full_sort_by_date(self) -> None:
+        self._populate(6)
+        request = RequestFactory().get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+        everything = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(period='all'),
+        )
+        expected = [tx.key for tx in everything]
+
+        keys: list[str] = []
+        for page in range(1, 4):
+            keys.extend(
+                tx.key for tx in self._get(page=str(page))['transactions']
+            )
+
+        self.assertEqual(keys, expected)
+        dates = [tx.date for tx in everything]
+        self.assertEqual(dates, sorted(dates, reverse=True))
+
+    def test_summary_is_aggregated_over_all_rows(self) -> None:
+        self._populate(5)
+
+        summary = self._get()['summary']
+
+        self.assertEqual(summary.count, 20)
+        self.assertEqual(summary.income, Decimal('500.00'))
+        self.assertEqual(summary.expense, Decimal('250.00'))
+        self.assertEqual(summary.net, Decimal('250.00'))
+        self.assertEqual(summary.avg_check, Decimal('750.00') / 15)
+
+    def test_sparkbar_counts_recent_rows(self) -> None:
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
+            user=self.user,
+            account=self.account,
+            category=self.income_category,
+            amount=Decimal('40.00'),
+            date=timezone.now(),
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('15.00'),
+            exchange_date=timezone.now(),
+        )
+
+        today_bar = self._get()['summary'].spark[-1]
+
+        self.assertEqual(today_bar.pos, Decimal('40.00'))
+        self.assertEqual(today_bar.neg, Decimal('15.00'))
+
+    def test_min_amount_filters_receipts_and_summary(self) -> None:
+        self._populate(2)
+
+        context = self._get(min_amount='25')
+
+        keys = {tx.key.split('-')[0] for tx in context['transactions']}
+        self.assertEqual(keys, {'income', 'expense'})
+        self.assertEqual(context['summary'].count, 4)
+
+    def test_out_of_range_page_returns_last_page(self) -> None:
+        self._populate(3)
+
+        context = self._get(page='99')
+
+        self.assertEqual(context['page_obj'].number, 2)
+
+    def test_query_count_does_not_grow_with_rows(self) -> None:
+        self._populate(2)
+        with CaptureQueriesContext(connection) as small:
+            self._get()
+        self._populate(10)
+        with CaptureQueriesContext(connection) as large:
+            self._get()
+
+        self.assertEqual(len(small), len(large))
