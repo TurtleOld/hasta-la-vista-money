@@ -69,7 +69,7 @@ class ReceiptProcessingLogTaskTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
 
     def test_task_creates_receipt_and_marks_adjustment_for_attention(
@@ -155,7 +155,7 @@ class ReceiptProcessingLogCleanupTaskTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
 
     def test_cleanup_marks_stalled_log_as_failed(self) -> None:
@@ -186,7 +186,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
         self.client = Client()
         self.client.force_login(self.user)
@@ -434,7 +434,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         deposit_account = Account.objects.create_deposit(
             user=self.user,
             name_account='Deposit',
-            currency='RU',
+            currency='RUB',
             balance=Decimal('0.00'),
         )
         deposit = Deposit.objects.create(

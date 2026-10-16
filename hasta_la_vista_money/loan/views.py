@@ -16,6 +16,9 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, ListView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.currencies import (
+    get_default_currency,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 
@@ -217,7 +220,7 @@ class LoanCreateView(
                 user=request.user,
                 name_account=str(_(f'Кредитный счёт на {loan_amount}')),
                 balance=loan_amount,
-                currency='RU',
+                currency=get_default_currency(),
                 type_account=Account.TYPE_ACCOUNT_LIST[0][0],
             )
             loan_instance = form.save(commit=False)

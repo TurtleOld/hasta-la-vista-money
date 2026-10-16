@@ -142,7 +142,7 @@ class ReceiptCreatorCategorySourceTest(TestCase):
             user=user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
         service = ApplicationContainer().receipts.receipt_creator_service()
 
@@ -183,7 +183,7 @@ class ReceiptCreatorCategorySourceTest(TestCase):
             user=user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
         service = ApplicationContainer().receipts.receipt_creator_service()
 
