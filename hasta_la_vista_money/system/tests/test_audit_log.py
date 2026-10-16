@@ -1222,7 +1222,7 @@ class StatementImportOperationTests(TestCase):
         period_from: date | None = None,
         period_to: date | None = None,
     ) -> None:
-        """Simulate a run's writes the way process_bank_statement does."""
+        """Simulate a run's writes the way process_bank_statement_task does."""
         with audit_operation(AuditOperationKind.STATEMENT_IMPORT):
             category, _ = Category.objects.get_or_create(
                 user=self.user,
