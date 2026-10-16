@@ -87,6 +87,7 @@ OWN_ONLY_SURFACES = frozenset(
         'deposits:reverse-event',
         'deposits:top-up',
         'deposits:withdraw',
+        'finance_account:adjust_balance',
         'finance_account:api_detail',
         'finance_account:api_list',
         'finance_account:change',

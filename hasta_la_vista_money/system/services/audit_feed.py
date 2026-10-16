@@ -88,6 +88,7 @@ _KIND_TITLES: Final[dict[str, Any]] = {
     AuditOperationKind.RECEIPT_EDIT: _('Правка чека'),
     AuditOperationKind.RECEIPT_DELETE: _('Удаление чека'),
     AuditOperationKind.ACCOUNT_DELETE: _('Удаление счёта'),
+    AuditOperationKind.BALANCE_ADJUSTMENT: _('Корректировка остатка'),
     AuditOperationKind.STATEMENT_IMPORT: _('Импорт выписки'),
     AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: _(
         'Разбор нерешённых строк',
@@ -127,6 +128,7 @@ _CAPTION_MODEL_FOR_KIND: Final[dict[AuditOperationKind, str]] = {
     AuditOperationKind.RECEIPT_PURCHASE: RECEIPT_LABEL,
     AuditOperationKind.INCOME: TRANSACTION_LABEL,
     AuditOperationKind.EXPENSE: TRANSACTION_LABEL,
+    AuditOperationKind.BALANCE_ADJUSTMENT: TRANSACTION_LABEL,
     AuditOperationKind.TRANSACTION_EDIT: TRANSACTION_LABEL,
     AuditOperationKind.TRANSACTION_DELETE: TRANSACTION_LABEL,
     AuditOperationKind.RECEIPT_EDIT: RECEIPT_LABEL,
@@ -143,6 +145,7 @@ _CAPTION_MONEY_FIELD: Final[dict[AuditOperationKind, str]] = {
     AuditOperationKind.RECEIPT_PURCHASE: 'total_sum',
     AuditOperationKind.INCOME: 'amount',
     AuditOperationKind.EXPENSE: 'amount',
+    AuditOperationKind.BALANCE_ADJUSTMENT: 'amount',
     AuditOperationKind.TRANSACTION_DELETE: 'amount',
     AuditOperationKind.RECEIPT_DELETE: 'total_sum',
     AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: 'amount',
