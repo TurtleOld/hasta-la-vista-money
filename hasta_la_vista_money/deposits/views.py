@@ -49,6 +49,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     DepositPrincipalEvent,
 )
+from hasta_la_vista_money.users.services.groups import can_write
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
@@ -199,6 +200,7 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
             pk=self.kwargs['pk'],
         )
         context['deposit'] = deposit
+        context['is_owner'] = can_write(user, deposit.account)
         context['renewal_available'] = service.is_renewal_available(deposit)
         context['forecast_lines'] = (
             deposit.current_term.interest_forecasts.all()

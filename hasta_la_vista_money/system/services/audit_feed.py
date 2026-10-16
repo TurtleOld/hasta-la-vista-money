@@ -199,6 +199,7 @@ class RenderedOperation:
     # preview is truncated, and the page listing every imported row.
     more_transactions_count: int = 0
     transactions_url: str = ''
+    owner: 'User | None' = None
 
     @property
     def has_changes(self) -> bool:
@@ -310,7 +311,7 @@ def parse_account_id(raw: str) -> int | None:
 
 def scope_to_account(
     queryset: QuerySet[AuditLog],
-    user: 'User',
+    users: Sequence['User'],
     account_pk: str,
 ) -> QuerySet[AuditLog]:
     """Restrict ``queryset`` to whole operations with a consequence for
@@ -324,7 +325,7 @@ def scope_to_account(
     handed to the feed alone.
     """
     account_entries = AuditLog.objects.filter(
-        user=user,
+        user__in=users,
         model_name=ACCOUNT_LABEL,
         object_pk=account_pk,
     ).values_list('operation_id', 'created_at')
@@ -462,6 +463,7 @@ def _render_full_operation(
         entries=rendered,
         balance_chips=balance_chips,
         total=_build_total(balance_chips, rendered, entries),
+        owner=entries[0].user,
     )
 
 
@@ -541,6 +543,7 @@ def _build_statement_import_operation(
             len(transaction_entries) - len(preview_entries),
         ),
         transactions_url=reverse('finance_account:list'),
+        owner=entries[0].user,
     )
 
 
@@ -624,23 +627,23 @@ def _collapse_account_chips(
 
 
 def get_operation_detail(
-    user: 'User',
+    users: Sequence['User'],
     operation_key: str,
 ) -> RenderedOperation | None:
-    """Look up one user's operation by its own address, rendered in full.
+    """Look up one operation of ``users`` by its own address, in full.
 
     ``operation_key`` is either an ``operation_id`` (a real operation) or
     the primary key of an archival group's anchor entry — the same two
-    shapes :func:`_anchor_url_key` hands out. Anything outside the
-    requesting user's own history, or matching neither shape, is reported
-    as absent rather than raising, so the view can turn it into a 404.
+    shapes :func:`_anchor_url_key` hands out. Anything outside the history
+    of ``users``, or matching neither shape, is reported as absent rather
+    than raising, so the view can turn it into a 404.
     """
     try:
         key = uuid.UUID(operation_key)
     except ValueError:
-        return _archival_operation_detail(user, operation_key)
+        return _archival_operation_detail(users, operation_key)
     entries = list(
-        AuditLog.objects.filter(user=user, operation_id=key)
+        AuditLog.objects.filter(user__in=users, operation_id=key)
         .select_related('user')
         .order_by('-created_at', '-id'),
     )
@@ -663,7 +666,7 @@ def get_operation_detail(
 
 
 def _archival_operation_detail(
-    user: 'User',
+    users: Sequence['User'],
     operation_key: str,
 ) -> RenderedOperation | None:
     try:
@@ -671,7 +674,7 @@ def _archival_operation_detail(
     except ValueError:
         return None
     anchor = AuditLog.objects.filter(
-        user=user,
+        user__in=users,
         pk=anchor_id,
         operation_id__isnull=True,
     ).first()
@@ -681,7 +684,7 @@ def _archival_operation_detail(
     bucket_end = bucket_start + timedelta(seconds=1)
     entries = list(
         AuditLog.objects.filter(
-            user=user,
+            user_id=cast('int', anchor.user_id),
             operation_id__isnull=True,
             created_at__gte=bucket_start,
             created_at__lt=bucket_end,
@@ -768,6 +771,7 @@ def _build_collapsed_operation(
         archival=True,
         url_key=_anchor_url_key(entries, archival=True),
         collapsed_count=size,
+        owner=entries[0].user,
     )
 
 

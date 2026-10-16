@@ -154,6 +154,12 @@
                                             <i class="bi bi-download"></i>
                                             <span>{% translate 'Экспорт данных' %}</span>
                                         </a>
+                                        {% for group in family_groups %}
+                                            <a class="profile-action-link" href="{% url 'users:export_data' %}?group_id={{ group.id }}">
+                                                <i class="bi bi-download"></i>
+                                                <span>{% blocktranslate with name=group.name %}Экспорт данных группы «{{ name }}»{% endblocktranslate %}</span>
+                                            </a>
+                                        {% endfor %}
                                     </div>
 
                                     <div class="profile-section profile-section-divider">

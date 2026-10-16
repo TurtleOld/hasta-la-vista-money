@@ -1,5 +1,6 @@
 """System health and readiness views."""
 
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,10 @@ from hasta_la_vista_money.system.services.audit_feed import (
 )
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    member_groups,
+    readable_users,
+)
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -126,11 +131,22 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
 
     template_name = 'system/auditlog.html'
 
-    def get_queryset(self) -> QuerySet[AuditLog]:
+    @cached_property
+    def scope_users(self) -> list[User]:
+        """Users of the ``group_id`` scope; ``my`` unless chosen explicitly."""
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
+        users = readable_users(
+            self.request.user,
+            self.request.GET.get('group_id'),
+        )
+        if not users:
+            raise Http404('Группа не найдена')
+        return users
+
+    def get_queryset(self) -> QuerySet[AuditLog]:
         qs = AuditLog.objects.filter(
-            user=self.request.user,
+            user__in=self.scope_users,
         ).select_related('user')
         kind = self.request.GET.get('kind', '')
         account = self.request.GET.get('account', '')
@@ -139,7 +155,7 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
         if kind:
             qs = qs.filter(kind=kind)
         if account:
-            qs = scope_to_account(qs, self.request.user, account)
+            qs = scope_to_account(qs, self.scope_users, account)
         if date_from:
             qs = qs.filter(created_at__date__gte=date_from)
         if date_to:
@@ -171,15 +187,23 @@ class AuditLogView(LoginRequiredMixin, TemplateView):
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
         ctx['account_choices'] = list(
-            Account.objects.filter(user=self.request.user)
+            Account.objects.filter(user__in=self.scope_users)
             .order_by('name_account')
             .values_list('id', 'name_account'),
         )
+        group_id = self.request.GET.get('group_id', '')
+        ctx['group_choices'] = member_groups(self.request.user)
+        ctx['show_owner'] = group_id not in {'', 'my'}
+        scope_query = self.request.GET.copy()
+        scope_query.pop('group_id', None)
+        scope_query.pop('page', None)
+        ctx['scope_querystring'] = scope_query.urlencode()
         account_raw = self.request.GET.get('account', '')
         kind_raw = self.request.GET.get('kind', '')
         date_from = self.request.GET.get('date_from', '')
         date_to = self.request.GET.get('date_to', '')
         ctx['filter'] = {
+            'group_id': group_id,
             'kind': kind_raw,
             'account': account_raw,
             'date_from': date_from,
@@ -218,8 +242,8 @@ class AuditOperationView(LoginRequiredMixin, TemplateView):
     Reachable at its own address on any width. A feed request (``HX-
     Request``) gets the same content as a bare partial, so the wide-screen
     accordion and the standalone page share one data source; a plain
-    navigation gets the full page. Anything outside the requesting user's
-    own history is a 404, never a redirect or an empty page.
+    navigation gets the full page. Anything outside the history of the
+    requesting user's family is a 404, never a redirect or an empty page.
     """
 
     template_name = 'system/audit_operation.html'
@@ -235,7 +259,7 @@ class AuditOperationView(LoginRequiredMixin, TemplateView):
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
         operation = get_operation_detail(
-            self.request.user,
+            readable_users(self.request.user, 'family'),
             kwargs['operation_key'],
         )
         if operation is None:

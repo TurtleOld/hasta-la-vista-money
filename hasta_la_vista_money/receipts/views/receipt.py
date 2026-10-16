@@ -35,7 +35,10 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.views.base import BaseView
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.groups import readable_users
+from hasta_la_vista_money.users.services.groups import (
+    can_write,
+    readable_users,
+)
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
@@ -352,6 +355,10 @@ class ReceiptDetailView(
         request = cast('RequestWithContainer', self.request)
         processing_service = (
             request.container.receipts.receipt_processing_service()
+        )
+        context['is_owner'] = can_write(
+            cast('User', self.request.user),
+            context['receipt'],
         )
         context['insufficient_at_conducting'] = (
             processing_service.is_insufficient_at_conducting(

@@ -33,10 +33,12 @@
                     <i class="bi bi-arrow-left"></i>
                     {% translate 'К списку' %}
                 </a>
+                {% if is_owner %}
                 <a href="{% url 'receipts:update' receipt.id %}" class="receipts-button receipts-button-primary">
                     <i class="bi bi-pencil"></i>
                     {% translate 'Редактировать' %}
                 </a>
+                {% endif %}
             </div>
         </header>
 
@@ -131,6 +133,7 @@
                 <i class="bi bi-info-circle"></i>
                 {% translate 'Чек уже сохранён и списан со счёта.' %}
             </p>
+            {% if is_owner %}
             <div class="ft-actions">
                 <form class="form-remove-receipt-button" action="{% url 'receipts:delete' receipt.id %}" method="post">
                     {% csrf_token %}
@@ -145,6 +148,7 @@
                     </button>
                 </form>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
