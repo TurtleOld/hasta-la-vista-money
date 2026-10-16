@@ -253,15 +253,9 @@ SUCCESS_MESSAGE_PAYMENT_MAKE: Final = _('Платеж успешно внесё�
 # ============================================================================
 # Family Groups
 # ============================================================================
-# Reserved names of default family groups
+# Family groups
 
-DEFAULT_FAMILY_GROUP_NAME: Final = 'Семья'
-DEFAULT_FAMILY_GROUP_PREFIX: Final = f'{DEFAULT_FAMILY_GROUP_NAME} #'
-DEFAULT_FAMILY_GROUP_SUFFIX_BYTES: Final = 4
 FAMILY_INVITE_TTL: Final = timedelta(days=7)
-ERROR_MESSAGE_RESERVED_GROUP_NAME: Final = _(
-    'Это название зарезервировано для семейной группы по умолчанию.',
-)
 
 # ============================================================================
 # User Messages - Profile Operations

@@ -8,12 +8,11 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest, HttpResponse
 from django.test import Client, RequestFactory, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import (
-    DEFAULT_FAMILY_GROUP_NAME,
-    DEFAULT_FAMILY_GROUP_PREFIX,
     FAMILY_INVITE_TTL,
 )
 from hasta_la_vista_money.finance_account.models import Account
@@ -24,18 +23,19 @@ from hasta_la_vista_money.users.forms import (
     GroupDeleteForm,
     RegisterByInviteForm,
 )
-from hasta_la_vista_money.users.models import FamilyGroupMembership
+from hasta_la_vista_money.users.models import (
+    FamilyGroupMembership,
+    FamilyInvite,
+)
 from hasta_la_vista_money.users.services.groups import (
     GroupDict,
     accept_family_invite,
     create_group,
     delete_group,
     get_family_groups,
-    get_or_create_default_family_group,
     get_or_create_family_invite,
     get_user_groups,
     remove_user_from_group,
-    user_can_manage_group,
     user_has_group_access,
 )
 from hasta_la_vista_money.users.services.registration import (
@@ -161,8 +161,8 @@ class GroupsServiceTest(TestCase):
         self.assertIn(invite.token, family_groups[0]['invite_url'] or '')
 
 
-class DefaultFamilyGroupIsolationTest(TestCase):
-    """Default family groups must be personal, never shared by name."""
+class ExplicitFamilyGroupTest(TestCase):
+    """Groups appear only on explicit create/accept, never on GET."""
 
     def setUp(self) -> None:
         self.alice: UserType = User.objects.create_user(
@@ -174,43 +174,48 @@ class DefaultFamilyGroupIsolationTest(TestCase):
             password='testpass123',  # nosec B106: test-only password
         )
 
-    def test_independent_users_get_different_groups(self) -> None:
-        alice_group = get_or_create_default_family_group(self.alice)
-        mallory_group = get_or_create_default_family_group(self.mallory)
+    def _make_group(self, owner: UserType, name: str = 'Alice family') -> Group:
+        form = GroupCreateForm(data={'name': name})
+        form.current_user = owner
+        self.assertTrue(form.is_valid())
+        return create_group(form)
 
-        self.assertNotEqual(alice_group.pk, mallory_group.pk)
-        self.assertNotIn(mallory_group, self.alice.groups.all())
-        self.assertNotIn(alice_group, self.mallory.groups.all())
+    def test_profile_get_without_groups_creates_nothing(self) -> None:
+        self.client.force_login(self.alice)
 
-    def test_taken_default_name_is_not_reused(self) -> None:
-        squatted = Group.objects.create(
-            name=f'{DEFAULT_FAMILY_GROUP_PREFIX}{self.mallory.pk}',
+        response = self.client.get(
+            reverse('users:profile', kwargs={'pk': self.alice.pk}),
         )
-        self.alice.groups.add(squatted)
 
-        mallory_group = get_or_create_default_family_group(self.mallory)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Group.objects.count(), 0)
+        self.assertEqual(FamilyGroupMembership.objects.count(), 0)
 
-        self.assertNotEqual(mallory_group.pk, squatted.pk)
-        self.assertNotIn(squatted, self.mallory.groups.all())
-        self.assertTrue(user_can_manage_group(self.mallory, mallory_group))
+    def test_group_forms_without_groups_create_nothing(self) -> None:
+        AddUserToGroupForm(current_user=self.alice)
+        DeleteUserFromGroupForm(current_user=self.alice)
 
-    def test_viewer_is_not_promoted_to_owner(self) -> None:
-        alice_group = get_or_create_default_family_group(self.alice)
-        invite = get_or_create_family_invite(alice_group, self.alice)
+        self.assertEqual(Group.objects.count(), 0)
+        self.assertEqual(FamilyGroupMembership.objects.count(), 0)
+
+    def test_viewer_stays_viewer_after_profile_get(self) -> None:
+        group = self._make_group(self.alice)
+        invite = get_or_create_family_invite(group, self.alice)
         accept_family_invite(self.mallory, invite.token)
+        self.client.force_login(self.mallory)
 
-        mallory_group = get_or_create_default_family_group(self.mallory)
+        self.client.get(
+            reverse('users:profile', kwargs={'pk': self.mallory.pk}),
+        )
 
-        self.assertNotEqual(mallory_group.pk, alice_group.pk)
         self.assertEqual(
             FamilyGroupMembership.objects.get(
-                group=alice_group,
+                group=group,
                 user=self.mallory,
             ).role,
             FamilyGroupMembership.Role.VIEWER,
         )
-        self.assertFalse(user_can_manage_group(self.mallory, alice_group))
-        self.assertTrue(user_can_manage_group(self.mallory, mallory_group))
+        self.assertEqual(Group.objects.count(), 1)
 
     def test_family_scope_does_not_expose_other_user_accounts(self) -> None:
         alice_account = Account.objects.create(
@@ -219,13 +224,12 @@ class DefaultFamilyGroupIsolationTest(TestCase):
             balance=Decimal('1000.00'),
             currency='RUB',
         )
-        alice_group = get_or_create_default_family_group(self.alice)
-        mallory_group = get_or_create_default_family_group(self.mallory)
+        alice_group = self._make_group(self.alice)
         account_service = (
             ApplicationContainer().finance_account.account_service()
         )
 
-        for group_id in ('family', str(mallory_group.pk), str(alice_group.pk)):
+        for group_id in ('family', str(alice_group.pk)):
             with self.subTest(group_id=group_id):
                 accounts = account_service.get_accounts_for_user_or_group(
                     self.mallory,
@@ -233,28 +237,66 @@ class DefaultFamilyGroupIsolationTest(TestCase):
                 )
                 self.assertNotIn(alice_account, accounts)
 
-    def test_personal_default_group_cannot_be_deleted(self) -> None:
-        alice_group = get_or_create_default_family_group(self.alice)
+    def test_last_owner_deletes_group_and_keeps_user_data(self) -> None:
+        account = Account.objects.create(
+            user=self.alice,
+            name_account='Alice Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        group = self._make_group(self.alice)
+        get_or_create_family_invite(group, self.alice)
 
         form = GroupDeleteForm(
-            data={'group': alice_group.pk},
+            data={'group': group.pk},
             current_user=self.alice,
         )
-        self.assertFalse(form.is_valid())
-
-        form.cleaned_data = {'group': alice_group}
+        self.assertTrue(form.is_valid())
         delete_group(form)  # type: ignore[arg-type]
-        self.assertTrue(Group.objects.filter(pk=alice_group.pk).exists())
 
-    def test_reserved_family_group_names_cannot_be_created(self) -> None:
-        for name in (
-            DEFAULT_FAMILY_GROUP_NAME,
-            f'{DEFAULT_FAMILY_GROUP_PREFIX}999',
-        ):
-            with self.subTest(name=name):
-                form = GroupCreateForm(data={'name': name})
-                self.assertFalse(form.is_valid())
-                self.assertIn('name', form.errors)
+        self.assertFalse(Group.objects.filter(pk=group.pk).exists())
+        self.assertFalse(FamilyGroupMembership.objects.exists())
+        self.assertFalse(FamilyInvite.objects.exists())
+        self.assertTrue(Account.objects.filter(pk=account.pk).exists())
+
+    def test_not_last_owner_cannot_delete_group(self) -> None:
+        group = self._make_group(self.alice)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.mallory,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+        form = GroupDeleteForm(
+            data={'group': group.pk},
+            current_user=self.alice,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertTrue(Group.objects.filter(pk=group.pk).exists())
+
+    def test_invite_does_not_change_existing_role(self) -> None:
+        group = self._make_group(self.alice)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.mallory,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
+        invite = get_or_create_family_invite(
+            group,
+            self.alice,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+        accept_family_invite(self.mallory, invite.token)
+
+        self.assertEqual(
+            FamilyGroupMembership.objects.get(
+                group=group,
+                user=self.mallory,
+            ).role,
+            FamilyGroupMembership.Role.VIEWER,
+        )
 
 
 class InviteExpiryTest(TestCase):
