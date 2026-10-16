@@ -662,7 +662,7 @@ def _calculate_grace_period_end(
                 time.max,
             ),
         )
-    if bank == 'RAIFFAISENBANK':
+    if bank == BANK_RAIFFEISENBANK:
         if raiffeisen_schedule and 'grace_end_date' in raiffeisen_schedule:
             return cast('datetime', raiffeisen_schedule['grace_end_date'])
         return purchase_end
@@ -740,7 +740,7 @@ def _build_single_card_month(
     )
 
     debt = exp_sum + rcpt_expense - rcpt_return
-    is_raiffeisen = getattr(card.bank, 'code', None) == 'RAIFFAISENBANK'
+    is_raiffeisen = getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK
     schedule = (
         account_service.calculate_raiffeisenbank_payment_schedule(
             card,
@@ -1044,7 +1044,7 @@ def _build_payment_schedule(
         if m['debt_for_month'] <= constants.ZERO:
             continue
         due = m['grace_end'].strftime('%d.%m.%Y')
-        if getattr(card.bank, 'code', None) == 'RAIFFAISENBANK':
+        if getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK:
             for h in history:
                 if h['month'] == m['month']:
                     due = h['grace_end']

@@ -300,12 +300,12 @@ def _category_drilldown_transactions(
             own_rank=Window(
                 RowNumber(),
                 partition_by=F('category_id'),
-                order_by=F('date').desc(),
+                order_by=[F('date').desc(), F('pk').desc()],
             ),
             parent_rank=Window(
                 RowNumber(),
                 partition_by=F('category__parent_category_id'),
-                order_by=F('date').desc(),
+                order_by=[F('date').desc(), F('pk').desc()],
             ),
         )
         .filter(
@@ -326,7 +326,7 @@ def _category_drilldown_transactions(
             'own_rank',
             'parent_rank',
         )
-        .order_by('-date')
+        .order_by('-date', '-pk')
     )
     for row in rows:
         own_rank = row.pop('own_rank')

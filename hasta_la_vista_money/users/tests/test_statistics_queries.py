@@ -224,7 +224,10 @@ class CategoryDrilldownTest(TestCase):
 
         result = self._drilldown([self.parent.pk, self.child.pk])
 
-        self.assertEqual(len(result[self.parent.pk]), 10)
+        self.assertEqual(
+            len(result[self.parent.pk]),
+            constants.PAGINATE_BY_DEFAULT,
+        )
         self.assertEqual(len(result[self.child.pk]), 1)
 
     def test_query_count_does_not_grow_with_categories(self) -> None:
