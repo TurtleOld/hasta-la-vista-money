@@ -4,14 +4,14 @@ This module provides data access layer for Account model,
 including filtering by user, group, type, and currency.
 """
 
+from collections.abc import Iterable
 from decimal import Decimal
 
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account, AccountQuerySet
-from hasta_la_vista_money.users.models import FamilyGroupMembership, User
-from hasta_la_vista_money.users.services.groups import user_has_group_access
+from hasta_la_vista_money.users.models import User
 
 
 class AccountRepository:
@@ -116,71 +116,13 @@ class AccountRepository:
         """
         return Account.objects.by_user_with_related(user)
 
-    def get_by_user_and_group(
-        self,
-        user: User,
-        group_id: str | None = None,
-    ) -> AccountQuerySet:
-        """Get accounts for user or group.
-
-        Group ID parameter semantics:
-        - 'my': only user's own accounts
-        - None: only user's own accounts
-        - '123' (group ID): accounts of all users from specified group
-
-        Args:
-            user: User instance to filter by.
-            group_id: Group ID or 'my' for filtering, None for all available.
-
-        Returns:
-            AccountQuerySet: QuerySet of accounts according to filter.
-        """
-        user_accounts = (
+    def get_by_users(self, users: Iterable[User]) -> AccountQuerySet:
+        """Get accounts of the given users."""
+        return (
             Account.objects.get_queryset()
-            .filter(user=user)
+            .filter(user__in=users)
             .select_related('user')
         )
-        result = user_accounts
-
-        if group_id is None or group_id == 'my':
-            return result
-
-        if group_id == 'family':
-            owner_group_ids = FamilyGroupMembership.objects.filter(
-                user=user,
-                role=FamilyGroupMembership.Role.OWNER,
-            ).values_list('group_id', flat=True)
-            users_in_owned_groups = User.objects.filter(
-                family_memberships__group_id__in=owner_group_ids,
-            ).distinct()
-            if users_in_owned_groups.exists():
-                result = (
-                    Account.objects.get_queryset()
-                    .filter(user__in=users_in_owned_groups)
-                    .select_related('user')
-                    .distinct()
-                )
-        elif not user_has_group_access(user, group_id):
-            result = Account.objects.get_queryset().none()
-        elif not FamilyGroupMembership.objects.filter(
-            user=user,
-            group_id=group_id,
-            role=FamilyGroupMembership.Role.OWNER,
-        ).exists():
-            result = user_accounts
-        else:
-            users_in_group = User.objects.filter(
-                family_memberships__group_id=group_id,
-            ).distinct()
-            if users_in_group.exists():
-                result = (
-                    Account.objects.get_queryset()
-                    .filter(user__in=users_in_group)
-                    .select_related('user')
-                    .distinct()
-                )
-
-        return result
 
     def get_credit_accounts(self) -> QuerySet[Account]:
         """Get only credit accounts and credit cards.

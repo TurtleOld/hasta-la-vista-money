@@ -1,5 +1,5 @@
 import secrets
-from typing import cast
+from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.models import Group
@@ -50,10 +50,14 @@ def get_user_groups(user: User) -> list[GroupDict]:
     """
     return cast(
         'list[GroupDict]',
-        list(
-            user.groups.all().prefetch_related('user_set').values('id', 'name'),
-        ),
+        list(member_groups(user).values('id', 'name')),
     )
+
+
+def member_groups(user: User) -> QuerySet[Group]:
+    """Return groups where user has a membership."""
+
+    return Group.objects.filter(family_memberships__user=user).order_by('name')
 
 
 def create_group(form: ModelForm[Group]) -> Group:
@@ -107,7 +111,10 @@ def remove_user_from_group(
         user: User to remove from group.
         group: Group to remove user from.
     """
-    if group not in user.groups.all():
+    if not FamilyGroupMembership.objects.filter(
+        group=group,
+        user=user,
+    ).exists():
         messages.error(
             request,
             _('Пользователь не состоит в выбранной группе.'),
@@ -141,17 +148,32 @@ def user_can_manage_group(user: User, group: Group) -> bool:
     ).exists()
 
 
-def user_has_group_access(user: User, group_id: str | None) -> bool:
-    """Return whether user may read data for selected group."""
+def readable_users(user: User, group_id: str | None = None) -> list[User]:
+    """Return users whose data ``user`` may read for the selected scope.
 
-    if not group_id or group_id in {'my', 'family'}:
-        return True
-    if not group_id.isdigit():
-        return False
-    return FamilyGroupMembership.objects.filter(
-        user=user,
-        group_id=int(group_id),
-    ).exists()
+    ``my``/empty is the user alone, ``<id>`` is every member of that group
+    (empty if ``user`` is not a member), ``family`` is the union of all groups
+    of ``user``. Membership comes only from ``FamilyGroupMembership``.
+    """
+
+    if not group_id or group_id == 'my':
+        return [user]
+    memberships = FamilyGroupMembership.objects.filter(user=user)
+    if group_id != 'family':
+        if not group_id.isdigit():
+            return []
+        memberships = memberships.filter(group_id=int(group_id))
+    members = User.objects.filter(
+        family_memberships__group_id__in=memberships.values('group_id'),
+    )
+    users = list(members.distinct().order_by('username'))
+    return users or ([user] if group_id == 'family' else [])
+
+
+def can_write(user: User, obj: Any) -> bool:
+    """Return whether user may change the record: only its owner may."""
+
+    return bool(obj.user_id == user.pk)
 
 
 def get_family_groups(

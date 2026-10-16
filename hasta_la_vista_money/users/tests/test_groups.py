@@ -34,9 +34,9 @@ from hasta_la_vista_money.users.services.groups import (
     get_family_groups,
     get_or_create_family_invite,
     get_user_groups,
+    readable_users,
     remove_user_from_group,
     user_can_manage_group,
-    user_has_group_access,
 )
 from hasta_la_vista_money.users.services.registration import (
     register_invited_user,
@@ -78,7 +78,7 @@ class GroupsServiceTest(TestCase):
         self.group: Group = Group.objects.create(name='TestGroup')
 
     def test_get_user_groups(self) -> None:
-        self.user.groups.add(self.group)
+        FamilyGroupMembership.objects.create(group=self.group, user=self.user)
         user_groups: list[GroupDict] = get_user_groups(self.user)
         self.assertTrue(any(g['name'] == 'TestGroup' for g in user_groups))
 
@@ -141,8 +141,11 @@ class GroupsServiceTest(TestCase):
         second_invite = get_or_create_family_invite(self.group, self.user)
 
         self.assertEqual(invite.pk, second_invite.pk)
-        self.assertTrue(user_has_group_access(self.user, str(self.group.pk)))
-        self.assertFalse(user_has_group_access(self.user, '999999'))
+        self.assertEqual(
+            readable_users(self.user, str(self.group.pk)),
+            [self.user],
+        )
+        self.assertEqual(readable_users(self.user, '999999'), [])
 
         family_groups = get_family_groups(self.user, request)
         self.assertEqual(

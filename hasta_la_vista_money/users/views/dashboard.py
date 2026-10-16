@@ -48,6 +48,7 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     DashboardSummaryStatisticsDict,
     MonthDataDict,
 )
+from hasta_la_vista_money.users.services.groups import readable_users
 from hasta_la_vista_money.users.utils.date_utils import get_period_dates
 
 if TYPE_CHECKING:
@@ -158,12 +159,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ]
         user = self.request.user
         if isinstance(user, User):
-            request_with_container = cast('RequestWithContainer', self.request)
-            account_service = (
-                request_with_container.container.core.account_service()
-            )
             scope = self.request.GET.get('group_id', 'family')
-            users = account_service.get_users_for_group(user, scope)
+            users = readable_users(user, scope)
             context['kpi_cards'] = _build_kpi_cards(
                 get_dashboard_month_kpis(user, users),
             )

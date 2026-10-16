@@ -31,9 +31,9 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
+from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.users.models import User
 
 
@@ -120,13 +120,9 @@ class TransactionByGroupAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id')
 
-        request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
 
-        account_service = (
-            request_with_container.container.core.account_service()
-        )
-        users_in_group = account_service.get_users_for_group(user, group_id)
+        users_in_group = readable_users(user, group_id)
 
         if users_in_group:
             transactions = (
@@ -193,13 +189,9 @@ class TransactionDataAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id', 'my')
 
-        request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
 
-        account_service = (
-            request_with_container.container.core.account_service()
-        )
-        users_in_group = account_service.get_users_for_group(user, group_id)
+        users_in_group = readable_users(user, group_id)
 
         if users_in_group:
             transactions = (

@@ -4,7 +4,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import ClassVar
 
-from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -169,35 +168,6 @@ class TransactionRepositoryTest(TestCase):
             list(self.repo.get_by_user(self.user, type_value='income')),
             [self.income_jan],
         )
-
-    def test_get_by_user_and_group_my_returns_user_only(self) -> None:
-        result = self.repo.get_by_user_and_group(self.user, group_id='my')
-        self.assertEqual(result.count(), 2)
-
-    def test_get_by_user_and_group_unknown_group_returns_empty(self) -> None:
-        result = self.repo.get_by_user_and_group(
-            self.user,
-            group_id='9999',
-        )
-        self.assertEqual(list(result), [])
-
-    def test_get_by_user_and_group_with_membership(self) -> None:
-        group = Group.objects.create(name='family')
-        self.user.groups.add(group)
-        self.other_user.groups.add(group)
-        Transaction.objects.create(
-            user=self.other_user,
-            account=self.account,
-            category=self.expense_category,
-            amount=Decimal('50.00'),
-            date=datetime(2026, 2, 17, 12, 0, tzinfo=UTC),
-            type=TransactionType.EXPENSE,
-        )
-        result = self.repo.get_by_user_and_group(
-            self.user,
-            group_id=str(group.id),
-        )
-        self.assertEqual(result.count(), 3)
 
     def test_get_by_period_filters_by_range(self) -> None:
         result = self.repo.get_by_period(

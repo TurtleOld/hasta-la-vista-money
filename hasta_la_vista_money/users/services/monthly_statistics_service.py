@@ -23,11 +23,14 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import FamilyGroupMembership, User
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     get_dashboard_summary_cache_key,
 )
-from hasta_la_vista_money.users.services.groups import get_family_groups
+from hasta_la_vista_money.users.services.groups import (
+    get_family_groups,
+    readable_users,
+)
 
 
 class MonthDataDict(TypedDict, total=False):
@@ -449,26 +452,6 @@ def _period_choices() -> list[StatisticsChoiceDict]:
     ]
 
 
-def _owned_family_group_ids(user: User) -> list[int]:
-    return list(
-        FamilyGroupMembership.objects.filter(
-            user=user,
-            role=FamilyGroupMembership.Role.OWNER,
-        ).values_list('group_id', flat=True),
-    )
-
-
-def _family_users_for_statistics(user: User) -> list[User]:
-    group_ids = _owned_family_group_ids(user)
-    if not group_ids:
-        return [user]
-    return list(
-        User.objects.filter(family_memberships__group_id__in=group_ids)
-        .distinct()
-        .order_by('username'),
-    ) or [user]
-
-
 def _resolve_statistics_members(
     user: User,
     stats_filter: StatisticsFilters,
@@ -476,7 +459,7 @@ def _resolve_statistics_members(
     if stats_filter.member == 'my':
         return [user]
 
-    family_users = _family_users_for_statistics(user)
+    family_users = readable_users(user, 'family')
     if stats_filter.member == 'family':
         return family_users
     if stats_filter.member.startswith('user-'):
@@ -498,20 +481,16 @@ def _member_choices(
         return [{'value': 'my', 'label': 'Мои данные'}]
 
     family_groups = get_family_groups(user, request)
-    has_owned_family = any(
-        group['role'] == FamilyGroupMembership.Role.OWNER
-        for group in family_groups
-    )
-    family_users = _family_users_for_statistics(user)
+    family_users = readable_users(user, 'family')
     choices: list[StatisticsChoiceDict] = [
         {'value': 'my', 'label': 'Мои данные'},
     ]
-    if has_owned_family:
+    if family_groups:
         choices.append({'value': 'family', 'label': 'Вся семья'})
     choices.extend(
         {'value': f'user-{member.pk}', 'label': member.username}
         for member in family_users
-        if has_owned_family or member.pk == user.pk
+        if member.pk == user.pk or family_groups
     )
     return choices
 
@@ -1083,11 +1062,9 @@ __all__ = [
     '_aware_period_bounds',
     '_budgets_data',
     '_date_to_aware',
-    '_family_users_for_statistics',
     '_member_choices',
     '_month_ranges_for_filter',
     '_normalize_member_filter',
-    '_owned_family_group_ids',
     '_parse_filter_date',
     '_period_choices',
     '_plan_fact_engagement',

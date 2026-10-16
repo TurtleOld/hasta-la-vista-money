@@ -81,6 +81,7 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import (
@@ -439,13 +440,9 @@ class FinancesView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         request = cast('WSGIRequestWithContainer', self.request)
         finances_filter = FinancesFilter.from_request(request)
-        account_service = request.container.core.account_service()
-        group_users = (
-            account_service.get_users_for_group(
-                request.user,
-                finances_filter.group_id,
-            )
-            or []
+        group_users = readable_users(
+            cast('User', request.user),
+            finances_filter.group_id,
         )
         users = group_users
         accounts = Account.objects.filter(user__in=users).order_by(
@@ -1790,11 +1787,9 @@ class AccountView(
 
         context.update(page_context)
 
-        account_service = request.container.core.account_service()
-        users_in_group = account_service.get_users_for_group(
+        users_in_group = readable_users(current_user, group_id) or [
             current_user,
-            group_id,
-        ) or [current_user]
+        ]
         context['last_operations'] = _recent_transactions(
             current_user,
             users_in_group,

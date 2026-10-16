@@ -152,22 +152,6 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def get_users_for_group(
-        self,
-        user: User,
-        group_id: str | None = None,
-    ) -> list[User]:
-        """Get users for a group or user.
-
-        Args:
-            user: Current user.
-            group_id: Optional group ID.
-
-        Returns:
-            List of User instances.
-        """
-        ...
-
     def get_accounts_for_user_or_group(
         self,
         user: User,
