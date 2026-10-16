@@ -67,7 +67,7 @@ class TestLoan(TestCase):
             user=self.user,
             name_account=name,
             balance=balance,
-            currency='RU',
+            currency='RUB',
         )
 
     def _create_test_loan(
@@ -235,7 +235,7 @@ class TestLoan(TestCase):
             user=self.user,
             name_account='Кредитный счёт на 10000',
             balance=loan_amount,
-            currency='RU',
+            currency='RUB',
             type_account=Account.TYPE_ACCOUNT_LIST[0][0],
         )
         form = LoanForm(
@@ -385,7 +385,7 @@ class TestLoan(TestCase):
             user=other_user,
             name_account='Foreign payment account',
             balance=constants.TEST_ACCOUNT_BALANCE,
-            currency='RU',
+            currency='RUB',
         )
 
         self.client.force_login(self.user)

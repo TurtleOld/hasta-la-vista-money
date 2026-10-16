@@ -74,7 +74,7 @@ class _ProcessingLogCase(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
 
     def _log(self, **fields: Any) -> ReceiptProcessingLog:

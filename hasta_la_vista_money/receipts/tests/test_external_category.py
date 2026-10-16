@@ -315,7 +315,7 @@ class CategorizeReceiptProductTaskTests(TestCase):
             user=user,
             name_account='Wallet',
             balance=Decimal('100.00'),
-            currency='RU',
+            currency='RUB',
         )
         service = ApplicationContainer().receipts.receipt_creator_service()
 
