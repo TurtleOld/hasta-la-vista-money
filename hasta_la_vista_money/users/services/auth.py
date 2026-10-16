@@ -2,11 +2,22 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import HttpRequest, HttpResponse
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
 from hasta_la_vista_money.users.models import User
+
+
+def blacklist_refresh_token(raw_token: str | None) -> None:
+    """Revoke refresh token; invalid or already revoked tokens are ignored."""
+    if not raw_token:
+        return
+    try:
+        RefreshToken(raw_token).blacklist()  # type: ignore[arg-type]
+    except TokenError:
+        return
 
 
 class LoginResult(TypedDict, total=False):
