@@ -22,6 +22,9 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
+from hasta_la_vista_money.users.repositories.statistics_repository import (
+    StatisticsRepository,
+)
 from hasta_la_vista_money.users.services.dashboard_kpis import (
     get_dashboard_month_kpis,
 )
@@ -74,6 +77,19 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
 
         self.assertEqual(kpis['income'], Decimal(0))
         self.assertEqual(kpis['expenses'], Decimal(100))
+
+    def test_statistics_sums_ignore_adjustments(self) -> None:
+        repository = StatisticsRepository()
+        start = self.now - timedelta(days=1)
+
+        self.assertEqual(
+            repository.get_expenses_sum_by_period(self.user, start),
+            Decimal('100.00'),
+        )
+        self.assertEqual(
+            repository.get_income_sum_by_period(self.user, start),
+            Decimal(0),
+        )
 
     def test_category_report_ignores_adjustments(self) -> None:
         report = str(pie_expense_category(self.user))
