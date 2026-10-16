@@ -1323,6 +1323,15 @@
   color: #111827;
 }
 
+.receipts-scan-photo {
+  margin-top: 0.75rem;
+}
+
+[disabled].receipts-scan-photo {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Review */
 .receipt-review-form {
   display: grid;

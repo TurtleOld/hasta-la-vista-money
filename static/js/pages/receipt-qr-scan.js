@@ -2,9 +2,12 @@ import {
   autozoomStep,
   calculateCenteredScanRegion,
   createAutozoomState,
+  createPhotoButton,
   createScanHints,
   isFNSReceiptQR,
+  isPhotoUploadAccepted,
   measureQR,
+  photoButton,
   pickCamera,
   scanHints,
   shouldScanFullFrame,
@@ -16,6 +19,10 @@ const FULL_FRAME_INTERVAL_MS = 1000;
 const WRONG_QR_RESCAN_DELAY_MS = 500;
 const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
+const PHOTO_WORKER_TIMEOUT_MS = 8000;
+const PHOTO_OUTCOME_HINT_MS = 3000;
+const PHOTO_PICKER_FOCUS_GRACE_MS = 1000;
+const PHOTO_FILE_NAME = 'receipt.jpg';
 const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
 const IDEAL_WIDTH = 1920;
 const IDEAL_HEIGHT = 1080;
@@ -159,6 +166,9 @@ function messagesFrom(element) {
       notFound: element.dataset.hintNotFound,
       idle: element.dataset.hintIdle,
     },
+    photoRecognizing: element.dataset.messagePhotoRecognizing,
+    photoNotFound: element.dataset.messagePhotoNotFound,
+    photoUploadFailed: element.dataset.messagePhotoUploadFailed,
     preparing: element.dataset.messagePreparing,
     scanning: element.dataset.messageScanning,
   };
@@ -189,6 +199,52 @@ function describeCameraError(error, messages) {
     return messages.cameraPolicyBlocked;
   }
   return messages.cameraGeneric;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function captureWithImageCapture(track) {
+  if (!window.ImageCapture || !track) {
+    return null;
+  }
+  try {
+    const capture = new window.ImageCapture(track);
+    const capabilities = await capture.getPhotoCapabilities();
+    const width = capabilities?.imageWidth?.max;
+    return await capture.takePhoto(width ? { imageWidth: width } : undefined);
+  } catch (error) {
+    console.warn('receipt QR scan: takePhoto unavailable', error);
+    return null;
+  }
+}
+
+function pickPhotoFile(input) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) {
+        return;
+      }
+      done = true;
+      input.removeEventListener('change', finish);
+      input.removeEventListener('cancel', finish);
+      window.removeEventListener('focus', onFocus);
+      const file = input.files?.[0] || null;
+      input.value = '';
+      resolve(file);
+    };
+    // Browsers without the `cancel` event fire nothing when the picker is
+    // dismissed; the page regaining focus is the only signal. `change` can
+    // arrive after `focus`, so wait a moment before giving up.
+    const onFocus = () =>
+      window.setTimeout(finish, PHOTO_PICKER_FOCUS_GRACE_MS);
+    input.addEventListener('change', finish);
+    input.addEventListener('cancel', finish);
+    window.addEventListener('focus', onFocus);
+    input.click();
+  });
 }
 
 function registerReceiptUploadTabs(Alpine) {
@@ -239,6 +295,10 @@ function registerReceiptQRScanPage(Alpine) {
       autozoom: null,
       frameSize: null,
       zoomLimit: 'unavailable',
+      photoState: null,
+      photoVisible: false,
+      photoBusy: false,
+      photoPending: null,
 
       init() {
         this.messages = messagesFrom(this.$el);
@@ -329,6 +389,7 @@ function registerReceiptQRScanPage(Alpine) {
         this.statusMessage = this.messages.scanning;
         this.hintState = createScanHints(performance.now());
         this.hintText = this.messages.hints.idle;
+        this.photoState = createPhotoButton(performance.now());
         this.scheduleScan(0);
       },
 
@@ -363,7 +424,9 @@ function registerReceiptQRScanPage(Alpine) {
           });
           this.worker.addEventListener('error', (event) => {
             window.clearTimeout(timeout);
-            reject(event.error || new Error(event.message));
+            const error = event.error || new Error(event.message);
+            this.settlePhoto({ type: 'scan-error', message: error.message });
+            reject(error);
           });
           this.worker.postMessage({ type: 'initialize', wasmUrl });
         });
@@ -371,6 +434,10 @@ function registerReceiptQRScanPage(Alpine) {
 
       handleWorkerMessage(message) {
         if (message.type !== 'scan-result' && message.type !== 'scan-error') {
+          return;
+        }
+        if (message.source === 'photo') {
+          this.settlePhoto(message);
           return;
         }
         this.workerBusy = false;
@@ -396,8 +463,17 @@ function registerReceiptQRScanPage(Alpine) {
         this.submitDecoded(message.value);
       },
 
+      tickPhotoButton(now) {
+        if (!this.photoState) {
+          return;
+        }
+        const result = photoButton(this.photoState, now);
+        this.photoState = result.state;
+        this.photoVisible = result.visible;
+      },
+
       updateHint(message, wrongQr) {
-        if (!this.hintState) {
+        if (!this.hintState || this.photoBusy) {
           return;
         }
         const result = scanHints(
@@ -560,7 +636,7 @@ function registerReceiptQRScanPage(Alpine) {
       },
 
       scheduleScan(delay = SCAN_INTERVAL_MS) {
-        if (!this.stream || !this.worker) {
+        if (!this.stream || !this.worker || this.photoBusy) {
           return;
         }
         window.clearTimeout(this.scanTimer);
@@ -568,6 +644,7 @@ function registerReceiptQRScanPage(Alpine) {
       },
 
       scanFrame() {
+        this.tickPhotoButton(performance.now());
         const video = this.$refs.video;
         const canvas = this.$refs.canvas;
         if (
@@ -630,6 +707,149 @@ function registerReceiptQRScanPage(Alpine) {
         );
       },
 
+      settlePhoto(message) {
+        const pending = this.photoPending;
+        if (!pending) {
+          return;
+        }
+        window.clearTimeout(pending.timeout);
+        this.photoPending = null;
+        if (message === null) {
+          pending.resolve(null);
+        } else if (message.type === 'scan-error') {
+          pending.reject(new Error(message.message));
+        } else {
+          pending.resolve(message);
+        }
+      },
+
+      requestPhotoScan(blob) {
+        return new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            this.settlePhoto({
+              type: 'scan-error',
+              message: 'QR decoder worker did not answer for the photo',
+            });
+          }, PHOTO_WORKER_TIMEOUT_MS);
+          this.photoPending = { resolve, reject, timeout };
+          this.worker.postMessage({ type: 'scan-photo', blob });
+        });
+      },
+
+      async takePhoto() {
+        if (this.photoBusy || !this.stream || !this.worker) {
+          return;
+        }
+        this.photoBusy = true;
+        this.hintText = this.messages.photoRecognizing;
+        window.clearTimeout(this.scanTimer);
+        let blob = await captureWithImageCapture(this.getVideoTrack());
+        if (!blob) {
+          blob = await pickPhotoFile(this.$refs.photoInput);
+        }
+        if (!this.stream) {
+          return;
+        }
+        if (!blob) {
+          await this.resumeLive();
+          return;
+        }
+
+        let message;
+        try {
+          message = await this.requestPhotoScan(blob);
+        } catch (error) {
+          console.warn('receipt QR scan: photo decoding failed', error);
+          await this.uploadPhotoAfterFailure(blob);
+          return;
+        }
+        if (!message) {
+          return;
+        }
+
+        if (message.value && isFNSReceiptQR(message.value)) {
+          this.submitDecoded(message.value);
+          return;
+        }
+        this.hintText = message.value
+          ? this.messages.hints.wrongQr
+          : this.messages.photoNotFound;
+        await sleep(PHOTO_OUTCOME_HINT_MS);
+        if (this.stream) {
+          await this.resumeLive();
+        }
+      },
+
+      async resumeLive() {
+        // The system camera app can end the stream while the page is in the
+        // background; reopen the camera instead of scanning a dead video.
+        if (this.getVideoTrack()?.readyState !== 'live') {
+          this.stop({ preserveError: true });
+          await this.start();
+          return;
+        }
+        this.photoBusy = false;
+        this.hintState = createScanHints(performance.now());
+        this.hintText = this.messages.hints.idle;
+        this.$refs.video?.play().catch(() => {});
+        this.scheduleScan(0);
+      },
+
+      async restartWorker() {
+        this.worker?.terminate();
+        this.worker = null;
+        this.workerBusy = false;
+        try {
+          await this.initializeWorker();
+          return true;
+        } catch (error) {
+          console.error('receipt QR scan: decoder restart failed', error);
+          return false;
+        }
+      },
+
+      async uploadPhotoAfterFailure(blob) {
+        // Not awaited: the upload runs while the decoder restarts.
+        const restarted = this.restartWorker();
+        try {
+          const response = await this.uploadPhoto(blob);
+          this.stop();
+          window.location.assign(response.url);
+          return;
+        } catch (error) {
+          console.error('receipt QR scan: photo upload failed', error);
+        }
+        const workerReady = await restarted;
+        if (!this.stream) {
+          return;
+        }
+        if (workerReady) {
+          await this.resumeLive();
+        } else {
+          this.stop({ preserveError: true });
+        }
+        this.errorMessage = this.messages.photoUploadFailed;
+      },
+
+      async uploadPhoto(blob) {
+        const form = this.$refs.scanForm;
+        const token = form.querySelector('[name="csrfmiddlewaretoken"]').value;
+        const body = new FormData();
+        body.append('file', blob, blob.name || PHOTO_FILE_NAME);
+        body.append('account', form.querySelector('[name="account"]').value);
+        body.append('csrfmiddlewaretoken', token);
+        const response = await fetch(this.$el.dataset.uploadUrl, {
+          method: 'POST',
+          body,
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': token },
+        });
+        if (!isPhotoUploadAccepted(response)) {
+          throw new Error(`photo upload failed: ${response.status}`);
+        }
+        return response;
+      },
+
       submitDecoded(rawValue) {
         this.stop();
         const form = this.$refs.scanForm;
@@ -641,6 +861,10 @@ function registerReceiptQRScanPage(Alpine) {
       },
 
       stop({ preserveError = false } = {}) {
+        this.settlePhoto(null);
+        this.photoState = null;
+        this.photoVisible = false;
+        this.photoBusy = false;
         window.clearTimeout(this.scanTimer);
         this.scanTimer = null;
         this.stream?.getTracks().forEach((track) => track.stop());

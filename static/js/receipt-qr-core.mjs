@@ -19,6 +19,9 @@ const AUTOZOOM_COOLDOWN_MS = 600;
 const AUTOZOOM_SETTLE_MS = 300;
 const DEFAULT_ZOOM_STEP = 0.1;
 
+const PHOTO_BUTTON_DELAY_MS = 5000;
+const PHOTO_MIN_PX_PER_MODULE = 3;
+
 const HINT_WARMUP_MS = 800;
 const HINT_HOLD_MS = 400;
 const HINT_MIN_DWELL_MS = 1500;
@@ -177,6 +180,7 @@ export function magnificationRegion(
     defaultVersion = DEFAULT_QR_VERSION,
     minPaddingModules = MIN_PADDING_MODULES,
     paddingRatio = PADDING_RATIO,
+    minPxPerModule = 0,
   } = {},
 ) {
   const bounds = positionBounds(position);
@@ -198,10 +202,18 @@ export function magnificationRegion(
   );
   const longest = Math.max(width, height);
   if (longest * scale > maxSide) {
-    scale = maxSide / longest;
+    scale = Math.max(maxSide / longest, minPxPerModule / modulePx);
   }
   return { x, y, width, height, scale };
 }
+
+// A full-resolution photo: crop at the source resolution, shrink only when
+// the crop is over 1200 px and never below 3 px per module.
+export const PHOTO_MAGNIFICATION = Object.freeze({
+  minScale: 1,
+  maxScale: 1,
+  minPxPerModule: PHOTO_MIN_PX_PER_MODULE,
+});
 
 function translatePosition(position, offsetX, offsetY) {
   const shift = (point) => ({ x: point.x + offsetX, y: point.y + offsetY });
@@ -227,7 +239,13 @@ function distanceToCenter(position, frameSize) {
  * `{text, position, version}` items for an image, `magnify` crops and scales
  * an image by a region. At most one magnification is made.
  */
-export async function scanFrames({ frames, frameSize, decode, magnify }) {
+export async function scanFrames({
+  frames,
+  frameSize,
+  decode,
+  magnify,
+  regionOptions,
+}) {
   let magnified = false;
   let detection = null;
   let detectionDistance = Infinity;
@@ -263,6 +281,7 @@ export async function scanFrames({ frames, frameSize, decode, magnify }) {
         nearest.item.position,
         nearest.item.version,
         { width: frame.image.width, height: frame.image.height },
+        regionOptions,
       );
       const zoomed = await decode(await magnify(frame.image, region));
       const zoomedRead = zoomed.find((item) => item.text);
@@ -501,6 +520,28 @@ export function scanHints(state, observation, now) {
     },
     hint: { id: shown.id, key: hintKey(shown.id, observation) },
   };
+}
+
+export function createPhotoButton(now) {
+  return { openedAt: now, visible: false };
+}
+
+/**
+ * Reducer for the "take photo" button, called on every scan tick. Once shown,
+ * the button stays visible until the scan stops.
+ */
+export function photoButton(state, now) {
+  const visible =
+    state.visible || now - state.openedAt >= PHOTO_BUTTON_DELAY_MS;
+  return { state: { ...state, visible }, visible };
+}
+
+/**
+ * An invalid upload re-renders the form with 200 and no redirect, so only a
+ * redirected successful response means the receipt was accepted.
+ */
+export function isPhotoUploadAccepted(response) {
+  return Boolean(response.ok && response.redirected);
 }
 
 const METRICS_STEP = 4;
