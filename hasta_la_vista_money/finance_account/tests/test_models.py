@@ -97,33 +97,6 @@ class TestAccountModel(TestCase):
         debt = account_service.get_credit_card_debt(account)
         self.assertEqual(debt, Decimal('0.00'))
 
-    def test_account_calculate_grace_period_info(self) -> None:
-        """Test calculate_grace_period_info method."""
-        account = Account.objects.create(
-            user=self.user,
-            name_account='Credit Card',
-            type_account=ACCOUNT_TYPE_CREDIT_CARD,
-            balance=Decimal('-1000.00'),
-            limit_credit=Decimal('5000.00'),
-            payment_due_date=timezone.now().date() + timedelta(days=10),
-            grace_period_days=30,
-            currency='RUB',
-        )
-
-        container = ApplicationContainer()
-        account_service = container.finance_account.account_service()
-        info = account_service.calculate_grace_period_info(
-            account,
-            timezone.now().date(),
-        )
-
-        self.assertIn('final_debt', info)
-        self.assertIn('days_until_due', info)
-        self.assertIn('purchase_month', info)
-        self.assertIn('purchase_start', info)
-        self.assertIn('purchase_end', info)
-        self.assertIn('grace_end', info)
-
     def test_account_model_choices(self) -> None:
         """Test model choices."""
         currency_choices_list = [choice[0] for choice in currency_choices('ru')]

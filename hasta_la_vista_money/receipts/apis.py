@@ -18,7 +18,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound
 from rest_framework.generics import (
     ListAPIView,
     ListCreateAPIView,
@@ -632,23 +632,17 @@ class ReceiptDeleteAPIView(APIView):
             Response: Empty response with 204 status on success.
 
         Raises:
-            NotFound: When receipt is not found.
-            PermissionDenied: When user doesn't have permission to delete.
+            NotFound: When receipt is missing or belongs to another user.
         """
+        user = cast('User', request.user)
         try:
             receipt = (
                 Receipt.objects.select_related('user', 'seller', 'account')
                 .prefetch_related('product')
-                .get(id=pk)
+                .get(id=pk, user=user)
             )
         except Receipt.DoesNotExist as e:
             raise NotFound('Receipt not found') from e
-
-        user = cast('User', request.user)
-        if receipt.user != user:
-            raise PermissionDenied(
-                'You do not have permission to delete this receipt',
-            )
 
         request_with_container = cast('RequestWithContainer', request)
         deleter = (

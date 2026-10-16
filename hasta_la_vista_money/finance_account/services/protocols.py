@@ -8,7 +8,6 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
     FinancialMovement,
-    GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
 
@@ -65,23 +64,6 @@ class CreditCalculationServiceProtocol(Protocol):
 
         Returns:
             Decimal debt amount if account is credit type, None otherwise.
-        """
-        ...
-
-    def calculate_grace_period_info(
-        self,
-        account: Account,
-        purchase_month: date | datetime,
-    ) -> GracePeriodInfoDict:
-        """Calculate grace period information for a credit card.
-
-        Args:
-            account: Credit card account.
-            purchase_month: Month to calculate grace period for.
-
-        Returns:
-            Dictionary with grace period information. Empty dict if account
-            is not a credit card.
         """
         ...
 

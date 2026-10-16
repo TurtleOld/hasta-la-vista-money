@@ -4,7 +4,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import ListView, View
@@ -20,15 +19,11 @@ from hasta_la_vista_money.authentication.authentication import (
 )
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
-from hasta_la_vista_money.budget.repositories import (
-    PlanningRepository,
-)
 from hasta_la_vista_money.budget.services.budget import (
     get_categories,
 )
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category
-from hasta_la_vista_money.transactions.repositories import TransactionRepository
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import get_family_groups
 
@@ -112,47 +107,6 @@ def _resolve_budget_scope(
         _family_users_for_budget(user) if scope == 'family' else [user]
     )
     return scope, scope_users, choices
-
-
-def get_fact_amount(
-    user: User,
-    category: Category,
-    month: date,
-    type_: str,
-    transaction_repository: TransactionRepository | None = None,
-) -> Decimal | int:
-    """Return the total transaction amount for a category in a given month."""
-    if transaction_repository is None:
-        raise ValueError('transaction_repository must be provided')
-
-    qs = transaction_repository.filter_by_user_category_and_month(
-        user,
-        category,
-        month,
-    ).filter(type=type_)
-    return qs.aggregate(total=Sum('amount'))['total'] or 0
-
-
-def get_plan_amount(
-    user: User,
-    category: Category,
-    month: date,
-    type_: str,
-    planning_repository: PlanningRepository | None = None,
-) -> Decimal | int:
-    """Return the planned amount for a category in a given month."""
-    if planning_repository is None:
-        raise ValueError('planning_repository must be provided')
-
-    plan = planning_repository.filter_by_user_category_and_month(
-        user,
-        category,
-        month,
-        type_,
-    )
-    if plan:
-        return Decimal(str(plan.amount))
-    return 0
 
 
 class BaseView:

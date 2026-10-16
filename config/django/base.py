@@ -521,6 +521,7 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API для системы домашнего учета финансов',
     'VERSION': '1.8.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
     'COMPONENT_SPLIT_REQUEST': True,
     'AUTHENTICATION_WHITELIST': [
         'hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication',

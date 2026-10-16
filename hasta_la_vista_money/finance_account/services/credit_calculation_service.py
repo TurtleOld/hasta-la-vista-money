@@ -17,17 +17,12 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
-    SUPPORTED_BANKS,
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.services.bank_calculators import (
-    create_bank_calculator,
-)
 from hasta_la_vista_money.finance_account.services.types import (
-    GracePeriodInfoDict,
     PaymentScheduleStatementDict,
     RaiffeisenbankScheduleDict,
 )
@@ -298,178 +293,6 @@ class CreditCalculationService:
         if first_receipt:
             return first_receipt.receipt_date
         return None
-
-    def _calculate_purchase_period(
-        self,
-        purchase_month: date | datetime,
-    ) -> tuple[datetime, datetime]:
-        """Calculate purchase period start and end dates.
-
-        Args:
-            purchase_month: Month to calculate period for.
-
-        Returns:
-            Tuple of (purchase_start, purchase_end) datetimes for the month.
-        """
-        purchase_start = timezone.make_aware(
-            datetime.combine(purchase_month.replace(day=1), time.min),
-        )
-        last_day_of_month = monthrange(
-            purchase_start.year,
-            purchase_start.month,
-        )[1]
-        purchase_end = timezone.make_aware(
-            datetime.combine(
-                purchase_start.date().replace(day=last_day_of_month),
-                time.max,
-            ),
-        )
-
-        return purchase_start, purchase_end
-
-    def _calculate_grace_period_by_bank(
-        self,
-        account: Account,
-        purchase_start: datetime,
-        purchase_end: datetime,
-    ) -> tuple[datetime, datetime, datetime]:
-        """Calculate grace period based on bank type.
-
-        Uses bank calculator factory to get appropriate calculator.
-
-        Args:
-            account: Account to calculate grace period for.
-            purchase_start: Start of purchase period.
-            purchase_end: End of purchase period.
-
-        Returns:
-            Tuple of (grace_end, payments_start, payments_end) datetimes.
-        """
-        calculator = create_bank_calculator(
-            account.bank,
-            transaction_repository=self.transaction_repository,
-            receipt_repository=self.receipt_repository,
-        )
-        return calculator.calculate_grace_period(
-            account,
-            purchase_start,
-            purchase_end,
-        )
-
-    def _calculate_debt_info(
-        self,
-        account: Account,
-        purchase_start: datetime,
-        purchase_end: datetime,
-        payments_start: datetime,
-        payments_end: datetime,
-    ) -> tuple[Decimal, Decimal, Decimal]:
-        """Calculate debt information for the period.
-
-        Args:
-            account: Account to calculate debt for.
-            purchase_start: Start of purchase period.
-            purchase_end: End of purchase period.
-            payments_start: Start of payments period (unused, kept for compat).
-            payments_end: End of grace period.
-
-        Returns:
-            Tuple of (purchase_period_debt, payments_made, final_debt).
-        """
-        purchase_period_debt = self.get_credit_card_debt(
-            account,
-            purchase_start,
-            purchase_end,
-        ) or Decimal(str(constants.ZERO))
-
-        if account.bank.code in SUPPORTED_BANKS:
-            payments_made = self.get_credit_card_payments(
-                account,
-                purchase_start,
-                payments_end,
-            )
-        else:
-            payments_made = Decimal(str(constants.ZERO))
-
-        final_debt = max(
-            purchase_period_debt - payments_made,
-            Decimal(str(constants.ZERO)),
-        )
-
-        return purchase_period_debt, payments_made, final_debt
-
-    def _ensure_timezone_aware(self, dt: datetime) -> datetime:
-        """Ensure datetime is timezone aware.
-
-        Args:
-            dt: Datetime to check and convert.
-
-        Returns:
-            Timezone-aware datetime.
-        """
-        if hasattr(dt, 'utcoffset') and timezone.is_naive(dt):
-            return timezone.make_aware(dt)
-        return dt
-
-    def calculate_grace_period_info(
-        self,
-        account: Account,
-        purchase_month: date | datetime,
-    ) -> GracePeriodInfoDict:
-        """Calculate grace period information for a credit card.
-
-        Args:
-            account: Credit card account.
-            purchase_month: Month to calculate grace period for.
-
-        Returns:
-            Dictionary with grace period information. Empty dict if account
-            is not a credit card.
-        """
-        if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
-            return {}
-
-        purchase_start, purchase_end = self._calculate_purchase_period(
-            purchase_month,
-        )
-
-        grace_end, payments_start, payments_end = (
-            self._calculate_grace_period_by_bank(
-                account,
-                purchase_start,
-                purchase_end,
-            )
-        )
-
-        purchase_period_debt, payment_period_debt, total_debt = (
-            self._calculate_debt_info(
-                account,
-                purchase_start,
-                purchase_end,
-                payments_start,
-                payments_end,
-            )
-        )
-
-        grace_end = self._ensure_timezone_aware(grace_end)
-
-        return {
-            'purchase_month': purchase_start.strftime('%m.%Y'),
-            'purchase_start': purchase_start,
-            'purchase_end': purchase_end,
-            'grace_end': grace_end,
-            'debt_for_month': purchase_period_debt,
-            'payments_for_period': payment_period_debt,
-            'final_debt': total_debt,
-            'is_overdue': (
-                timezone.now() > grace_end and total_debt > constants.ZERO
-            ),
-            'days_until_due': (
-                (grace_end.date() - timezone.now().date()).days
-                if timezone.now() <= grace_end
-                else constants.ZERO
-            ),
-        }
 
     def _validate_raiffeisenbank_account(
         self,

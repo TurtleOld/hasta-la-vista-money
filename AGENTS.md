@@ -45,7 +45,7 @@ service/repository/protocol/DI из раздела «Архитектура пр
 
 - **Backend**: Django 6.0, Python 3.12
 - **API**: Django REST Framework (DRF)
-- **База данных**: PostgreSQL (продакшен), SQLite (разработка)
+- **База данных**: PostgreSQL (разработка, тесты и продакшен; см. ADR-0007)
 - **Кеширование**: Redis (продакшен), LocMemCache (разработка)
 - **Аутентификация**: JWT (djangorestframework-simplejwt)
 - **Dependency Injection**: dependency-injector
@@ -258,7 +258,7 @@ path('api/my-endpoint/', MyAPIView.as_view(), name='my_endpoint'),
 
 **Важно:**
 - Все API должны быть через DRF, не через function-based views
-- Используйте версионирование: `/api/v1/...`
+- Версионирования API нет: эндпоинты живут под `/api/...`
 - Всегда добавляйте аутентификацию и throttling
 
 ### Работа с моделями
@@ -403,7 +403,7 @@ make build-js
 make watch-js
 ```
 
-Esbuild собирает несколько entry points в `static/js/dist/`:
+Esbuild (`esbuild.config.mjs`) собирает 11 entry points в `static/js/dist/`:
 
 | Entry point | Выходной файл | Загружается на |
 |---|---|---|
@@ -412,11 +412,15 @@ Esbuild собирает несколько entry points в `static/js/dist/`:
 | `static/js/pages/budget.js` | `dist/pages/budget.js` | Бюджет |
 | `static/js/pages/receipts.js` | `dist/pages/receipts.js` | Список чеков |
 | `static/js/pages/receipt-update.js` | `dist/pages/receipt-update.js` | Редактирование чека |
+| `static/js/pages/receipt-qr-scan.js` | `dist/pages/receipt-qr-scan.js` | Сканирование QR чека |
+| `static/js/pages/receipt-qr-worker.js` | `dist/pages/receipt-qr-worker.js` | Worker распознавания QR |
 | `static/js/pages/loan.js` | `dist/pages/loan.js` | Кредиты |
 | `static/js/pages/profile.js` | `dist/pages/profile.js` | Профиль |
+| `static/js/pages/bank-statement-reconciliation.js` | `dist/pages/bank-statement-reconciliation.js` | Сверка банковской выписки |
+| `static/js/pages/auditlog.js` | `dist/pages/auditlog.js` | Журнал аудита |
 
 **Важно:**
-- `static/js/dist/` исключён из `.gitignore` и `.dockerignore` — файлы не хранятся в репозитории
+- `static/js/dist/` указан в `.gitignore` и `.dockerignore` — собранные файлы не хранятся в репозитории
 - В production Docker-образе JS собирается автоматически в `node-builder` stage
 - В локальной разработке Django-сервер читает уже собранные файлы — после изменений нужно вручную запустить `make build-js` (или держать открытым `make watch-js`)
 - Исходники для page-specific бандлов — в `static/js/pages/`, они импортируют файлы из `static/js/`
@@ -741,7 +745,7 @@ class MyFeatureAPIView(APIView):
         return Response(result, status=201)
 
 # 7. URL (app/urls.py)
-path('api/v1/my-feature/', MyFeatureAPIView.as_view(), name='my_feature'),
+path('api/my-feature/', MyFeatureAPIView.as_view(), name='my_feature'),
 ```
 
 ---

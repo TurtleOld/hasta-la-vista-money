@@ -10,8 +10,7 @@ until nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
     sleep 2
 done
 
-echo "Database is up - executing migrations"
-python manage.py migrate --noinput
+echo "Database is up"
 
 echo "Creating staticfiles, media and logs directories with proper permissions"
 mkdir -p /app/staticfiles /app/media /app/logs
