@@ -3,8 +3,8 @@ from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any
 
-from django.db.models import Avg, Count, F, Q, QuerySet, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import Avg, Count, F, Q, QuerySet, Sum, Window
+from django.db.models.functions import RowNumber, TruncMonth
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
@@ -277,33 +277,69 @@ def _category_drilldown_transactions(
     end: date,
     category_ids: list[int],
 ) -> dict[int, list[dict[str, Any]]]:
-    result: dict[int, list[dict[str, Any]]] = {}
+    result: dict[int, list[dict[str, Any]]] = {
+        category_id: [] for category_id in category_ids
+    }
     if not category_ids:
         return result
-    queryset = _filtered_transactions(
-        type_value,
-        users,
-        stats_filter,
-        start,
-        end,
-    ).select_related('account', 'category', 'user')
-    for category_id in category_ids:
-        rows = (
-            queryset.filter(
-                Q(category_id=category_id)
-                | Q(category__parent_category_id=category_id),
-            )
-            .values(
-                'date',
-                'amount',
-                'account__name_account',
-                'category__name',
-                'user__username',
-            )
-            .order_by('-date')[: constants.PAGINATE_BY_DEFAULT]
+    limit = constants.PAGINATE_BY_DEFAULT
+    wanted = set(category_ids)
+    rows = (
+        _filtered_transactions(
+            type_value,
+            users,
+            stats_filter,
+            start,
+            end,
         )
-        result[category_id] = [dict(row) for row in rows]
-    return result
+        .filter(
+            Q(category_id__in=category_ids)
+            | Q(category__parent_category_id__in=category_ids),
+        )
+        .annotate(
+            own_rank=Window(
+                RowNumber(),
+                partition_by=F('category_id'),
+                order_by=[F('date').desc(), F('pk').desc()],
+            ),
+            parent_rank=Window(
+                RowNumber(),
+                partition_by=F('category__parent_category_id'),
+                order_by=[F('date').desc(), F('pk').desc()],
+            ),
+        )
+        .filter(
+            Q(category_id__in=category_ids, own_rank__lte=limit)
+            | Q(
+                category__parent_category_id__in=category_ids,
+                parent_rank__lte=limit,
+            ),
+        )
+        .values(
+            'date',
+            'amount',
+            'account__name_account',
+            'category__name',
+            'user__username',
+            'category_id',
+            'category__parent_category_id',
+            'own_rank',
+            'parent_rank',
+        )
+        .order_by('-date', '-pk')
+    )
+    for row in rows:
+        own_rank = row.pop('own_rank')
+        parent_rank = row.pop('parent_rank')
+        category_id = row.pop('category_id')
+        parent_id = row.pop('category__parent_category_id')
+        if category_id in wanted and own_rank <= limit:
+            result[category_id].append(dict(row))
+        if parent_id in wanted and parent_rank <= limit:
+            result[parent_id].append(dict(row))
+    # A category list merges its own rows and its children's rows, so each
+    # part is limited separately above and the merge is trimmed here.
+    return {category_id: items[:limit] for category_id, items in result.items()}
 
 
 def _match_income_expense_search(
