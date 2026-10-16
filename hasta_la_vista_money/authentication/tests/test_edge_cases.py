@@ -95,6 +95,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
         """Test that deleted user token returns None."""
         user: User = UserFactoryTyped()
         user_id = user.pk
+        user.categories.all().delete()
         user.delete()
 
         payload = {

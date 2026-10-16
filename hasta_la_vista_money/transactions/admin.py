@@ -1,6 +1,7 @@
 """Django admin registration for transactions and categories."""
 
 from django.contrib import admin
+from django.http import HttpRequest
 
 from hasta_la_vista_money.transactions.models import Category, Transaction
 
@@ -24,3 +25,23 @@ class CategoryAdmin(admin.ModelAdmin[Category]):
     list_select_related = ('user', 'parent_category')
     list_filter = ('type',)
     search_fields = ('name', 'user__username')
+
+    def get_readonly_fields(
+        self,
+        request: HttpRequest,
+        obj: Category | None = None,
+    ) -> tuple[str, ...]:
+        """Lock the identity fields of system categories."""
+        if obj is not None and obj.system_kind:
+            return ('name', 'type', 'parent_category', 'system_kind')
+        return ()
+
+    def has_delete_permission(
+        self,
+        request: HttpRequest,
+        obj: Category | None = None,
+    ) -> bool:
+        """Forbid deleting system categories."""
+        if obj is not None and obj.system_kind:
+            return False
+        return super().has_delete_permission(request, obj)

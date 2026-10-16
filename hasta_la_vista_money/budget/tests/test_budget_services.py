@@ -67,7 +67,7 @@ class BudgetServicesTestCase(TestCase):
     def test_get_categories_expense(self) -> None:
         cats = get_categories(self.user, 'expense')
         self.assertQuerySetEqual(
-            cats.order_by('id'),
+            cats.filter(system_kind='').order_by('id'),
             list(self.expense_categories),
             transform=lambda x: x,
         )
@@ -75,7 +75,7 @@ class BudgetServicesTestCase(TestCase):
     def test_get_categories_income(self) -> None:
         cats = get_categories(self.user, 'income')
         self.assertQuerySetEqual(
-            cats.order_by('id'),
+            cats.filter(system_kind='').order_by('id'),
             list(self.income_categories),
             transform=lambda x: x,
         )

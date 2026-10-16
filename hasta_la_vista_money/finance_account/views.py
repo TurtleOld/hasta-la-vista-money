@@ -494,10 +494,12 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         income_categories = Category.objects.filter(
             user=current_user,
             type=TransactionType.INCOME,
+            system_kind='',
         )
         expense_categories = Category.objects.filter(
             user=current_user,
             type=TransactionType.EXPENSE,
+            system_kind='',
         )
         accounts = (
             Account.objects.available_for_operations()
@@ -1806,10 +1808,12 @@ class AccountView(
         context['drawer_income_categories'] = Category.objects.filter(
             user=current_user,
             type=TransactionType.INCOME,
+            system_kind='',
         ).order_by('name')
         context['drawer_expense_categories'] = Category.objects.filter(
             user=current_user,
             type=TransactionType.EXPENSE,
+            system_kind='',
         ).order_by('name')
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()

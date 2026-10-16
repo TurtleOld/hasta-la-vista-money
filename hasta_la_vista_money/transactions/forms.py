@@ -95,6 +95,9 @@ class TransactionForm(
         account_queryset: QuerySet[Account] | None = None,
         **kwargs: Any,
     ) -> None:
+        if category_queryset is not None:
+            # System categories are only used by dedicated scenarios.
+            category_queryset = category_queryset.filter(system_kind='')
         super().__init__(
             *args,
             category_queryset=category_queryset,

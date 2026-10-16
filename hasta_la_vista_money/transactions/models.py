@@ -26,6 +26,12 @@ class TransactionType(models.TextChoices):
     EXPENSE = 'expense', _('Расход')
 
 
+class SystemCategoryKind(models.TextChoices):
+    """Kinds of protected system categories (empty value: regular)."""
+
+    BALANCE_ADJUSTMENT = 'balance_adjustment', _('Корректировка остатка')
+
+
 TransactionManager = models.Manager.from_queryset(TransactionQuerySet)
 
 
@@ -54,6 +60,12 @@ class Category(models.Model):
         related_name='subcategories',
         on_delete=models.PROTECT,
     )
+    system_kind = models.CharField(
+        max_length=32,
+        choices=SystemCategoryKind.choices,
+        blank=True,
+        default='',
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
@@ -66,6 +78,11 @@ class Category(models.Model):
             models.UniqueConstraint(
                 fields=['user', 'name', 'type'],
                 name='unique_user_category_per_type',
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'system_kind', 'type'],
+                condition=~Q(system_kind=''),
+                name='unique_user_system_category_kind_per_type',
             ),
         ]
 
