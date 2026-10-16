@@ -19,12 +19,10 @@ from hasta_la_vista_money.loan.models import (
 )
 from hasta_la_vista_money.loan.services.loan_calculation import (
     LoanCalculationService,
+    calculate_annuity_loan_db,
     calculate_annuity_schedule,
+    calculate_differentiated_loan_db,
     calculate_differentiated_schedule,
-)
-from hasta_la_vista_money.loan.tasks import (
-    calculate_annuity_loan,
-    calculate_differentiated_loan,
 )
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -409,7 +407,7 @@ class TestLoan(TestCase):
 
     def test_calculate_annuity_loan(self) -> None:
         """Test calculate_annuity_loan function."""
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -425,7 +423,7 @@ class TestLoan(TestCase):
 
     def test_calculate_differentiated_loan(self) -> None:
         """Test calculate_differentiated_loan function."""
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -532,7 +530,7 @@ class TestLoan(TestCase):
 
     def test_calculate_annuity_loan_with_float_inputs(self) -> None:
         """Test calculate_annuity_loan with float inputs."""
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -548,7 +546,7 @@ class TestLoan(TestCase):
 
     def test_calculate_differentiated_loan_with_float_inputs(self) -> None:
         """Test calculate_differentiated_loan with float inputs."""
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -949,7 +947,7 @@ class TestLoanCalculationIntegration(TestCase):
         """Test that calculate_annuity_loan creates payment schedule."""
         initial_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
 
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -970,7 +968,7 @@ class TestLoanCalculationIntegration(TestCase):
         """Test that calculate_differentiated_loan creates payment schedule."""
         initial_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
 
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -1027,7 +1025,7 @@ class TestLoanCalculationIntegration(TestCase):
                 rate=rate_raw,
                 period=period_raw,
             ):
-                calculate_annuity_loan(
+                calculate_annuity_loan_db(
                     user_id=self.user.pk,
                     loan_id=self.loan1.pk,
                     start_date=timezone.now(),
@@ -1049,7 +1047,7 @@ class TestLoanCalculationIntegration(TestCase):
 
         PaymentSchedule.objects.filter(loan=self.loan1).delete()
 
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
