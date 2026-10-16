@@ -1,7 +1,9 @@
 from calendar import monthrange
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
@@ -725,24 +727,40 @@ def _budgets_data(
         .order_by('period', 'category__name')
     )
 
+    budgets = list(budgets)
+    category_totals: dict[tuple[date, int | None], Decimal] = defaultdict(
+        Decimal,
+    )
+    month_totals: dict[date, Decimal] = defaultdict(Decimal)
+    if budgets:
+        last_month = period_end.replace(day=1)
+        last_day = monthrange(last_month.year, last_month.month)[1]
+        rows = (
+            Transaction.objects.filter(
+                user__in=users_list,
+                type=TransactionType.EXPENSE,
+                date__gte=_date_to_aware(period_start.replace(day=1)),
+                date__lte=_date_to_aware(
+                    last_month.replace(day=last_day),
+                    end_of_day=True,
+                ),
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('month', 'category_id')
+            .annotate(total=Sum('amount'))
+        )
+        for row in rows:
+            month = row['month'].date()
+            category_totals[(month, row['category_id'])] += row['total']
+            month_totals[month] += row['total']
+
     result: list[BudgetDataDict] = []
     for budget in budgets:
-        month_start = budget.period
-        last_day = monthrange(month_start.year, month_start.month)[1]
-        month_end = month_start.replace(day=last_day)
-
-        expense_qs = Transaction.objects.filter(
-            user__in=users_list,
-            type=TransactionType.EXPENSE,
-            date__gte=_date_to_aware(month_start),
-            date__lte=_date_to_aware(month_end, end_of_day=True),
-        )
         if budget.category_id:
-            expense_qs = expense_qs.filter(category=budget.category)
-
-        actual = float(
-            expense_qs.aggregate(total=Sum('amount'))['total'] or 0,
-        )
+            total = category_totals[(budget.period, budget.category_id)]
+        else:
+            total = month_totals[budget.period]
+        actual = float(total or 0)
         limit = float(budget.amount_limit)
         usage_pct = (
             round(actual / limit * constants.PERCENTAGE_MULTIPLIER, 1)
