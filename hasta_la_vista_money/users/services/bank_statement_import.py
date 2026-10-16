@@ -658,7 +658,7 @@ class BankStatementImportService:
         description: str,
         current_file_hash: str,
     ) -> list[Transaction]:
-        queryset = Transaction.objects.filter(
+        queryset = Transaction.objects.without_adjustments().filter(
             account=account,
             user=user,
             type=type_value,
@@ -720,7 +720,7 @@ class BankStatementImportService:
                 source_ref=source_ref,
             ).exists():
                 return True
-            legacy_queryset = Transaction.objects.filter(
+            legacy_queryset = Transaction.objects.without_adjustments().filter(
                 account=account,
                 user=user,
                 type=type_value,

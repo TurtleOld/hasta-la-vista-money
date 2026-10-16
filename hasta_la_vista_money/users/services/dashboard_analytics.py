@@ -134,39 +134,43 @@ def get_period_comparison(
     previous_start_dt = period_dates['previous_start']
     previous_end_dt = period_dates['previous_end']
 
-    transaction_totals = Transaction.objects.filter(user=user).aggregate(
-        current_expense=Sum(
-            'amount',
-            filter=Q(
-                type=TransactionType.EXPENSE,
-                date__gte=current_start_dt,
-                date__lte=today_dt,
+    transaction_totals = (
+        Transaction.objects.without_adjustments()
+        .filter(user=user)
+        .aggregate(
+            current_expense=Sum(
+                'amount',
+                filter=Q(
+                    type=TransactionType.EXPENSE,
+                    date__gte=current_start_dt,
+                    date__lte=today_dt,
+                ),
             ),
-        ),
-        previous_expense=Sum(
-            'amount',
-            filter=Q(
-                type=TransactionType.EXPENSE,
-                date__gte=previous_start_dt,
-                date__lte=previous_end_dt,
+            previous_expense=Sum(
+                'amount',
+                filter=Q(
+                    type=TransactionType.EXPENSE,
+                    date__gte=previous_start_dt,
+                    date__lte=previous_end_dt,
+                ),
             ),
-        ),
-        current_income=Sum(
-            'amount',
-            filter=Q(
-                type=TransactionType.INCOME,
-                date__gte=current_start_dt,
-                date__lte=today_dt,
+            current_income=Sum(
+                'amount',
+                filter=Q(
+                    type=TransactionType.INCOME,
+                    date__gte=current_start_dt,
+                    date__lte=today_dt,
+                ),
             ),
-        ),
-        previous_income=Sum(
-            'amount',
-            filter=Q(
-                type=TransactionType.INCOME,
-                date__gte=previous_start_dt,
-                date__lte=previous_end_dt,
+            previous_income=Sum(
+                'amount',
+                filter=Q(
+                    type=TransactionType.INCOME,
+                    date__gte=previous_start_dt,
+                    date__lte=previous_end_dt,
+                ),
             ),
-        ),
+        )
     )
     interest_totals = actual_interest_totals_for_periods(
         [user],
@@ -298,7 +302,8 @@ def get_drill_down_data(
 
     if category_id is None:
         top_categories = (
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments()
+            .filter(
                 user=user,
                 type=type_value,
                 date__gte=month_start_dt,
@@ -339,7 +344,8 @@ def get_drill_down_data(
         return {'error': 'Категория не найдена', 'data': []}
 
     subcategories = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user=user,
             type=type_value,
             date__gte=month_start_dt,
@@ -362,13 +368,15 @@ def get_drill_down_data(
 
     if not data:
         transactions = list(
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments()
+            .filter(
                 user=user,
                 type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
                 category__id=category_id,
-            ).order_by('-date')[: constants.RECENT_RECEIPTS_LIMIT],
+            )
+            .order_by('-date')[: constants.RECENT_RECEIPTS_LIMIT],
         )
 
         data = [

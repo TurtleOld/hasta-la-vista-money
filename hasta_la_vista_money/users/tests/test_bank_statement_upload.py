@@ -26,6 +26,7 @@ from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import (
     Category,
+    SystemCategoryKind,
     Transaction,
     TransactionType,
 )
@@ -1399,6 +1400,28 @@ class TestBankStatementReconciliationView(TestCase):
             {'decision': 'new'},
         )
         self.assertEqual(decision_response.status_code, 404)
+
+    def test_balance_adjustment_is_not_a_candidate(self) -> None:
+        adjustment_category = Category.objects.create(
+            user=self.user,
+            name='Корректировка остатка',
+            type=TransactionType.EXPENSE,
+            system_kind=SystemCategoryKind.BALANCE_ADJUSTMENT,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=adjustment_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('120.00'),
+            date=self.candidate.date,
+        )
+
+        candidates = BankStatementReconciliationService().current_candidates(
+            self.row,
+        )
+
+        self.assertEqual(list(candidates), [self.candidate])
 
     def test_stale_candidate_returns_current_candidates(self) -> None:
         stale_candidate = BankStatementCandidate.objects.get(row=self.row)

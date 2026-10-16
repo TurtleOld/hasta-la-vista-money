@@ -68,7 +68,10 @@ def _filtered_transactions(
     start: date | None = None,
     end: date | None = None,
 ) -> QuerySet[Transaction]:
-    queryset = Transaction.objects.filter(user__in=users, type=type_value)
+    queryset = Transaction.objects.without_adjustments().filter(
+        user__in=users,
+        type=type_value,
+    )
     return _filter_transaction_queryset(
         queryset,
         stats_filter=stats_filter,

@@ -272,6 +272,7 @@ class BudgetService:
                 date__gte=start_date,
                 date__lte=end_date,
             )
+            .without_adjustments()
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
             .annotate(total=Sum('amount'))

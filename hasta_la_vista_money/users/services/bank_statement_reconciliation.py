@@ -511,7 +511,7 @@ class BankStatementReconciliationService:
         if bounds is None:
             return Transaction.objects.none()
         transaction_type, amount, transaction_date = bounds
-        candidates = Transaction.objects.filter(
+        candidates = Transaction.objects.without_adjustments().filter(
             account=row.upload.account,
             user=row.upload.user,
             type=transaction_type,

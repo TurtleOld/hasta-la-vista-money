@@ -810,7 +810,7 @@ def _card_months_block(
 
     expenses_by_month = (
         _filter_transaction_queryset(
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments().filter(
                 user=card.user,
                 account=card,
                 type=TransactionType.EXPENSE,

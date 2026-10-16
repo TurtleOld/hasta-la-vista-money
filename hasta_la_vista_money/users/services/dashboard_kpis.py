@@ -56,12 +56,16 @@ def _sum_for_month(
     start: datetime,
     end: datetime,
 ) -> Decimal:
-    total = Transaction.objects.filter(
-        user__in=users,
-        type=type_value,
-        date__gte=start,
-        date__lte=end,
-    ).aggregate(total=Sum('amount'))['total']
+    total = (
+        Transaction.objects.without_adjustments()
+        .filter(
+            user__in=users,
+            type=type_value,
+            date__gte=start,
+            date__lte=end,
+        )
+        .aggregate(total=Sum('amount'))['total']
+    )
     return Decimal(total or constants.ZERO)
 
 
@@ -150,7 +154,8 @@ def get_dashboard_month_kpis(
     )
 
     top_category = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=selected_users,
             type=TransactionType.EXPENSE,
             date__gte=start_dt,

@@ -72,13 +72,15 @@ def collect_datasets(
 ) -> tuple[Any, Any]:
     """Collect expense and income datasets for user."""
     expense_dataset = (
-        Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
+        Transaction.objects.without_adjustments()
+        .filter(user=user, type=TransactionType.EXPENSE)
         .values('date')
         .annotate(total_amount=Sum('amount'))
         .order_by('date')
     )
     income_dataset = (
-        Transaction.objects.filter(user=user, type=TransactionType.INCOME)
+        Transaction.objects.without_adjustments()
+        .filter(user=user, type=TransactionType.INCOME)
         .values('date')
         .annotate(total_amount=Sum('amount'))
         .order_by('date')
@@ -149,7 +151,8 @@ class ChartDataDict(TypedDict):
 def pie_expense_category(user: User) -> list[ChartDataDict]:
     """Return pie chart data for expense categories with monthly drilldown."""
     expense_rows = (
-        Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
+        Transaction.objects.without_adjustments()
+        .filter(user=user, type=TransactionType.EXPENSE)
         .annotate(
             month=TruncMonth('date'),
             parent_category_name=Coalesce(
@@ -265,7 +268,8 @@ def _fact_map_for_categories(
     )
 
     qs = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user=user,
             type=type_value,
             category__in=categories,
@@ -337,7 +341,9 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         return cast('BudgetChartsDict', cached_charts)
 
     period_range = report_period_range(period)
-    transactions_qs = Transaction.objects.filter(user=user)
+    transactions_qs = Transaction.objects.without_adjustments().filter(
+        user=user,
+    )
     interest_events = DepositCapitalizationEvent.objects.filter(
         deposit__account__user=user,
     )

@@ -37,7 +37,8 @@ def _monthly_net_flows(
     end: date,
 ) -> list[Decimal]:
     rows = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=users,
             date__gte=_aware_day(start),
             date__lte=_aware_day(end, end_of_day=True),

@@ -37,7 +37,7 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        qs = Transaction.objects.filter(
+        qs = Transaction.objects.without_adjustments().filter(
             user=user,
             type=TransactionType.EXPENSE,
             date__gte=start_date,
@@ -53,7 +53,7 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        qs = Transaction.objects.filter(
+        qs = Transaction.objects.without_adjustments().filter(
             user=user,
             type=TransactionType.INCOME,
             date__gte=start_date,
@@ -95,7 +95,8 @@ class StatisticsRepository:
         limit: int = 5,
     ) -> QuerySet[Transaction, dict[str, str | Decimal]]:
         return (
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments()
+            .filter(
                 user=user,
                 type=TransactionType.EXPENSE,
                 date__gte=start_date,
