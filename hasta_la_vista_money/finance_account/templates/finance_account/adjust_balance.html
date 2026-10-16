@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+{% load word_hash %}
+
+{% block title %}{% translate 'Корректировка остатка' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="accounts-app accounts-form-app">
+    <div class="accounts-composer-crumb">
+        <a href="{% url 'finance_account:list' %}">{% translate 'Счета' %}</a>
+        <span class="sep">·</span>
+        <b>{% translate 'Корректировка остатка' %}</b>
+    </div>
+
+    <div class="accounts-composer-shell">
+        <form id="adjust-balance-form" class="accounts-composer-card" method="post">
+            {% csrf_token %}
+            <div class="accounts-composer-hd">
+                <h1>{% translate 'Корректировка остатка' %}</h1>
+                <span class="meta">{{ account.name_account }}</span>
+            </div>
+
+            <div class="accounts-cmp-body">
+                <section class="accounts-cmp-section{% if form.actual_balance.errors %} has-error{% endif %}">
+                    <h3>{{ form.actual_balance.label }}<span class="req">*</span></h3>
+                    <div class="accounts-cmp-input">
+                        {% include 'forms/_field.html' with field=form.actual_balance %}
+                    </div>
+                </section>
+            </div>
+
+            <div class="accounts-composer-ft">
+                <div class="hint">{% blocktranslate with balance=account.balance currency=account.currency %}Текущий остаток: {{ balance }} {{ currency }}. Разница будет проведена операцией системной категории.{% endblocktranslate %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'finance_account:list' %}" class="accounts-form-button accounts-form-button-secondary">{% translate 'Отмена' %}</a>
+                    <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Скорректировать' %}</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</main>
+{% endblock %}

@@ -2,12 +2,19 @@
 
 from dependency_injector import containers, providers
 
+from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
+    AccountRepository,
+)
 from hasta_la_vista_money.transactions.protocols.services import (
+    BalanceAdjustmentServiceProtocol,
     TransactionServiceProtocol,
 )
 from hasta_la_vista_money.transactions.repositories import (
     CategoryRepository,
     TransactionRepository,
+)
+from hasta_la_vista_money.transactions.services.balance_adjustment import (
+    BalanceAdjustmentService,
 )
 from hasta_la_vista_money.transactions.services.category_ops import (
     CategoryService,
@@ -36,4 +43,14 @@ class TransactionContainer(containers.DeclarativeContainer):
             account_service=core.account_service,
             transaction_repository=transaction_repository,
         )
+    )
+
+    balance_adjustment_service: providers.Factory[
+        BalanceAdjustmentServiceProtocol
+    ] = providers.Factory(
+        BalanceAdjustmentService,
+        account_service=core.account_service,
+        account_repository=providers.Singleton(AccountRepository),
+        transaction_repository=transaction_repository,
+        category_repository=category_repository,
     )

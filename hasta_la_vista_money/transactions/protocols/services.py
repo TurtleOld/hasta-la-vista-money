@@ -1,5 +1,6 @@
 """Protocol interfaces for transaction services."""
 
+from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from hasta_la_vista_money.transactions.commands import (
@@ -37,3 +38,16 @@ class TransactionServiceProtocol(Protocol):
         user: User,
         transaction_id: int,
     ) -> Transaction: ...
+
+
+@runtime_checkable
+class BalanceAdjustmentServiceProtocol(Protocol):
+    """Protocol for aligning an account balance with the actual one."""
+
+    def adjust_balance(
+        self,
+        *,
+        user: User,
+        account_id: int,
+        actual_balance: Decimal,
+    ) -> Transaction | None: ...

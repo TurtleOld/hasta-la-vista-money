@@ -18,6 +18,14 @@
                    title="{% translate 'Изменить' %}">
                     {% include 'partials/_swipe_icons.html' with icon='edit' %}
                 </a>
+                {% if account.user == request.user and not account.is_archived %}
+                <a href="{% url 'finance_account:adjust_balance' account.id %}"
+                   class="accounts-row-action swipe-action-btn is-neutral"
+                   aria-label="{% translate 'Корректировка остатка' %}"
+                   title="{% translate 'Корректировка остатка' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='check' %}
+                </a>
+                {% endif %}
                 <form method="post" action="{% url 'finance_account:delete_account' account.id %}" class="accounts-row-delete-form">
                     {% csrf_token %}
                     <button type="submit" name="delete_account_button"

@@ -125,6 +125,7 @@ class AuditOperationKindTests(TestCase):
             'receipt_edit',
             'receipt_delete',
             'account_edit',
+            'balance_adjustment',
             'account_delete',
             'statement_import',
             'statement_import_resolution',
