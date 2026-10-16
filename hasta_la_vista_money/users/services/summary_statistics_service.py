@@ -37,11 +37,9 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.finance_account.services.credit_calculation_service import (  # noqa: E501
-    split_withdrawal_total,
-)
 from hasta_la_vista_money.finance_account.services.credit_debt import (
     card_debt_for_balance,
+    split_withdrawal_total,
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -168,7 +166,7 @@ class CardMonthDict(TypedDict):
     payments_made: Decimal
     remaining_debt: Decimal
     is_paid: bool
-    cash_withdrawals: Decimal
+    cash_debt: Decimal
 
 
 class CardHistoryDict(TypedDict):
@@ -786,7 +784,7 @@ def _build_single_card_month(
         'payments_made': Decimal(0),
         'remaining_debt': Decimal(0),
         'is_paid': False,
-        'cash_withdrawals': Decimal(0),
+        'cash_debt': Decimal(0),
     }
 
     final_debt = debt
@@ -852,18 +850,18 @@ def _card_months_block(
         .values('month')
         .annotate(total=Sum('amount'))
     )
-    bank_code = getattr(card.bank, 'code', '')
-    cash_dict: dict[date, Decimal] = {}
+    cash_by_month: dict[date, Decimal] = {}
     for item in withdrawals_by_month:
         month_date = item['month'].date().replace(day=1)
-        in_grace, cash = split_withdrawal_total(
-            bank_code,
+        grace_part, cash_part = split_withdrawal_total(
+            card.bank.code,
             Decimal(str(item['total'] or 0)),
         )
+        # The grace part of withdrawals counts as month debt like purchases.
         expenses_dict[month_date] = (
-            expenses_dict.get(month_date, Decimal(0)) + in_grace
+            expenses_dict.get(month_date, Decimal(0)) + grace_part
         )
-        cash_dict[month_date] = cash
+        cash_by_month[month_date] = cash_part
 
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
@@ -877,7 +875,7 @@ def _card_months_block(
             account_service,
             now,
         )
-        month_data['cash_withdrawals'] = cash_dict.get(month_date, Decimal(0))
+        month_data['cash_debt'] = cash_by_month.get(month_date, Decimal(0))
         months.append(month_data)
 
         history.append(
@@ -1392,9 +1390,9 @@ def _credit_cards_block(
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
                 'cash_withdrawals': [
-                    {'month': m['month'], 'amount': m['cash_withdrawals']}
+                    {'month': m['month'], 'amount': m['cash_debt']}
                     for m in months
-                    if m['cash_withdrawals'] > constants.ZERO
+                    if m['cash_debt'] > constants.ZERO
                 ],
                 'schedule_debt': schedule_debt,
                 'schedule_mismatch': (

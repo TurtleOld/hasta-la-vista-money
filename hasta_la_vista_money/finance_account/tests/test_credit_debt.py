@@ -246,11 +246,12 @@ class CashWithdrawalDebtTest(TestCase):
         )
 
     def _grace_debt(self, card: Account) -> Decimal | None:
-        return self.account_service.get_credit_card_debt(
+        debt: Decimal | None = self.account_service.get_credit_card_debt(
             card,
             date(2026, 8, 1),
             date(2026, 8, 31),
         )
+        return debt
 
     def test_withdrawal_is_not_in_grace_debt(self) -> None:
         card = self._card()

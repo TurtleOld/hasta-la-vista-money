@@ -69,6 +69,7 @@ class AccountService:
         self.credit_calculation_service = CreditCalculationService(
             transaction_repository=transaction_repository,
             receipt_repository=receipt_repository,
+            transfer_money_log_repository=transfer_money_log_repository,
         )
 
     def get_user_accounts(self, user: User) -> list[Account]:

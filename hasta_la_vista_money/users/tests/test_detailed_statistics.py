@@ -1019,6 +1019,7 @@ class CreditCardPaymentScheduleTest(TestCase):
                 'payments_made': Decimal(0),
                 'remaining_debt': Decimal(0),
                 'is_paid': False,
+                'cash_debt': Decimal(0),
             },
         ]
         payments: list[PaymentItemDict] = [

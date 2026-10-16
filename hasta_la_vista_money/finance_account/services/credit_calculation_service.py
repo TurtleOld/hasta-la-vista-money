@@ -22,6 +22,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.credit_debt import (
+    split_withdrawal_total,
+)
 from hasta_la_vista_money.finance_account.services.types import (
     PaymentScheduleStatementDict,
     RaiffeisenbankScheduleDict,
@@ -29,21 +32,13 @@ from hasta_la_vista_money.finance_account.services.types import (
 from hasta_la_vista_money.transactions.models import TransactionType
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.repositories import (
+        TransferMoneyLogRepository,
+    )
     from hasta_la_vista_money.receipts.repositories import ReceiptRepository
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
         TransactionRepository,
     )
-
-
-def split_withdrawal_total(
-    bank_code: str,
-    total: Decimal,
-) -> tuple[Decimal, Decimal]:
-    """Split withdrawals into (in grace period, cash debt) for a bank."""
-    if bank_code != BANK_RAIFFEISENBANK:
-        return Decimal(0), total
-    in_grace = min(total, constants.RAIFFEISEN_GRACE_CASH_LIMIT)
-    return in_grace, total - in_grace
 
 
 class CreditCalculationService:
@@ -57,15 +52,18 @@ class CreditCalculationService:
         self,
         transaction_repository: 'TransactionRepository',
         receipt_repository: 'ReceiptRepository',
+        transfer_money_log_repository: 'TransferMoneyLogRepository',
     ) -> None:
         """Initialize CreditCalculationService.
 
         Args:
             transaction_repository: Repository for transaction data access.
             receipt_repository: Repository for receipt data access.
+            transfer_money_log_repository: Repository for transfer logs.
         """
         self.transaction_repository = transaction_repository
         self.receipt_repository = receipt_repository
+        self.transfer_money_log_repository = transfer_money_log_repository
 
     def get_credit_card_debt(
         self,
@@ -196,14 +194,16 @@ class CreditCalculationService:
                 )
         return start_date_dt, end_date_dt
 
-    @staticmethod
     def _split_withdrawals(
+        self,
         account: Account,
         start_date_dt: datetime | None,
         end_date_dt: datetime | None,
     ) -> tuple[Decimal, Decimal]:
         """Split withdrawals into (in grace period, cash debt)."""
-        queryset = TransferMoneyLog.objects.filter(from_account=account)
+        queryset = self.transfer_money_log_repository.filter(
+            from_account=account,
+        )
         if start_date_dt and end_date_dt:
             queryset = queryset.filter(
                 exchange_date__range=(start_date_dt, end_date_dt),
