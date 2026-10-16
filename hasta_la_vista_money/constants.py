@@ -221,6 +221,19 @@ SUCCESS_MESSAGE_DELETE_ACCOUNT: Final = _('Счёт успешно удалён!
 UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT: Final = _(
     'Счёт не может быть удалён!',
 )
+ACCOUNT_HAS_MOVEMENTS_MESSAGE: Final = _(
+    'Счёт не может быть удалён: по нему есть движения. '
+    'Вместо удаления отправьте счёт в архив.',
+)
+ACCOUNT_ARCHIVE_NONZERO_BALANCE_MESSAGE: Final = _(
+    'Архивировать можно только счёт с нулевым остатком. '
+    'Сначала сделайте корректировку остатка до нуля.',
+)
+ACCOUNT_DEPOSIT_MANAGED_BY_DEPOSIT_MESSAGE: Final = _(
+    'Счётом вклада можно управлять только через вклад.',
+)
+SUCCESS_MESSAGE_ARCHIVE_ACCOUNT: Final = _('Счёт отправлен в архив.')
+SUCCESS_MESSAGE_UNARCHIVE_ACCOUNT: Final = _('Счёт возвращён из архива.')
 ANOTHER_ACCRUAL_ACCOUNT: Final = _(
     'Нельзя выбирать одинаковые счета для перевода.',
 )

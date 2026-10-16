@@ -7,6 +7,7 @@ with proper authentication and user-specific data filtering.
 
 from typing import TYPE_CHECKING, Any, cast
 
+from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -14,6 +15,7 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
 )
+from rest_framework import status
 from rest_framework.generics import (
     ListCreateAPIView,
     RetrieveUpdateDestroyAPIView,
@@ -212,3 +214,27 @@ class AccountRetrieveUpdateDestroyAPIView(
             .exclude(type_account=ACCOUNT_TYPE_DEPOSIT)
             .order_by('-id')
         )
+
+    def destroy(
+        self,
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
+        """Delete the account, or answer 409 when it has movements."""
+        account = self.get_object()
+        service = cast(
+            'RequestWithContainer',
+            request,
+        ).container.core.account_service()
+        try:
+            service.delete_account(
+                user=cast('User', request.user),
+                account_id=account.pk,
+            )
+        except ValidationError as error:
+            return Response(
+                {'detail': ' '.join(error.messages)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)

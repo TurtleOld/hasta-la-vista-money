@@ -208,7 +208,7 @@ class TestAccount(TestCase):
         response = self.client.post(url2, follow=True)
         self.assertContains(
             response,
-            'Счёт не может быть удалён!',
+            constants.ACCOUNT_HAS_MOVEMENTS_MESSAGE,
         )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertTrue(Account.objects.filter(pk=self.account1.pk).exists())

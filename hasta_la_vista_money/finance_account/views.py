@@ -53,7 +53,6 @@ from hasta_la_vista_money.constants import (
     RECEIPT_CATEGORY_NAME,
     RECEIPT_OPERATION_PURCHASE,
 )
-from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     InterestPayoutDestination,
@@ -2240,24 +2239,11 @@ class TransferMoneyAccountView(
             return self.form_invalid(form)  # type: ignore[return-value]
 
 
-class DeleteAccountView(
-    DeleteObjectMixin,
-    LoginRequiredMixin,
-    DeleteView[Account, Any],
-):
-    """
-    Handles deletion of an account.
-
-    Deletes the specified account and provides user feedback on
-    success or failure.
-    """
+class DeleteAccountView(LoginRequiredMixin, DeleteView[Account, Any]):
+    """Deletes an own account that has no movements."""
 
     model = Account
-    template_name = 'finance_account/finance_account.html'
     success_url = reverse_lazy('finance_account:list')
-    success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
-    error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
-    audit_kind = AuditOperationKind.ACCOUNT_DELETE
 
     def get_queryset(self) -> QuerySet[Account]:
         request = cast('WSGIRequestWithContainer', self.request)
@@ -2266,6 +2252,48 @@ class DeleteAccountView(
         return Account.objects.filter(
             user=request.user,
         ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        request = cast('WSGIRequestWithContainer', self.request)
+        service = request.container.core.account_service()
+        try:
+            service.delete_account(
+                user=cast('User', request.user),
+                account_id=self.object.pk,
+            )
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+        else:
+            messages.success(request, constants.SUCCESS_MESSAGE_DELETE_ACCOUNT)
+        return HttpResponseRedirect(str(self.get_success_url()))
+
+
+@method_decorator(require_POST, name='dispatch')
+class AccountArchiveView(LoginRequiredMixin, View):
+    """Send an own account to the archive or bring it back."""
+
+    archive = True
+
+    def post(self, request: Any, pk: int) -> HttpResponse:
+        account = get_object_or_404(Account, pk=pk, user=request.user)
+        service = request.container.core.account_service()
+        action = (
+            service.archive_account
+            if self.archive
+            else service.unarchive_account
+        )
+        try:
+            action(user=request.user, account_id=account.pk)
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+        else:
+            messages.success(
+                request,
+                constants.SUCCESS_MESSAGE_ARCHIVE_ACCOUNT
+                if self.archive
+                else constants.SUCCESS_MESSAGE_UNARCHIVE_ACCOUNT,
+            )
+        return redirect('finance_account:list')
 
 
 @method_decorator(require_POST, name='dispatch')

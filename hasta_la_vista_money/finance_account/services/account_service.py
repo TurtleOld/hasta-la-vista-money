@@ -4,7 +4,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.db.models import QuerySet, Sum
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction as db_transaction
+from django.db.models import ProtectedError, QuerySet, Sum
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
@@ -21,6 +24,8 @@ from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
     RaiffeisenbankScheduleDict,
 )
+from hasta_la_vista_money.system.models import AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     readable_users,
@@ -149,6 +154,54 @@ class AccountService:
             user,
             limit,
         )
+
+    def _lock_regular_account(self, user: User, account_id: int) -> Account:
+        """Lock an own non-deposit account inside the caller's transaction."""
+        account = self.account_repository.get_by_ids_for_update(
+            {account_id},
+        ).get(account_id)
+        if account is None or account.user_id != user.pk:
+            raise PermissionDenied(
+                _('У вас нет прав на операции с этим счётом.'),
+            )
+        if account.is_deposit:
+            raise ValidationError(
+                constants.ACCOUNT_DEPOSIT_MANAGED_BY_DEPOSIT_MESSAGE,
+            )
+        return account
+
+    def archive_account(self, *, user: User, account_id: int) -> None:
+        """Archive an own regular account with a zero balance."""
+        with db_transaction.atomic():
+            account = self._lock_regular_account(user, account_id)
+            if account.balance:
+                raise ValidationError(
+                    constants.ACCOUNT_ARCHIVE_NONZERO_BALANCE_MESSAGE,
+                )
+            with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
+                self.account_repository.archive(account.pk)
+
+    def unarchive_account(self, *, user: User, account_id: int) -> None:
+        """Return an own regular account from the archive."""
+        with db_transaction.atomic():
+            account = self._lock_regular_account(user, account_id)
+            with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
+                self.account_repository.unarchive(account.pk)
+
+    def delete_account(self, *, user: User, account_id: int) -> None:
+        """Delete an own regular account that has no movements."""
+        with db_transaction.atomic():
+            account = self._lock_regular_account(user, account_id)
+            if account.has_movements():
+                raise ValidationError(constants.ACCOUNT_HAS_MOVEMENTS_MESSAGE)
+            try:
+                with audit_operation(kind=AuditOperationKind.ACCOUNT_DELETE):
+                    account.delete()
+            except ProtectedError as error:
+                # A movement landed after the check: the DB still protects it.
+                raise ValidationError(
+                    constants.ACCOUNT_HAS_MOVEMENTS_MESSAGE,
+                ) from error
 
     # Balance operations - delegated to BalanceService
     def apply_receipt_spend(self, account: Account, amount: Decimal) -> Account:
