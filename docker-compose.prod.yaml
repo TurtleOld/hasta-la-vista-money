@@ -115,6 +115,7 @@ services:
     image: ghcr.io/turtleold/hasta-la-vista-money:main
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
+    stop_grace_period: 60s
     volumes:
       - media_data:/app/media
     env_file:
@@ -136,6 +137,12 @@ services:
         condition: service_started
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --destination celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   celery-beat:

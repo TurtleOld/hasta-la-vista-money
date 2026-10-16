@@ -2,7 +2,7 @@
         transprepare transcompile shell install install-prod migrate \
         docker-build docker-build-prod docker-test-prod docker-up \
         gettext staticfiles start secretkey test test-js coverage \
-        rabbitmq rabbitmq-stop rabbitmq-management export-api-schema \
+        export-api-schema \
         help check build-js watch-js build-front
 
 lint:
@@ -93,15 +93,6 @@ test-js:
 coverage:
 	@if [ -n "$$CI" ]; then uv run python -m coverage run manage.py test -v 2 && uv run python -m coverage xml && uv run python -m coverage report; else docker compose up --wait db && docker compose run --build --rm --no-deps hlvm-server python -m coverage run manage.py test -v 2 && docker compose run --build --rm --no-deps hlvm-server python -m coverage xml && docker compose run --build --rm --no-deps hlvm-server python -m coverage report; fi
 
-rabbitmq:
-	@docker run -d --name hlvm_rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management-alpine
-
-rabbitmq-stop:
-	@docker stop hlvm_rabbitmq && docker rm hlvm_rabbitmq
-
-rabbitmq-management:
-	@echo "RabbitMQ Management UI: http://localhost:15672" && echo "Username: guest" && echo "Password: guest"
-
 export-api-schema:
 	@uv run python -c "import os; os.makedirs('docs/docs/api', exist_ok=True)"
 	@echo "Exporting OpenAPI schema..." && uv run python manage.py spectacular --file docs/docs/api/schema.json --format openapi-json && echo "Schema exported to docs/docs/api/schema.json"
@@ -112,4 +103,4 @@ check:
 	@uv run mypy . && uv run pyright
 
 help:
-	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js / build-front\\n  test / test-js / coverage\\n  export-api-schema\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"
+	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js / build-front\\n  test / test-js / coverage\\n  export-api-schema\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"
