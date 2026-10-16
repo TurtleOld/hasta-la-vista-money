@@ -112,10 +112,10 @@ class BudgetPresentationTest(TestCase):
         self.assertEqual(context['budget_visible_range'], '6')
         self.assertEqual(context['budget_months'][0], date(2025, 11, 1))
         self.assertFalse(
-            context['budget_month_columns'][5]['is_visible_default']
+            context['budget_month_columns'][5]['is_visible_default'],
         )
         self.assertTrue(
-            context['budget_month_columns'][6]['is_visible_default']
+            context['budget_month_columns'][6]['is_visible_default'],
         )
 
     def test_budget_matrix_all_range_shows_history(self) -> None:
@@ -170,11 +170,26 @@ class BudgetViewsTest(TestCase):
             self.assertIn('chart_plan_execution_expense', chart_data)
 
     def test_budget_view_renders_family_scope_choice(self) -> None:
+        group = Group.objects.create(name='Семья')
+        self.user.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
         response = self.client.get(reverse('budget:list'))
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertContains(response, 'Семья')
         self.assertContains(response, '?scope=family')
+
+    def test_budget_view_without_group_has_no_family_scope(self) -> None:
+        response = self.client.get(reverse('budget:list'))
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertNotContains(response, '?scope=family')
+        self.assertFalse(Group.objects.exists())
 
     def test_expense_table_range_buttons_render(self) -> None:
         Category.objects.create(
