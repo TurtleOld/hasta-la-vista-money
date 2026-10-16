@@ -26,6 +26,7 @@ class AuditOperationKind(models.TextChoices):
     RECEIPT_EDIT = 'receipt_edit', _('Правка чека')
     RECEIPT_DELETE = 'receipt_delete', _('Удаление чека')
     ACCOUNT_EDIT = 'account_edit', _('Правка счёта')
+    BALANCE_ADJUSTMENT = 'balance_adjustment', _('Корректировка остатка')
     ACCOUNT_DELETE = 'account_delete', _('Удаление счёта')
     STATEMENT_IMPORT = 'statement_import', _('Импорт выписки')
     STATEMENT_IMPORT_RESOLUTION = (

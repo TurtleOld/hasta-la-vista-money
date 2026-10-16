@@ -15,6 +15,7 @@ from hasta_la_vista_money.finance_account.apis import (
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
+    BalanceAdjustmentView,
     ChangeAccountView,
     DeleteAccountView,
     QuickBankCreateView,
@@ -42,6 +43,11 @@ urlpatterns = [
         'change/<int:pk>/',
         ChangeAccountView.as_view(),
         name='change',
+    ),
+    path(
+        'adjust-balance/<int:pk>/',
+        BalanceAdjustmentView.as_view(),
+        name='adjust_balance',
     ),
     path(
         'delete/<int:pk>',

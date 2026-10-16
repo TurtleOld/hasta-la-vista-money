@@ -59,6 +59,7 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
+    BalanceAdjustmentForm,
     TransferMoneyAccountForm,
 )
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
@@ -2031,6 +2032,49 @@ class ChangeAccountView(
         context = self.get_context_data()
         context['add_account_form'] = form
         return self.render_to_response(context)
+
+
+class BalanceAdjustmentView(
+    LoginRequiredMixin,
+    FormView[BalanceAdjustmentForm],
+):
+    """Align an own account balance with the actual one."""
+
+    form_class = BalanceAdjustmentForm
+    template_name = 'finance_account/adjust_balance.html'
+    success_url = reverse_lazy('finance_account:list')
+
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        super().setup(request, *args, **kwargs)
+        self.account_id: int = kwargs['pk']
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['account'] = get_object_or_404(
+            Account,
+            pk=self.account_id,
+            user=self.request.user,
+        )
+        return context
+
+    def form_valid(self, form: BalanceAdjustmentForm) -> HttpResponse:
+        request = cast('WSGIRequestWithContainer', self.request)
+        get_object_or_404(Account, pk=self.account_id, user=request.user)
+        service = request.container.transactions.balance_adjustment_service()
+        try:
+            movement = service.adjust_balance(
+                user=cast('User', request.user),
+                account_id=self.account_id,
+                actual_balance=form.cleaned_data['actual_balance'],
+            )
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+        else:
+            if movement is None:
+                messages.info(request, _('Остаток уже совпадает с введённым.'))
+            else:
+                messages.success(request, _('Остаток счёта скорректирован.'))
+        return HttpResponseRedirect(str(self.get_success_url()))
 
 
 class TransferMoneyAccountView(

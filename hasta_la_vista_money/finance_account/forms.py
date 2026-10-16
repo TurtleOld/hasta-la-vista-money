@@ -18,6 +18,7 @@ from django.forms import (
     ChoiceField,
     DateField,
     DecimalField,
+    Form,
     IntegerField,
     ModelChoiceField,
 )
@@ -477,3 +478,14 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         labels = {
             'exchange_date': _('Дата перевода'),
         }
+
+
+class BalanceAdjustmentForm(Form):
+    """Asks for the actual account balance to align the account with."""
+
+    actual_balance = DecimalField(
+        label=_('Фактический остаток'),
+        max_digits=constants.TWENTY,
+        decimal_places=2,
+        min_value=0,
+    )
