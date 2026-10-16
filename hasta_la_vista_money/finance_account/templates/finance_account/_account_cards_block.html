@@ -26,6 +26,17 @@
                     {% include 'partials/_swipe_icons.html' with icon='check' %}
                 </a>
                 {% endif %}
+                {% if account.user == request.user %}
+                <form method="post" action="{% if account.is_archived %}{% url 'finance_account:unarchive' account.id %}{% else %}{% url 'finance_account:archive' account.id %}{% endif %}" class="accounts-row-delete-form">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="accounts-row-action swipe-action-btn is-neutral"
+                            aria-label="{% if account.is_archived %}{% translate 'Вернуть из архива' %}{% else %}{% translate 'В архив' %}{% endif %}"
+                            title="{% if account.is_archived %}{% translate 'Вернуть из архива' %}{% else %}{% translate 'В архив' %}{% endif %}">
+                        {% include 'partials/_swipe_icons.html' with icon=account.is_archived|yesno:'retry,archive' %}
+                    </button>
+                </form>
+                {% endif %}
                 <form method="post" action="{% url 'finance_account:delete_account' account.id %}" class="accounts-row-delete-form">
                     {% csrf_token %}
                     <button type="submit" name="delete_account_button"

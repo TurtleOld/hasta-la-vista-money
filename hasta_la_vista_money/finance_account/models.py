@@ -310,6 +310,7 @@ class Account(TimeStampedModel):
                 'loan_accounts',
                 'payment_make_loan_accounts',
                 'bankstatementupload_set',
+                'receipt_processing_logs',
             )
         )
 

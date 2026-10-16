@@ -122,6 +122,18 @@ class AccountServiceProtocol(Protocol):
         """Apply signed deltas to accounts atomically."""
         ...
 
+    def archive_account(self, *, user: User, account_id: int) -> None:
+        """Archive an own regular account with a zero balance."""
+        ...
+
+    def unarchive_account(self, *, user: User, account_id: int) -> None:
+        """Return an own regular account from the archive."""
+        ...
+
+    def delete_account(self, *, user: User, account_id: int) -> None:
+        """Delete an own regular account that has no movements."""
+        ...
+
     def reconcile_account_balances(
         self,
         command: BalanceReconcileCommand,

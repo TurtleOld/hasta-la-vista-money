@@ -13,6 +13,7 @@ from hasta_la_vista_money.finance_account.apis import (
     AccountsByGroupAPIView,
 )
 from hasta_la_vista_money.finance_account.views import (
+    AccountArchiveView,
     AccountCreateView,
     AccountView,
     BalanceAdjustmentView,
@@ -53,6 +54,16 @@ urlpatterns = [
         'delete/<int:pk>',
         DeleteAccountView.as_view(),
         name='delete_account',
+    ),
+    path(
+        'archive/<int:pk>/',
+        AccountArchiveView.as_view(archive=True),
+        name='archive',
+    ),
+    path(
+        'unarchive/<int:pk>/',
+        AccountArchiveView.as_view(archive=False),
+        name='unarchive',
     ),
     path(
         'transfer-money/',
