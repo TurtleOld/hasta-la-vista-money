@@ -18,6 +18,14 @@ Issues и спеки живут как markdown-файлы в `.scratch/<feature
 
 Single-context: `CONTEXT.md` и `docs/adr/` в корне репозитория. См. `docs/agents/domain.md`.
 
+### Порядок работы со скиллами
+
+`grilling` → `tdd` → `ponytail` (режим `full`).
+
+Ponytail применяется внутри слоёв проекта, а не против них: он не отменяет
+service/repository/protocol/DI из раздела «Архитектура проекта». Режим `ultra`
+не использовать.
+
 ---
 
 ## 📋 О проекте

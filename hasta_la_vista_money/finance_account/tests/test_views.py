@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import Group
@@ -1346,13 +1346,13 @@ class TestFinancesPagination(TestCase):
                 exchange_date=moment - timedelta(minutes=3),
             )
 
-    def _get(self, **params: str) -> dict[str, object]:
+    def _get(self, **params: str) -> dict[str, Any]:
         response = self.client.get(
             reverse('finances'),
             {'period': 'all', **params},
         )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-        return response.context
+        return cast('dict[str, Any]', response.context)
 
     def test_pages_are_ordered_across_mixed_sources(self) -> None:
         self._populate(8)  # 32 rows -> 4 pages
