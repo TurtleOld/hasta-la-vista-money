@@ -35,6 +35,17 @@ if TYPE_CHECKING:
     )
 
 
+def split_withdrawal_total(
+    bank_code: str,
+    total: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Split withdrawals into (in grace period, cash debt) for a bank."""
+    if bank_code != BANK_RAIFFEISENBANK:
+        return Decimal(0), total
+    in_grace = min(total, constants.RAIFFEISEN_GRACE_CASH_LIMIT)
+    return in_grace, total - in_grace
+
+
 class CreditCalculationService:
     """Service for credit card debt and grace period calculations.
 
@@ -81,22 +92,7 @@ class CreditCalculationService:
         if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
             return None
 
-        start_date_dt: datetime | None = None
-        end_date_dt: datetime | None = None
-
-        if start_date and end_date:
-            if isinstance(start_date, datetime):
-                start_date_dt = start_date
-            elif isinstance(start_date, date):
-                start_date_dt = timezone.make_aware(
-                    datetime.combine(start_date, time.min),
-                )
-            if isinstance(end_date, datetime):
-                end_date_dt = end_date
-            elif isinstance(end_date, date):
-                end_date_dt = timezone.make_aware(
-                    datetime.combine(end_date, time.max),
-                )
+        start_date_dt, end_date_dt = self._period_bounds(start_date, end_date)
 
         expenses_queryset = self.transaction_repository.filter(
             account=account,
@@ -159,10 +155,63 @@ class CreditCalculationService:
             or 0
         )
 
-        result = (total_expense + total_receipt_expense) - (
-            total_income + total_receipt_return + total_transfer_payments
+        grace_withdrawals, cash_debt = self._split_withdrawals(
+            account,
+            start_date_dt,
+            end_date_dt,
+        )
+        # Repayments close the cash debt first: it accrues interest at once.
+        repaid_purchases = max(
+            Decimal(str(total_income + total_transfer_payments)) - cash_debt,
+            Decimal(str(constants.ZERO)),
+        )
+        result = (
+            total_expense
+            + total_receipt_expense
+            + grace_withdrawals
+            - total_receipt_return
+            - repaid_purchases
         )
         return max(Decimal(str(result)), Decimal(str(constants.ZERO)))
+
+    @staticmethod
+    def _period_bounds(
+        start_date: date | datetime | None,
+        end_date: date | datetime | None,
+    ) -> tuple[datetime | None, datetime | None]:
+        start_date_dt: datetime | None = None
+        end_date_dt: datetime | None = None
+        if start_date and end_date:
+            if isinstance(start_date, datetime):
+                start_date_dt = start_date
+            elif isinstance(start_date, date):
+                start_date_dt = timezone.make_aware(
+                    datetime.combine(start_date, time.min),
+                )
+            if isinstance(end_date, datetime):
+                end_date_dt = end_date
+            elif isinstance(end_date, date):
+                end_date_dt = timezone.make_aware(
+                    datetime.combine(end_date, time.max),
+                )
+        return start_date_dt, end_date_dt
+
+    @staticmethod
+    def _split_withdrawals(
+        account: Account,
+        start_date_dt: datetime | None,
+        end_date_dt: datetime | None,
+    ) -> tuple[Decimal, Decimal]:
+        """Split withdrawals into (in grace period, cash debt)."""
+        queryset = TransferMoneyLog.objects.filter(from_account=account)
+        if start_date_dt and end_date_dt:
+            queryset = queryset.filter(
+                exchange_date__range=(start_date_dt, end_date_dt),
+            )
+        total = Decimal(
+            str(queryset.aggregate(total=Sum('amount'))['total'] or 0),
+        )
+        return split_withdrawal_total(account.bank.code, total)
 
     def get_credit_card_payments(
         self,
