@@ -3,6 +3,7 @@ import hashlib
 from django.core.cache import cache
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.users.models import FamilyGroupMembership
 
 PERIOD_TYPES = ('month', 'quarter', 'year')
 
@@ -57,3 +58,26 @@ def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
             for period_type in PERIOD_TYPES
         ],
     )
+
+
+def invalidate_group_statistics_cache(
+    group_id: int,
+    *user_ids: int,
+) -> None:
+    """Invalidate cached statistics of the group members and extra users."""
+    member_ids = FamilyGroupMembership.objects.filter(
+        group_id=group_id,
+    ).values_list('user_id', flat=True)
+    for user_id in {*member_ids, *user_ids}:
+        invalidate_user_detailed_statistics_cache(user_id)
+
+
+def invalidate_user_circle_statistics_cache(user_id: int) -> None:
+    """Invalidate cached statistics of the user and all their group peers."""
+    peer_ids = FamilyGroupMembership.objects.filter(
+        group_id__in=FamilyGroupMembership.objects.filter(
+            user_id=user_id,
+        ).values('group_id'),
+    ).values_list('user_id', flat=True)
+    for peer_id in {*peer_ids, user_id}:
+        invalidate_user_detailed_statistics_cache(peer_id)
