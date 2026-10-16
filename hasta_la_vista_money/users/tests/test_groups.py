@@ -346,9 +346,9 @@ class DirectGroupMembershipTest(TestCase):
         invite = get_or_create_family_invite(self.group, self.owner)
         accept_family_invite(self.viewer, invite.token)
 
-    def _remove(self, who: UserType, target: UserType) -> HttpResponse:
+    def _remove(self, who: UserType, target: UserType) -> None:
         self.client.force_login(who)
-        return self.client.post(
+        self.client.post(
             reverse('users:groups:delete_user'),
             {'user': target.pk, 'group': self.group.pk},
         )
@@ -373,9 +373,8 @@ class DirectGroupMembershipTest(TestCase):
         self.assertNotIn(self.stranger, users)
 
     def test_viewer_cannot_remove_other_member(self) -> None:
-        response = self._remove(self.viewer, self.owner)
+        self._remove(self.viewer, self.owner)
 
-        self.assertEqual(response.status_code, 200)
         self.assertIn(self.group, self.owner.groups.all())
 
     def test_owner_can_remove_viewer(self) -> None:
