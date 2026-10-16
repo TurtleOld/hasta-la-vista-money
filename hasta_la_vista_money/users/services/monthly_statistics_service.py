@@ -715,7 +715,8 @@ def _budgets_data(
         last_month = period_end.replace(day=1)
         last_day = monthrange(last_month.year, last_month.month)[1]
         rows = (
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments()
+            .filter(
                 user__in=users_list,
                 type=TransactionType.EXPENSE,
                 date__gte=_date_to_aware(period_start.replace(day=1)),
@@ -798,7 +799,8 @@ def _plan_fact_summary(
     }
 
     fact_totals = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=users_list,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             date__gte=start_dt,
@@ -849,7 +851,8 @@ def _plan_fact_top_deviations(
     }
 
     fact_rows = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=users_list,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             category_id__in=[key[0] for key in plan_by_category],
@@ -910,7 +913,8 @@ def _plan_fact_engagement(
     }
 
     fact_rows = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=users_list,
             type=TransactionType.EXPENSE,
             category_id__in=plan_by_category,
@@ -968,7 +972,8 @@ def _suggested_plan_categories(
     )
 
     fact_rows = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user__in=users_list,
             type=TransactionType.EXPENSE,
             category_id__isnull=False,

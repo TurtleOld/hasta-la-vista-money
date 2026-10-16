@@ -398,7 +398,8 @@ class DashboardDataView(LoginRequiredMixin, View):
         current_end = period_dates['current_end']
 
         grouped_expenses = (
-            Transaction.objects.filter(
+            Transaction.objects.without_adjustments()
+            .filter(
                 user=user,
                 type=TransactionType.EXPENSE,
                 date__gte=current_start,

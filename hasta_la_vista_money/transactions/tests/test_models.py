@@ -10,6 +10,7 @@ from django.test import TestCase
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Category,
+    SystemCategoryKind,
     Transaction,
     TransactionType,
 )
@@ -121,6 +122,32 @@ class TransactionQuerySetTest(TestCase):
         }
         self.assertEqual(grouped[date(2026, 1, 1)], Decimal('1000.00'))
         self.assertEqual(grouped[date(2026, 2, 1)], Decimal('500.00'))
+
+    def test_without_adjustments_drops_both_system_categories(self) -> None:
+        system = {
+            type_value: Category.objects.create(
+                user=self.user,
+                name='Корректировка остатка',
+                type=type_value,
+                system_kind=SystemCategoryKind.BALANCE_ADJUSTMENT,
+            )
+            for type_value in (TransactionType.INCOME, TransactionType.EXPENSE)
+        }
+        for type_value in (TransactionType.INCOME, TransactionType.EXPENSE):
+            Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=system[type_value],
+                amount=Decimal('50.00'),
+                date=datetime(2026, 2, 25, 10, 0, tzinfo=UTC),
+                type=type_value,
+            )
+
+        self.assertEqual(Transaction.objects.count(), 5)
+        self.assertEqual(
+            set(Transaction.objects.without_adjustments()),
+            {self.income, self.expense_a, self.expense_b},
+        )
 
 
 class CategoryUniqueConstraintTest(TestCase):

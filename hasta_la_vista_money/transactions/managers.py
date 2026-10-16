@@ -34,6 +34,16 @@ class TransactionQuerySet(models.QuerySet['Transaction']):
         """Return only expense transactions."""
         return self.filter(type='expense')
 
+    def without_adjustments(self) -> 'TransactionQuerySet':
+        """Drop balance adjustments: they are not real income or spending.
+
+        Every analytical total (statistics, budgets, reports, KPIs, forecast)
+        must read transactions through this; feeds, balance history and
+        exports keep adjustments because they move the balance.
+        """
+        # Literal, not SystemCategoryKind: models.py imports this module.
+        return self.exclude(category__system_kind='balance_adjustment')
+
     def for_user(self, user: 'User') -> 'TransactionQuerySet':
         """Return transactions for a specific user."""
         return self.filter(user=user)

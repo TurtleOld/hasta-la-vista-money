@@ -62,19 +62,23 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
             },
         )
     current_month_expenses = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user=user,
             type=TransactionType.EXPENSE,
             date__gte=month_start,
-        ).aggregate(total=Sum('amount'))['total']
+        )
+        .aggregate(total=Sum('amount'))['total']
         or 0
     )
     current_month_income = (
-        Transaction.objects.filter(
+        Transaction.objects.without_adjustments()
+        .filter(
             user=user,
             type=TransactionType.INCOME,
             date__gte=month_start,
-        ).aggregate(total=Sum('amount'))['total']
+        )
+        .aggregate(total=Sum('amount'))['total']
         or 0
     )
     if current_month_expenses > current_month_income:
