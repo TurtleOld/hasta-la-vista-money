@@ -647,3 +647,4 @@ BANK_STATEMENT_UPLOAD_DIR: Final = 'bank_statements'
 RECEIPT_PROCESSING_UPLOAD_DIR: Final = 'receipt_processing_logs'
 
 CSV_FORMULA_PREFIXES: Final = ('=', '+', '-', '@', '\t', '\r')
+PDF_SIGNATURE: Final = b'%PDF-'

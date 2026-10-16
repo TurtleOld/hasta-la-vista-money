@@ -448,4 +448,10 @@ class BankStatementUploadForm(forms.Form):
                 raise forms.ValidationError(
                     _('Размер файла не должен превышать 10 МБ.'),
                 )
+            signature = pdf_file.read(len(constants.PDF_SIGNATURE))
+            if signature != constants.PDF_SIGNATURE:
+                raise forms.ValidationError(
+                    _('Файл не является корректным PDF.'),
+                )
+            pdf_file.seek(0)
         return pdf_file
