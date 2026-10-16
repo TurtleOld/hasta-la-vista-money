@@ -252,8 +252,11 @@ class StatisticsFilters:
             ),
         )
 
-    @property
-    def query_string(self) -> str:
+    def _query_params(
+        self,
+        *,
+        with_tables: bool,
+    ) -> list[tuple[str, str | int]]:
         params: list[tuple[str, str | int]] = []
         optional_params: list[tuple[str, str | int, bool]] = [
             ('period', self.period, self.period != '6'),
@@ -281,44 +284,57 @@ class StatisticsFilters:
             ),
             ('currency', self.currency, bool(self.currency)),
             ('member', self.member, self.member != 'my'),
-            (
-                'operations_page',
-                self.operations_page,
-                self.operations_page != 1,
-            ),
-            ('transfers_page', self.transfers_page, self.transfers_page != 1),
-            ('receipts_page', self.receipts_page, self.receipts_page != 1),
-            (
-                'operations_sort',
-                self.operations_sort,
-                self.operations_sort != '-date',
-            ),
-            (
-                'transfers_sort',
-                self.transfers_sort,
-                self.transfers_sort != '-exchange_date',
-            ),
-            (
-                'receipts_sort',
-                self.receipts_sort,
-                self.receipts_sort != '-receipt_date',
-            ),
-            (
-                'operations_search',
-                self.operations_search,
-                bool(self.operations_search),
-            ),
-            (
-                'transfers_search',
-                self.transfers_search,
-                bool(self.transfers_search),
-            ),
-            (
-                'receipts_search',
-                self.receipts_search,
-                bool(self.receipts_search),
-            ),
         ]
+        if with_tables:
+            optional_params.extend(
+                [
+                    (
+                        'operations_page',
+                        self.operations_page,
+                        self.operations_page != 1,
+                    ),
+                    (
+                        'transfers_page',
+                        self.transfers_page,
+                        self.transfers_page != 1,
+                    ),
+                    (
+                        'receipts_page',
+                        self.receipts_page,
+                        self.receipts_page != 1,
+                    ),
+                    (
+                        'operations_sort',
+                        self.operations_sort,
+                        self.operations_sort != '-date',
+                    ),
+                    (
+                        'transfers_sort',
+                        self.transfers_sort,
+                        self.transfers_sort != '-exchange_date',
+                    ),
+                    (
+                        'receipts_sort',
+                        self.receipts_sort,
+                        self.receipts_sort != '-receipt_date',
+                    ),
+                    (
+                        'operations_search',
+                        self.operations_search,
+                        bool(self.operations_search),
+                    ),
+                    (
+                        'transfers_search',
+                        self.transfers_search,
+                        bool(self.transfers_search),
+                    ),
+                    (
+                        'receipts_search',
+                        self.receipts_search,
+                        bool(self.receipts_search),
+                    ),
+                ],
+            )
         params.extend(
             (name, value) for name, value, enabled in optional_params if enabled
         )
@@ -328,11 +344,16 @@ class StatisticsFilters:
         params.extend(
             ('category', category_key) for category_key in self.category_keys
         )
-        return urlencode(params)
+        return params
+
+    @property
+    def query_string(self) -> str:
+        return urlencode(self._query_params(with_tables=True))
 
     @property
     def cache_suffix(self) -> str:
-        return self.query_string or 'default'
+        """Ключ кеша агрегатов: без страниц, сортировок и поиска таблиц."""
+        return urlencode(self._query_params(with_tables=False)) or 'default'
 
     def date_range(self, today: date) -> tuple[date, date]:
         if self.period == 'range':
