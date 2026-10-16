@@ -57,6 +57,22 @@ class CategoryRepository:
         """Create a category."""
         return Category.objects.create(**kwargs)
 
+    def ensure_system_category(
+        self,
+        user: User,
+        kind: str,
+        type_value: str,
+        name: str,
+    ) -> Category:
+        """Return the user's system category, creating it if missing."""
+        category, _ = Category.objects.get_or_create(
+            user=user,
+            system_kind=kind,
+            type=type_value,
+            defaults={'name': name},
+        )
+        return category
+
     def filter(self, **kwargs: object) -> QuerySet[Category]:
         """Filter categories by arbitrary criteria."""
         return Category.objects.filter(**kwargs)

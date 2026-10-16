@@ -90,6 +90,7 @@ ERROR_MODEL_UNAVAILABLE: Final = _(
 # ============================================================================
 
 RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
+BALANCE_ADJUSTMENT_CATEGORY_NAME: Final = 'Корректировка остатка'
 RECEIPT_ADJUSTMENT_WARNING_AMOUNT: Final = Decimal('1.00')
 RECEIPT_ADJUSTMENT_WARNING_RATIO: Final = Decimal('0.01')
 RECEIPT_PROCESSING_POLL_INTERVAL: Final = '5s'

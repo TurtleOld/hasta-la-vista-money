@@ -494,10 +494,12 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         income_categories = Category.objects.filter(
             user=current_user,
             type=TransactionType.INCOME,
+            system_kind='',
         )
         expense_categories = Category.objects.filter(
             user=current_user,
             type=TransactionType.EXPENSE,
+            system_kind='',
         )
         accounts = (
             Account.objects.available_for_operations()
@@ -1806,10 +1808,12 @@ class AccountView(
         context['drawer_income_categories'] = Category.objects.filter(
             user=current_user,
             type=TransactionType.INCOME,
+            system_kind='',
         ).order_by('name')
         context['drawer_expense_categories'] = Category.objects.filter(
             user=current_user,
             type=TransactionType.EXPENSE,
+            system_kind='',
         ).order_by('name')
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()
@@ -2258,6 +2262,14 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
             name=name,
             type=category_type,
         ).first()
+        if existing is not None and existing.system_kind:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': str(_('Это название зарезервировано системой')),
+                },
+                status=400,
+            )
         if existing is not None:
             return JsonResponse(
                 {'ok': True, 'id': existing.pk, 'name': existing.name},

@@ -4,8 +4,13 @@ from typing import TYPE_CHECKING
 
 from django.core.cache import cache
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.transactions.forms import CategoryForm
-from hasta_la_vista_money.transactions.models import Category
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    SystemCategoryKind,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -30,6 +35,16 @@ class CategoryService:
     def _invalidate_tree_cache(user: User, type_value: str) -> None:
         for depth in CATEGORY_TREE_CACHE_DEPTHS:
             cache.delete(f'category_tree_{type_value}_{user.pk}_{depth}')
+
+    def ensure_system_categories(self, user: User) -> None:
+        """Create the income and expense balance adjustment categories."""
+        for type_value in TransactionType.values:
+            self.category_repository.ensure_system_category(
+                user=user,
+                kind=SystemCategoryKind.BALANCE_ADJUSTMENT,
+                type_value=type_value,
+                name=constants.BALANCE_ADJUSTMENT_CATEGORY_NAME,
+            )
 
     def create_category(self, user: User, form: CategoryForm) -> Category:
         """Create a category from a validated form."""

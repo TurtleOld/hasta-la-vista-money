@@ -7,6 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.db.models import ProtectedError
 from django.http import HttpResponse
+from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -48,6 +49,18 @@ def _find_category_node(
     return None
 
 
+def _system_category_refusal(
+    request: Any,
+    category: Category,
+    message: Any,
+) -> HttpResponse | None:
+    """Flash an error and redirect when the category is protected."""
+    if not category.system_kind:
+        return None
+    messages.error(request, message)
+    return redirect('finances_categories')
+
+
 class CategoryListView(LoginRequiredMixin, ListView[Category]):
     """Redirect category listing to the combined finance category page."""
 
@@ -82,6 +95,7 @@ class CategoryCreateView(
         kwargs['category_queryset'] = Category.objects.filter(
             user=user,
             type=self.get_category_type(),
+            system_kind='',
         )
         return kwargs
 
@@ -124,6 +138,22 @@ class CategoryUpdateView(
             user=user,
         )
 
+    def dispatch(
+        self,
+        request: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponseBase:
+        if request.user.is_authenticated:
+            refusal = _system_category_refusal(
+                request,
+                self.get_object(),
+                _('Системную категорию нельзя изменить.'),
+            )
+            if refusal is not None:
+                return refusal
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
         if not self.is_inline_request():
             return super().get(request, *args, **kwargs)
@@ -140,6 +170,7 @@ class CategoryUpdateView(
         kwargs['category_queryset'] = Category.objects.filter(
             user=user,
             type=category.type,
+            system_kind='',
         ).exclude(pk=category.pk)
         kwargs.setdefault('initial', {})['type'] = category.type
         return kwargs
@@ -253,6 +284,13 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
     def form_valid(self, form: Any) -> HttpResponse:
         user = cast('User', self.request.user)
         category = self.get_object()
+        refusal = _system_category_refusal(
+            self.request,
+            category,
+            _('Системную категорию нельзя удалить.'),
+        )
+        if refusal is not None:
+            return refusal
         category_type = category.type
         try:
             category.delete()
