@@ -33,6 +33,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.decorators import method_decorator
+from django.utils.functional import cached_property
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -2044,27 +2045,26 @@ class BalanceAdjustmentView(
     template_name = 'finance_account/adjust_balance.html'
     success_url = reverse_lazy('finance_account:list')
 
-    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
-        super().setup(request, *args, **kwargs)
-        self.account_id: int = kwargs['pk']
+    @cached_property
+    def account(self) -> Account:
+        return get_object_or_404(
+            Account,
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context['account'] = get_object_or_404(
-            Account,
-            pk=self.account_id,
-            user=self.request.user,
-        )
+        context['account'] = self.account
         return context
 
     def form_valid(self, form: BalanceAdjustmentForm) -> HttpResponse:
         request = cast('WSGIRequestWithContainer', self.request)
-        get_object_or_404(Account, pk=self.account_id, user=request.user)
         service = request.container.transactions.balance_adjustment_service()
         try:
             movement = service.adjust_balance(
                 user=cast('User', request.user),
-                account_id=self.account_id,
+                account_id=self.account.pk,
                 actual_balance=form.cleaned_data['actual_balance'],
             )
         except ValidationError as error:
