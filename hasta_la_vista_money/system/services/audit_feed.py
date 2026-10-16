@@ -37,8 +37,10 @@ from hasta_la_vista_money.system.services.audit_render import (
     DATE_FORMAT,
     EMPTY,
     BalanceEffect,
+    ReadContext,
     RenderedChange,
     RenderedEntry,
+    build_read_context,
     entry_has_visible_change,
     format_signed_money,
     render_entries,
@@ -283,7 +285,12 @@ def list_operations(
             .select_related('user')
             .order_by('-created_at', '-id'),
         )
-        operations = _build_page_operations(entries, keys, sizes)
+        operations = _build_page_operations(
+            entries,
+            keys,
+            sizes,
+            build_read_context(entries),
+        )
 
     return FeedPage(
         operations=operations,
@@ -343,6 +350,7 @@ def _build_page_operations(
     entries: Sequence[AuditLog],
     keys: list[str],
     sizes: dict[str, int],
+    context: ReadContext,
 ) -> list[RenderedOperation]:
     """Group fetched entries by their group key, then render each group.
 
@@ -357,7 +365,12 @@ def _build_page_operations(
         operation
         for key in keys
         if (
-            operation := _build_operation(key, by_key.get(key, []), sizes[key])
+            operation := _build_operation(
+                key,
+                by_key.get(key, []),
+                sizes[key],
+                context,
+            )
         ).has_changes
     ]
 
@@ -379,6 +392,7 @@ def _build_operation(
     group_key: str,
     entries: list[AuditLog],
     size: int,
+    context: ReadContext,
 ) -> RenderedOperation:
     if not entries:
         return RenderedOperation(
@@ -397,10 +411,17 @@ def _build_operation(
             group_key,
             entries,
             created_at,
+            context,
         )
         if import_operation is not None:
             return import_operation
-    return _render_full_operation(group_key, entries, archival, created_at)
+    return _render_full_operation(
+        group_key,
+        entries,
+        archival,
+        created_at,
+        context,
+    )
 
 
 def _render_full_operation(
@@ -408,6 +429,7 @@ def _render_full_operation(
     entries: list[AuditLog],
     archival: bool,
     created_at: datetime,
+    context: ReadContext | None = None,
 ) -> RenderedOperation:
     """Render every entry of a group in full — no size-based collapsing.
 
@@ -415,7 +437,9 @@ def _render_full_operation(
     the operation screen, which always shows an operation whole regardless
     of how many entries an archival bucket happens to hold.
     """
-    rendered = [item for item in render_entries(entries) if item.has_changes]
+    rendered = [
+        item for item in render_entries(entries, context) if item.has_changes
+    ]
     # An archival group's composition is only a guess, so its balance chain
     # cannot be trusted either — it gets no chips, not even wrong ones.
     balance_chips = (
@@ -448,6 +472,7 @@ def _build_statement_import_operation(
     group_key: str,
     entries: list[AuditLog],
     created_at: datetime,
+    context: ReadContext | None = None,
 ) -> RenderedOperation | None:
     """Render a statement import run as one summary row, not per-field diffs.
 
@@ -489,13 +514,16 @@ def _build_statement_import_operation(
         item
         for item in render_entries(
             transaction_entries[:_STATEMENT_IMPORT_PREVIEW_LIMIT],
+            context,
         )
         if item.has_changes
     ]
     account_entries = [
         entry for entry in entries if entry.model_name == ACCOUNT_LABEL
     ]
-    balance_chips = _collapse_account_chips(render_entries(account_entries))
+    balance_chips = _collapse_account_chips(
+        render_entries(account_entries, context),
+    )
 
     return RenderedOperation(
         group_key=group_key,
