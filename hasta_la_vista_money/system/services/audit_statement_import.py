@@ -1,6 +1,6 @@
 """Write-side summary of a bank statement import run.
 
-``process_bank_statement`` and ``process_bank_statement_task`` write
+``process_bank_statement_task`` writes
 Transaction and Account audit entries under one ``audit_operation(kind=
 STATEMENT_IMPORT)`` for the whole run. None of those entries alone carries
 the run's own facts — the account, how many rows were created versus
