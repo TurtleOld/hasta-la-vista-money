@@ -36,12 +36,14 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% if is_owner %}
                 <div class="accounts-hero-change">
                     <form method="post" action="{% url 'deposits:reconcile' pk=deposit.pk %}" style="display:inline;">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-sm btn-outline-primary">{% translate 'Сверить остаток' %}</button>
                     </form>
                 </div>
+                {% endif %}
             </div>
         </section>
         {% if principal_events or renewal_events %}
@@ -60,7 +62,7 @@
                                 {{ event.amount|comma }} <span class="cur">{{ deposit.account.currency }}</span>
                                 {% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}
                             </div>
-                            {% if not event.reversal_of_id and not event.reversal %}
+                            {% if is_owner and not event.reversal_of_id and not event.reversal %}
                             {% include 'deposits/_reverse_event_form.html' with event_kind='principal' %}
                             {% endif %}
                         </div>
@@ -76,7 +78,7 @@
                                 {% if event.reversal_of_id %}<span class="badge bg-warning text-dark">{% translate 'Аннулирование' %}</span>{% elif event.reversal %}<span class="badge bg-secondary">{% translate 'Аннулировано' %}</span>{% endif %}
                             </div>
                             <div class="accounts-row-name">{{ event.previous_term.matures_on|date:'d.m.Y' }} → {{ event.renewed_term.matures_on|date:'d.m.Y' }}{% if event.reversal_reason %} · {{ event.reversal_reason }}{% endif %}</div>
-                            {% if not event.reversal_of_id and not event.reversal %}
+                            {% if is_owner and not event.reversal_of_id and not event.reversal %}
                             {% include 'deposits/_reverse_event_form.html' with event_kind='renewal' %}
                             {% endif %}
                         </div>
@@ -86,7 +88,7 @@
             </div>
         </section>
         {% endif %}
-        {% if term.state == 'matured' %}
+        {% if is_owner and term.state == 'matured' %}
         {% if renewal_available %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Пролонгировать вклад' %}</h2></div>
@@ -119,7 +121,7 @@
                 </div>
             </form>
         </section>
-        {% elif term.state != 'closed' %}
+        {% elif is_owner and term.state != 'closed' %}
         {% if term.state == 'active' %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Закрыть вклад досрочно' %}</h2></div>
@@ -279,7 +281,7 @@
         <section class="accounts-panel">
             <div class="accounts-panel-hd">
                 <h2>{% translate 'История ставки' %}</h2>
-                {% if term.state != 'matured' and term.state != 'closed' %}
+                {% if is_owner and term.state != 'matured' and term.state != 'closed' %}
                 <a href="{% url 'deposits:add-rate-period' pk=deposit.pk term_id=term.pk %}" class="btn btn-sm btn-outline-primary">{% translate 'Добавить период' %}</a>
                 {% endif %}
             </div>
@@ -293,7 +295,7 @@
         <section class="accounts-panel">
             <div class="accounts-panel-hd">
                 <h2>{% translate 'Ожидаемые выплаты процентов' %}</h2>
-                {% if term.state != 'closed' %}<form method="post" action="{% url 'deposits:recalculate-forecast' pk=deposit.pk term_id=term.pk %}">
+                {% if is_owner and term.state != 'closed' %}<form method="post" action="{% url 'deposits:recalculate-forecast' pk=deposit.pk term_id=term.pk %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-outline-primary">{% translate 'Пересчитать прогноз' %}</button>
                 </form>{% endif %}

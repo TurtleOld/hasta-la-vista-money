@@ -1,5 +1,7 @@
 """Единая политика доступа к данным семейной группы."""
 
+import json
+import uuid
 from collections.abc import Callable
 from datetime import timedelta
 from decimal import Decimal
@@ -7,7 +9,7 @@ from decimal import Decimal
 from django.contrib.auth.models import Group
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
+from django.urls import URLPattern, URLResolver, get_resolver, reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -16,6 +18,8 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
 from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.receipts.models import Receipt, Seller
+from hasta_la_vista_money.system.audit_registry import ACCOUNT_LABEL
+from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -33,6 +37,160 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
 )
 
 Surface = Callable[[User, str], set[int]]
+
+# Поверхности, которые читают данные группы через readable_users.
+GROUP_READ_SURFACES = frozenset(
+    {
+        'budget:expense_budget',
+        'budget:expense_table',
+        'budget:income_budget',
+        'budget:income_table',
+        'budget:list',
+        'deposits:detail',
+        'finance_account:by_group',
+        'finance_account:list',
+        'finances',
+        'receipts:by_group',
+        'receipts:list',
+        'receipts:view',
+        'system:auditlog',
+        'system:auditlog_operation',
+        'transactions:by_group',
+        'transactions:data',
+        'transactions:retrieve',
+        'users:dashboard',
+        'users:export_data',
+        'users:statistics',
+        'users:statistics_export',
+    },
+)
+# Запись (только владелец записи), чтение только своих данных или служебное.
+OWN_ONLY_SURFACES = frozenset(
+    {
+        'authentication:token',
+        'authentication:token_refresh',
+        'authentication:token_session',
+        'budget:change_planning',
+        'budget:generate_date',
+        'budget:save_limit',
+        'budget:save_planning',
+        'deposits:add-rate-period',
+        'deposits:capitalize',
+        'deposits:close',
+        'deposits:correct-schedule',
+        'deposits:create',
+        'deposits:early-close',
+        'deposits:list',
+        'deposits:recalculate-forecast',
+        'deposits:reconcile',
+        'deposits:renew',
+        'deposits:reverse-event',
+        'deposits:top-up',
+        'deposits:withdraw',
+        'finance_account:api_detail',
+        'finance_account:api_list',
+        'finance_account:change',
+        'finance_account:create',
+        'finance_account:delete_account',
+        'finance_account:quick_bank',
+        'finance_account:quick_category',
+        'finance_account:transaction_change',
+        'finance_account:transaction_copy',
+        'finance_account:transaction_delete',
+        'finance_account:transfer_delete',
+        'finance_account:transfer_money',
+        'finances_categories',
+        'finances_create',
+        'healthz',
+        'index',
+        # кредиты: без detail и выбора группы, область группы не нужна
+        'loan:create',
+        'loan:delete',
+        'loan:list',
+        'loan:payment_create',
+        'login',
+        'logout',
+        'offline',
+        'readyz',
+        'receipts:api_list',
+        'receipts:category_twins',
+        'receipts:category_twins_keep',
+        'receipts:category_twins_merge',
+        'receipts:create',
+        'receipts:create_seller',
+        'receipts:delete',
+        'receipts:delete_api',
+        'receipts:processing_delete',
+        'receipts:processing_notifications',
+        'receipts:processing_retry',
+        'receipts:product_autocomplete_api',
+        'receipts:products',
+        'receipts:receipt_api_create',
+        'receipts:receipt_image',
+        'receipts:scan_qr',
+        'receipts:seller',
+        'receipts:seller_autocomplete_api',
+        'receipts:seller_create_api',
+        'receipts:update',
+        'receipts:update_seller',
+        'receipts:upload',
+        'service_worker',
+        'service_worker_precache',
+        'transactions:category_list',
+        'transactions:create_category',
+        'transactions:delete_category',
+        'transactions:update_category',
+        'users:ajax:groups_for_user',
+        'users:ajax:groups_not_for_user',
+        'users:available_groups',
+        'users:bank_statement_pending_transfer_dismiss',
+        'users:bank_statement_reconciliation',
+        'users:bank_statement_reconciliation_bulk',
+        'users:bank_statement_reconciliation_decide',
+        'users:bank_statement_reconciliation_revise',
+        'users:bank_statement_upload',
+        'users:bank_statement_upload_status',
+        'users:dashboard_comparison',
+        'users:dashboard_data',
+        'users:dashboard_drilldown',
+        'users:dashboard_widget',
+        'users:groups',
+        'users:groups:create',
+        'users:groups:delete',
+        'users:groups:delete_user',
+        'users:groups:join',
+        'users:groups:register_by_invite',
+        'users:list_users',
+        'users:login',
+        'users:password',
+        'users:profile',
+        'users:registration',
+        'users:set_theme',
+        'users:statistics_receipts_category_products',
+        'users:statistics_receipts_product_purchases',
+        'users:update_user',
+    },
+)
+
+
+def _project_url_names(
+    patterns: list[URLPattern | URLResolver],
+    namespace: str = '',
+) -> set[str]:
+    """Имена URL всех view и API проекта; ``api:`` дублирует веб-маршруты."""
+    names: set[str] = set()
+    for pattern in patterns:
+        if isinstance(pattern, URLResolver):
+            prefix = f'{pattern.namespace}:' if pattern.namespace else ''
+            if prefix == 'api:':
+                prefix = ''
+            names |= _project_url_names(
+                pattern.url_patterns,
+                namespace + prefix,
+            )
+        elif pattern.callback.__module__.startswith('hasta_la_vista_money'):
+            names.add(f'{namespace}{pattern.name}')
+    return names
 
 
 class AccessPolicyTest(TestCase):
@@ -191,7 +349,22 @@ class AccessPolicyTest(TestCase):
             date=timezone.now(),
             type=TransactionType.EXPENSE,
         )
+        operation = AuditLog.objects.create(
+            user=owner,
+            operation_id=uuid.uuid4(),
+            model_name=ACCOUNT_LABEL,
+            object_pk=str(self.accounts[owner.pk].pk),
+            action=AuditLog.Action.CREATE,
+            diff={'v': 2, 'created': {'balance': '10.00'}},
+        )
+        group_scope = f'?group_id={self.group.pk}'
         return {
+            'audit_feed': reverse('system:auditlog') + group_scope,
+            'audit_operation': reverse(
+                'system:auditlog_operation',
+                args=[str(operation.operation_id)],
+            ),
+            'export': reverse('users:export_data') + group_scope,
             'receipt': reverse('receipts:view', args=[receipt.pk]),
             'deposit': reverse('deposits:detail', args=[deposit.pk]),
             'transaction_api': reverse(
@@ -230,3 +403,90 @@ class AccessPolicyTest(TestCase):
                     self.client.post(url).status_code,
                     status.HTTP_404_NOT_FOUND,
                 )
+
+    def test_every_view_is_in_policy_table(self) -> None:
+        self.assertFalse(GROUP_READ_SURFACES & OWN_ONLY_SURFACES)
+        missing = _project_url_names(get_resolver().url_patterns) - (
+            GROUP_READ_SURFACES | OWN_ONLY_SURFACES
+        )
+        self.assertEqual(missing, set(), 'Внесите view в таблицу политики')
+        self.assertLessEqual(
+            {
+                'receipts:view',
+                'deposits:detail',
+                'transactions:retrieve',
+                'system:auditlog',
+                'system:auditlog_operation',
+                'users:export_data',
+            },
+            GROUP_READ_SURFACES,
+        )
+
+    def test_audit_and_export_show_group_only_on_explicit_scope(self) -> None:
+        urls = self._detail_urls()
+        self.client.force_login(self.viewer)
+        feed = self.client.get(urls['audit_feed'])
+        self.assertContains(feed, urls['audit_operation'])
+        self.assertContains(feed, f'caption">{self.owner.username}<')
+        own_feed = self.client.get(reverse('system:auditlog'))
+        self.assertNotContains(own_feed, urls['audit_operation'])
+
+        exported = json.loads(self.client.get(urls['export']).content)
+        self.assertEqual(
+            [row['owner'] for row in exported['expenses']],
+            [self.owner.username],
+        )
+        self.assertEqual(
+            {row['owner'] for row in exported['accounts']},
+            {self.owner.username, self.viewer.username},
+        )
+        own = json.loads(self.client.get(reverse('users:export_data')).content)
+        self.assertEqual(own['expenses'], [])
+        self.assertEqual(
+            [row['owner'] for row in own['accounts']],
+            [self.viewer.username],
+        )
+
+    def test_viewer_sees_no_write_buttons_on_detail_pages(self) -> None:
+        urls = self._detail_urls()
+        receipt_pk = urls['receipt'].rstrip('/').rsplit('/', 1)[-1]
+        deposit_pk = urls['deposit'].rstrip('/').rsplit('/', 1)[-1]
+        write_urls = {
+            'receipt': (
+                reverse('receipts:delete', args=[receipt_pk]),
+                reverse('receipts:update', args=[receipt_pk]),
+            ),
+            'deposit': (
+                reverse('deposits:reconcile', args=[deposit_pk]),
+                reverse('deposits:top-up', args=[deposit_pk]),
+            ),
+        }
+        for user, visible in ((self.owner, True), (self.viewer, False)):
+            self.client.force_login(user)
+            for page, actions in write_urls.items():
+                html = self.client.get(urls[page]).content.decode()
+                for action in actions:
+                    with self.subTest(user=user.username, action=action):
+                        self.assertEqual(f'"{action}"' in html, visible)
+
+    def test_archival_operation_keeps_only_its_owner(self) -> None:
+        anchor, other = (
+            AuditLog.objects.create(
+                user=user,
+                model_name=ACCOUNT_LABEL,
+                object_pk=str(self.accounts[user.pk].pk),
+                object_name=user.username,
+                action=AuditLog.Action.CREATE,
+                diff={'v': 2, 'created': {'name_account': user.username}},
+            )
+            for user in (self.owner, self.viewer)
+        )
+        AuditLog.objects.filter(pk=other.pk).update(
+            created_at=anchor.created_at,
+        )
+        self.client.force_login(self.viewer)
+        response = self.client.get(
+            reverse('system:auditlog_operation', args=[str(anchor.pk)]),
+        )
+        self.assertContains(response, self.owner.username)
+        self.assertNotContains(response, f'«{self.viewer.username}»')

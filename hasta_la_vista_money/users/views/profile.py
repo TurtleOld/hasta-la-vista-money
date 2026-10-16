@@ -10,6 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.forms import BaseForm
 from django.http import (
+    Http404,
     HttpRequest,
     HttpResponse,
     HttpResponseRedirect,
@@ -44,7 +45,10 @@ from hasta_la_vista_money.users.services.export import (
     escape_csv_cell,
     get_user_export_data,
 )
-from hasta_la_vista_money.users.services.groups import get_family_groups
+from hasta_la_vista_money.users.services.groups import (
+    get_family_groups,
+    readable_users,
+)
 from hasta_la_vista_money.users.services.notifications import (
     get_user_notifications,
 )
@@ -142,7 +146,10 @@ class ExportUserDataView(LoginRequiredMixin, View):
     ) -> HttpResponse:
         if not isinstance(request.user, User):
             return HttpResponse('Unauthorized', status=401)
-        user_data = get_user_export_data(request.user)
+        users = readable_users(request.user, request.GET.get('group_id'))
+        if not users:
+            raise Http404('Группа не найдена')
+        user_data = get_user_export_data(request.user, users)
         response = HttpResponse(
             json.dumps(user_data, ensure_ascii=False, indent=2, default=str),
             content_type='application/json',

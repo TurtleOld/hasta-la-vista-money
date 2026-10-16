@@ -27,6 +27,12 @@
         {% translate 'Период' as chip_period_default %}
         <div class="audit-filters" data-audit-filters>
             <div class="audit-chip-row" data-audit-chip-row>
+                {% if group_choices %}
+                    <a href="?{% if scope_querystring %}{{ scope_querystring }}&{% endif %}group_id=my" class="audit-chip-btn{% if not show_owner %} audit-chip-btn--on{% endif %}">{% translate 'Мои' %}</a>
+                    {% for group in group_choices %}
+                        <a href="?{% if scope_querystring %}{{ scope_querystring }}&{% endif %}group_id={{ group.pk }}" class="audit-chip-btn{% if filter.group_id == group.pk|stringformat:'s' %} audit-chip-btn--on{% endif %}">{{ group.name }}</a>
+                    {% endfor %}
+                {% endif %}
                 {% include 'system/partials/_audit_filter_chip.html' with field='kind' active=filter.kind value=kind_label default_label=chip_kind_default %}
                 {% include 'system/partials/_audit_filter_chip.html' with field='account' active=filter.account value=account_label default_label=chip_account_default %}
                 {% include 'system/partials/_audit_filter_chip.html' with field='period' active=period_active value=period_label default_label=chip_period_default %}
@@ -39,6 +45,7 @@
             </div>
 
             <form method="get" id="audit-filter-form" data-audit-filter-form hidden>
+                <input type="hidden" name="group_id" value="{{ filter.group_id }}">
                 <select name="kind" id="id_kind">
                     <option value="" {% if not filter.kind %}selected{% endif %}>{% translate 'Все виды' %}</option>
                     {% for value, label in kind_choices %}
@@ -138,6 +145,9 @@
                     <div class="audit-row-content">
                         <div class="audit-row-operation">
                             <span class="audit-operation-title">{{ operation.title }}</span>
+                            {% if show_owner and operation.owner %}
+                                <span class="audit-operation-caption">{{ operation.owner.username }}</span>
+                            {% endif %}
                             {% if operation.archival %}
                                 <span class="audit-heuristic-badge" title="{% translate 'Состав группы восстановлен эвристикой' %}">
                                     {% translate 'восстановлено эвристикой' %}
@@ -199,7 +209,7 @@
             {% if is_paginated %}
             <div class="audit-pagination">
                 {% if page_obj.has_previous %}
-                    <a class="audit-page-link" href="?{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                    <a class="audit-page-link" href="?{% if filter.group_id %}group_id={{ filter.group_id }}&{% endif %}{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                     </a>
                 {% endif %}
@@ -209,7 +219,7 @@
                 </span>
 
                 {% if page_obj.has_next %}
-                    <a class="audit-page-link" href="?{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
+                    <a class="audit-page-link" href="?{% if filter.group_id %}group_id={{ filter.group_id }}&{% endif %}{% if filter.kind %}kind={{ filter.kind }}&{% endif %}{% if filter.account %}account={{ filter.account }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
                     </a>
                 {% endif %}

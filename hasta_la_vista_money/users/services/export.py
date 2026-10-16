@@ -1,8 +1,9 @@
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from typing import cast
 
-from django.db.models import Sum
+from django.db.models import F, Sum
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money.constants import CSV_FORMULA_PREFIXES
@@ -62,12 +63,14 @@ class AccountDict(TypedDict):
     """Account data dictionary.
 
     Attributes:
+        owner: Username of the record owner.
         name_account: Account name.
         balance: Account balance.
         currency: Currency code.
         created_at: Account creation date or None.
     """
 
+    owner: str
     name_account: str
     balance: Decimal
     currency: str
@@ -78,12 +81,14 @@ class ExpenseDict(TypedDict):
     """Expense data dictionary.
 
     Attributes:
+        owner: Username of the record owner.
         amount: Expense amount.
         date: Expense date.
         category__name: Category name.
         account__name_account: Account name.
     """
 
+    owner: str
     amount: Decimal
     date: datetime
     category__name: str
@@ -94,12 +99,14 @@ class IncomeDict(TypedDict):
     """Income data dictionary.
 
     Attributes:
+        owner: Username of the record owner.
         amount: Income amount.
         date: Income date.
         category__name: Category name.
         account__name_account: Account name.
     """
 
+    owner: str
     amount: Decimal
     date: datetime
     category__name: str
@@ -110,11 +117,13 @@ class ReceiptDict(TypedDict):
     """Receipt data dictionary.
 
     Attributes:
+        owner: Username of the record owner.
         receipt_date: Receipt date.
         seller__name_seller: Seller name.
         total_sum: Total receipt sum.
     """
 
+    owner: str
     receipt_date: datetime
     seller__name_seller: str
     total_sum: Decimal
@@ -140,15 +149,21 @@ class UserExportData(TypedDict):
     statistics: StatisticsDict
 
 
-def get_user_export_data(user: User) -> UserExportData:
+def get_user_export_data(
+    user: User,
+    users: Sequence[User] | None = None,
+) -> UserExportData:
     """Get user data for export.
 
     Args:
-        user: User to export data for.
+        user: User requesting the export.
+        users: Owners whose records are exported; ``user`` alone by default.
 
     Returns:
         UserExportData dictionary with all user data.
     """
+    owners = users or [user]
+    owner = F('user__username')
     return {
         'user_info': {
             'username': user.username,
@@ -163,11 +178,12 @@ def get_user_export_data(user: User) -> UserExportData:
         'accounts': cast(
             'list[AccountDict]',
             list(
-                Account.objects.filter(user=user).values(
+                Account.objects.filter(user__in=owners).values(
                     'name_account',
                     'balance',
                     'currency',
                     'created_at',
+                    owner=owner,
                 ),
             ),
         ),
@@ -175,13 +191,14 @@ def get_user_export_data(user: User) -> UserExportData:
             'list[ExpenseDict]',
             list(
                 Transaction.objects.filter(
-                    user=user,
+                    user__in=owners,
                     type=TransactionType.EXPENSE,
                 ).values(
                     'amount',
                     'date',
                     'category__name',
                     'account__name_account',
+                    owner=owner,
                 ),
             ),
         ),
@@ -189,47 +206,49 @@ def get_user_export_data(user: User) -> UserExportData:
             'list[IncomeDict]',
             list(
                 Transaction.objects.filter(
-                    user=user,
+                    user__in=owners,
                     type=TransactionType.INCOME,
                 ).values(
                     'amount',
                     'date',
                     'category__name',
                     'account__name_account',
+                    owner=owner,
                 ),
             ),
         ),
         'receipts': cast(
             'list[ReceiptDict]',
             list(
-                Receipt.objects.filter(user=user).values(
+                Receipt.objects.filter(user__in=owners).values(
                     'receipt_date',
                     'seller__name_seller',
                     'total_sum',
+                    owner=owner,
                 ),
             ),
         ),
         'statistics': {
             'total_balance': float(
-                Account.objects.filter(user=user).aggregate(
+                Account.objects.filter(user__in=owners).aggregate(
                     total=Sum('balance'),
                 )['total']
                 or 0,
             ),
             'total_expenses': float(
                 Transaction.objects.filter(
-                    user=user,
+                    user__in=owners,
                     type=TransactionType.EXPENSE,
                 ).aggregate(total=Sum('amount'))['total']
                 or 0,
             ),
             'total_incomes': float(
                 Transaction.objects.filter(
-                    user=user,
+                    user__in=owners,
                     type=TransactionType.INCOME,
                 ).aggregate(total=Sum('amount'))['total']
                 or 0,
             ),
-            'receipts_count': Receipt.objects.filter(user=user).count(),
+            'receipts_count': Receipt.objects.filter(user__in=owners).count(),
         },
     }
