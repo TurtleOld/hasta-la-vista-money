@@ -1422,7 +1422,7 @@ def get_user_detailed_statistics(
             users,
             today,
         )
-        cache.set(cache_key, aggregates, 600)
+        cache.set(cache_key, aggregates, constants.STATISTICS_CACHE_TIMEOUT)
 
     return _with_statistics_tables(
         aggregates,

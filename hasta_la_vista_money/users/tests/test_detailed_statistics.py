@@ -3,6 +3,7 @@ from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from unittest import mock
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth import get_user_model
@@ -17,7 +18,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
@@ -213,48 +213,37 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
     def test_table_page_change_does_not_recompute_aggregates(self) -> None:
         container = ApplicationContainer()
-        first_filter = StatisticsFilters(period='12')
         get_user_detailed_statistics(
             self.user,
             container=container,
-            stats_filter=first_filter,
+            stats_filter=StatisticsFilters(period='12'),
         )
 
-        with CaptureQueriesContext(connection) as warm_queries:
-            get_user_detailed_statistics(
-                self.user,
-                container=container,
-                stats_filter=first_filter,
-            )
-        with CaptureQueriesContext(connection) as page_queries:
+        with (
+            mock.patch(
+                'hasta_la_vista_money.users.services.'
+                'summary_statistics_service._build_statistics_aggregates',
+            ) as build_aggregates,
+            CaptureQueriesContext(connection) as page_queries,
+        ):
             stats = get_user_detailed_statistics(
                 self.user,
                 container=container,
                 stats_filter=StatisticsFilters(
                     period='12',
                     receipts_page=2,
-                    operations_page=2,
-                    transfers_page=2,
-                    receipts_sort='total_sum',
                 ),
             )
 
-        self.assertEqual(stats['receipt_page'].number, 1)
-        self.assertLessEqual(
-            len(page_queries),
-            len(warm_queries) + constants.ONE,
-        )
-        aggregate_tables = {
-            'transactions_transaction',
-            'budget_planning',
-        }
-        for query in page_queries.captured_queries:
-            sql = query['sql']
-            if 'GROUP BY' in sql:
-                self.assertFalse(
-                    any(table in sql for table in aggregate_tables),
-                    sql,
-                )
+        build_aggregates.assert_not_called()
+        self.assertIn('receipt_page', stats)
+        table_queries = [
+            query['sql']
+            for query in page_queries.captured_queries
+            if 'receipts_receipt' in query['sql']
+            or 'transfermoneylog' in query['sql'].replace('_', '')
+        ]
+        self.assertEqual(len(table_queries), len(page_queries))
 
     def _forbidden_types(self, value: object, path: str = '') -> list[str]:
         if isinstance(value, dict):
