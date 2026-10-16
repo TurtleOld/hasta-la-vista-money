@@ -727,12 +727,12 @@ def _budgets_data(
         .order_by('period', 'category__name')
     )
 
-    budgets = list(budgets)
+    budget_list = list(budgets)
     category_totals: dict[tuple[date, int | None], Decimal] = defaultdict(
         Decimal,
     )
     month_totals: dict[date, Decimal] = defaultdict(Decimal)
-    if budgets:
+    if budget_list:
         last_month = period_end.replace(day=1)
         last_day = monthrange(last_month.year, last_month.month)[1]
         rows = (
@@ -755,7 +755,7 @@ def _budgets_data(
             month_totals[month] += row['total']
 
     result: list[BudgetDataDict] = []
-    for budget in budgets:
+    for budget in budget_list:
         if budget.category_id:
             total = category_totals[(budget.period, budget.category_id)]
         else:

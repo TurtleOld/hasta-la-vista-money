@@ -664,7 +664,7 @@ def _calculate_grace_period_end(
         )
     if bank == 'RAIFFAISENBANK':
         if raiffeisen_schedule and 'grace_end_date' in raiffeisen_schedule:
-            return raiffeisen_schedule['grace_end_date']
+            return cast('datetime', raiffeisen_schedule['grace_end_date'])
         return purchase_end
     return purchase_end
 
