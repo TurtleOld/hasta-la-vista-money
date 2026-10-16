@@ -600,7 +600,7 @@ MONTH_NAMES: Final = {
 # ============================================================================
 # Constants for session management
 
-SESSION_COOKIE_AGE: Final = 31536000
+SESSION_COOKIE_AGE: Final = 60 * 60 * 24 * 30
 
 # ============================================================================
 # Webhook Constants
