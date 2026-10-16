@@ -1,7 +1,9 @@
 from calendar import monthrange
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
@@ -252,8 +254,11 @@ class StatisticsFilters:
             ),
         )
 
-    @property
-    def query_string(self) -> str:
+    def _query_params(
+        self,
+        *,
+        with_tables: bool,
+    ) -> list[tuple[str, str | int]]:
         params: list[tuple[str, str | int]] = []
         optional_params: list[tuple[str, str | int, bool]] = [
             ('period', self.period, self.period != '6'),
@@ -281,44 +286,57 @@ class StatisticsFilters:
             ),
             ('currency', self.currency, bool(self.currency)),
             ('member', self.member, self.member != 'my'),
-            (
-                'operations_page',
-                self.operations_page,
-                self.operations_page != 1,
-            ),
-            ('transfers_page', self.transfers_page, self.transfers_page != 1),
-            ('receipts_page', self.receipts_page, self.receipts_page != 1),
-            (
-                'operations_sort',
-                self.operations_sort,
-                self.operations_sort != '-date',
-            ),
-            (
-                'transfers_sort',
-                self.transfers_sort,
-                self.transfers_sort != '-exchange_date',
-            ),
-            (
-                'receipts_sort',
-                self.receipts_sort,
-                self.receipts_sort != '-receipt_date',
-            ),
-            (
-                'operations_search',
-                self.operations_search,
-                bool(self.operations_search),
-            ),
-            (
-                'transfers_search',
-                self.transfers_search,
-                bool(self.transfers_search),
-            ),
-            (
-                'receipts_search',
-                self.receipts_search,
-                bool(self.receipts_search),
-            ),
         ]
+        if with_tables:
+            optional_params.extend(
+                [
+                    (
+                        'operations_page',
+                        self.operations_page,
+                        self.operations_page != 1,
+                    ),
+                    (
+                        'transfers_page',
+                        self.transfers_page,
+                        self.transfers_page != 1,
+                    ),
+                    (
+                        'receipts_page',
+                        self.receipts_page,
+                        self.receipts_page != 1,
+                    ),
+                    (
+                        'operations_sort',
+                        self.operations_sort,
+                        self.operations_sort != '-date',
+                    ),
+                    (
+                        'transfers_sort',
+                        self.transfers_sort,
+                        self.transfers_sort != '-exchange_date',
+                    ),
+                    (
+                        'receipts_sort',
+                        self.receipts_sort,
+                        self.receipts_sort != '-receipt_date',
+                    ),
+                    (
+                        'operations_search',
+                        self.operations_search,
+                        bool(self.operations_search),
+                    ),
+                    (
+                        'transfers_search',
+                        self.transfers_search,
+                        bool(self.transfers_search),
+                    ),
+                    (
+                        'receipts_search',
+                        self.receipts_search,
+                        bool(self.receipts_search),
+                    ),
+                ],
+            )
         params.extend(
             (name, value) for name, value, enabled in optional_params if enabled
         )
@@ -328,11 +346,16 @@ class StatisticsFilters:
         params.extend(
             ('category', category_key) for category_key in self.category_keys
         )
-        return urlencode(params)
+        return params
+
+    @property
+    def query_string(self) -> str:
+        return urlencode(self._query_params(with_tables=True))
 
     @property
     def cache_suffix(self) -> str:
-        return self.query_string or 'default'
+        """Ключ кеша агрегатов: без страниц, сортировок и поиска таблиц."""
+        return urlencode(self._query_params(with_tables=False)) or 'default'
 
     def date_range(self, today: date) -> tuple[date, date]:
         if self.period == 'range':
@@ -704,24 +727,40 @@ def _budgets_data(
         .order_by('period', 'category__name')
     )
 
+    budget_list = list(budgets)
+    category_totals: dict[tuple[date, int | None], Decimal] = defaultdict(
+        Decimal,
+    )
+    month_totals: dict[date, Decimal] = defaultdict(Decimal)
+    if budget_list:
+        last_month = period_end.replace(day=1)
+        last_day = monthrange(last_month.year, last_month.month)[1]
+        rows = (
+            Transaction.objects.filter(
+                user__in=users_list,
+                type=TransactionType.EXPENSE,
+                date__gte=_date_to_aware(period_start.replace(day=1)),
+                date__lte=_date_to_aware(
+                    last_month.replace(day=last_day),
+                    end_of_day=True,
+                ),
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('month', 'category_id')
+            .annotate(total=Sum('amount'))
+        )
+        for row in rows:
+            month = row['month'].date()
+            category_totals[(month, row['category_id'])] += row['total']
+            month_totals[month] += row['total']
+
     result: list[BudgetDataDict] = []
-    for budget in budgets:
-        month_start = budget.period
-        last_day = monthrange(month_start.year, month_start.month)[1]
-        month_end = month_start.replace(day=last_day)
-
-        expense_qs = Transaction.objects.filter(
-            user__in=users_list,
-            type=TransactionType.EXPENSE,
-            date__gte=_date_to_aware(month_start),
-            date__lte=_date_to_aware(month_end, end_of_day=True),
-        )
+    for budget in budget_list:
         if budget.category_id:
-            expense_qs = expense_qs.filter(category=budget.category)
-
-        actual = float(
-            expense_qs.aggregate(total=Sum('amount'))['total'] or 0,
-        )
+            total = category_totals[(budget.period, budget.category_id)]
+        else:
+            total = month_totals[budget.period]
+        actual = float(total or 0)
         limit = float(budget.amount_limit)
         usage_pct = (
             round(actual / limit * constants.PERCENTAGE_MULTIPLIER, 1)

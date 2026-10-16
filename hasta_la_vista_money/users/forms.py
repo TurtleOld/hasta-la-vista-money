@@ -3,6 +3,7 @@ from typing import Any, ClassVar
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import Group
+from django.db.models import Q, QuerySet
 from django.forms import CharField, ModelForm, PasswordInput
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
@@ -12,10 +13,7 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
-    add_user_to_group,
-    default_family_group_names_q,
-    get_or_create_default_family_group,
-    is_default_family_group_name,
+    owned_group_ids,
     remove_user_from_group,
 )
 from hasta_la_vista_money.users.timezones import get_available_timezones
@@ -246,15 +244,6 @@ class GroupCreateForm(ModelForm[Group]):
             },
         }
 
-    def clean_name(self) -> str:
-        """Reject names reserved for default family groups."""
-        name: str = self.cleaned_data['name']
-        if is_default_family_group_name(name):
-            raise forms.ValidationError(
-                constants.ERROR_MESSAGE_RESERVED_GROUP_NAME,
-            )
-        return name
-
 
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
@@ -263,16 +252,19 @@ class GroupDeleteForm(forms.Form):
         current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         if isinstance(current_user, User):
-            owner_group_ids = FamilyGroupMembership.objects.filter(
-                user=current_user,
-                role=FamilyGroupMembership.Role.OWNER,
-            ).values_list('group_id', flat=True)
             group_field = self.fields['group']
             if not isinstance(group_field, forms.ModelChoiceField):
                 return
+            other_owner_group_ids = (
+                FamilyGroupMembership.objects.filter(
+                    role=FamilyGroupMembership.Role.OWNER,
+                )
+                .exclude(user=current_user)
+                .values_list('group_id', flat=True)
+            )
             group_field.queryset = Group.objects.filter(
-                id__in=owner_group_ids,
-            ).exclude(default_family_group_names_q())
+                id__in=owned_group_ids(current_user),
+            ).exclude(id__in=other_owner_group_ids)
 
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
@@ -295,6 +287,12 @@ class UserGroupBaseForm(forms.Form):
         self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         self.user_instance = self._get_user_instance()
+        co_members = User.objects.none()
+        if isinstance(self.current_user, User):
+            co_members = User.objects.filter(
+                groups__in=self.current_user.groups.all(),
+            ).distinct()
+        self.fields['user'].queryset = co_members  # type: ignore[attr-defined]
 
     def _get_user_instance(self) -> User | None:
         """Extract User instance from form data or initial data."""
@@ -311,6 +309,19 @@ class UserGroupBaseForm(forms.Form):
             except User.DoesNotExist:
                 pass
         return None
+
+    def _limit_to_manageable_groups(
+        self,
+        queryset: QuerySet[Group],
+    ) -> QuerySet[Group]:
+        """Limit groups to the owned ones, or own groups when leaving."""
+        current_user = self.current_user
+        if not isinstance(current_user, User):
+            return queryset.none()
+        allowed = Q(id__in=owned_group_ids(current_user))
+        if self.user_instance == current_user:
+            allowed |= Q(id__in=current_user.groups.values('id'))
+        return queryset.filter(allowed)
 
     user = forms.ModelChoiceField(
         queryset=User.objects.all(),
@@ -332,66 +343,19 @@ class UserGroupBaseForm(forms.Form):
     )
 
 
-class AddUserToGroupForm(UserGroupBaseForm):
-    """Form for adding users to groups."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        family_group = None
-        if isinstance(self.current_user, User):
-            family_group = get_or_create_default_family_group(
-                self.current_user,
-            )
-        if self.user_instance:
-            queryset = Group.objects.exclude(
-                id__in=self.user_instance.groups.values_list('id', flat=True),
-            )
-            if family_group is not None:
-                queryset = queryset.filter(pk=family_group.pk)
-            self.fields['group'].queryset = queryset  # type: ignore[attr-defined]
-        else:
-            self.fields['group'].queryset = (  # type: ignore[attr-defined]
-                Group.objects.filter(pk=family_group.pk)
-                if family_group is not None
-                else Group.objects.none()
-            )
-        if family_group is not None:
-            self.fields['group'].initial = family_group
-            self.fields['group'].widget = forms.HiddenInput()
-
-    def save(self, request: HttpRequest) -> None:
-        """Add user to selected group."""
-        add_user_to_group(
-            request,
-            self.cleaned_data['user'],
-            self.cleaned_data['group'],
-        )
-
-
 class DeleteUserFromGroupForm(UserGroupBaseForm):
     """Form for removing users from groups."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        family_group = None
-        if isinstance(self.current_user, User):
-            family_group = get_or_create_default_family_group(
-                self.current_user,
-            )
-        if self.user_instance:
-            queryset = self.user_instance.groups.all()
-            if family_group is not None:
-                queryset = queryset.filter(pk=family_group.pk)
-            self.fields['group'].queryset = queryset  # type: ignore[attr-defined]
-        else:
-            self.fields['group'].queryset = (  # type: ignore[attr-defined]
-                Group.objects.filter(pk=family_group.pk)
-                if family_group is not None
-                else Group.objects.none()
-            )
-        if family_group is not None:
-            self.fields['group'].initial = family_group
-            self.fields['group'].widget = forms.HiddenInput()
+        queryset = (
+            self.user_instance.groups.all()
+            if self.user_instance
+            else Group.objects.all()
+        )
+        self.fields['group'].queryset = self._limit_to_manageable_groups(  # type: ignore[attr-defined]
+            queryset,
+        )
 
     def save(self, request: HttpRequest) -> None:
         """Remove user from selected group."""
@@ -448,4 +412,10 @@ class BankStatementUploadForm(forms.Form):
                 raise forms.ValidationError(
                     _('Размер файла не должен превышать 10 МБ.'),
                 )
+            signature = pdf_file.read(len(constants.PDF_SIGNATURE))
+            if signature != constants.PDF_SIGNATURE:
+                raise forms.ValidationError(
+                    _('Файл не является корректным PDF.'),
+                )
+            pdf_file.seek(0)
         return pdf_file

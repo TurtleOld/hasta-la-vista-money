@@ -20,7 +20,6 @@ from hasta_la_vista_money.finance_account.services.credit_calculation_service im
 )
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
-    GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
@@ -70,6 +69,7 @@ class AccountService:
         self.credit_calculation_service = CreditCalculationService(
             transaction_repository=transaction_repository,
             receipt_repository=receipt_repository,
+            transfer_money_log_repository=transfer_money_log_repository,
         )
 
     def get_user_accounts(self, user: User) -> list[Account]:
@@ -289,26 +289,6 @@ class AccountService:
             account,
             start_date,
             end_date,
-        )
-
-    def calculate_grace_period_info(
-        self,
-        account: Account,
-        purchase_month: date | datetime,
-    ) -> GracePeriodInfoDict:
-        """Calculate grace period information for a credit card.
-
-        Args:
-            account: Credit card account.
-            purchase_month: Month to calculate grace period for.
-
-        Returns:
-            Dictionary with grace period information. Empty dict if account
-            is not a credit card.
-        """
-        return self.credit_calculation_service.calculate_grace_period_info(
-            account,
-            purchase_month,
         )
 
     def calculate_raiffeisenbank_payment_schedule(

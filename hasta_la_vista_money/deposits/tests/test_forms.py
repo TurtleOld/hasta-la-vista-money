@@ -35,7 +35,7 @@ def _sberbank() -> Bank:
 
 class TopUpDepositFormLabelTests(TestCase):
     def test_labels_stay_russian_under_english_locale(self) -> None:
-        user = UserFactory()
+        user = cast('User', UserFactory())
         with translation.override('en'):
             form = TopUpDepositForm(user=user, currency='RUB')
             self.assertEqual(

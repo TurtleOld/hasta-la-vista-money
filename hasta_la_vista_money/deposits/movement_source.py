@@ -8,6 +8,10 @@ together without a circular dependency).
 """
 
 from datetime import date
+from decimal import Decimal
+from typing import Final
+
+from django.db.models import Q
 
 from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
@@ -15,6 +19,29 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import FinancialMovement
+
+_TRANSFER_LOGGED_REVERSAL_TYPES: Final = (
+    DepositPrincipalEvent.Type.FUNDING,
+    DepositPrincipalEvent.Type.TOP_UP,
+    DepositPrincipalEvent.Type.WITHDRAWAL,
+)
+_DEPOSIT_ACCOUNT_INFLOW_TYPES: Final = (
+    DepositPrincipalEvent.Type.FUNDING,
+    DepositPrincipalEvent.Type.TOP_UP,
+)
+_DEPOSIT_ACCOUNT_OUTFLOW_TYPES: Final = (
+    DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+    DepositPrincipalEvent.Type.EARLY_CLOSURE,
+)
+
+
+def _deposit_account_delta(event: DepositPrincipalEvent) -> Decimal:
+    """Return the original event's effect on the deposit's own account."""
+    if event.type in _DEPOSIT_ACCOUNT_INFLOW_TYPES:
+        return event.amount
+    if event.type in _DEPOSIT_ACCOUNT_OUTFLOW_TYPES:
+        return -event.amount
+    return Decimal('0.00')
 
 
 class DepositMovementSource:
@@ -35,29 +62,51 @@ class DepositMovementSource:
         account: Account,
         since: date,
     ) -> list[FinancialMovement]:
-        outgoing = DepositPrincipalEvent.objects.filter(
-            source_account=account,
-            effective_on__gte=since,
-        )
-        incoming = DepositPrincipalEvent.objects.filter(
-            destination_account=account,
-            effective_on__gte=since,
-        )
-        return [
-            FinancialMovement(
-                effective_on=event.effective_on,
-                delta=-event.amount,
-                description=event.get_type_display(),
+        """Publish principal events not already recorded as transfers.
+
+        Withdrawals and reversals of funding, top-ups and withdrawals are
+        accompanied by a `TransferMoneyLog` row, which `BalanceHistoryService`
+        already undoes; publishing them here would count them twice. A
+        reversal event carries the original's type and accounts, so its
+        movement is the original's with the opposite sign.
+        """
+        events = (
+            DepositPrincipalEvent.objects.select_related(
+                'deposit',
             )
-            for event in outgoing
-        ] + [
-            FinancialMovement(
-                effective_on=event.effective_on,
-                delta=event.amount,
-                description=event.get_type_display(),
+            .filter(
+                Q(source_account=account)
+                | Q(destination_account=account)
+                | Q(deposit__account=account),
+                effective_on__gte=since,
             )
-            for event in incoming
-        ]
+            .exclude(
+                Q(type=DepositPrincipalEvent.Type.WITHDRAWAL)
+                | Q(
+                    reversal_of__isnull=False,
+                    type__in=_TRANSFER_LOGGED_REVERSAL_TYPES,
+                ),
+            )
+        )
+        movements: list[FinancialMovement] = []
+        for event in events:
+            sign = -1 if event.reversal_of_id else 1
+            delta = Decimal('0.00')
+            if event.source_account_id == account.pk:
+                delta -= event.amount
+            if event.destination_account_id == account.pk:
+                delta += event.amount
+            if event.deposit.account_id == account.pk:
+                delta += _deposit_account_delta(event)
+            if delta:
+                movements.append(
+                    FinancialMovement(
+                        effective_on=event.effective_on,
+                        delta=delta * sign,
+                        description=event.get_type_display(),
+                    ),
+                )
+        return movements
 
     def _capitalization_movements(
         self,
@@ -76,7 +125,7 @@ class DepositMovementSource:
         return [
             FinancialMovement(
                 effective_on=event.posting_on,
-                delta=event.net,
+                delta=-event.net if event.reversal_of_id else event.net,
                 description='Капитализация процентов',
             )
             for event in (*capitalized_on_own_account, *paid_to_own_account)

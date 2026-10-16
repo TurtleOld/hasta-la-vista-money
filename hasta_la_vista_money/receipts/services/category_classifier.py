@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any, Final
 
+import structlog
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models.functions import Lower
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from hasta_la_vista_money.users.models import User
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _EMBEDDING_BACKFILL_BATCH_SIZE: Final = 200
 

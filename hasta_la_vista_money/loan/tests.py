@@ -7,6 +7,9 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.currencies import (
+    get_default_currency,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import (
@@ -16,12 +19,10 @@ from hasta_la_vista_money.loan.models import (
 )
 from hasta_la_vista_money.loan.services.loan_calculation import (
     LoanCalculationService,
+    calculate_annuity_loan_db,
     calculate_annuity_schedule,
+    calculate_differentiated_loan_db,
     calculate_differentiated_schedule,
-)
-from hasta_la_vista_money.loan.tasks import (
-    calculate_annuity_loan,
-    calculate_differentiated_loan,
 )
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -64,7 +65,7 @@ class TestLoan(TestCase):
             user=self.user,
             name_account=name,
             balance=balance,
-            currency='RU',
+            currency='RUB',
         )
 
     def _create_test_loan(
@@ -149,6 +150,14 @@ class TestLoan(TestCase):
             Loan.objects.filter(loan_amount=data['loan_amount']).exists(),
         )
 
+    def test_create_loan_account_uses_iso_currency(self) -> None:
+        """New loan creates credit account with ISO default currency."""
+        self.client.force_login(self.user)
+        data = self._get_loan_form_data('Annuity')
+        self.client.post(reverse_lazy('loan:create'), data)
+        loan = Loan.objects.get(loan_amount=data['loan_amount'])
+        self.assertEqual(loan.account.currency, get_default_currency())
+
     def test_create_differentiated_loan(self) -> None:
         """Test differentiated loan creation."""
         self.client.force_login(self.user)
@@ -224,7 +233,7 @@ class TestLoan(TestCase):
             user=self.user,
             name_account='Кредитный счёт на 10000',
             balance=loan_amount,
-            currency='RU',
+            currency='RUB',
             type_account=Account.TYPE_ACCOUNT_LIST[0][0],
         )
         form = LoanForm(
@@ -374,7 +383,7 @@ class TestLoan(TestCase):
             user=other_user,
             name_account='Foreign payment account',
             balance=constants.TEST_ACCOUNT_BALANCE,
-            currency='RU',
+            currency='RUB',
         )
 
         self.client.force_login(self.user)
@@ -398,7 +407,7 @@ class TestLoan(TestCase):
 
     def test_calculate_annuity_loan(self) -> None:
         """Test calculate_annuity_loan function."""
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -414,7 +423,7 @@ class TestLoan(TestCase):
 
     def test_calculate_differentiated_loan(self) -> None:
         """Test calculate_differentiated_loan function."""
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -521,7 +530,7 @@ class TestLoan(TestCase):
 
     def test_calculate_annuity_loan_with_float_inputs(self) -> None:
         """Test calculate_annuity_loan with float inputs."""
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -537,7 +546,7 @@ class TestLoan(TestCase):
 
     def test_calculate_differentiated_loan_with_float_inputs(self) -> None:
         """Test calculate_differentiated_loan with float inputs."""
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -938,7 +947,7 @@ class TestLoanCalculationIntegration(TestCase):
         """Test that calculate_annuity_loan creates payment schedule."""
         initial_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
 
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -959,7 +968,7 @@ class TestLoanCalculationIntegration(TestCase):
         """Test that calculate_differentiated_loan creates payment schedule."""
         initial_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
 
-        calculate_differentiated_loan(
+        calculate_differentiated_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
@@ -1016,7 +1025,7 @@ class TestLoanCalculationIntegration(TestCase):
                 rate=rate_raw,
                 period=period_raw,
             ):
-                calculate_annuity_loan(
+                calculate_annuity_loan_db(
                     user_id=self.user.pk,
                     loan_id=self.loan1.pk,
                     start_date=timezone.now(),
@@ -1038,7 +1047,7 @@ class TestLoanCalculationIntegration(TestCase):
 
         PaymentSchedule.objects.filter(loan=self.loan1).delete()
 
-        calculate_annuity_loan(
+        calculate_annuity_loan_db(
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),

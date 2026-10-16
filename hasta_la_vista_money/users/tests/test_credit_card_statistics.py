@@ -237,6 +237,53 @@ class CreditCardStatisticsTest(TestCase):
         self.assertEqual(response.status_code, 200)
         return cast('HttpResponse', response)
 
+    def _withdraw(self, amount: str, when: datetime) -> None:
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.card,
+            to_account=self.debit,
+            amount=Decimal(amount),
+            exchange_date=when,
+        )
+
+    def test_cash_withdrawals_listed_apart_from_grace_schedule(self) -> None:
+        self._withdraw('5000.00', datetime(2026, 9, 10, 12, 0, tzinfo=UTC))
+
+        card = self._card_data()
+
+        self.assertEqual(
+            card['cash_withdrawals'],
+            [{'month': '09.2026', 'amount': Decimal('5000.00')}],
+        )
+        self.assertNotIn(
+            Decimal('5000.00'),
+            [row['sum_expense'] for row in card['payment_schedule']],
+        )
+
+    def test_raiffeisenbank_withdrawal_splits_grace_and_cash(self) -> None:
+        self.card.bank = Bank.objects.get(code='RAIFFAISENBANK')
+        self.card.save(update_fields=['bank'])
+        self._withdraw('60000.00', datetime(2026, 9, 10, 12, 0, tzinfo=UTC))
+
+        card = self._card_data()
+
+        self.assertEqual(
+            card['cash_withdrawals'],
+            [{'month': '09.2026', 'amount': Decimal('10000.00')}],
+        )
+        september = next(
+            row for row in card['payment_schedule'] if row['month'] == '09.2026'
+        )
+        self.assertEqual(
+            september['sum_expense'],
+            Decimal('85.13') + Decimal('50000.00'),
+        )
+
+    def test_page_shows_cash_withdrawals(self) -> None:
+        self._withdraw('5000.00', datetime(2026, 9, 10, 12, 0, tzinfo=UTC))
+
+        self.assertContains(self._page(), 'Снятие наличных')
+
     def test_page_shows_grace_block_like_bank(self) -> None:
         response = self._page()
 

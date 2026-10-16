@@ -1,12 +1,14 @@
 """Celery tasks for user-related async operations."""
 
-import logging
 from typing import Any
 
+import structlog
 from celery import shared_task
+from django.db import InterfaceError, OperationalError
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -18,7 +20,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+RETRYABLE_ERRORS = (OperationalError, InterfaceError)
 
 
 def _cleanup_expired_bank_statements() -> dict[str, int]:
@@ -32,7 +36,12 @@ cleanup_expired_bank_statements = shared_task(
 )(_cleanup_expired_bank_statements)
 
 
-@shared_task(bind=True, max_retries=3)  # type: ignore[untyped-decorator]
+@shared_task(  # type: ignore[untyped-decorator]
+    bind=True,
+    max_retries=constants.STATEMENT_IMPORT_MAX_RETRIES,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
 def process_bank_statement_task(
     self: Any,
     upload_id: int,
@@ -57,8 +66,8 @@ def process_bank_statement_task(
         BankStatementParseError: Если PDF не удалось разобрать.
     """
     logger.info(
-        'Starting bank statement processing task for upload_id=%d',
-        upload_id,
+        'bank_statement_task_started',
+        upload_id=upload_id,
     )
 
     try:
@@ -95,6 +104,7 @@ def process_bank_statement_task(
             update_fields=[
                 'status',
                 'progress',
+                'updated_at',
                 'statement_closing_balance',
                 'account_balance_after',
                 'balance_discrepancy',
@@ -103,11 +113,12 @@ def process_bank_statement_task(
         BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
-            'Completed: %d income, %d expenses, %d skipped, discrepancy=%s',
-            result.income_count,
-            result.expense_count,
-            result.skipped_count,
-            upload.balance_discrepancy,
+            'bank_statement_task_completed',
+            upload_id=upload_id,
+            income=result.income_count,
+            expenses=result.expense_count,
+            skipped=result.skipped_count,
+            discrepancy=str(upload.balance_discrepancy),
         )
 
         return {
@@ -119,36 +130,61 @@ def process_bank_statement_task(
         }
 
     except BankStatementUpload.DoesNotExist:
-        logger.exception('Upload with id=%d not found', upload_id)
+        logger.exception(
+            'bank_statement_upload_not_found',
+            upload_id=upload_id,
+        )
         raise
 
     except BankStatementParseError as e:
-        logger.exception('Failed to parse bank statement')
-        try:
-            upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = BankStatementUpload.Status.FAILED
-            upload.failed_count = 1
-            upload.error_message = f'Ошибка парсинга: {e!s}'
-            upload.save(
-                update_fields=['status', 'failed_count', 'error_message'],
-            )
-        except BankStatementUpload.DoesNotExist:
-            pass
+        logger.exception(
+            'bank_statement_parse_failed',
+            upload_id=upload_id,
+        )
+        _mark_upload_failed(upload_id, f'{_("Ошибка парсинга")}: {e!s}')
         raise
 
-    except Exception as e:
-        logger.exception('Unexpected error processing bank statement')
-        try:
-            upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = BankStatementUpload.Status.FAILED
-            upload.failed_count = 1
-            upload.error_message = f'Непредвиденная ошибка: {e!s}'
-            upload.save(
-                update_fields=['status', 'failed_count', 'error_message'],
+    except RETRYABLE_ERRORS as e:
+        logger.exception(
+            'bank_statement_task_transient_error',
+            upload_id=upload_id,
+        )
+        if self.request.retries >= self.max_retries:
+            _mark_upload_failed(
+                upload_id,
+                f'{_("Непредвиденная ошибка")}: {e!s}',
             )
-        except BankStatementUpload.DoesNotExist:
-            pass
-        raise self.retry(exc=e, countdown=60) from e
+        raise self.retry(
+            exc=e,
+            countdown=constants.STATEMENT_IMPORT_RETRY_DELAY_SECONDS,
+        ) from e
+
+    except Exception as e:
+        logger.exception(
+            'bank_statement_task_unexpected_error',
+            upload_id=upload_id,
+        )
+        _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
+        raise
+
+
+def _mark_upload_failed(upload_id: int, message: str) -> None:
+    """Перевести загрузку в FAILED с текстом ошибки."""
+    try:
+        upload = BankStatementUpload.objects.get(id=upload_id)
+    except BankStatementUpload.DoesNotExist:
+        return
+    upload.status = BankStatementUpload.Status.FAILED
+    upload.failed_count = 1
+    upload.error_message = message
+    upload.save(
+        update_fields=[
+            'status',
+            'failed_count',
+            'error_message',
+            'updated_at',
+        ],
+    )
 
 
 def _initialize_upload(
@@ -163,13 +199,14 @@ def _initialize_upload(
     """
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
-    upload.progress = 0
     upload.failed_count = 0
+    upload.error_message = ''
     upload.save(
         update_fields=[
             'status',
             'celery_task_id',
-            'progress',
             'failed_count',
+            'error_message',
+            'updated_at',
         ],
     )

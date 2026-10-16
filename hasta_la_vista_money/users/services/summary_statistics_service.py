@@ -1,7 +1,7 @@
 import json
 from calendar import monthrange
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
@@ -39,6 +39,7 @@ from hasta_la_vista_money.finance_account.prepare import (
 )
 from hasta_la_vista_money.finance_account.services.credit_debt import (
     card_debt_for_balance,
+    split_withdrawal_total,
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_creator import (
@@ -165,6 +166,7 @@ class CardMonthDict(TypedDict):
     payments_made: Decimal
     remaining_debt: Decimal
     is_paid: bool
+    cash_debt: Decimal
 
 
 class CardHistoryDict(TypedDict):
@@ -182,6 +184,13 @@ class PaymentItemDict(TypedDict):
 
     amount: Decimal
     date: date | datetime
+
+
+class CashWithdrawalItemDict(TypedDict):
+    """Cash withdrawn from a credit card in a month, outside grace."""
+
+    month: str
+    amount: Decimal
 
 
 class PaymentScheduleItemDict(TypedDict):
@@ -225,8 +234,10 @@ class CreditCardDataDict(TypedDict, total=False):
     history: list[CardHistoryDict]
     currency: str
     card_obj: Account
+    card_obj_id: int
     limit_left: Decimal
     payment_schedule: list[PaymentScheduleItemDict]
+    cash_withdrawals: list[CashWithdrawalItemDict]
     schedule_debt: Decimal
     schedule_mismatch: bool
     utilization_chart: dict[str, list[float] | list[str]]
@@ -632,7 +643,7 @@ def _calculate_grace_period_end(
     card: Account,
     purchase_start_date: date,
     purchase_end: datetime,
-    account_service: AccountServiceProtocol,
+    raiffeisen_schedule: Mapping[str, Any] | None = None,
 ) -> datetime:
     """Calculate grace period end date.
 
@@ -640,7 +651,8 @@ def _calculate_grace_period_end(
         card: Account (credit card) instance.
         purchase_start_date: Purchase period start date.
         purchase_end: Purchase period end datetime.
-        account_service: Account service for payment schedule calculations.
+        raiffeisen_schedule: Payment schedule of the card for the month,
+            already calculated for Raiffeisenbank cards.
 
     Returns:
         Grace period end datetime.
@@ -660,13 +672,9 @@ def _calculate_grace_period_end(
                 time.max,
             ),
         )
-    if bank == 'RAIFFAISENBANK':
-        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
-            card,
-            purchase_start_date,
-        )
-        if schedule and 'grace_end_date' in schedule:
-            return schedule['grace_end_date']
+    if bank == BANK_RAIFFEISENBANK:
+        if raiffeisen_schedule and 'grace_end_date' in raiffeisen_schedule:
+            return cast('datetime', raiffeisen_schedule['grace_end_date'])
         return purchase_end
     return purchase_end
 
@@ -742,11 +750,20 @@ def _build_single_card_month(
     )
 
     debt = exp_sum + rcpt_expense - rcpt_return
+    is_raiffeisen = getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK
+    schedule = (
+        account_service.calculate_raiffeisenbank_payment_schedule(
+            card,
+            purchase_start,
+        )
+        if is_raiffeisen
+        else None
+    )
     grace_end = _calculate_grace_period_end(
         card,
         purchase_start_date,
         purchase_end,
-        account_service,
+        schedule,
     )
 
     days_left = (
@@ -767,19 +784,12 @@ def _build_single_card_month(
         'payments_made': Decimal(0),
         'remaining_debt': Decimal(0),
         'is_paid': False,
+        'cash_debt': Decimal(0),
     }
 
     final_debt = debt
-    if (
-        getattr(card.bank, 'code', None) == 'RAIFFAISENBANK'
-        and debt > constants.ZERO
-    ):
-        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
-            card,
-            purchase_start,
-        )
-        if schedule and 'final_debt' in schedule:
-            final_debt = Decimal(schedule['final_debt'])
+    if schedule and debt > constants.ZERO and 'final_debt' in schedule:
+        final_debt = Decimal(schedule['final_debt'])
 
     return month_data, final_debt
 
@@ -833,6 +843,26 @@ def _card_months_block(
         receipts_by_month,
     )
 
+    withdrawals_by_month = (
+        TransferMoneyLog.objects.by_date_range(period_start, period_end)
+        .filter(from_account=card)
+        .annotate(month=TruncMonth('exchange_date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+    )
+    cash_by_month: dict[date, Decimal] = {}
+    for item in withdrawals_by_month:
+        month_date = item['month'].date().replace(day=1)
+        grace_part, cash_part = split_withdrawal_total(
+            card.bank.code,
+            Decimal(str(item['total'] or 0)),
+        )
+        # The grace part of withdrawals counts as month debt like purchases.
+        expenses_dict[month_date] = (
+            expenses_dict.get(month_date, Decimal(0)) + grace_part
+        )
+        cash_by_month[month_date] = cash_part
+
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
 
@@ -845,6 +875,7 @@ def _card_months_block(
             account_service,
             now,
         )
+        month_data['cash_debt'] = cash_by_month.get(month_date, Decimal(0))
         months.append(month_data)
 
         history.append(
@@ -1045,7 +1076,7 @@ def _build_payment_schedule(
         if m['debt_for_month'] <= constants.ZERO:
             continue
         due = m['grace_end'].strftime('%d.%m.%Y')
-        if getattr(card.bank, 'code', None) == 'RAIFFAISENBANK':
+        if getattr(card.bank, 'code', None) == BANK_RAIFFEISENBANK:
             for h in history:
                 if h['month'] == m['month']:
                     due = h['grace_end']
@@ -1358,6 +1389,11 @@ def _credit_cards_block(
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
+                'cash_withdrawals': [
+                    {'month': m['month'], 'amount': m['cash_debt']}
+                    for m in months
+                    if m['cash_debt'] > constants.ZERO
+                ],
                 'schedule_debt': schedule_debt,
                 'schedule_mismatch': (
                     schedule_covers_debt
@@ -1404,19 +1440,45 @@ def get_user_detailed_statistics(
     Returns:
         Словарь с детальной статистикой пользователя
     """
+    today = timezone.now().date()
+    period_start, period_end = stats_filter.date_range(today)
+    users = members or _resolve_statistics_members(user, stats_filter)
+
     cache_key = get_user_detailed_statistics_cache_key(
         user.pk,
         stats_filter.cache_suffix,
     )
-    cached_stats = cache.get(cache_key)
+    aggregates = cache.get(cache_key)
+    if aggregates is None:
+        aggregates = _build_statistics_aggregates(
+            user,
+            container,
+            stats_filter,
+            users,
+            today,
+        )
+        cache.set(cache_key, aggregates, constants.STATISTICS_CACHE_TIMEOUT)
 
-    if cached_stats is not None:
-        return cached_stats  # type: ignore[no-any-return]
+    return _with_statistics_tables(
+        aggregates,
+        user=user,
+        users=users,
+        stats_filter=stats_filter,
+        request=request,
+        period_start=period_start,
+        period_end=period_end,
+    )
 
-    now = timezone.now()
-    today = now.date()
+
+def _build_statistics_aggregates(
+    user: User,
+    container: 'ApplicationContainer',
+    stats_filter: StatisticsFilters,
+    users: list[User],
+    today: date,
+) -> dict[str, Any]:
+    """Тяжёлые агрегаты для кеша: только примитивы, без таблиц."""
     period_start, period_end = stats_filter.date_range(today)
-    users = members or _resolve_statistics_members(user, stats_filter)
 
     months_data = _six_months_data(
         users,
@@ -1458,20 +1520,16 @@ def get_user_detailed_statistics(
 
     start_dt = _date_to_aware(period_start)
     end_dt = _date_to_aware(period_end, end_of_day=True)
-    receipt_info_by_month = collect_info_receipt(
-        user=user,
-        users=users,
-        start=start_dt,
-        end=end_dt,
-        account_ids=stats_filter.account_ids,
-        currency=stats_filter.currency,
-        category_keys=stats_filter.category_keys,
-    )
-    receipt_page = _paginate(
-        _filtered_receipts(users, stats_filter, period_start, period_end)
-        .select_related('account', 'user', 'seller')
-        .order_by(stats_filter.receipts_sort),
-        stats_filter.receipts_page,
+    receipt_info_by_month = list(
+        collect_info_receipt(
+            user=user,
+            users=users,
+            start=start_dt,
+            end=end_dt,
+            account_ids=stats_filter.account_ids,
+            currency=stats_filter.currency,
+            category_keys=stats_filter.category_keys,
+        ),
     )
     (
         top_receipt_products,
@@ -1530,37 +1588,8 @@ def get_user_detailed_statistics(
         it['type'] = 'expense'  # type: ignore[typeddict-unknown-key]
 
     income_expense = sort_expense_income(expenses, incomes)
-    reverse_operations = stats_filter.operations_sort.startswith('-')
-    operations_sort_key = stats_filter.operations_sort.removeprefix('-')
-    income_expense = sorted(
-        income_expense,
-        key=lambda item: cast('Any', item)[operations_sort_key],
-        reverse=reverse_operations,
-    )
-    if stats_filter.operations_search:
-        income_expense = [
-            item
-            for item in income_expense
-            if _match_income_expense_search(
-                item,
-                stats_filter.operations_search,
-            )
-        ]
-    income_expense_page = _paginate(
-        income_expense,
-        stats_filter.operations_page,
-    )
 
-    transfer_money_log = _transfer_logs(
-        users,
-        stats_filter,
-        period_start,
-        period_end,
-    ).order_by(stats_filter.transfers_sort)
-
-    account_choices = Account.objects.filter(user__in=users).select_related(
-        'user',
-    )
+    account_choices = _account_choices(users)
     accounts = _filtered_accounts(account_choices, stats_filter)
     balances_by_currency, delta_by_currency = _balances_and_delta(
         accounts,
@@ -1603,7 +1632,7 @@ def get_user_detailed_statistics(
         set(account_choices.values_list('currency', flat=True)),
     )
 
-    stats = {
+    return {
         'months_data': months_data,
         'summary_cards': _summary_cards(months_data),
         'budgets_data': budgets_data,
@@ -1614,7 +1643,6 @@ def get_user_detailed_statistics(
         'top_expense_categories': top_expense_categories,
         'top_income_categories': top_income_categories,
         'receipt_info_by_month': receipt_info_by_month,
-        'receipt_page': receipt_page,
         'top_receipt_products': top_receipt_products,
         'top_receipt_sellers': top_receipt_sellers,
         'top_receipt_frequent_products': top_receipt_frequent_products,
@@ -1622,34 +1650,125 @@ def get_user_detailed_statistics(
         'receipt_category_shares': receipt_category_shares,
         'receipt_category_chart': receipt_category_chart,
         'income_expense': income_expense,
-        'income_expense_page': income_expense_page,
-        'transfer_money_log': transfer_money_log,
-        'transfer_money_log_page': _paginate(
-            transfer_money_log,
-            stats_filter.transfers_page,
-        ),
-        'accounts': accounts,
         'balances_by_currency': dict(balances_by_currency),
         'delta_by_currency': delta_by_currency,
         'chart_combined': chart_combined,
         'chart_combined_json': json.dumps(chart_combined),
-        'user': user,
-        'credit_cards_data': credit_cards_data,
+        'credit_cards_data': [
+            _detach_card_object(card) for card in credit_cards_data
+        ],
         'credit_cards_summary': credit_cards_summary,
-        'statistics_filter': stats_filter,
         'statistics_period_choices': _period_choices(),
-        'statistics_account_choices': account_choices,
         'statistics_currency_choices': currency_choices,
         'statistics_category_choices': _category_choices(users),
-        'statistics_member_choices': _member_choices(user, request),
-        'statistics_members': users,
         'statistics_alerts': statistics_alerts,
         'payment_calendar': payment_calendar,
     }
 
-    cache.set(cache_key, stats, 600)
 
-    return stats  # type: ignore[return-value]
+def _account_choices(users: list[User]) -> QuerySet[Account]:
+    return Account.objects.filter(user__in=users).select_related('user')
+
+
+def _detach_card_object(card: CreditCardDataDict) -> CreditCardDataDict:
+    """Заменяет модель счёта на её pk, чтобы в кеше остались примитивы."""
+    detached = cast('CreditCardDataDict', dict(card))
+    card_obj = detached.pop('card_obj', None)
+    if card_obj is not None:
+        detached['card_obj_id'] = card_obj.pk
+    return detached
+
+
+def _attach_card_objects(
+    cards: list[CreditCardDataDict],
+    accounts: QuerySet[Account],
+) -> list[CreditCardDataDict]:
+    card_ids = [card['card_obj_id'] for card in cards if 'card_obj_id' in card]
+    if not card_ids:
+        return cards
+    accounts_by_pk = accounts.in_bulk(card_ids)
+    attached: list[CreditCardDataDict] = []
+    for card in cards:
+        restored = cast('CreditCardDataDict', dict(card))
+        card_obj = accounts_by_pk.get(restored.get('card_obj_id', 0))
+        if card_obj is not None:
+            restored['card_obj'] = card_obj
+        attached.append(restored)
+    return attached
+
+
+def _with_statistics_tables(
+    aggregates: dict[str, Any],
+    *,
+    user: User,
+    users: list[User],
+    stats_filter: StatisticsFilters,
+    request: Any | None,
+    period_start: date,
+    period_end: date,
+) -> UserDetailedStatisticsDict:
+    """Достраивает после чтения кеша таблицы и объекты контекста шаблона."""
+    account_choices = _account_choices(users)
+    accounts = _filtered_accounts(account_choices, stats_filter)
+
+    reverse_operations = stats_filter.operations_sort.startswith('-')
+    operations_sort_key = stats_filter.operations_sort.removeprefix('-')
+    income_expense = sorted(
+        aggregates['income_expense'],
+        key=lambda item: item[operations_sort_key],
+        reverse=reverse_operations,
+    )
+    if stats_filter.operations_search:
+        income_expense = [
+            item
+            for item in income_expense
+            if _match_income_expense_search(
+                item,
+                stats_filter.operations_search,
+            )
+        ]
+
+    transfer_money_log = _transfer_logs(
+        users,
+        stats_filter,
+        period_start,
+        period_end,
+    ).order_by(stats_filter.transfers_sort)
+
+    receipt_page = _paginate(
+        _filtered_receipts(users, stats_filter, period_start, period_end)
+        .select_related('account', 'user', 'seller')
+        .order_by(stats_filter.receipts_sort),
+        stats_filter.receipts_page,
+    )
+
+    return cast(
+        'UserDetailedStatisticsDict',
+        {
+            **aggregates,
+            'credit_cards_data': _attach_card_objects(
+                aggregates['credit_cards_data'],
+                accounts,
+            ),
+            'income_expense': income_expense,
+            'income_expense_page': _paginate(
+                income_expense,
+                stats_filter.operations_page,
+            ),
+            'transfer_money_log': transfer_money_log,
+            'transfer_money_log_page': _paginate(
+                transfer_money_log,
+                stats_filter.transfers_page,
+            ),
+            'receipt_page': receipt_page,
+            'accounts': accounts,
+            'user': user,
+            'statistics_filter': stats_filter,
+            'statistics_account_choices': account_choices,
+            'statistics_member_choices': _member_choices(user, request),
+            'statistics_members': users,
+        },
+    )
 
 
 __all__ = [

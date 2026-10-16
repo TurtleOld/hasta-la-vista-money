@@ -253,15 +253,9 @@ SUCCESS_MESSAGE_PAYMENT_MAKE: Final = _('Платеж успешно внесё�
 # ============================================================================
 # Family Groups
 # ============================================================================
-# Reserved names of default family groups
+# Family groups
 
-DEFAULT_FAMILY_GROUP_NAME: Final = 'Семья'
-DEFAULT_FAMILY_GROUP_PREFIX: Final = f'{DEFAULT_FAMILY_GROUP_NAME} #'
-DEFAULT_FAMILY_GROUP_SUFFIX_BYTES: Final = 4
 FAMILY_INVITE_TTL: Final = timedelta(days=7)
-ERROR_MESSAGE_RESERVED_GROUP_NAME: Final = _(
-    'Это название зарезервировано для семейной группы по умолчанию.',
-)
 
 # ============================================================================
 # User Messages - Profile Operations
@@ -431,6 +425,7 @@ EXPENSE_MOVING_AVERAGE_WINDOW_MONTHS: Final = 3
 
 GRACE_PERIOD_MONTHS_SBERBANK: Final = 3
 GRACE_PERIOD_DAYS_RAIFFEISENBANK: Final = 110
+RAIFFEISEN_GRACE_CASH_LIMIT: Final = Decimal(50000)
 STATEMENT_DAY_NUMBER: Final = 2
 MIN_PAYMENT_PERCENTAGE: Final = 0.03
 PAYMENT_DUE_DAYS: Final = 20
@@ -460,6 +455,9 @@ RECENT_ITEMS_LIMIT: Final = 5
 PAGINATE_BY_DEFAULT: Final = 10
 STATEMENT_RECONCILIATION_PAGE_SIZE: Final = 25
 STATEMENT_RETENTION_DAYS: Final = 30
+STATEMENT_UPLOAD_STALE_MINUTES: Final = 30
+STATEMENT_IMPORT_MAX_RETRIES: Final = 3
+STATEMENT_IMPORT_RETRY_DELAY_SECONDS: Final = 60
 TOP_CATEGORIES_LIMIT: Final = 10
 RECEIPTS_DISTINCT_LIMIT: Final = 10
 TRANSFER_MONEY_LOG_LIMIT: Final = 10
@@ -469,6 +467,7 @@ TRANSFER_LOG_LIMIT: Final = 20
 DASHBOARD_CACHE_TIMEOUT: Final = 300
 DASHBOARD_COMPARISON_CACHE_TIMEOUT: Final = 120
 REPORTS_CACHE_TIMEOUT: Final = 300
+STATISTICS_CACHE_TIMEOUT: Final = 600
 
 # ============================================================================
 # Statistics Constants
@@ -596,7 +595,7 @@ MONTH_NAMES: Final = {
 # ============================================================================
 # Constants for session management
 
-SESSION_COOKIE_AGE: Final = 31536000
+SESSION_COOKIE_AGE: Final = 60 * 60 * 24 * 30
 
 # ============================================================================
 # Webhook Constants
@@ -638,3 +637,9 @@ RECEIPT_PROCESSING_MAX_RETRIES: Final = 3
 RECEIPT_PROCESSING_RETRY_BASE_SECONDS: Final = 60
 RECEIPT_PROCESSING_RETRY_JITTER_SECONDS: Final = 30
 RECEIPT_PROCESSING_RETRY_MAX_COUNTDOWN_SECONDS: Final = 600
+
+BANK_STATEMENT_UPLOAD_DIR: Final = 'bank_statements'
+RECEIPT_PROCESSING_UPLOAD_DIR: Final = 'receipt_processing_logs'
+
+CSV_FORMULA_PREFIXES: Final = ('=', '+', '-', '@', '\t', '\r')
+PDF_SIGNATURE: Final = b'%PDF-'

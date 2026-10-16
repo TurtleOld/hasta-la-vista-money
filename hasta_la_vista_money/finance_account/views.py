@@ -5,12 +5,12 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, overload
 from urllib.parse import urlencode
 
 import structlog
@@ -21,6 +21,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import models
 from django.db.models import Model, QuerySet
+from django.db.models.functions import Abs, Coalesce, TruncDate
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -451,13 +452,13 @@ class FinancesView(LoginRequiredMixin, TemplateView):
             'name_account',
         )
         categories = _finances_categories(users)
-        transactions = _finances_transactions(
+        feed = _finances_feed(
             request=request,
             users=users,
             finances_filter=finances_filter,
         )
         paginator = constants.PAGINATE_BY_DEFAULT
-        page_obj = Paginator(transactions, paginator).get_page(
+        page_obj = Paginator(feed, paginator).get_page(
             finances_filter.page,
         )
         page_transactions = list(page_obj.object_list)
@@ -469,7 +470,7 @@ class FinancesView(LoginRequiredMixin, TemplateView):
                 'finances_categories': categories,
                 'transactions': page_transactions,
                 'page_obj': page_obj,
-                'summary': _finances_summary(transactions),
+                'summary': _finances_summary(feed),
                 'by_day': _group_finances_by_day(page_transactions),
                 'by_category': _group_finances_by_category(
                     page_transactions,
@@ -718,7 +719,7 @@ class TransactionUpdateView(
 
 
 class TransactionCopyView(LoginRequiredMixin, View):
-    """Copy a unified transaction and return to finances."""
+    """Open a prefilled creation form without posting a transaction."""
 
     def post(
         self,
@@ -726,34 +727,20 @@ class TransactionCopyView(LoginRequiredMixin, View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
-        transaction_id = kwargs.get('pk')
-        if transaction_id is None:
-            messages.error(request, _('Некорректный идентификатор операции.'))
-            return redirect('finances')
-        try:
-            svc = request.container.transactions.transaction_service()
-            new_transaction = svc.copy_transaction(
-                user=request.user,
-                transaction_id=int(transaction_id),
-            )
-            messages.success(
-                request,
-                _('Операция скопирована. Отредактируйте данные и сохраните.'),
-            )
-            return redirect(
-                reverse(
-                    'finance_account:transaction_change',
-                    kwargs={'pk': new_transaction.pk},
-                ),
-            )
-        except (
-            ValueError,
-            TypeError,
-            PermissionDenied,
-            ValidationError,
-        ) as error:
-            messages.error(request, str(error))
-        return redirect('finances')
+        original = get_object_or_404(
+            Transaction,
+            pk=kwargs['pk'],
+            user=request.user,
+        )
+        params = {
+            'type': original.type,
+            'category': original.category_id,
+            'account': original.account_id,
+            'amount': str(original.amount),
+        }
+        return HttpResponseRedirect(
+            f'{reverse("finances_create")}?{urlencode(params)}',
+        )
 
 
 class TransactionDeleteView(LoginRequiredMixin, View):
@@ -924,19 +911,204 @@ def _apply_date_filter[ModelType: Model](
     )
 
 
-def _finances_transactions(
+@dataclass(frozen=True)
+class _DbSource:
+    """Filtered queryset that contributes rows to the finances page."""
+
+    queryset: QuerySet[Any]
+    date_field: str
+    signed: Any
+    magnitude: Any
+    related: tuple[str, ...]
+    build: Callable[[Any], FinancesTransaction]
+
+
+@dataclass
+class _Totals:
+    income: Decimal = field(default_factory=Decimal)
+    expense: Decimal = field(default_factory=Decimal)
+    count: int = 0
+    money_count: int = 0
+
+
+class _FinancesFeed(Sequence[FinancesTransaction]):
+    """Lazy, DB-paginated sequence of finances rows.
+
+    Totals and the sparkbar come from DB aggregates. For a page slice only
+    lightweight ``(pk, date)`` pairs are read from every source; full rows
+    are loaded for the page items alone.
+    """
+
+    def __init__(
+        self,
+        sources: list[_DbSource],
+        interest_rows: list[FinancesTransaction],
+    ) -> None:
+        self.sources = sources
+        self.interest_rows = interest_rows
+        self._totals: _Totals | None = None
+
+    def totals(self) -> _Totals:
+        """Return aggregated income, expense and counts over all sources."""
+
+        if self._totals is None:
+            totals = _Totals()
+            for source in self.sources:
+                annotated = _annotate_source(source)
+                aggregated = annotated.aggregate(
+                    income=models.Sum(
+                        'signed_value',
+                        filter=models.Q(signed_value__gt=0),
+                    ),
+                    expense=models.Sum(
+                        'magnitude_value',
+                        filter=models.Q(signed_value__lt=0),
+                    ),
+                    count=models.Count('pk'),
+                    money_count=models.Count(
+                        'pk',
+                        filter=~models.Q(signed_value=0),
+                    ),
+                )
+                totals.income += aggregated['income'] or Decimal()
+                totals.expense += aggregated['expense'] or Decimal()
+                totals.count += aggregated['count']
+                totals.money_count += aggregated['money_count']
+            for row in self.interest_rows:
+                if row.amount > 0:
+                    totals.income += row.amount
+                elif row.amount < 0:
+                    totals.expense += row.abs_amount
+                totals.count += 1
+                if row.amount != 0:
+                    totals.money_count += 1
+            self._totals = totals
+        return self._totals
+
+    def spark_buckets(
+        self,
+        days: list[date],
+    ) -> dict[date, dict[str, Decimal]]:
+        """Return daily positive and negative totals for the given days."""
+
+        buckets = {day: {'pos': Decimal(), 'neg': Decimal()} for day in days}
+        for source in self.sources:
+            rows = (
+                _annotate_source(source)
+                .filter(
+                    **{
+                        f'{source.date_field}__date__gte': days[0],
+                        f'{source.date_field}__date__lte': days[-1],
+                    },
+                )
+                .order_by()
+                .annotate(day=TruncDate(source.date_field))
+                .values('day')
+                .annotate(
+                    pos=models.Sum(
+                        'signed_value',
+                        filter=models.Q(signed_value__gt=0),
+                    ),
+                    neg=models.Sum(
+                        'magnitude_value',
+                        filter=models.Q(signed_value__lte=0),
+                    ),
+                )
+            )
+            for row in rows:
+                bucket = buckets.get(row['day'])
+                if bucket is not None:
+                    bucket['pos'] += row['pos'] or Decimal()
+                    bucket['neg'] += row['neg'] or Decimal()
+        for row in self.interest_rows:
+            bucket = buckets.get(_to_date(row.date))
+            if bucket is None:
+                continue
+            if row.amount > 0:
+                bucket['pos'] += row.amount
+            else:
+                bucket['neg'] += row.abs_amount
+        return buckets
+
+    def __len__(self) -> int:
+        return self.totals().count
+
+    @overload
+    def __getitem__(self, item: int) -> FinancesTransaction: ...
+
+    @overload
+    def __getitem__(self, item: slice) -> list[FinancesTransaction]: ...
+
+    def __getitem__(
+        self,
+        item: int | slice,
+    ) -> FinancesTransaction | list[FinancesTransaction]:
+        if isinstance(item, int):
+            index = item if item >= 0 else len(self) + item
+            if not 0 <= index < len(self):
+                raise IndexError(item)
+            return self[index : index + 1][0]
+        start, stop, _step = item.indices(len(self))
+        if start >= stop:
+            return []
+        # Entries are collected in source order so that the stable sort
+        # keeps ties ordered by source, then by position inside a source.
+        entries: list[tuple[Any, int, Any]] = []
+        for index, source in enumerate(self.sources):
+            light = source.queryset.order_by(
+                f'-{source.date_field}',
+                '-pk',
+            ).values_list('pk', source.date_field)[:stop]
+            entries.extend((date_, index, pk) for pk, date_ in light)
+        entries.extend(
+            (row.date, len(self.sources), row) for row in self.interest_rows
+        )
+        page = sorted(entries, key=lambda entry: entry[0], reverse=True)[
+            start:stop
+        ]
+
+        pks_by_source: dict[int, list[int]] = {}
+        for _date, index, ref in page:
+            if index < len(self.sources):
+                pks_by_source.setdefault(index, []).append(ref)
+        built: dict[tuple[int, int], FinancesTransaction] = {}
+        for index, pks in pks_by_source.items():
+            source = self.sources[index]
+            objects = source.queryset.select_related(*source.related).in_bulk(
+                pks,
+            )
+            built.update(
+                {(index, pk): source.build(obj) for pk, obj in objects.items()},
+            )
+        return [
+            ref if index == len(self.sources) else built[(index, ref)]
+            for _date, index, ref in page
+        ]
+
+
+def _annotate_source(source: _DbSource) -> QuerySet[Any]:
+    return cast(
+        'QuerySet[Any]',
+        source.queryset.annotate(
+            signed_value=source.signed,
+            magnitude_value=source.magnitude,
+        ),
+    )
+
+
+def _finances_feed(
     *,
     request: HttpRequest,
     users: list[User],
     finances_filter: FinancesFilter,
-) -> list[FinancesTransaction]:
+) -> _FinancesFeed:
     if not isinstance(request.user, User):
         raise TypeError('User must be authenticated')
     current_user = request.user
-    transactions: list[FinancesTransaction] = []
+    sources: list[_DbSource] = []
     if finances_filter.type in {'all', TransactionType.INCOME}:
-        transactions.extend(
-            _typed_transactions(
+        sources.extend(
+            _typed_sources(
                 current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
@@ -944,25 +1116,26 @@ def _finances_transactions(
             ),
         )
     if finances_filter.type in {'all', TransactionType.EXPENSE}:
-        transactions.extend(
-            _typed_transactions(
+        sources.extend(
+            _typed_sources(
                 current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
                 type_value=TransactionType.EXPENSE,
             ),
         )
-        transactions.extend(
-            _receipt_transactions(request, users, finances_filter),
+        sources.extend(
+            _receipt_sources(current_user, users, finances_filter),
         )
     if finances_filter.type in {'all', 'transfer'}:
-        transactions.extend(
-            _transfer_transactions(
+        sources.extend(
+            _transfer_sources(
                 current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
             ),
         )
+    interest_rows: list[FinancesTransaction] = []
     if finances_filter.type in {
         'all',
         TransactionType.INCOME,
@@ -976,23 +1149,32 @@ def _finances_transactions(
             interest_rows = [row for row in interest_rows if row.amount >= 0]
         elif finances_filter.type == TransactionType.EXPENSE:
             interest_rows = [row for row in interest_rows if row.amount < 0]
-        transactions.extend(interest_rows)
-    return sorted(transactions, key=lambda item: item.date, reverse=True)
+    return _FinancesFeed(sources, interest_rows)
 
 
-def _typed_transactions(
+def _finances_transactions(
+    *,
+    request: HttpRequest,
+    users: list[User],
+    finances_filter: FinancesFilter,
+) -> list[FinancesTransaction]:
+    feed = _finances_feed(
+        request=request,
+        users=users,
+        finances_filter=finances_filter,
+    )
+    return feed[: len(feed)]
+
+
+def _typed_sources(
     current_user: User,
     users: list[User],
     finances_filter: FinancesFilter,
     type_value: str,
-) -> list[FinancesTransaction]:
+) -> list[_DbSource]:
     queryset: QuerySet[Transaction] = Transaction.objects.filter(
         user__in=users,
         type=type_value,
-    ).select_related(
-        'account',
-        'category',
-        'user',
     )
     queryset = _apply_date_filter(queryset, 'date', finances_filter)
     if finances_filter.account_ids:
@@ -1004,7 +1186,7 @@ def _typed_transactions(
     if category_ids:
         queryset = queryset.filter(category_id__in=category_ids)
     elif finances_filter.category_keys:
-        queryset = queryset.none()
+        return []
     if finances_filter.min_amount:
         queryset = queryset.filter(amount__gte=finances_filter.min_amount)
     if finances_filter.q:
@@ -1020,9 +1202,20 @@ def _typed_transactions(
             search_filter |= models.Q(amount=search_amount)
         queryset = queryset.filter(search_filter)
 
+    signed = (
+        -models.F('amount')
+        if type_value == TransactionType.EXPENSE
+        else models.F('amount')
+    )
     return [
-        _build_transaction_row(transaction_obj, current_user)
-        for transaction_obj in queryset
+        _DbSource(
+            queryset=queryset,
+            date_field='date',
+            signed=signed,
+            magnitude=Abs('amount'),
+            related=('account', 'category', 'user'),
+            build=lambda obj: _build_transaction_row(obj, current_user),
+        ),
     ]
 
 
@@ -1092,17 +1285,13 @@ def _build_transfer_row(
     )
 
 
-def _transfer_transactions(
+def _transfer_sources(
     current_user: User,
     users: list[User],
     finances_filter: FinancesFilter,
-) -> list[FinancesTransaction]:
+) -> list[_DbSource]:
     queryset: QuerySet[TransferMoneyLog] = TransferMoneyLog.objects.filter(
         user__in=users,
-    ).select_related(
-        'from_account',
-        'to_account',
-        'user',
     )
     queryset = _apply_date_filter(queryset, 'exchange_date', finances_filter)
     if finances_filter.account_ids:
@@ -1131,7 +1320,17 @@ def _transfer_transactions(
             queryset = queryset.filter(search_filter)
 
     return [
-        _build_transfer_row(transfer, current_user) for transfer in queryset
+        _DbSource(
+            queryset=queryset,
+            date_field='exchange_date',
+            signed=models.Value(
+                Decimal(),
+                output_field=models.DecimalField(),
+            ),
+            magnitude=models.F('amount'),
+            related=('from_account', 'to_account', 'user'),
+            build=lambda obj: _build_transfer_row(obj, current_user),
+        ),
     ]
 
 
@@ -1227,21 +1426,20 @@ def _build_interest_row(
     )
 
 
-def _receipt_transactions(
-    request: HttpRequest,
+def _receipt_sources(
+    current_user: User,
     users: list[User],
     finances_filter: FinancesFilter,
-) -> list[FinancesTransaction]:
-    if not isinstance(request.user, User):
-        raise TypeError('User must be authenticated')
-    current_user = request.user
-    queryset = (
-        Receipt.objects.filter(
-            user__in=users,
-            operation_type=RECEIPT_OPERATION_PURCHASE,
-        )
-        .select_related('account', 'user')
-        .prefetch_related('product')
+) -> list[_DbSource]:
+    queryset = Receipt.objects.filter(
+        user__in=users,
+        operation_type=RECEIPT_OPERATION_PURCHASE,
+    ).annotate(
+        receipt_total=Coalesce(
+            'total_sum',
+            models.Value(Decimal()),
+            output_field=models.DecimalField(),
+        ),
     )
 
     queryset = _apply_date_filter(queryset, 'receipt_date', finances_filter)
@@ -1263,24 +1461,29 @@ def _receipt_transactions(
             if search_amount is not None:
                 search_filter |= models.Q(total_sum=search_amount)
             queryset = queryset.filter(search_filter)
+    if finances_filter.min_amount:
+        queryset = queryset.filter(
+            receipt_total__gte=finances_filter.min_amount,
+        )
 
-    transactions = []
-    for receipt in queryset:
-        amount = receipt.total_sum or Decimal()
-        if finances_filter.min_amount and amount < finances_filter.min_amount:
-            continue
-        transactions.append(
-            _build_receipt_transaction(
+    return [
+        _DbSource(
+            queryset=queryset,
+            date_field='receipt_date',
+            signed=-models.F('receipt_total'),
+            magnitude=Abs('receipt_total'),
+            related=('account', 'user'),
+            build=lambda receipt: _build_receipt_transaction(
                 key=f'receipt-{receipt.pk}',
                 source_id=receipt.pk,
                 receipt=receipt,
                 current_user=current_user,
-                amount=amount,
+                amount=receipt.total_sum or Decimal(),
                 category_name=category_name,
                 category_key='receipt',
             ),
-        )
-    return transactions
+        ),
+    ]
 
 
 def _build_receipt_transaction(
@@ -1311,42 +1514,26 @@ def _build_receipt_transaction(
     )
 
 
-def _finances_summary(
-    transactions: list[FinancesTransaction],
-) -> FinancesSummary:
-    income = sum((tx.amount for tx in transactions if tx.amount > 0), Decimal())
-    expense = sum(
-        (tx.abs_amount for tx in transactions if tx.amount < 0),
-        Decimal(),
+def _finances_summary(feed: _FinancesFeed) -> FinancesSummary:
+    totals = feed.totals()
+    total_abs = totals.income + totals.expense
+    avg_check = (
+        total_abs / totals.money_count if totals.money_count else Decimal()
     )
-    total_abs = income + expense
-    count = len(transactions)
-    money_count = len([tx for tx in transactions if tx.amount != 0])
-    avg_check = total_abs / money_count if money_count else Decimal()
     return FinancesSummary(
-        income=income,
-        expense=expense,
-        net=income - expense,
+        income=totals.income,
+        expense=totals.expense,
+        net=totals.income - totals.expense,
         avg_check=avg_check,
-        count=count,
-        spark=_finances_spark(transactions),
+        count=totals.count,
+        spark=_finances_spark(feed),
     )
 
 
-def _finances_spark(
-    transactions: list[FinancesTransaction],
-) -> list[FinancesSparkBar]:
+def _finances_spark(feed: _FinancesFeed) -> list[FinancesSparkBar]:
     today = timezone.localdate()
     days = [today - timedelta(days=offset) for offset in range(13, -1, -1)]
-    buckets = {day: {'pos': Decimal(), 'neg': Decimal()} for day in days}
-    for tx in transactions:
-        tx_date = _to_date(tx.date)
-        if tx_date not in buckets:
-            continue
-        if tx.amount > 0:
-            buckets[tx_date]['pos'] += tx.amount
-        else:
-            buckets[tx_date]['neg'] += tx.abs_amount
+    buckets = feed.spark_buckets(days)
     maximum = max(
         [Decimal(1)]
         + [value for bucket in buckets.values() for value in bucket.values()],

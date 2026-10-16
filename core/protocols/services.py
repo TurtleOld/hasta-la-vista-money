@@ -15,7 +15,6 @@ if TYPE_CHECKING:
         TransferMoneyLog,
     )
     from hasta_la_vista_money.finance_account.services import (
-        GracePeriodInfoDict,
         RaiffeisenbankScheduleDict,
     )
     from hasta_la_vista_money.finance_account.services.types import (
@@ -73,22 +72,6 @@ class AccountServiceProtocol(Protocol):
 
         Returns:
             Debt amount or None if not a credit account.
-        """
-        ...
-
-    def calculate_grace_period_info(
-        self,
-        account: Account,
-        purchase_month: date | datetime,
-    ) -> GracePeriodInfoDict:
-        """Calculate grace period information.
-
-        Args:
-            account: Credit card account.
-            purchase_month: Month to calculate for.
-
-        Returns:
-            Dictionary with grace period information.
         """
         ...
 

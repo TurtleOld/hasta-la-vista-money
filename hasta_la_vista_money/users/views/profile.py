@@ -1,5 +1,6 @@
 import json
 from csv import writer
+from functools import partial
 from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
 
@@ -39,7 +40,10 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     _resolve_statistics_members,
     get_user_detailed_statistics,
 )
-from hasta_la_vista_money.users.services.export import get_user_export_data
+from hasta_la_vista_money.users.services.export import (
+    escape_csv_cell,
+    get_user_export_data,
+)
 from hasta_la_vista_money.users.services.groups import get_family_groups
 from hasta_la_vista_money.users.services.notifications import (
     get_user_notifications,
@@ -294,6 +298,10 @@ class ReceiptFrequentProductPurchasesView(LoginRequiredMixin, View):
         )
 
 
+def _write_safe_row(csv_writer: Any, row: list[object]) -> None:
+    csv_writer.writerow([escape_csv_cell(cell) for cell in row])
+
+
 class UserStatisticsExportView(LoginRequiredMixin, View):
     """Export the currently filtered statistics slice as CSV."""
 
@@ -313,14 +321,15 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
 
         buffer = StringIO()
         csv_writer = writer(buffer)
-        csv_writer.writerow(
+        write_row = partial(_write_safe_row, csv_writer)
+        write_row(
             ['Раздел', 'Дата/период', 'Тип', 'Описание', 'Сумма'],
         )
         for month in stats['months_data']:
-            csv_writer.writerow(
+            write_row(
                 ['Месяцы', month['month'], 'Доходы', 'Факт', month['income']],
             )
-            csv_writer.writerow(
+            write_row(
                 [
                     'Месяцы',
                     month['month'],
@@ -329,7 +338,7 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
                     month['expenses'],
                 ],
             )
-            csv_writer.writerow(
+            write_row(
                 [
                     'Месяцы',
                     month['month'],
@@ -340,7 +349,7 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
             )
 
         for item in stats['income_expense']:
-            csv_writer.writerow(
+            write_row(
                 [
                     'Операции',
                     item['date'],
@@ -355,7 +364,7 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
             )
 
         for receipt in stats['receipt_page'].paginator.object_list:
-            csv_writer.writerow(
+            write_row(
                 [
                     'Чеки',
                     receipt.receipt_date,
@@ -370,7 +379,7 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
             )
 
         for event in stats['payment_calendar']:
-            csv_writer.writerow(
+            write_row(
                 [
                     'Календарь',
                     event['date'],

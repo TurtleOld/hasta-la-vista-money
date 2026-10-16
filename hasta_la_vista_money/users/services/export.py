@@ -5,6 +5,7 @@ from typing import cast
 from django.db.models import Sum
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money.constants import CSV_FORMULA_PREFIXES
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.transactions.models import (
@@ -12,6 +13,13 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+
+def escape_csv_cell(value: object) -> object:
+    """Prefix formula-like strings so spreadsheets do not execute them."""
+    if isinstance(value, str) and value.startswith(CSV_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
 
 
 class UserInfoDict(TypedDict):

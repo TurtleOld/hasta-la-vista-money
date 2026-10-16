@@ -111,12 +111,19 @@ class BalanceService:
         """
         return old_account.pk == new_account.pk
 
-    def apply_balance_delta(self, account: Account, delta: Decimal) -> Account:
+    def apply_balance_delta(
+        self,
+        account: Account,
+        delta: Decimal,
+        *,
+        check_funds: bool = True,
+    ) -> Account:
         """Apply a pre-computed signed delta to the account balance and save.
 
         Args:
             account: Account to update.
             delta: Signed amount (positive = income, negative = expense).
+            check_funds: Reject an expense larger than the current balance.
 
         Returns:
             Updated Account instance.
@@ -124,7 +131,10 @@ class BalanceService:
         if delta == 0:
             account.refresh_from_db(fields=['balance'])
             return account
-        return self.apply_account_deltas({account.pk: delta})[account.pk]
+        return self.apply_account_deltas(
+            {account.pk: delta},
+            check_funds=check_funds,
+        )[account.pk]
 
     def reconcile_account_balances(
         self,
@@ -152,6 +162,8 @@ class BalanceService:
     def apply_account_deltas(
         self,
         deltas: dict[int, Decimal],
+        *,
+        check_funds: bool = True,
     ) -> dict[int, Account]:
         """Apply signed deltas while locking accounts in a stable order."""
         effective_deltas = {
@@ -177,7 +189,7 @@ class BalanceService:
                     _('Архивный счёт недоступен для новых операций.'),
                 )
             delta = effective_deltas[locked_account.pk]
-            if delta < 0:
+            if check_funds and delta < 0:
                 validate_account_balance(locked_account, abs(delta))
             locked_account.balance += delta
             locked_account.save(update_fields=['balance', 'updated_at'])

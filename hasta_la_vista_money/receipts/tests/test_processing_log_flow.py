@@ -10,7 +10,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptProcessingLog,
@@ -65,7 +69,7 @@ class ReceiptProcessingLogTaskTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
 
     def test_task_creates_receipt_and_marks_adjustment_for_attention(
@@ -151,7 +155,7 @@ class ReceiptProcessingLogCleanupTaskTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
 
     def test_cleanup_marks_stalled_log_as_failed(self) -> None:
@@ -182,7 +186,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             user=self.user,
             name_account='Wallet',
             balance=Decimal('1000.00'),
-            currency='RU',
+            currency='RUB',
         )
         self.client = Client()
         self.client.force_login(self.user)
@@ -430,7 +434,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         deposit_account = Account.objects.create_deposit(
             user=self.user,
             name_account='Deposit',
-            currency='RU',
+            currency='RUB',
             balance=Decimal('0.00'),
         )
         deposit = Deposit.objects.create(
@@ -444,6 +448,13 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             amount=Decimal('900.00'),
             effective_on=(timezone.now() - timedelta(days=1)).date(),
             destination_account=self.account,
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=deposit_account,
+            to_account=self.account,
+            amount=Decimal('900.00'),
+            exchange_date=timezone.now() - timedelta(days=1),
         )
         # Balance right after the receipt was 800 - 900 = -100 (a real
         # shortfall). The withdrawal above returned 900 to the account the

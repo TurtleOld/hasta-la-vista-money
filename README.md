@@ -90,7 +90,7 @@
 | **Backend** | Django 6.0.5, Python 3.12.7+, Django REST Framework 3.15, Celery 5.4 |
 | **ASGI-сервер** | Granian 2.3+ (HTTP/2, TLS) |
 | **Frontend** | Tailwind CSS v4, DaisyUI 5, Chart.js, HTMX, driver.js, flatpickr |
-| **База данных** | PostgreSQL 18 (Docker), SQLite (локальный fallback) |
+| **База данных** | PostgreSQL 18 (Docker) |
 | **Кеш и очереди** | Redis 8, django-redis, django-celery-beat |
 | **API** | RESTful, OpenAPI schema (drf-spectacular), Swagger UI |
 | **Контейнеризация** | Docker, Docker Compose, Nginx |
@@ -131,7 +131,7 @@ docker compose up -d
 
 Откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090).
 
-> `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение и Nginx. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL`.
+> `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение и Nginx.
 
 ### Production-развёртывание
 
@@ -200,6 +200,8 @@ FNS_INN, FNS_PASSWORD, FNS_CLIENT_SECRET  # для обработки чеков
 ### Redis
 
 Redis используется для кеширования, сессий, rate limiting и брокера задач Celery.
+
+> В `docker-compose.prod.yaml` PostgreSQL, Redis и приложение доступны только внутри docker-сети. Наружу опубликованы только порты Nginx (80 и 443).
 
 Что кешируется:
 

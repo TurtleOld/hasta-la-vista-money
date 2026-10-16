@@ -844,6 +844,28 @@
                                                 </table>
                                             </div>
                                         {% endif %}
+
+                                        {% if card.cash_withdrawals %}
+                                            <div class="statistics-table-wrap statistics-section">
+                                                <h6 class="statistics-category-title">{% translate 'Снятие наличных (без беспроцентного периода)' %}</h6>
+                                                <table class="statistics-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>{% translate 'Месяц' %}</th>
+                                                            <th class="statistics-cell-right">{% translate 'Сумма' %}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for c in card.cash_withdrawals %}
+                                                            <tr>
+                                                                <td>{{ c.month }}</td>
+                                                                <td class="statistics-money-negative statistics-cell-right">{{ c.amount|comma }} {{ card.currency }}</td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        {% endif %}
                                     </div>
                                 </details>
                             {% endfor %}
