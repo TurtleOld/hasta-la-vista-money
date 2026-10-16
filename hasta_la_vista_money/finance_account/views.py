@@ -1221,14 +1221,10 @@ def _receipt_transactions(
     if not isinstance(request.user, User):
         raise TypeError('User must be authenticated')
     current_user = request.user
-    queryset = (
-        Receipt.objects.filter(
-            user__in=users,
-            operation_type=RECEIPT_OPERATION_PURCHASE,
-        )
-        .select_related('account', 'user')
-        .prefetch_related('product')
-    )
+    queryset = Receipt.objects.filter(
+        user__in=users,
+        operation_type=RECEIPT_OPERATION_PURCHASE,
+    ).select_related('account', 'user')
 
     queryset = _apply_date_filter(queryset, 'receipt_date', finances_filter)
     if finances_filter.account_ids:
