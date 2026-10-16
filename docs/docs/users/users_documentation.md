@@ -88,7 +88,7 @@ def __call__(self, request):
 
 Используется стандартная система групп Django:
 - Управление группами через формы `GroupCreateForm`, `GroupDeleteForm`
-- Добавление/удаление пользователей в группы через `AddUserToGroupForm`, `DeleteUserFromGroupForm`
+- Вступление в группу только по приглашению; удаление участника — через `DeleteUserFromGroupForm` (владелец исключает, участник может выйти сам)
 
 ## Формы и валидация
 
@@ -112,8 +112,7 @@ def __call__(self, request):
 
 4. **`GroupCreateForm`** - создание группы
 5. **`GroupDeleteForm`** - удаление группы  
-6. **`AddUserToGroupForm`** - добавление пользователя в группу
-7. **`DeleteUserFromGroupForm`** - удаление пользователя из группы
+6. **`DeleteUserFromGroupForm`** - удаление пользователя из группы
 
 ### Валидаторы
 
@@ -164,7 +163,6 @@ urlpatterns = [
 urlpatterns = [
     path('create/', GroupCreateView.as_view(), name='create'),
     path('delete/', GroupDeleteView.as_view(), name='delete'),
-    path('add-user/', AddUserToGroupView.as_view(), name='add_user'),
     path('delete-user/', DeleteUserFromGroupView.as_view(), name='delete_user'),
 ]
 ```
@@ -204,7 +202,6 @@ urlpatterns = [
 - `get_user_groups()` - получение групп пользователя
 - `create_group()` - создание группы
 - `delete_group()` - удаление группы
-- `add_user_to_group()` - добавление пользователя в группу
 - `remove_user_from_group()` - удаление пользователя из группы
 
 ### `services/statistics.py`

@@ -34,7 +34,6 @@ from hasta_la_vista_money.users.views.dashboard import (
     DashboardWidgetConfigView,
 )
 from hasta_la_vista_money.users.views.groups import (
-    AddUserToGroupView,
     DeleteUserFromGroupView,
     GroupCreateView,
     GroupDeleteView,
@@ -53,7 +52,6 @@ from hasta_la_vista_money.users.views.profile import (
 )
 
 __all__ = [
-    'AddUserToGroupView',
     'AuthRequest',
     'BankStatementPendingTransferDismissView',
     'BankStatementReconciliationBulkView',

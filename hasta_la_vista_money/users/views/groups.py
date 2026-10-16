@@ -13,7 +13,6 @@ from django.views import View
 from django.views.generic.edit import FormView
 
 from hasta_la_vista_money.users.forms import (
-    AddUserToGroupForm,
     DeleteUserFromGroupForm,
     GroupCreateForm,
     GroupDeleteForm,
@@ -90,41 +89,6 @@ class GroupDeleteView(
         )
 
 
-class AddUserToGroupView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddUserToGroupForm],
-    FormView[AddUserToGroupForm],
-):
-    template_name = 'users/add_user_to_group.html'
-    form_class = AddUserToGroupForm
-    success_message = _('Пользователь успешно добавлен в группу')
-
-    def get_form_kwargs(self) -> dict[str, object]:
-        kwargs = super().get_form_kwargs()
-        kwargs['current_user'] = self.request.user
-        return kwargs
-
-    def form_valid(self, form: AddUserToGroupForm) -> HttpResponse:
-        user = self.request.user
-        if not isinstance(user, User):
-            raise PermissionDenied
-        if not user_can_manage_group(
-            user,
-            form.cleaned_data['group'],
-        ):
-            raise PermissionDenied
-        form.save(self.request)
-        return super().form_valid(form)
-
-    def get_success_url(self) -> str:
-        return str(
-            reverse_lazy(
-                'users:profile',
-                kwargs={'pk': self.request.user.pk or 0},
-            ),
-        )
-
-
 class DeleteUserFromGroupView(
     LoginRequiredMixin,
     SuccessMessageMixin[DeleteUserFromGroupForm],
@@ -143,7 +107,7 @@ class DeleteUserFromGroupView(
         user = self.request.user
         if not isinstance(user, User):
             raise PermissionDenied
-        if not user_can_manage_group(
+        if form.cleaned_data['user'] != user and not user_can_manage_group(
             user,
             form.cleaned_data['group'],
         ):

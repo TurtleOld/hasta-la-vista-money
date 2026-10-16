@@ -17,7 +17,6 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.forms import (
-    AddUserToGroupForm,
     DeleteUserFromGroupForm,
     GroupCreateForm,
     GroupDeleteForm,
@@ -103,32 +102,23 @@ class GroupsServiceTest(TestCase):
         delete_group(delete_form)  # type: ignore[arg-type]
         self.assertFalse(Group.objects.filter(name='NewGroup').exists())
 
-    def test_add_and_remove_user_to_group(self) -> None:
-        factory: RequestFactory = RequestFactory()
-        request: HttpRequest = factory.get('/')
-        SessionMiddleware(_dummy_get_response).process_request(request)
-        request.session.save()
-        MessageMiddleware(_dummy_get_response).process_request(request)
-
-        add_form: AddUserToGroupForm = AddUserToGroupForm(
-            data={'user': self.user.pk, 'group': self.group.pk},
+    def test_remove_user_from_group(self) -> None:
+        self.user.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.VIEWER,
         )
-        self.assertTrue(add_form.is_valid())
-        add_form.save(request)
-        self.assertIn(self.group, self.user.groups.all())
-        self.assertTrue(
-            FamilyGroupMembership.objects.filter(
-                group=self.group,
-                user=self.user,
-                role=FamilyGroupMembership.Role.VIEWER,
-            ).exists(),
+        other: UserType = User.objects.create_user(username='other-owner')
+        other.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=other,
+            role=FamilyGroupMembership.Role.OWNER,
         )
 
-        remove_form: DeleteUserFromGroupForm = DeleteUserFromGroupForm(
-            data={'user': self.user.pk, 'group': self.group.pk},
-        )
-        self.assertTrue(remove_form.is_valid())
-        remove_form.save(request)
+        remove_user_from_group(_messages_request(), self.user, self.group)
+
         self.assertNotIn(self.group, self.user.groups.all())
         self.assertFalse(
             FamilyGroupMembership.objects.filter(
@@ -193,7 +183,6 @@ class ExplicitFamilyGroupTest(TestCase):
         self.assertEqual(FamilyGroupMembership.objects.count(), 0)
 
     def test_group_forms_without_groups_create_nothing(self) -> None:
-        AddUserToGroupForm(current_user=self.alice)
         DeleteUserFromGroupForm(current_user=self.alice)
 
         self.assertEqual(Group.objects.count(), 0)
@@ -280,12 +269,13 @@ class ExplicitFamilyGroupTest(TestCase):
         alice_group = self._make_group(self.alice, 'Alice family')
         mallory_group = self._make_group(self.mallory, 'Mallory family')
 
-        for form_class in (AddUserToGroupForm, DeleteUserFromGroupForm):
-            with self.subTest(form=form_class.__name__):
-                form = form_class(current_user=self.alice)
-                groups = form.fields['group'].queryset  # type: ignore[attr-defined]
-                self.assertIn(alice_group, groups)
-                self.assertNotIn(mallory_group, groups)
+        form = DeleteUserFromGroupForm(
+            data={'user': self.alice.pk},
+            current_user=self.alice,
+        )
+        groups = form.fields['group'].queryset  # type: ignore[attr-defined]
+        self.assertIn(alice_group, groups)
+        self.assertNotIn(mallory_group, groups)
 
     def test_last_owner_cannot_be_removed_from_group(self) -> None:
         group = self._make_group(self.alice)
@@ -331,6 +321,78 @@ class ExplicitFamilyGroupTest(TestCase):
             ).role,
             FamilyGroupMembership.Role.VIEWER,
         )
+
+
+class DirectGroupMembershipTest(TestCase):
+    """Membership changes only via invites; removal is scoped by role."""
+
+    def setUp(self) -> None:
+        self.owner: UserType = User.objects.create_user(
+            username='owner',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.viewer: UserType = User.objects.create_user(
+            username='viewer',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.stranger: UserType = User.objects.create_user(
+            username='stranger',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        form = GroupCreateForm(data={'name': 'Family'})
+        form.current_user = self.owner
+        self.assertTrue(form.is_valid())
+        self.group: Group = create_group(form)
+        invite = get_or_create_family_invite(self.group, self.owner)
+        accept_family_invite(self.viewer, invite.token)
+
+    def _remove(self, who: UserType, target: UserType) -> HttpResponse:
+        self.client.force_login(who)
+        return self.client.post(
+            reverse('users:groups:delete_user'),
+            {'user': target.pk, 'group': self.group.pk},
+        )
+
+    def test_direct_add_route_is_gone(self) -> None:
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            '/users/groups/add-user/',
+            {'user': self.stranger.pk, 'group': self.group.pk},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(self.group, self.stranger.groups.all())
+
+    def test_group_form_does_not_list_all_users(self) -> None:
+        form = DeleteUserFromGroupForm(current_user=self.owner)
+
+        users = form.fields['user'].queryset  # type: ignore[attr-defined]
+
+        self.assertIn(self.viewer, users)
+        self.assertNotIn(self.stranger, users)
+
+    def test_viewer_cannot_remove_other_member(self) -> None:
+        response = self._remove(self.viewer, self.owner)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.group, self.owner.groups.all())
+
+    def test_owner_can_remove_viewer(self) -> None:
+        self._remove(self.owner, self.viewer)
+
+        self.assertNotIn(self.group, self.viewer.groups.all())
+
+    def test_viewer_can_leave_group(self) -> None:
+        self._remove(self.viewer, self.viewer)
+
+        self.assertNotIn(self.group, self.viewer.groups.all())
+
+    def test_last_owner_cannot_leave_with_other_members(self) -> None:
+        self._remove(self.owner, self.owner)
+
+        self.assertIn(self.group, self.owner.groups.all())
+        self.assertTrue(user_can_manage_group(self.owner, self.group))
 
 
 class InviteExpiryTest(TestCase):

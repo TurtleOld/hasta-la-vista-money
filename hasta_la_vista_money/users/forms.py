@@ -3,7 +3,7 @@ from typing import Any, ClassVar
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import Group
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.forms import CharField, ModelForm, PasswordInput
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
@@ -13,7 +13,6 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
-    add_user_to_group,
     owned_group_ids,
     remove_user_from_group,
 )
@@ -288,6 +287,12 @@ class UserGroupBaseForm(forms.Form):
         self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         self.user_instance = self._get_user_instance()
+        co_members = User.objects.none()
+        if isinstance(self.current_user, User):
+            co_members = User.objects.filter(
+                groups__in=self.current_user.groups.all(),
+            ).distinct()
+        self.fields['user'].queryset = co_members  # type: ignore[attr-defined]
 
     def _get_user_instance(self) -> User | None:
         """Extract User instance from form data or initial data."""
@@ -305,14 +310,18 @@ class UserGroupBaseForm(forms.Form):
                 pass
         return None
 
-    def _limit_to_owned_groups(
+    def _limit_to_manageable_groups(
         self,
         queryset: QuerySet[Group],
     ) -> QuerySet[Group]:
-        """Limit groups to the ones the current user owns."""
-        if isinstance(self.current_user, User):
-            return queryset.filter(id__in=owned_group_ids(self.current_user))
-        return queryset if self.user_instance else queryset.none()
+        """Limit groups to the owned ones, or own groups when leaving."""
+        current_user = self.current_user
+        if not isinstance(current_user, User):
+            return queryset.none()
+        allowed = Q(id__in=owned_group_ids(current_user))
+        if self.user_instance == current_user:
+            allowed |= Q(id__in=current_user.groups.values('id'))
+        return queryset.filter(allowed)
 
     user = forms.ModelChoiceField(
         queryset=User.objects.all(),
@@ -334,29 +343,6 @@ class UserGroupBaseForm(forms.Form):
     )
 
 
-class AddUserToGroupForm(UserGroupBaseForm):
-    """Form for adding users to groups."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        queryset = Group.objects.all()
-        if self.user_instance:
-            queryset = queryset.exclude(
-                id__in=self.user_instance.groups.values_list('id', flat=True),
-            )
-        self.fields['group'].queryset = self._limit_to_owned_groups(  # type: ignore[attr-defined]
-            queryset,
-        )
-
-    def save(self, request: HttpRequest) -> None:
-        """Add user to selected group."""
-        add_user_to_group(
-            request,
-            self.cleaned_data['user'],
-            self.cleaned_data['group'],
-        )
-
-
 class DeleteUserFromGroupForm(UserGroupBaseForm):
     """Form for removing users from groups."""
 
@@ -367,7 +353,7 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
             if self.user_instance
             else Group.objects.all()
         )
-        self.fields['group'].queryset = self._limit_to_owned_groups(  # type: ignore[attr-defined]
+        self.fields['group'].queryset = self._limit_to_manageable_groups(  # type: ignore[attr-defined]
             queryset,
         )
 

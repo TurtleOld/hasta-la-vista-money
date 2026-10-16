@@ -86,29 +86,6 @@ def delete_group(form: ModelForm[Group]) -> None:
     form.cleaned_data['group'].delete()
 
 
-def add_user_to_group(request: HttpRequest, user: User, group: Group) -> None:
-    """Add user to group with checks and user messages.
-
-    Args:
-        request: HTTP request object.
-        user: User to add to group.
-        group: Group to add user to.
-    """
-    if group in user.groups.all():
-        messages.error(
-            request,
-            _('Пользователь уже состоит в выбранной группе.'),
-        )
-        return
-    user.groups.add(group)
-    FamilyGroupMembership.objects.update_or_create(
-        group=group,
-        user=user,
-        defaults={'role': FamilyGroupMembership.Role.VIEWER},
-    )
-    messages.success(request, _('Пользователь успешно добавлен в группу.'))
-
-
 def owned_group_ids(user: User) -> QuerySet[FamilyGroupMembership, int]:
     """Return IDs of the groups where user is an owner."""
 
