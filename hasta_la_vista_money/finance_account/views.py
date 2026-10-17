@@ -1823,7 +1823,6 @@ class AccountView(
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()
         )
-        reconciliation_service.settle_transfers_for_user(current_user)
         now = timezone.now()
         grouped_transfers: dict[int, dict[str, Any]] = {}
         for row in reconciliation_service.pending_transfers_for_user(
@@ -2136,6 +2135,7 @@ class TransferMoneyAccountView(
             'to_account',
         )
         self._apply_amount_initial(initial, request)
+        initial['statement_row'] = request.GET.get('statement_row')
         self._apply_exchange_date_initial(initial, request)
         return initial
 
@@ -2209,24 +2209,12 @@ class TransferMoneyAccountView(
                 user=cleaned_data['from_account'].user,
                 exchange_date=cleaned_data.get('exchange_date'),
                 notes=cleaned_data.get('notes'),
+                statement_row_id=cleaned_data.get('statement_row'),
             )
-            try:
-                users_container = request.container.users
-                reconciliation_service = (
-                    users_container.bank_statement_reconciliation_service()
-                )
-                reconciliation_service.settle_pending_transfers(
-                    cleaned_data['to_account'],
-                )
-            except Exception:
-                logger.exception(
-                    'Ошибка при закрытии непроведённых погашений',
-                    user_id=getattr(request.user, 'id', None),
-                )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:
-            messages.error(request, str(e))
+            form.add_error(None, e)
             return self.form_invalid(form)  # type: ignore[return-value]
         except Exception:
             logger.exception(

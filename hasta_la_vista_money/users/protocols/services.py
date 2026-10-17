@@ -121,10 +121,6 @@ class BankStatementReconciliationServiceProtocol(Protocol):
         user: User,
     ) -> QuerySet[BankStatementRow]: ...
 
-    def settle_pending_transfers(self, account: Account) -> int: ...
-
-    def settle_transfers_for_user(self, user: User) -> int: ...
-
     def current_candidates(
         self,
         row: BankStatementRow,
