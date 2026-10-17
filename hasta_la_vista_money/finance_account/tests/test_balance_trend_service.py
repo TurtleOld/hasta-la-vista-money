@@ -208,12 +208,33 @@ class BalanceTrendServiceTests(TestCase):
         self._spend_by_receipt(Decimal('150.00'), self._days_ago(5))
         accounts = Account.objects.filter(user=self.user)
 
-        with self.assertNumQueries(10):
+        with self.assertNumQueries(7):
             year = self.trend_service.get_balance_trend(accounts, 'RUB', '12m')
-        with self.assertNumQueries(10):
+        with self.assertNumQueries(7):
             self.trend_service.get_balance_trend(accounts, 'RUB', '7d')
 
         self.assertEqual(len(year['series']), 366)
+
+    def test_query_count_does_not_depend_on_number_of_accounts(self) -> None:
+        self._fund_and_top_up_deposit()
+        accounts = Account.objects.filter(user=self.user)
+        with self.assertNumQueries(7):
+            self.trend_service.get_balance_trend(accounts, 'RUB', '30d')
+
+        Account.objects.filter(pk=self.wallet.pk).update(
+            balance=Decimal('5000.00'),
+        )
+        self._fund_and_top_up_deposit()
+        for index in range(3):
+            Account.objects.create(
+                user=self.user,
+                name_account=f'Extra {index}',
+                currency='RUB',
+                balance=Decimal('10.00'),
+            )
+
+        with self.assertNumQueries(7):
+            self.trend_service.get_balance_trend(accounts, 'RUB', '30d')
 
 
 class AccountListBalanceTrendCurrencyTests(TestCase):

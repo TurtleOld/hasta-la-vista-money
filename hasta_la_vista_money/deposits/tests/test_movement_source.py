@@ -60,7 +60,7 @@ class DepositMovementSourceTests(TestCase):
         )
 
         movements = self.source.list_financial_movements(
-            self.wallet,
+            [self.wallet],
             since=date(2026, 1, 1),
         )
 
@@ -78,7 +78,7 @@ class DepositMovementSourceTests(TestCase):
         )
 
         movements = self.source.list_financial_movements(
-            self.wallet,
+            [self.wallet],
             since=date(2026, 1, 1),
         )
 
@@ -98,7 +98,7 @@ class DepositMovementSourceTests(TestCase):
         )
 
         movements = self.source.list_financial_movements(
-            self.deposit.account,
+            [self.deposit.account],
             since=date(2026, 1, 1),
         )
 
@@ -121,7 +121,7 @@ class DepositMovementSourceTests(TestCase):
         )
 
         movements = self.source.list_financial_movements(
-            self.wallet,
+            [self.wallet],
             since=date(2026, 1, 1),
         )
 
@@ -143,14 +143,14 @@ class DepositMovementSourceTests(TestCase):
 
         self.assertEqual(
             self.source.list_financial_movements(
-                self.wallet,
+                [self.wallet],
                 since=date(2026, 1, 1),
             ),
             [],
         )
         self.assertEqual(
             self.source.list_financial_movements(
-                self.deposit.account,
+                [self.deposit.account],
                 since=date(2026, 1, 1),
             ),
             [],
@@ -166,7 +166,7 @@ class DepositMovementSourceTests(TestCase):
         )
 
         movements = self.source.list_financial_movements(
-            self.wallet,
+            [self.wallet],
             since=date(2026, 1, 2),
         )
 

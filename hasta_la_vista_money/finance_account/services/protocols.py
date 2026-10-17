@@ -147,13 +147,15 @@ class FinancialMovementSourceProtocol(Protocol):
 
     def list_financial_movements(
         self,
-        account: Account,
+        accounts: Sequence[Account],
         since: date,
     ) -> list[FinancialMovement]:
-        """List this domain's balance-affecting events for an account.
+        """List this domain's balance-affecting events for the accounts.
+
+        Each movement's delta is its net effect on the accounts together.
 
         Args:
-            account: Account to list movements for.
+            accounts: Accounts to list movements for.
             since: Only movements effective on or after this date.
 
         Returns:

@@ -165,10 +165,9 @@ class BalanceHistoryService:
             yield timezone.localdate(at), delta
 
         since = moment.date() + timedelta(days=1)
-        for account in accounts:
-            for source in self.movement_sources:
-                for movement in source.list_financial_movements(
-                    account,
-                    since=since,
-                ):
-                    yield movement.effective_on, movement.delta
+        for source in self.movement_sources:
+            for movement in source.list_financial_movements(
+                accounts,
+                since=since,
+            ):
+                yield movement.effective_on, movement.delta
