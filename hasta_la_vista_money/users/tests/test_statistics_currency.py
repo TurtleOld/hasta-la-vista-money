@@ -66,26 +66,42 @@ class StatisticsCurrencyTest(TestCase):
     def test_budget_and_plan_fact_exclude_other_currency(self) -> None:
         month = timezone.localdate().replace(day=1)
         category = self.category
-        Budget.objects.create(
-            user=self.user,
-            category=category,
-            period=month,
-            amount_limit=Decimal(1000),
-        )
-        Planning.objects.create(
-            user=self.user,
-            category=category,
-            date=month,
-            amount=Decimal(1000),
-            planning_type=TransactionType.EXPENSE,
-        )
+        for currency, amount in (('RUB', 1000), ('USD', 50)):
+            Budget.objects.create(
+                user=self.user,
+                category=category,
+                period=month,
+                amount_limit=Decimal(amount),
+                currency=currency,
+            )
+            Planning.objects.create(
+                user=self.user,
+                category=category,
+                date=month,
+                amount=Decimal(amount),
+                planning_type=TransactionType.EXPENSE,
+                currency=currency,
+            )
 
         response = self.client.get(reverse('users:statistics'))
 
         context = response.context
-        self.assertEqual(context['budgets_data'][0]['actual_expenses'], 300.0)
-        self.assertEqual(context['plan_fact_summary']['expense']['fact'], 300.0)
-        self.assertEqual(context['plan_fact_top_deviations'][0]['fact'], 300.0)
+        budgets = context['budgets_data']
+        self.assertEqual(
+            [(b['amount_limit'], b['actual_expenses']) for b in budgets],
+            [(1000.0, 300.0)],
+        )
+        self.assertEqual(
+            sum(m['planned_expenses'] for m in context['months_data']),
+            1000.0,
+        )
+        summary = context['plan_fact_summary']['expense']
+        self.assertEqual((summary['fact'], summary['plan']), (300.0, 1000.0))
+        deviations = context['plan_fact_top_deviations']
+        self.assertEqual(
+            [(d['fact'], d['plan']) for d in deviations],
+            [(300.0, 1000.0)],
+        )
         self.assertEqual(context['plan_fact_engagement']['diff'], -700.0)
 
     def test_switching_currency_is_not_served_from_previous_cache(

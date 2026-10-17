@@ -499,14 +499,17 @@ def _planning_amounts_by_month(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    currency: str,
 ) -> tuple[dict[date, float], dict[date, float]]:
     """Aggregate planned income and expense amounts by month."""
+    plans = Planning.objects.filter(
+        user__in=list(users),
+        date__range=(period_start, period_end),
+    )
+    if currency:
+        plans = plans.filter(currency=currency)
     qs = (
-        Planning.objects.filter(
-            user__in=list(users),
-            date__range=(period_start, period_end),
-        )
-        .select_related(None)
+        plans.select_related(None)
         .annotate(month=TruncMonth('date'))
         .values('month', 'planning_type')
         .annotate(total=Sum('amount'))
@@ -608,6 +611,7 @@ def _six_months_data(
                 users,
                 period_start,
                 period_end,
+                stats_filter.currency,
             )
         )
     else:
@@ -701,6 +705,7 @@ def _budgets_data(
     budgets = (
         Budget.objects.filter(
             user__in=users_list,
+            currency=currency,
             period__gte=period_start.replace(day=1),
             period__lte=period_end.replace(day=1),
         )
@@ -794,6 +799,7 @@ def _plan_fact_summary(
     plan_totals = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             date__range=(period_start, period_end),
         )
         .values('planning_type')
@@ -845,6 +851,7 @@ def _plan_fact_top_deviations(
     plan_rows = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             date__range=(period_start, period_end),
         )
         .values('category_id', 'category__name', 'planning_type')
@@ -913,6 +920,7 @@ def _plan_fact_engagement(
     plan_rows = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             planning_type=TransactionType.EXPENSE,
             date__range=(period_start, period_end),
         )
@@ -980,6 +988,7 @@ def _suggested_plan_categories(
     planned_category_ids = set(
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             planning_type=TransactionType.EXPENSE,
             date__range=(period_start, period_end),
         ).values_list('category_id', flat=True),
