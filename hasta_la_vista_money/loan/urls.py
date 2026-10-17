@@ -5,6 +5,7 @@ from hasta_la_vista_money.loan.views import (
     LoanDeleteView,
     LoanView,
     PaymentMakeCreateView,
+    PaymentMakeDeleteView,
 )
 
 app_name = 'loan'
@@ -16,5 +17,10 @@ urlpatterns = [
         'payment/create/',
         PaymentMakeCreateView.as_view(),
         name='payment_create',
+    ),
+    path(
+        'payment/delete/<int:pk>',
+        PaymentMakeDeleteView.as_view(),
+        name='payment_delete',
     ),
 ]

@@ -255,6 +255,10 @@
                                                     {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
                                                         <span class="loan-badge">{% translate 'Оплачен' %}</span>
                                                         {% if not payment_make.is_posted %}<span class="loan-badge">{% translate 'не проведён' %}</span>{% endif %}
+                                                        <form method="post" action="{% url 'loan:payment_delete' payment_make.pk %}" class="inline" @submit="if (!confirm('{% translate 'Удалить платёж?' %}')) $event.preventDefault()">
+                                                            {% csrf_token %}
+                                                            <button type="submit" class="loan-badge">{% translate 'Удалить' %}</button>
+                                                        </form>
                                                     {% endif %}
                                                 {% endfor %}
                                             </td>

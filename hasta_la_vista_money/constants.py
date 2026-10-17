@@ -263,6 +263,10 @@ UNSUCCESSFULLY_MESSAGE_LOAN_DELETE: Final = _(
     'Кредит не может быть удалён: его счёт используется в операциях.',
 )
 SUCCESS_MESSAGE_PAYMENT_MAKE: Final = _('Платеж успешно внесён')
+SUCCESS_MESSAGE_PAYMENT_DELETE: Final = _('Платёж успешно удалён')
+UNSUCCESSFULLY_MESSAGE_LOAN_DELETE_POSTED: Final = _(
+    'Кредит нельзя удалить: сначала удалите проведённые платежи.',
+)
 
 # ============================================================================
 # Family Groups

@@ -275,8 +275,18 @@ class LoanDeleteView(
         """
         loan = self.object
         account = loan.account
+        request = cast('RequestWithContainer', self.request)
+        payments = request.container.loan.payment_make_loan_repository()
         try:
             with transaction.atomic():
+                # Payments lock this account too, so the check cannot race.
+                Account.objects.select_for_update().get(pk=account.pk)
+                if payments.filter(loan=loan, is_posted=True).exists():
+                    messages.error(
+                        self.request,
+                        constants.UNSUCCESSFULLY_MESSAGE_LOAN_DELETE_POSTED,
+                    )
+                    return redirect(str(self.success_url))
                 loan.delete()
                 account.delete()
         except ProtectedError:
@@ -334,3 +344,32 @@ class PaymentMakeCreateView(
             )
         messages.success(request, constants.SUCCESS_MESSAGE_PAYMENT_MAKE)
         return JsonResponse({'success': True})
+
+
+class PaymentMakeDeleteView(
+    LoginRequiredMixin,
+    DeleteView[PaymentMakeLoan, Any],
+):
+    model = PaymentMakeLoan
+    success_url = reverse_lazy('loan:list')
+    no_permission_url = reverse_lazy('login')
+
+    def get_queryset(self) -> QuerySet[PaymentMakeLoan]:
+        user = cast('User', self.request.user)
+        return PaymentMakeLoan.objects.filter(user=user).select_related(
+            'loan',
+        )
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        request = cast('RequestWithContainer', self.request)
+        service = request.container.loan.loan_payment_service()
+        try:
+            service.delete_payment(self.object)
+        except ValidationError as error:
+            messages.error(self.request, ' '.join(error.messages))
+        else:
+            messages.success(
+                self.request,
+                constants.SUCCESS_MESSAGE_PAYMENT_DELETE,
+            )
+        return redirect(str(self.success_url))
