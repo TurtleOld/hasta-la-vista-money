@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from hasta_la_vista_money.core.mixins.admin import MovementAdminMixin
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 
 
@@ -18,9 +19,17 @@ class ProductAdmin(admin.ModelAdmin[Product]):
 
 
 @admin.register(Receipt)
-class ReceiptAdmin(admin.ModelAdmin[Receipt]):
+class ReceiptAdmin(MovementAdminMixin, admin.ModelAdmin[Receipt]):
     list_display = ('receipt_date', 'total_sum', 'seller', 'account', 'user')
     list_select_related = ('user', 'account', 'seller')
     list_filter = ('receipt_date', 'operation_type')
     search_fields = ('user__username', 'seller__name_seller')
     date_hierarchy = 'receipt_date'
+    readonly_fields = (
+        'account',
+        'operation_type',
+        'total_sum',
+        'nds10',
+        'nds20',
+        'adjustment',
+    )

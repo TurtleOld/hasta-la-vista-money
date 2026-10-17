@@ -3,11 +3,12 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
+from hasta_la_vista_money.core.mixins.admin import MovementAdminMixin
 from hasta_la_vista_money.transactions.models import Category, Transaction
 
 
 @admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin[Transaction]):
+class TransactionAdmin(MovementAdminMixin, admin.ModelAdmin[Transaction]):
     """Admin view for the unified Transaction model."""
 
     list_display = ('date', 'type', 'amount', 'category', 'account', 'user')
@@ -15,6 +16,7 @@ class TransactionAdmin(admin.ModelAdmin[Transaction]):
     list_filter = ('type', 'date', 'category__name')
     search_fields = ('user__username', 'category__name')
     date_hierarchy = 'date'
+    readonly_fields = ('account', 'type', 'amount')
 
 
 @admin.register(Category)
