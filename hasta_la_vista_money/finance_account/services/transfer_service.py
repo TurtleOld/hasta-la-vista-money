@@ -21,6 +21,9 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_row_links import (
+    release_linked_rows,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
@@ -174,4 +177,5 @@ class TransferService:
                     to_account.pk: -transfer_log.amount,
                 },
             )
+            release_linked_rows(transfer_log)
             self.transfer_money_log_repository.delete_log(transfer_log)
