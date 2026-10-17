@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
@@ -195,6 +196,41 @@ class StatementRowLinkedMovementTest(TestCase):
         self._update(amount=Decimal('150.00'))
         self.expense.refresh_from_db()
         self.assertEqual(self.expense.amount, Decimal('150.00'))
+
+    def test_web_update_of_linked_transaction_amount_is_refused(self) -> None:
+        self._row(transaction=self.expense)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse(
+                'finance_account:transaction_change',
+                kwargs={'pk': self.expense.pk},
+            ),
+            {
+                'type': TransactionType.EXPENSE,
+                'category': self.category.pk,
+                'account': self.account.pk,
+                'date': '2026-04-05T10:00',
+                'amount': '150.00',
+            },
+        )
+
+        self.assertContains(response, 'связанной со строкой банковской выписки')
+        self._assert_unchanged()
+
+    def test_web_delete_of_linked_transaction_releases_row(self) -> None:
+        row = self._row(transaction=self.expense)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse(
+                'finance_account:transaction_delete',
+                kwargs={'pk': self.expense.pk},
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self._assert_pending(row)
 
     def _assert_unchanged(self) -> None:
         self.expense.refresh_from_db()
