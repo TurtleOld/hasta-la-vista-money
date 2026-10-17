@@ -111,6 +111,7 @@ OWN_ONLY_SURFACES = frozenset(
         'loan:delete',
         'loan:list',
         'loan:payment_create',
+        'loan:payment_delete',
         'login',
         'logout',
         'offline',
