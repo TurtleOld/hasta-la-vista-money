@@ -21,8 +21,10 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_row_links import (
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     close_repayment_row,
+)
+from hasta_la_vista_money.users.services.statement_row_links import (
     lock_repayment_row,
     release_linked_rows,
 )

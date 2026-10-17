@@ -4,7 +4,6 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q, QuerySet
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -13,13 +12,7 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.transactions.models import Transaction
-from hasta_la_vista_money.users.models import (
-    BankStatementDecisionAudit,
-    BankStatementRow,
-)
-from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    BankStatementReconciliationService,
-)
+from hasta_la_vista_money.users.models import BankStatementRow
 
 _REPAYMENT_ROW = Q(
     upload__account__type_account__in=constants.CREDIT_ACCOUNT_TYPES,
@@ -89,20 +82,3 @@ def lock_repayment_row(
             _('Сумма перевода должна совпадать с суммой строки выписки.'),
         )
     return row
-
-
-def close_repayment_row(
-    row: BankStatementRow,
-    transfer: TransferMoneyLog,
-) -> None:
-    """Close a locked repayment row by the transfer made from it."""
-    row.transfer = transfer
-    row.decision = BankStatementRow.Decision.TRANSFERRED
-    row.decided_at = timezone.now()
-    row.save(update_fields=['transfer', 'decision', 'decided_at'])
-    BankStatementDecisionAudit.objects.create(
-        row=row,
-        actor_id=transfer.user_id,
-        decision=row.decision,
-    )
-    BankStatementReconciliationService.refresh_outcome_counts(row.upload)

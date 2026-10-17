@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.transactions.models import TransactionType
 from hasta_la_vista_money.users.models import BankStatementRow
@@ -25,7 +26,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
 
-TRANSFER_DATE_WINDOW = timedelta(days=1)
+TRANSFER_DATE_WINDOW = timedelta(
+    days=constants.STATEMENT_TRANSFER_DATE_WINDOW_DAYS,
+)
 
 
 def find_mirroring_transfers(

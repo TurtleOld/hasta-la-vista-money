@@ -604,9 +604,70 @@ class BankStatementReconciliationService:
                 ),
                 decision=BankStatementRow.Decision.NEEDS_TRANSFER,
             )
-            .select_related('upload__account')
+            .select_related('upload__account', 'upload__user')
             .order_by('transaction_date', 'pk')
         )
+
+    def repayment_candidates(
+        self,
+        row: BankStatementRow,
+    ) -> QuerySet[TransferMoneyLog]:
+        """Return recorded transfers that may have paid a repayment row."""
+        if row.amount is None or row.transaction_date is None:
+            return TransferMoneyLog.objects.none()
+        return find_mirroring_transfers(
+            account=row.upload.account,
+            user=row.upload.user,
+            transaction_type=TransactionType.INCOME,
+            amount=row.amount,
+            row_date=local_row_date(row.transaction_date),
+        ).select_related('from_account')
+
+    def link_repayment(
+        self,
+        row_id: int,
+        transfer_id: int,
+        user_id: int,
+    ) -> BankStatementRow:
+        """Close a repayment row by a transfer the owner picked."""
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return self._link_repayment(row_id, transfer_id, user_id)
+
+    @transaction.atomic
+    def _link_repayment(
+        self,
+        row_id: int,
+        transfer_id: int,
+        user_id: int,
+    ) -> BankStatementRow:
+        row = (
+            BankStatementRow.objects.select_for_update()
+            .select_related('upload__account', 'upload__user')
+            .get(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+        )
+        if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
+            raise ReconciliationDecisionConflictError(row.decision)
+        # The lock keeps two rows of one account from taking one transfer.
+        transfer = (
+            TransferMoneyLog.objects.select_for_update()
+            .filter(pk=transfer_id, user_id=user_id)
+            .first()
+        )
+        if (
+            transfer is None
+            or not self.repayment_candidates(row)
+            .filter(pk=transfer_id)
+            .exists()
+        ):
+            raise StaleStatementCandidateError(transfer_id)
+        close_repayment_row(row, transfer)
+        return row
 
     def mark_not_payment(self, row_id: int, user_id: int) -> BankStatementRow:
         """Close an unperformed repayment row without creating a movement."""
@@ -644,3 +705,20 @@ class BankStatementReconciliationService:
         )
         self.refresh_outcome_counts(row.upload)
         return row
+
+
+def close_repayment_row(
+    row: BankStatementRow,
+    transfer: TransferMoneyLog,
+) -> None:
+    """Close a locked repayment row by the transfer that paid it."""
+    row.transfer = transfer
+    row.decision = BankStatementRow.Decision.TRANSFERRED
+    row.decided_at = timezone.now()
+    row.save(update_fields=['transfer', 'decision', 'decided_at'])
+    BankStatementDecisionAudit.objects.create(
+        row=row,
+        actor_id=transfer.user_id,
+        decision=row.decision,
+    )
+    BankStatementReconciliationService.refresh_outcome_counts(row.upload)

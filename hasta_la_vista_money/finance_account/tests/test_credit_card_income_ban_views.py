@@ -10,7 +10,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_DEBIT_CARD,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -111,12 +114,34 @@ class PendingTransferViewTest(TestCase):
 
         self.assertContains(response, 'Непроведённые погашения из выписки')
         self.assertContains(response, '199')
-        self.assertContains(response, 'Сделать перевод')
+        self.assertContains(response, 'Провести переводом')
         self.assertContains(response, 'Не погашение')
         self.assertContains(response, f'to_account={self.card.pk}')
         self.assertContains(response, 'amount=199.00')
         self.assertContains(response, 'date=2026-02-09')
         self.assertContains(response, f'statement_row={self.row.pk}')
+        self.assertNotContains(response, 'Уже проведено')
+
+    def test_card_page_offers_recorded_transfer(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            exchange_date=datetime(2026, 2, 10, 9, 0, tzinfo=UTC),
+        )
+
+        response = self.client.get(reverse('finance_account:list'))
+
+        self.assertContains(response, 'Уже проведено')
+        self.assertContains(
+            response,
+            reverse(
+                'users:bank_statement_pending_transfer_link',
+                args=[self.upload.pk, self.row.pk],
+            ),
+        )
+        self.assertContains(response, f'value="{transfer.pk}"')
 
     def test_transfer_form_prefilled_from_reminder(self) -> None:
         response = self.client.get(

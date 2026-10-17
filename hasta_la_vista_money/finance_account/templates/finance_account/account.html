@@ -152,8 +152,19 @@
                                     <span>{{ item.row.amount|comma }} {{ group.account.currency }}</span>
                                     <span>{% blocktranslate with days=item.days_left %}Осталось дней: {{ days }}{% endblocktranslate %}</span>
                                     <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount|unlocalize }}&date={{ item.row.transaction_date|date:'Y-m-d' }}&statement_row={{ item.row.pk }}">
-                                        {% translate 'Сделать перевод' %}
+                                        {% translate 'Провести переводом' %}
                                     </a>
+                                    {% if item.candidates %}
+                                    <form method="post" action="{% url 'users:bank_statement_pending_transfer_link' item.row.upload_id item.row.pk %}">
+                                        {% csrf_token %}
+                                        <select name="transfer" aria-label="{% translate 'Перевод' %}">
+                                            {% for transfer in item.candidates %}
+                                                <option value="{{ transfer.pk }}">{{ transfer.exchange_date|date:'d.m.Y' }} · {{ transfer.from_account.name_account }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit">{% translate 'Уже проведено' %}</button>
+                                    </form>
+                                    {% endif %}
                                     <form method="post" action="{% url 'users:bank_statement_pending_transfer_dismiss' item.row.upload_id item.row.pk %}">
                                         {% csrf_token %}
                                         <button type="submit">{% translate 'Не погашение' %}</button>

@@ -509,3 +509,41 @@ class BankStatementPendingTransferDismissView(LoginRequiredMixin, View):
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         return redirect('finance_account:list')
+
+
+class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
+    """Close an unperformed repayment row by a recorded transfer."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        """Link the pending repayment to the transfer the owner picked."""
+        get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        try:
+            _reconciliation_service(request).link_repayment(
+                row_id,
+                int(request.POST.get('transfer', '')),
+                cast('User', request.user).pk,
+            )
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        except ValueError:  # bad id or a transfer that is not a candidate
+            messages.error(
+                request,
+                _('Перевод не подходит для этой строки выписки.'),
+            )
+        else:
+            messages.success(
+                request,
+                _('Погашение связано с переводом.'),
+            )
+        return redirect('finance_account:list')

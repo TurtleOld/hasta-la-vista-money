@@ -1833,6 +1833,9 @@ class AccountView(
                 {
                     'row': row,
                     'days_left': max((row.upload.expires_at - now).days, 0),
+                    'candidates': list(
+                        reconciliation_service.repayment_candidates(row),
+                    ),
                 },
             )
         context['pending_card_transfers'] = list(grouped_transfers.values())

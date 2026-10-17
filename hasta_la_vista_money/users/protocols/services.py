@@ -10,7 +10,10 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
     from config.containers import ApplicationContainer
-    from hasta_la_vista_money.finance_account.models import Account
+    from hasta_la_vista_money.finance_account.models import (
+        Account,
+        TransferMoneyLog,
+    )
     from hasta_la_vista_money.transactions.models import Transaction
     from hasta_la_vista_money.users.models import (
         BankStatementRow,
@@ -108,6 +111,18 @@ class BankStatementReconciliationServiceProtocol(Protocol):
     def mark_not_payment(
         self,
         row_id: int,
+        user_id: int,
+    ) -> BankStatementRow: ...
+
+    def repayment_candidates(
+        self,
+        row: BankStatementRow,
+    ) -> QuerySet[TransferMoneyLog]: ...
+
+    def link_repayment(
+        self,
+        row_id: int,
+        transfer_id: int,
         user_id: int,
     ) -> BankStatementRow: ...
 
