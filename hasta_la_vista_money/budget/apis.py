@@ -59,15 +59,16 @@ def _budget_range_from_request(request: Request) -> str:
 
 
 def _requested_currency(request: Request, users: list[User]) -> str:
-    currency = request.data.get('currency') or (
-        get_analytics_currency(cast('HttpRequest', request), users).currency
+    currency = str(
+        request.data.get('currency')
+        or get_analytics_currency(cast('HttpRequest', request), users).currency,
     )
     if currency not in dict(currency_choices()):
         raise ValidationError(
             detail='Unknown currency',
             code='invalid_currency',
         )
-    return str(currency)
+    return currency
 
 
 def _render_budget_matrix(request: Request, table_type: str) -> Any:

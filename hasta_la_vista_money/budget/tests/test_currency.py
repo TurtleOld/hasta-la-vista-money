@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from http import HTTPStatus
 
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
@@ -115,6 +116,10 @@ class BudgetCurrencyTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertContains(response, '2222')
         self.assertNotContains(response, '1111')
+        self.assertContains(
+            response,
+            '<input type="hidden" name="currency" value="USD">',
+        )
 
     def test_new_limit_defaults_to_analytics_currency(self) -> None:
         self.client.force_login(self.user)
@@ -135,6 +140,23 @@ class BudgetCurrencyTest(TestCase):
             Budget.objects.get(category=self.category).currency,
             'USD',
         )
+
+    def test_unknown_currency_rejected(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('budget:save_limit'),
+            {
+                'category_id': self.category.pk,
+                'month': MONTH.isoformat(),
+                'amount_limit': 300,
+                'currency': ['USD'],
+            },
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertFalse(Budget.objects.exists())
 
 
 class BudgetCurrencyMigrationTest(TransactionTestCase):
