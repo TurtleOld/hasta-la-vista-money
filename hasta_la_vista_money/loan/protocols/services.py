@@ -4,11 +4,12 @@ This module defines Protocol interfaces for loan calculation services,
 enabling dependency injection and type checking.
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
-from hasta_la_vista_money.loan.models import Loan
+from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
+from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
@@ -30,3 +31,18 @@ class LoanCalculationServiceProtocol(Protocol):
         annual_interest_rate: Decimal,
         period_loan: int,
     ) -> None: ...
+
+
+@runtime_checkable
+class LoanPaymentServiceProtocol(Protocol):
+    """Protocol for posting a loan payment as a financial movement."""
+
+    def post_payment(
+        self,
+        *,
+        user: User,
+        loan_id: int,
+        account_id: int | None,
+        amount: Decimal,
+        date: datetime,
+    ) -> PaymentMakeLoan: ...

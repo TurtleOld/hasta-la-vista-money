@@ -132,6 +132,8 @@ class PaymentMakeLoan(models.Model):
         max_digits=constants.TWO_HUNDRED_FIFTY,
         decimal_places=constants.TWO,
     )
+    # Historical payments only were recorded and never moved balances.
+    is_posted = models.BooleanField(default=True)
 
 
 class PaymentSchedule(models.Model):

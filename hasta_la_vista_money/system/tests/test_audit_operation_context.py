@@ -127,6 +127,7 @@ class AuditOperationKindTests(TestCase):
             'account_edit',
             'balance_adjustment',
             'account_delete',
+            'loan_payment',
             'statement_import',
             'statement_import_resolution',
         }

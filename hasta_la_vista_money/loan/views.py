@@ -6,6 +6,7 @@ import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import QuerySet, Sum
 from django.db.models.deletion import ProtectedError
@@ -312,50 +313,24 @@ class PaymentMakeCreateView(
         if not form.is_valid():
             return JsonResponse({'success': False, 'errors': form.errors})
 
-        form_instance = form.save(commit=False)
         cd = form.cleaned_data
-        amount = cd.get('amount')
         account = cd.get('account')
-        loan = cd.get('loan')
-
-        if not all([amount, account, loan]):
-            return JsonResponse(
-                {
-                    'success': False,
-                    'errors': {'__all__': ['Все поля должны быть заполнены']},
-                },
+        service = request.container.loan.loan_payment_service()
+        try:
+            service.post_payment(
+                user=request.user,
+                loan_id=cd['loan'].pk,
+                account_id=account.pk if account else None,
+                amount=cd['amount'],
+                date=cd['date'],
             )
-
-        if account is None:
+        except ValidationError as error:
             return JsonResponse(
-                {
-                    'success': False,
-                    'errors': {'__all__': ['Счёт не выбран']},
-                },
+                {'success': False, 'errors': {'__all__': error.messages}},
             )
-
-        if loan is None:
+        except PermissionDenied as error:
             return JsonResponse(
-                {
-                    'success': False,
-                    'errors': {'__all__': ['Кредит не выбран']},
-                },
+                {'success': False, 'errors': {'__all__': [str(error)]}},
             )
-
-        if account.user == request.user:
-            form_instance.user = request.user
-            form_instance.account = account
-            form_instance.loan = loan
-            form_instance.save()
-            messages.success(request, constants.SUCCESS_MESSAGE_PAYMENT_MAKE)
-            return JsonResponse({'success': True})
-        return JsonResponse(
-            {
-                'success': False,
-                'errors': {
-                    '__all__': [
-                        'У вас нет прав для выполнения этого действия',
-                    ],
-                },
-            },
-        )
+        messages.success(request, constants.SUCCESS_MESSAGE_PAYMENT_MAKE)
+        return JsonResponse({'success': True})

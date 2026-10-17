@@ -63,6 +63,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
         transactions=transactions,
     )
 
-    loan = providers.Container(LoanContainer)
+    loan = providers.Container(LoanContainer, core=core)
 
     users = providers.Container(UsersContainer)

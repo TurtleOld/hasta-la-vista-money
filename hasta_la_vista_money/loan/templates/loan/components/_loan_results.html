@@ -254,6 +254,7 @@
                                                 {% for payment_make in payment_make_loan %}
                                                     {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
                                                         <span class="loan-badge">{% translate 'Оплачен' %}</span>
+                                                        {% if not payment_make.is_posted %}<span class="loan-badge">{% translate 'не проведён' %}</span>{% endif %}
                                                     {% endif %}
                                                 {% endfor %}
                                             </td>
