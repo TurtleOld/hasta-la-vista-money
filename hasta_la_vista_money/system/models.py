@@ -28,6 +28,7 @@ class AuditOperationKind(models.TextChoices):
     ACCOUNT_EDIT = 'account_edit', _('Правка счёта')
     BALANCE_ADJUSTMENT = 'balance_adjustment', _('Корректировка остатка')
     ACCOUNT_DELETE = 'account_delete', _('Удаление счёта')
+    LOAN_PAYMENT = 'loan_payment', _('Платёж по кредиту')
     STATEMENT_IMPORT = 'statement_import', _('Импорт выписки')
     STATEMENT_IMPORT_RESOLUTION = (
         'statement_import_resolution',

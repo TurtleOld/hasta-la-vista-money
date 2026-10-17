@@ -145,8 +145,10 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
 
     account = ModelChoiceField(
         queryset=Account.objects.all(),
+        required=False,
+        empty_label=_('Внешний источник'),
         label=_('Счёт списания'),
-        help_text=_('Выберите счёт для списания'),
+        help_text=_('Выберите счёт для списания или внешний источник'),
     )
 
     loan = ModelChoiceField(
@@ -188,7 +190,7 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         )
 
     def get_account_queryset(self) -> QuerySet[Account]:
-        accounts = Account.objects.available_for_operations().filter(
+        accounts = Account.objects.available_for_regular_operations().filter(
             user=self.user,
         )
 

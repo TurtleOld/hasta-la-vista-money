@@ -89,6 +89,7 @@ _KIND_TITLES: Final[dict[str, Any]] = {
     AuditOperationKind.RECEIPT_DELETE: _('Удаление чека'),
     AuditOperationKind.ACCOUNT_DELETE: _('Удаление счёта'),
     AuditOperationKind.BALANCE_ADJUSTMENT: _('Корректировка остатка'),
+    AuditOperationKind.LOAN_PAYMENT: _('Платёж по кредиту'),
     AuditOperationKind.STATEMENT_IMPORT: _('Импорт выписки'),
     AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: _(
         'Разбор нерешённых строк',
