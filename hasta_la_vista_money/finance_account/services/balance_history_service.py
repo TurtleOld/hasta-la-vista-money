@@ -112,20 +112,28 @@ class BalanceHistoryService:
         source events from the day after `moment`'s calendar day.
         """
         account_ids = {account.pk for account in accounts}
-        receipts = Receipt.objects.filter(
-            account_id__in=account_ids,
-            receipt_date__gt=moment,
-        ).values_list('receipt_date', 'operation_type', 'total_sum')
+        receipts = (
+            Receipt.objects.filter(
+                account_id__in=account_ids,
+                receipt_date__gt=moment,
+            )
+            .order_by()
+            .values_list('receipt_date', 'operation_type', 'total_sum')
+        )
         for at, operation_type, total_sum in receipts:
             yield (
                 timezone.localdate(at),
                 receipt_balance_delta(operation_type, total_sum),
             )
 
-        transactions = Transaction.objects.filter(
-            account_id__in=account_ids,
-            date__gt=moment,
-        ).values_list('date', 'type', 'amount')
+        transactions = (
+            Transaction.objects.filter(
+                account_id__in=account_ids,
+                date__gt=moment,
+            )
+            .order_by()
+            .values_list('date', 'type', 'amount')
+        )
         for at, transaction_type, amount in transactions:
             yield (
                 timezone.localdate(at),
@@ -134,15 +142,19 @@ class BalanceHistoryService:
                 else -amount,
             )
 
-        transfers = TransferMoneyLog.objects.filter(
-            Q(from_account_id__in=account_ids)
-            | Q(to_account_id__in=account_ids),
-            exchange_date__gt=moment,
-        ).values_list(
-            'exchange_date',
-            'from_account_id',
-            'to_account_id',
-            'amount',
+        transfers = (
+            TransferMoneyLog.objects.filter(
+                Q(from_account_id__in=account_ids)
+                | Q(to_account_id__in=account_ids),
+                exchange_date__gt=moment,
+            )
+            .order_by()
+            .values_list(
+                'exchange_date',
+                'from_account_id',
+                'to_account_id',
+                'amount',
+            )
         )
         for at, from_id, to_id, amount in transfers:
             delta = Decimal('0.00')
