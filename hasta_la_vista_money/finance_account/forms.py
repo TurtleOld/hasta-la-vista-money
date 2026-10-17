@@ -266,7 +266,11 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
     including balance checks, account differences, and amount validation.
     """
 
-    statement_row = IntegerField(required=False, widget=HiddenInput)
+    statement_row = IntegerField(
+        required=False,
+        widget=HiddenInput,
+        error_messages={'invalid': _('Строка выписки не найдена.')},
+    )
 
     def __init__(
         self,
@@ -443,6 +447,9 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             ValidationError: If transfer validation fails.
         """
         cleaned_data = super().clean()
+        # The row is a hidden field: show its error above the form.
+        for error in self.errors.pop('statement_row', []):
+            self.add_error(None, error)
 
         if cleaned_data:
             from_account = cleaned_data.get('from_account')

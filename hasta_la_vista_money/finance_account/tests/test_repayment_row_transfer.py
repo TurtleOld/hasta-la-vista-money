@@ -201,7 +201,7 @@ class RepaymentRowTransferViewTest(RepaymentRowTransferBase):
         super().setUp()
         self.client.force_login(self.user)
 
-    def _post(self, row_id: int) -> Any:
+    def _post(self, row_id: int | str) -> Any:
         return self.client.post(
             reverse('finance_account:transfer_money'),
             {
@@ -264,6 +264,13 @@ class RepaymentRowTransferViewTest(RepaymentRowTransferBase):
         response = self._post(self.row.pk)
 
         self.assertContains(response, 'Строка выписки уже закрыта')
+        self.assertFalse(TransferMoneyLog.objects.exists())
+
+    def test_post_with_malformed_row_shows_error(self) -> None:
+        response = self._post('abc')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Строка выписки не найдена')
         self.assertFalse(TransferMoneyLog.objects.exists())
 
     def test_close_failure_rolls_back_transfer(self) -> None:
