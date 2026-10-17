@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         TransferMoneyLogRepository,
     )
     from hasta_la_vista_money.finance_account.services import (
-        BalanceTrendService,
+        BalanceTrendServiceProtocol,
         TransferService,
     )
 
@@ -41,7 +41,7 @@ class AccountPageContextService:
         transfer_money_log_repository: 'TransferMoneyLogRepository',
         account_service: 'AccountServiceProtocol',
         transfer_service: 'TransferService',
-        balance_trend_service: 'BalanceTrendService',
+        balance_trend_service: 'BalanceTrendServiceProtocol',
     ) -> None:
         """Initialize service with required repositories and services.
 

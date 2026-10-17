@@ -2,32 +2,17 @@
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import TypedDict
 
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
-    BalanceHistoryService,
+from hasta_la_vista_money.finance_account.services.protocols import (
+    BalanceHistoryServiceProtocol,
 )
-
-
-class BalanceTrendPoint(TypedDict):
-    """Type definition for a balance trend data point."""
-
-    date: str
-    balance: float
-
-
-class BalanceTrendData(TypedDict):
-    """Type definition for balance trend response."""
-
-    current_balance: float
-    delta_absolute: float
-    delta_percent: float
-    series: list[BalanceTrendPoint]
-    has_data: bool
+from hasta_la_vista_money.finance_account.services.types import (
+    BalanceTrendData,
+)
 
 
 class BalanceTrendService:
@@ -40,7 +25,10 @@ class BalanceTrendService:
         '12m': 365,
     }
 
-    def __init__(self, balance_history_service: BalanceHistoryService) -> None:
+    def __init__(
+        self,
+        balance_history_service: BalanceHistoryServiceProtocol,
+    ) -> None:
         self.balance_history_service = balance_history_service
 
     def get_balance_trend(

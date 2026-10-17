@@ -14,7 +14,9 @@ from hasta_la_vista_money.finance_account.services import (
     AnalyticsCurrencyService,
     AnalyticsCurrencyServiceProtocol,
     BalanceHistoryService,
+    BalanceHistoryServiceProtocol,
     BalanceTrendService,
+    BalanceTrendServiceProtocol,
     BankService,
     TransferService,
 )
@@ -31,7 +33,9 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
         TransferMoneyLogRepository,
     )
     bank_repository = providers.Singleton(BankRepository)
-    balance_history_service = providers.Factory(
+    balance_history_service: providers.Factory[
+        BalanceHistoryServiceProtocol
+    ] = providers.Factory(
         BalanceHistoryService,
         movement_sources=providers.List(deposits.deposit_movement_source),
     )
@@ -49,9 +53,11 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
     )
-    balance_trend_service = providers.Factory(
-        BalanceTrendService,
-        balance_history_service=balance_history_service,
+    balance_trend_service: providers.Factory[BalanceTrendServiceProtocol] = (
+        providers.Factory(
+            BalanceTrendService,
+            balance_history_service=balance_history_service,
+        )
     )
     analytics_currency_service: providers.Factory[
         AnalyticsCurrencyServiceProtocol

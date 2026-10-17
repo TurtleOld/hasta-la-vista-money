@@ -43,7 +43,9 @@ from hasta_la_vista_money.finance_account.services.credit_debt import (
 )
 from hasta_la_vista_money.finance_account.services.protocols import (
     AnalyticsCurrencyServiceProtocol,
+    BalanceHistoryServiceProtocol,
     BalanceServiceProtocol,
+    BalanceTrendServiceProtocol,
     BankCalculatorProtocol,
     CreditCalculationServiceProtocol,
     FinancialMovementSourceProtocol,
@@ -53,6 +55,7 @@ from hasta_la_vista_money.finance_account.services.transfer_service import (
 )
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
+    BalanceTrendData,
     FinancialMovement,
     GracePeriodInfoDict,
     PaymentScheduleItemDict,
@@ -69,10 +72,13 @@ __all__ = [
     'AnalyticsCurrencyService',
     'AnalyticsCurrencyServiceProtocol',
     'BalanceHistoryService',
+    'BalanceHistoryServiceProtocol',
     'BalanceReconcileCommand',
     'BalanceService',
     'BalanceServiceProtocol',
+    'BalanceTrendData',
     'BalanceTrendService',
+    'BalanceTrendServiceProtocol',
     'BankCalculatorProtocol',
     'BankService',
     'CreditCalculationService',

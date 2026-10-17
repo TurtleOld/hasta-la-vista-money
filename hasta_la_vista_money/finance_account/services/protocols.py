@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
+    BalanceTrendData,
     FinancialMovement,
     RaiffeisenbankScheduleDict,
 )
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
     from hasta_la_vista_money.users.models import User
 
 
@@ -181,4 +184,34 @@ class AnalyticsCurrencyServiceProtocol(Protocol):
 
         Values outside ``available`` are ignored.
         """
+        ...
+
+
+class BalanceHistoryServiceProtocol(Protocol):
+    """Reconstruct account balances at past moments."""
+
+    def balance_at(self, account: Account, moment: datetime) -> Decimal:
+        """Account balance immediately after `moment`."""
+        ...
+
+    def daily_balances(
+        self,
+        accounts: Sequence[Account],
+        start: date,
+        end: date,
+    ) -> dict[date, Decimal]:
+        """Summed end-of-day balance of `accounts`, `start` to `end`."""
+        ...
+
+
+class BalanceTrendServiceProtocol(Protocol):
+    """Daily balance trend of one currency's accounts."""
+
+    def get_balance_trend(
+        self,
+        accounts: 'QuerySet[Account]',
+        currency: str,
+        period: str = '30d',
+    ) -> BalanceTrendData:
+        """Current balance, delta and daily series for `period`."""
         ...

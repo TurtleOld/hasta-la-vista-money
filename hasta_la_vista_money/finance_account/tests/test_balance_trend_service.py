@@ -29,7 +29,7 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.services.balance_trend_service import (  # noqa: E501
+    from hasta_la_vista_money.finance_account.services import (
         BalanceTrendData,
     )
     from hasta_la_vista_money.users.models import User
