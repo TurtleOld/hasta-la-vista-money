@@ -1833,6 +1833,8 @@ class AccountView(
                 {
                     'row': row,
                     'days_left': max((row.upload.expires_at - now).days, 0),
+                    # shortcut: one query per pending row; rows expire with
+                    # the statement, so a user has only a handful at once.
                     'candidates': list(
                         reconciliation_service.repayment_candidates(row),
                     ),
