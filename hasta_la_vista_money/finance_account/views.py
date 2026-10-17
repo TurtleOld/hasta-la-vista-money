@@ -1823,11 +1823,14 @@ class AccountView(
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()
         )
+        link_service = request.container.users.statement_row_link_service()
+        pending_rows = list(
+            reconciliation_service.pending_transfers_for_user(current_user),
+        )
+        candidates = link_service.repayment_candidates(pending_rows)
         now = timezone.now()
         grouped_transfers: dict[int, dict[str, Any]] = {}
-        for row in reconciliation_service.pending_transfers_for_user(
-            current_user,
-        ):
+        for row in pending_rows:
             account = row.upload.account
             group = grouped_transfers.setdefault(
                 account.pk,
@@ -1837,11 +1840,7 @@ class AccountView(
                 {
                     'row': row,
                     'days_left': max((row.upload.expires_at - now).days, 0),
-                    # shortcut: one query per pending row; rows expire with
-                    # the statement, so a user has only a handful at once.
-                    'candidates': list(
-                        reconciliation_service.repayment_candidates(row),
-                    ),
+                    'candidates': candidates[row.pk],
                 },
             )
         context['pending_card_transfers'] = list(grouped_transfers.values())

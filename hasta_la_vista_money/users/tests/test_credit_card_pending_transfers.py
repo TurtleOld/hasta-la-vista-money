@@ -8,7 +8,9 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -73,6 +75,9 @@ class CreditCardStatementBaseTest(TestCase):
             currency='RUB',
         )
         self.service = BankStatementReconciliationService()
+        self.link_service = (
+            ApplicationContainer().users.statement_row_link_service()
+        )
 
     def tearDown(self) -> None:
         cache.clear()
@@ -337,14 +342,14 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
             decision=BankStatementRow.Decision.TRANSFERRED,
         )
 
-        candidates = self.service.repayment_candidates(self.row)
+        candidates = self.link_service.repayment_candidates([self.row])
 
-        self.assertEqual(list(candidates), [match])
+        self.assertEqual(candidates, {self.row.pk: [match]})
 
     def test_link_closes_row_and_keeps_balances(self) -> None:
         transfer = self._transfer()
 
-        self.service.link_repayment(self.row.pk, transfer.pk, self.user.pk)
+        self.link_service.link_repayment(self.row.pk, transfer.pk, self.user.pk)
 
         self.row.refresh_from_db()
         self.assertEqual(
@@ -370,7 +375,7 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
         transfer = self._transfer(amount='200.00')
 
         with self.assertRaises(StaleStatementCandidateError):
-            self.service.link_repayment(
+            self.link_service.link_repayment(
                 self.row.pk,
                 transfer.pk,
                 self.user.pk,
@@ -386,10 +391,10 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
     def test_link_of_closed_row_conflicts(self) -> None:
         first = self._transfer()
         second = self._transfer()
-        self.service.link_repayment(self.row.pk, first.pk, self.user.pk)
+        self.link_service.link_repayment(self.row.pk, first.pk, self.user.pk)
 
         with self.assertRaises(ReconciliationDecisionConflictError):
-            self.service.link_repayment(
+            self.link_service.link_repayment(
                 self.row.pk,
                 second.pk,
                 self.user.pk,
@@ -455,9 +460,16 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
             BankStatementRow.Decision.NEEDS_TRANSFER,
         )
 
+    def test_malformed_transfer_shows_error(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {'transfer': 'x'}, follow=True)
+
+        self.assertContains(response, 'Перевод не подходит для этой строки')
+
     def test_closed_row_conflicts(self) -> None:
         transfer = self._transfer()
-        self.service.link_repayment(self.row.pk, transfer.pk, self.user.pk)
+        self.link_service.link_repayment(self.row.pk, transfer.pk, self.user.pk)
         self.client.force_login(self.user)
 
         response = self.client.post(self.url, {'transfer': transfer.pk})
@@ -480,3 +492,46 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
             self.row.decision,
             BankStatementRow.Decision.NEEDS_TRANSFER,
         )
+
+
+class PendingRepaymentListQueriesTest(CreditCardStatementBaseTest):
+    """Repayment candidates on the accounts page are loaded in bulk."""
+
+    WHEN = datetime(2026, 2, 9, 12, 0, tzinfo=UTC)
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.upload = self._create_upload()
+        self.client.force_login(self.user)
+
+    def _row_with_candidate(self, position: int) -> None:
+        amount = Decimal('100.00') + position
+        self._create_pending_row(
+            upload=self.upload,
+            amount=amount,
+            when=self.WHEN,
+            position=position,
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.debit,
+            to_account=self.card,
+            amount=amount,
+            exchange_date=self.WHEN,
+        )
+
+    def _page_queries(self) -> int:
+        cache.clear()
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse('finance_account:list'))
+        self.assertEqual(response.status_code, 200)
+        return len(queries)
+
+    def test_query_count_does_not_grow_with_rows(self) -> None:
+        self._row_with_candidate(0)
+        one_row = self._page_queries()
+
+        self._row_with_candidate(1)
+        self._row_with_candidate(2)
+
+        self.assertEqual(self._page_queries(), one_row)

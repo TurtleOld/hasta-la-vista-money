@@ -194,6 +194,8 @@ class RepaymentRowTransferServiceTest(RepaymentRowTransferBase):
         )
         self.assertIsNone(self.row.transfer)
         self.assertIsNone(self.row.decided_at)
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.needs_transfer_count, 1)
 
 
 class RepaymentRowTransferViewTest(RepaymentRowTransferBase):

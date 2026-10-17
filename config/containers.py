@@ -37,6 +37,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     transactions = providers.Container(
         TransactionContainer,
         core=core,
+        users=providers.DependenciesContainer(),
     )
 
     finance_account = providers.Container(
@@ -45,6 +46,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
         receipts=receipts,
         transactions=transactions,
         deposits=providers.DependenciesContainer(),
+        users=providers.DependenciesContainer(),
     )
 
     core.account_service.override(finance_account.account_service)
@@ -66,3 +68,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
     loan = providers.Container(LoanContainer, core=core)
 
     users = providers.Container(UsersContainer)
+
+    transactions.users.override(users)
+    finance_account.users.override(users)

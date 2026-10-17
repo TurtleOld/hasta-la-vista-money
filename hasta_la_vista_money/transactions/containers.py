@@ -28,6 +28,7 @@ class TransactionContainer(containers.DeclarativeContainer):
     """DI container exposing transaction repositories and services."""
 
     core = providers.DependenciesContainer()
+    users = providers.DependenciesContainer()
 
     transaction_repository = providers.Singleton(TransactionRepository)
     category_repository = providers.Singleton(CategoryRepository)
@@ -42,6 +43,7 @@ class TransactionContainer(containers.DeclarativeContainer):
             TransactionService,
             account_service=core.account_service,
             transaction_repository=transaction_repository,
+            statement_row_links=users.statement_row_link_service,
         )
     )
 

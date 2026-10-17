@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
+    from decimal import Decimal
 
     from django.db.models import QuerySet
 
@@ -52,7 +54,7 @@ class DashboardSummaryStatisticsServiceProtocol(Protocol):
     def __call__(
         self,
         user: User,
-        container: ApplicationContainer,
+        currency: str,
     ) -> DashboardSummaryStatisticsDict: ...
 
 
@@ -114,18 +116,6 @@ class BankStatementReconciliationServiceProtocol(Protocol):
         user_id: int,
     ) -> BankStatementRow: ...
 
-    def repayment_candidates(
-        self,
-        row: BankStatementRow,
-    ) -> QuerySet[TransferMoneyLog]: ...
-
-    def link_repayment(
-        self,
-        row_id: int,
-        transfer_id: int,
-        user_id: int,
-    ) -> BankStatementRow: ...
-
     def pending_transfer_rows(
         self,
         account: Account,
@@ -142,6 +132,47 @@ class BankStatementReconciliationServiceProtocol(Protocol):
     ) -> QuerySet[Transaction]: ...
 
     def refresh_outcome_counts(self, upload: BankStatementUpload) -> None: ...
+
+
+@runtime_checkable
+class StatementRowLinkServiceProtocol(Protocol):
+    """Statement rows closed by movements; credit-card repayment rows."""
+
+    def has_linked_row(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> bool: ...
+
+    def release_linked_rows(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> None: ...
+
+    def lock_repayment_row(
+        self,
+        row_id: int,
+        *,
+        to_account: Account,
+        amount: Decimal,
+    ) -> BankStatementRow: ...
+
+    def close_repayment_row(
+        self,
+        row: BankStatementRow,
+        transfer: TransferMoneyLog,
+    ) -> None: ...
+
+    def repayment_candidates(
+        self,
+        rows: Sequence[BankStatementRow],
+    ) -> dict[int, list[TransferMoneyLog]]: ...
+
+    def link_repayment(
+        self,
+        row_id: int,
+        transfer_id: int,
+        user_id: int,
+    ) -> BankStatementRow: ...
 
 
 @runtime_checkable

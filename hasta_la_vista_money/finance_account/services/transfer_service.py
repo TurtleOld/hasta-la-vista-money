@@ -21,17 +21,13 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    close_repayment_row,
-)
-from hasta_la_vista_money.users.services.statement_row_links import (
-    lock_repayment_row,
-    release_linked_rows,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         TransferMoneyLogRepository,
+    )
+    from hasta_la_vista_money.users.protocols.services import (
+        StatementRowLinkServiceProtocol,
     )
 
 
@@ -45,14 +41,17 @@ class TransferService:
     def __init__(
         self,
         transfer_money_log_repository: 'TransferMoneyLogRepository',
+        statement_row_links: 'StatementRowLinkServiceProtocol',
     ) -> None:
         """Initialize TransferService.
 
         Args:
             transfer_money_log_repository: Repository for transfer log
                 operations.
+            statement_row_links: Statement rows closed by transfers.
         """
         self.transfer_money_log_repository = transfer_money_log_repository
+        self.statement_row_links = statement_row_links
         self._balance_service = BalanceService()
 
     @transaction.atomic
@@ -102,7 +101,7 @@ class TransferService:
             )
         row = None
         if statement_row_id is not None:
-            row = lock_repayment_row(
+            row = self.statement_row_links.lock_repayment_row(
                 statement_row_id,
                 to_account=to_account,
                 amount=amount,
@@ -127,7 +126,7 @@ class TransferService:
                 notes=notes or '',
             )
             if row is not None:
-                close_repayment_row(row, transfer)
+                self.statement_row_links.close_repayment_row(row, transfer)
             return transfer
 
     def get_last_used_accounts(
@@ -195,5 +194,5 @@ class TransferService:
                     to_account.pk: -transfer_log.amount,
                 },
             )
-            release_linked_rows(transfer_log)
+            self.statement_row_links.release_linked_rows(transfer_log)
             self.transfer_money_log_repository.delete_log(transfer_log)

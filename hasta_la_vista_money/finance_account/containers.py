@@ -27,6 +27,7 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     receipts = providers.DependenciesContainer()
     transactions = providers.DependenciesContainer()
     deposits = providers.DependenciesContainer()
+    users = providers.DependenciesContainer()
 
     account_repository = providers.Singleton(AccountRepository)
     transfer_money_log_repository = providers.Singleton(
@@ -52,6 +53,7 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     transfer_service = providers.Factory(
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
+        statement_row_links=users.statement_row_link_service,
     )
     balance_trend_service: providers.Factory[BalanceTrendServiceProtocol] = (
         providers.Factory(
