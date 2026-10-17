@@ -142,6 +142,19 @@ class DashboardManager {
         return url.toString();
     }
 
+    _formatMoney(value, currency, fractionDigits = 0) {
+        try {
+            return value.toLocaleString('ru-RU', {
+                style: 'currency',
+                currency,
+                minimumFractionDigits: fractionDigits,
+                maximumFractionDigits: Math.max(fractionDigits, 2),
+            });
+        } catch {
+            return `${value.toLocaleString('ru-RU')} ${currency}`;
+        }
+    }
+
     _buildNavigationURL(path, params) {
         const url = new URL(String(path || ''), window.location.origin);
         if (url.origin !== window.location.origin) {
@@ -241,7 +254,12 @@ class DashboardManager {
 
     async loadDashboard() {
         try {
-            const response = await this._safeFetch('data/', { period: this.period }, {
+            const params = { period: this.period };
+            const pageParams = new URLSearchParams(window.location.search);
+            for (const key of ['currency', 'group_id']) {
+                if (pageParams.has(key)) params[key] = pageParams.get(key);
+            }
+            const response = await this._safeFetch('data/', params, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -267,6 +285,7 @@ class DashboardManager {
             this.comparisonData = data.comparison || {};
             this.recentTransactions = data.recent_transactions || [];
             this.clickThrough = data.click_through || {};
+            this.currency = data.currency || 'RUB';
 
             this.renderWidgets();
         } catch (error) {
@@ -615,7 +634,7 @@ class DashboardManager {
                 const summary = this._el(
                     'p',
                     { class: 'mt-1 text-sm text-gray-600 dark:text-gray-400' },
-                    `${safeFact.toLocaleString('ru-RU')} ₽ из ${safeLimit.toLocaleString('ru-RU')} ₽`,
+                    `${this._formatMoney(safeFact, this.currency)} из ${this._formatMoney(safeLimit, this.currency)}`,
                 );
 
                 const progressWrap = this._el('div', { class: 'mt-2 h-2 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden' });
@@ -747,17 +766,17 @@ class DashboardManager {
             const date = new Date(dateStr);
             return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
         };
-        const amountNode = (amount, type) => {
+        const amountNode = (amount, type, currency) => {
             const num = Number(amount);
             const formatted = isFinite(num)
-                ? num.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                : String(amount);
+                ? this._formatMoney(num, currency, 2)
+                : `${amount} ${currency}`;
             const sign = type === 'expense' ? '-' : '+';
             const cls = type === 'expense'
                 ? 'text-red-600 dark:text-red-400 font-semibold'
                 : 'text-green-600 dark:text-green-400 font-semibold';
             const span = this._el('span', { class: cls });
-            span.textContent = `${sign}${formatted} ₽`;
+            span.textContent = `${sign}${formatted}`;
             return span;
         };
 
@@ -803,7 +822,7 @@ class DashboardManager {
             leftDiv.appendChild(infoRow);
 
             const rightDiv = this._el('div', { class: 'text-right shrink-0' });
-            rightDiv.appendChild(amountNode(t.amount, t.type));
+            rightDiv.appendChild(amountNode(t.amount, t.type, t.currency));
 
             itemContent.appendChild(leftDiv);
             itemContent.appendChild(rightDiv);

@@ -75,8 +75,9 @@ def signed_adjustment_expense() -> Expression:
 def actual_interest_totals_for_periods(
     users: Iterable['User'],
     periods: dict[str, tuple[date, date]],
+    currency: str,
 ) -> dict[str, tuple[Decimal, Decimal]]:
-    """Return actual deposit totals for named periods in one query."""
+    """Return actual deposit totals in `currency` for named periods."""
     aggregates: dict[str, Any] = {}
     for name, (start, end) in periods.items():
         period_filter = Q(posting_on__gte=start, posting_on__lte=end)
@@ -102,6 +103,7 @@ def actual_interest_totals_for_periods(
         )
     totals = DepositCapitalizationEvent.objects.filter(
         deposit__account__user__in=users,
+        deposit__account__currency=currency,
     ).aggregate(**aggregates)
     return {
         name: (

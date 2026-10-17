@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
@@ -13,9 +13,6 @@ from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
-
-if TYPE_CHECKING:
-    from config.containers import ApplicationContainer
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Budget, Planning
@@ -232,29 +229,6 @@ class StatisticsFilters:
             operations_search=query.get('operations_search', '').strip(),
             transfers_search=query.get('transfers_search', '').strip(),
             receipts_search=query.get('receipts_search', '').strip(),
-        )
-
-    @property
-    def is_default(self) -> bool:
-        return not any(
-            (
-                self.period != '6',
-                self.date_from,
-                self.date_to,
-                self.account_ids,
-                self.currency,
-                self.category_keys,
-                self.member != 'my',
-                self.operations_page != 1,
-                self.transfers_page != 1,
-                self.receipts_page != 1,
-                self.operations_sort != '-date',
-                self.transfers_sort != '-exchange_date',
-                self.receipts_sort != '-receipt_date',
-                bool(self.operations_search),
-                bool(self.transfers_search),
-                bool(self.receipts_search),
-            ),
         )
 
     def _query_params(
@@ -505,9 +479,8 @@ def _planning_amounts_by_month(
     plans = Planning.objects.filter(
         user__in=list(users),
         date__range=(period_start, period_end),
+        currency=currency,
     )
-    if currency:
-        plans = plans.filter(currency=currency)
     qs = (
         plans.select_related(None)
         .annotate(month=TruncMonth('date'))
@@ -1029,12 +1002,10 @@ class DashboardSummaryStatisticsDict(TypedDict):
 
 def get_dashboard_summary_statistics(
     user: User,
-    container: 'ApplicationContainer',
+    currency: str,
 ) -> DashboardSummaryStatisticsDict:
-    """Return the dashboard widget payload without heavyweight sections."""
-    del container
-
-    cache_key = get_dashboard_summary_cache_key(user.pk)
+    """Return the dashboard widget payload in one currency."""
+    cache_key = get_dashboard_summary_cache_key(user.pk, currency)
     cached_stats = cache.get(cache_key)
 
     if cached_stats is not None:
@@ -1042,7 +1013,7 @@ def get_dashboard_summary_statistics(
 
     now = timezone.now()
     today = now.date()
-    stats_filter = StatisticsFilters()
+    stats_filter = StatisticsFilters(currency=currency)
     start, end = stats_filter.date_range(today)
     users = [user]
 

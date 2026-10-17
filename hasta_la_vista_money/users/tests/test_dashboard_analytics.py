@@ -113,7 +113,7 @@ class GetPeriodComparisonTest(TestCase):
         cache.clear()
 
     def test_get_period_comparison_month(self) -> None:
-        result = get_period_comparison(self.user, 'month')
+        result = get_period_comparison(self.user, 'month', 'RUB')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
@@ -123,29 +123,29 @@ class GetPeriodComparisonTest(TestCase):
         self.assertIn('income', result['previous'])
 
     def test_get_period_comparison_quarter(self) -> None:
-        result = get_period_comparison(self.user, 'quarter')
+        result = get_period_comparison(self.user, 'quarter', 'RUB')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
 
     def test_get_period_comparison_year(self) -> None:
-        result = get_period_comparison(self.user, 'year')
+        result = get_period_comparison(self.user, 'year', 'RUB')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
 
     def test_get_period_comparison_uses_two_aggregate_queries(self) -> None:
         with CaptureQueriesContext(connection) as queries:
-            result = get_period_comparison(self.user, 'month')
+            result = get_period_comparison(self.user, 'month', 'RUB')
 
         self.assertIn('current', result)
         self.assertLessEqual(len(queries), 2)
 
     def test_get_period_comparison_uses_cache(self) -> None:
-        get_period_comparison(self.user, 'quarter')
+        get_period_comparison(self.user, 'quarter', 'RUB')
 
         with CaptureQueriesContext(connection) as queries:
-            cached_result = get_period_comparison(self.user, 'quarter')
+            cached_result = get_period_comparison(self.user, 'quarter', 'RUB')
 
         self.assertIn('current', cached_result)
         self.assertEqual(len(queries), 0)
@@ -189,7 +189,7 @@ class GetPeriodComparisonTest(TestCase):
             value_on=today,
         )
 
-        result = get_period_comparison(self.user, 'month')
+        result = get_period_comparison(self.user, 'month', 'RUB')
 
         self.assertEqual(result['current']['income'], 100.0)
         self.assertEqual(result['current']['expenses'], 13.0)
