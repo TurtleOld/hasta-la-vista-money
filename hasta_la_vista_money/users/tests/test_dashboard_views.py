@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
 from django.db import connection
 from django.test import RequestFactory, TestCase
@@ -217,6 +218,7 @@ class DashboardDataViewTest(TestCase):
         }
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
+        request.session = SessionStore()
         setup_container_for_request(request)
 
         with patch(

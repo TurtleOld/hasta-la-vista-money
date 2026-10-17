@@ -9,6 +9,10 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.currencies import (
+    currency_choices,
+    get_default_currency,
+)
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
@@ -144,6 +148,12 @@ class Planning(models.Model):
         verbose_name=_('Сумма'),
         help_text=_('Планируемая сумма'),
     )
+    currency: str = models.CharField(  # type: ignore[assignment]
+        max_length=3,
+        choices=currency_choices('ru'),
+        default=get_default_currency,
+        verbose_name=_('Валюта'),
+    )
     planning_type: str = models.CharField(  # type: ignore[assignment]
         max_length=10,
         choices=TransactionType.choices,
@@ -168,7 +178,13 @@ class Planning(models.Model):
         ordering: ClassVar[list[str]] = ['-date']
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
-                fields=['user', 'category', 'date', 'planning_type'],
+                fields=[
+                    'user',
+                    'category',
+                    'date',
+                    'planning_type',
+                    'currency',
+                ],
                 name='unique_planning_per_user_category_date_type',
             ),
         ]
@@ -236,6 +252,12 @@ class Budget(models.Model):
         verbose_name=_('Лимит'),
         help_text=_('Максимальная сумма расходов за период'),
     )
+    currency: str = models.CharField(  # type: ignore[assignment]
+        max_length=3,
+        choices=currency_choices('ru'),
+        default=get_default_currency,
+        verbose_name=_('Валюта'),
+    )
     alert_threshold: int = models.PositiveSmallIntegerField(  # type: ignore[assignment]
         default=constants.EIGHTY,
         validators=[
@@ -266,12 +288,12 @@ class Budget(models.Model):
         ordering: ClassVar[list[str]] = ['-period', 'category__name']
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
-                fields=['user', 'period'],
+                fields=['user', 'period', 'currency'],
                 condition=Q(category__isnull=True),
                 name='unique_overall_budget_per_user_period',
             ),
             models.UniqueConstraint(
-                fields=['user', 'category', 'period'],
+                fields=['user', 'category', 'period', 'currency'],
                 condition=Q(category__isnull=False),
                 name='unique_category_budget_per_user_period',
             ),
