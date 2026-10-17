@@ -27,11 +27,14 @@ class AnalyticsCurrency:
 def get_analytics_currency(
     request: HttpRequest,
     users: Iterable[User],
+    *,
+    remember: bool = True,
 ) -> AnalyticsCurrency:
     """Read ``?currency=``, remember the choice in the session.
 
     Put the result into the context as ``analytics_currency`` and include
-    ``includes/analytics_currency_switcher.html``.
+    ``includes/analytics_currency_switcher.html``. Saves pass
+    ``remember=False`` so that only page views change the choice.
     """
     service: AnalyticsCurrencyServiceProtocol = cast(
         'RequestWithContainer',
@@ -45,6 +48,6 @@ def get_analytics_currency(
         request.session.get(key),
         currencies,
     )
-    if requested == currency:
+    if remember and requested == currency:
         request.session[key] = currency
     return AnalyticsCurrency(currency=currency, currencies=currencies)

@@ -23,15 +23,24 @@ class DateListGenerator:
     creates Planning records for expense or income categories.
     """
 
-    def __init__(self, user: User, type_: str | None) -> None:
+    def __init__(
+        self,
+        user: User,
+        type_: str | None,
+        currency: str | None = None,
+    ) -> None:
         """Initialize DateListGenerator.
 
         Args:
             user: User to generate dates for.
             type_: Planning type ('expense', 'income', or None).
+            currency: Currency of the plans; required with ``type_``.
         """
+        if type_ is not None and currency is None:
+            raise ValueError('Planning needs a currency')
         self.user = user
         self.type_ = type_
+        self.currency = currency
 
     def run(self, current_date: datetime | QuerySet[DateList]) -> None:
         """Add 12 following months and optionally Planning records.
@@ -141,6 +150,7 @@ class DateListGenerator:
             Planning.objects.filter(
                 user=self.user,
                 planning_type=self.type_,
+                currency=self.currency,
                 date__in=months,
                 category__in=categories,
             ).values_list('category_id', 'date'),
@@ -151,6 +161,7 @@ class DateListGenerator:
                 category=c,
                 date=d,
                 planning_type=self.type_,
+                currency=self.currency,
                 amount=0,
             )
             for c in categories
@@ -166,6 +177,8 @@ def generate_date_list(
     current_date: datetime | QuerySet[DateList],
     user: User,
     type_: str | None = None,
+    *,
+    currency: str | None = None,
 ) -> None:
     """Generate date list and optionally planning records.
 
@@ -175,5 +188,8 @@ def generate_date_list(
         current_date: Starting date or QuerySet of DateList.
         user: User to generate dates for.
         type_: Planning type ('expense', 'income', or None).
+        currency: Currency of the plans; required with ``type_``.
     """
-    DateListGenerator(user=user, type_=type_).run(current_date)
+    DateListGenerator(user=user, type_=type_, currency=currency).run(
+        current_date,
+    )

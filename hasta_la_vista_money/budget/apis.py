@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
     OpenApiResponse,
@@ -34,6 +35,7 @@ from hasta_la_vista_money.core.mixins import (
     UserAuthMixin,
 )
 from hasta_la_vista_money.finance_account.analytics_currency import (
+    AnalyticsCurrency,
     get_analytics_currency,
 )
 from hasta_la_vista_money.finance_account.currencies import currency_choices
@@ -58,14 +60,28 @@ def _budget_range_from_request(request: Request) -> str:
     return str(range_value or '6')
 
 
+def _analytics_currency(
+    request: Request,
+    users: list[User],
+    *,
+    remember: bool = True,
+) -> AnalyticsCurrency:
+    return get_analytics_currency(
+        cast('HttpRequest', request),
+        users,
+        remember=remember,
+    )
+
+
 def _requested_currency(request: Request, users: list[User]) -> str:
+    """Posted currency, else the analytics one; a save never remembers it."""
     currency = str(
-        request.data.get('currency')
-        or get_analytics_currency(cast('HttpRequest', request), users).currency,
+        request.data.get(constants.ANALYTICS_CURRENCY_PARAM)
+        or _analytics_currency(request, users, remember=False).currency,
     )
     if currency not in dict(currency_choices()):
         raise ValidationError(
-            detail='Unknown currency',
+            {constants.ANALYTICS_CURRENCY_PARAM: _('Неизвестная валюта.')},
             code='invalid_currency',
         )
     return currency
@@ -87,10 +103,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
     )
     months = sorted({month.replace(day=1) for month in dates})
     budget_service = request_with_container.container.budget.budget_service()
-    analytics_currency = get_analytics_currency(
-        cast('HttpRequest', request),
-        scope_users,
-    )
+    analytics_currency = _analytics_currency(request, scope_users)
 
     if table_type == TransactionType.EXPENSE:
         categories = list(
@@ -160,10 +173,7 @@ def _render_budget_limits(request: Request) -> Any:
         get_categories(user, TransactionType.EXPENSE, users=scope_users),
     )
     budget_service = request_with_container.container.budget.budget_service()
-    analytics_currency = get_analytics_currency(
-        cast('HttpRequest', request),
-        scope_users,
-    )
+    analytics_currency = _analytics_currency(request, scope_users)
     context = {
         'budget_limit_overview': budget_service.aggregate_budget_limit_overview(
             user=user,
@@ -230,6 +240,12 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         """
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
+        _scope, scope_users, _choices = _resolve_budget_scope(user, request)
+        currency = _analytics_currency(
+            request,
+            scope_users,
+            remember=False,
+        ).currency
 
         last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
@@ -240,8 +256,13 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             queryset_last_date = timezone.now().replace(day=1)
 
         # Generate dates for both income and expense types
-        generate_date_list(queryset_last_date, queryset_user, 'expense')
-        generate_date_list(queryset_last_date, queryset_user, 'income')
+        for type_ in ('expense', 'income'):
+            generate_date_list(
+                queryset_last_date,
+                queryset_user,
+                type_,
+                currency=currency,
+            )
 
         redirect_url = str(reverse_lazy('budget:list'))
 

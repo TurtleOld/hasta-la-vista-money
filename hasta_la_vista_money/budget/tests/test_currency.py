@@ -4,15 +4,22 @@ from datetime import date, datetime
 from decimal import Decimal
 from http import HTTPStatus
 
+from django.contrib.sessions.backends.db import SessionStore
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from config.containers import ApplicationContainer
+from core.test_helpers import setup_container_for_request
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Budget, DateList, Planning
+from hasta_la_vista_money.budget.views import (
+    ExpenseBudgetAPIView,
+    IncomeBudgetAPIView,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -157,6 +164,52 @@ class BudgetCurrencyTest(TestCase):
 
         self.assertEqual(response.status_code, HTTPStatus.BAD_REQUEST)
         self.assertFalse(Budget.objects.exists())
+        self.assertEqual(
+            response.json()['currency'],
+            'Неизвестная валюта.',
+        )
+
+    def test_add_months_creates_plans_in_analytics_currency(self) -> None:
+        self.client.force_login(self.user)
+        self.client.get(reverse('budget:list'), {'currency': 'USD'})
+
+        response = self.client.post(reverse('budget:generate_date'))
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(
+            set(Planning.objects.values_list('currency', flat=True)),
+            {'USD'},
+        )
+
+    def test_save_does_not_remember_currency(self) -> None:
+        self.client.force_login(self.user)
+
+        self.client.post(
+            f'{reverse("budget:save_limit")}?currency=USD',
+            {
+                'category_id': self.category.pk,
+                'month': MONTH.isoformat(),
+                'amount_limit': 300,
+            },
+            content_type='application/json',
+        )
+
+        self.assertNotIn(
+            constants.ANALYTICS_CURRENCY_SESSION_KEY,
+            self.client.session,
+        )
+
+    def test_budget_json_reports_currency(self) -> None:
+        for view in (ExpenseBudgetAPIView, IncomeBudgetAPIView):
+            with self.subTest(view=view.__name__):
+                request = APIRequestFactory().get('/', {'currency': 'USD'})
+                request.session = SessionStore()
+                setup_container_for_request(request)
+                force_authenticate(request, user=self.user)
+
+                response = view.as_view()(request)
+
+                self.assertEqual(response.data['currency'], 'USD')
 
 
 class BudgetCurrencyMigrationTest(TransactionTestCase):

@@ -1,12 +1,10 @@
 from datetime import date
-from datetime import datetime as dt
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import get_object_or_404, redirect
-from django.utils import timezone
-from django.views.generic import ListView, View
+from django.shortcuts import get_object_or_404
+from django.views.generic import ListView
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
@@ -26,7 +24,6 @@ from hasta_la_vista_money.finance_account.analytics_currency import (
     AnalyticsCurrency,
     get_analytics_currency,
 )
-from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
@@ -278,28 +275,6 @@ class IncomeTableView(
         return context
 
 
-class GenerateDateView(LoginRequiredMixin, View):
-    """View for generating date list for both expense and income types."""
-
-    def post(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        """Generate date list for both expense and income types."""
-        user = cast('User', request.user)
-        queryset_user = get_object_or_404(User, username=user)
-
-        last_date_obj = queryset_user.budget_date_lists.last()
-        if last_date_obj:
-            queryset_last_date = timezone.make_aware(
-                dt.combine(last_date_obj.date, dt.min.time()),
-            )
-        else:
-            queryset_last_date = timezone.now().replace(day=1)
-
-        generate_date_list(queryset_last_date, queryset_user, 'expense')
-        generate_date_list(queryset_last_date, queryset_user, 'income')
-
-        return redirect('budget:list')
-
-
 class PlanningExpenseDict(TypedDict):
     category_id: int
     date: date
@@ -330,6 +305,7 @@ class PlanningExpenseDict(TypedDict):
                         'type': 'array',
                         'items': {'type': 'object'},
                     },
+                    'currency': {'type': 'string'},
                 },
             },
         ),
@@ -362,14 +338,15 @@ class ExpenseBudgetAPIView(APIView):
         budget_service = (
             request_with_container.container.budget.budget_service()
         )
+        currency = get_analytics_currency(request, scope_users).currency
         data = budget_service.aggregate_expense_api(
             user=user,
             months=months,
             expense_categories=expense_categories,
-            currency=get_analytics_currency(request, scope_users).currency,
+            currency=currency,
             users=scope_users,
         )
-        return Response(data)
+        return Response({**data, 'currency': currency})
 
 
 @extend_schema(
@@ -396,6 +373,7 @@ class ExpenseBudgetAPIView(APIView):
                         'type': 'array',
                         'items': {'type': 'object'},
                     },
+                    'currency': {'type': 'string'},
                 },
             },
         ),
@@ -428,11 +406,12 @@ class IncomeBudgetAPIView(APIView):
         budget_service = (
             request_with_container.container.budget.budget_service()
         )
+        currency = get_analytics_currency(request, scope_users).currency
         data = budget_service.aggregate_income_api(
             user=user,
             months=months,
             income_categories=income_categories,
-            currency=get_analytics_currency(request, scope_users).currency,
+            currency=currency,
             users=scope_users,
         )
-        return Response(data)
+        return Response({**data, 'currency': currency})
