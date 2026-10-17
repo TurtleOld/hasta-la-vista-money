@@ -19,6 +19,7 @@ from django.forms import (
     DateField,
     DecimalField,
     Form,
+    HiddenInput,
     IntegerField,
     ModelChoiceField,
 )
@@ -264,6 +265,8 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
     Supports user-specific account filtering and comprehensive validation
     including balance checks, account differences, and amount validation.
     """
+
+    statement_row = IntegerField(required=False, widget=HiddenInput)
 
     def __init__(
         self,

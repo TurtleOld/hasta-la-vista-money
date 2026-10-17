@@ -152,6 +152,7 @@ class TestAccountView(TestCase):
         view = AccountView()
         view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
+        view.request.session = self.client.session
         setup_container_for_request(view.request)
 
         view.object_list = view.get_queryset()

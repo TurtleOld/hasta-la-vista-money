@@ -22,6 +22,8 @@ from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.statement_row_links import (
+    close_repayment_row,
+    lock_repayment_row,
     release_linked_rows,
 )
 
@@ -60,6 +62,8 @@ class TransferService:
         user: User,
         exchange_date: datetime | None = None,
         notes: str | None = None,
+        *,
+        statement_row_id: int | None = None,
     ) -> TransferMoneyLog:
         """Transfer money between accounts with validation and logging.
 
@@ -70,6 +74,8 @@ class TransferService:
             user: User performing the transfer.
             exchange_date: Optional exchange date for the transfer.
             notes: Optional notes for the transfer.
+            statement_row_id: Optional unperformed repayment row of
+                ``to_account`` that this transfer closes.
 
         Returns:
             TransferMoneyLog: Created transfer log entry.
@@ -92,6 +98,13 @@ class TransferService:
                     'сервис вкладов.',
                 ),
             )
+        row = None
+        if statement_row_id is not None:
+            row = lock_repayment_row(
+                statement_row_id,
+                to_account=to_account,
+                amount=amount,
+            )
 
         with audit_operation(kind=AuditOperationKind.TRANSFER):
             locked_accounts = self._balance_service.apply_account_deltas(
@@ -103,7 +116,7 @@ class TransferService:
             from_account = locked_accounts[from_account.pk]
             to_account = locked_accounts[to_account.pk]
 
-            return self.transfer_money_log_repository.create_log(
+            transfer = self.transfer_money_log_repository.create_log(
                 user=user,
                 from_account=from_account,
                 to_account=to_account,
@@ -111,6 +124,9 @@ class TransferService:
                 exchange_date=exchange_date,
                 notes=notes or '',
             )
+            if row is not None:
+                close_repayment_row(row, transfer)
+            return transfer
 
     def get_last_used_accounts(
         self,

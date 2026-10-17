@@ -108,6 +108,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
             user=self.user,
             months=months,
             expense_categories=[self.food, self.adjustment_expense],
+            currency='RUB',
         )
 
         facts = {

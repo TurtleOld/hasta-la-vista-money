@@ -25,6 +25,8 @@ class BudgetServiceProtocol(Protocol):
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> BudgetLimitOverviewDict: ...
 
@@ -34,6 +36,8 @@ class BudgetServiceProtocol(Protocol):
         months: list[date],
         expense_categories: list[Category],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateBudgetDataDict: ...
 
@@ -42,6 +46,8 @@ class BudgetServiceProtocol(Protocol):
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateExpenseTableDict: ...
 
@@ -50,6 +56,8 @@ class BudgetServiceProtocol(Protocol):
         user: User,
         months: list[date],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateIncomeTableDict: ...
 
@@ -58,6 +66,8 @@ class BudgetServiceProtocol(Protocol):
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateExpenseApiDict: ...
 
@@ -66,5 +76,7 @@ class BudgetServiceProtocol(Protocol):
         user: User,
         months: list[date],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateIncomeApiDict: ...

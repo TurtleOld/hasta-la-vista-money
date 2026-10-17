@@ -22,6 +22,10 @@ from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.budget.services.budget import (
     get_categories,
 )
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    AnalyticsCurrency,
+    get_analytics_currency,
+)
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
@@ -47,6 +51,7 @@ class BudgetPageContextDict(TypedDict):
     scope_users: list[User]
     budget_scope: str
     budget_scope_choices: list[BudgetScopeChoiceDict]
+    analytics_currency: AnalyticsCurrency
 
 
 def _normalize_budget_scope(value: str | None) -> str:
@@ -125,6 +130,7 @@ class BudgetContextMixin:
             'scope_users': scope_users,
             'budget_scope': budget_scope,
             'budget_scope_choices': budget_scope_choices,
+            'analytics_currency': get_analytics_currency(request, scope_users),
         }
 
 
@@ -147,6 +153,7 @@ class BudgetView(
             months=budget_context['months'],
             expense_categories=budget_context['expense_categories'],
             income_categories=budget_context['income_categories'],
+            currency=budget_context['analytics_currency'].currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -155,6 +162,7 @@ class BudgetView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
+                'analytics_currency': budget_context['analytics_currency'],
             },
         )
         context.update(
@@ -199,6 +207,7 @@ class ExpenseTableView(
             user=budget_context['user'],
             months=budget_context['months'],
             expense_categories=budget_context['expense_categories'],
+            currency=budget_context['analytics_currency'].currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -216,6 +225,7 @@ class ExpenseTableView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
+                'analytics_currency': budget_context['analytics_currency'],
             },
         )
         return context
@@ -244,6 +254,7 @@ class IncomeTableView(
             user=budget_context['user'],
             months=budget_context['months'],
             income_categories=budget_context['income_categories'],
+            currency=budget_context['analytics_currency'].currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -261,6 +272,7 @@ class IncomeTableView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
+                'analytics_currency': budget_context['analytics_currency'],
             },
         )
         return context
@@ -354,6 +366,7 @@ class ExpenseBudgetAPIView(APIView):
             user=user,
             months=months,
             expense_categories=expense_categories,
+            currency=get_analytics_currency(request, scope_users).currency,
             users=scope_users,
         )
         return Response(data)
@@ -419,6 +432,7 @@ class IncomeBudgetAPIView(APIView):
             user=user,
             months=months,
             income_categories=income_categories,
+            currency=get_analytics_currency(request, scope_users).currency,
             users=scope_users,
         )
         return Response(data)

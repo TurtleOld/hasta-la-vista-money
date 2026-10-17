@@ -444,6 +444,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             user=user,
             months=[month_start],
             expense_categories=expense_categories,
+            currency=get_analytics_currency(request, [user]).currency,
             users=[user],
         )
         hot_categories = [

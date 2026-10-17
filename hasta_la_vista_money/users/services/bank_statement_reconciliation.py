@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -644,82 +644,3 @@ class BankStatementReconciliationService:
         )
         self.refresh_outcome_counts(row.upload)
         return row
-
-    def settle_pending_transfers(self, account: Account) -> int:
-        """Close unperformed repayments matched by existing transfers.
-
-        A transfer closes at most one row: its amount must match and its
-        date must be within one day of the statement row.
-        """
-        with audit_operation(
-            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
-        ):
-            return self._settle_pending_transfers(account)
-
-    def settle_transfers_for_user(self, user: User) -> int:
-        """Auto-close pending repayments across a user's credit accounts."""
-        total = 0
-        for account in Account.objects.filter(
-            user=user,
-            type_account__in=constants.CREDIT_ACCOUNT_TYPES,
-        ):
-            total += self.settle_pending_transfers(account)
-        return total
-
-    @transaction.atomic
-    def _settle_pending_transfers(self, account: Account) -> int:
-        if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
-            return 0
-        rows = list(
-            BankStatementRow.objects.select_for_update()
-            .filter(
-                upload__account=account,
-                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
-            )
-            .order_by('transaction_date', 'pk'),
-        )
-        if not rows:
-            return 0
-        used_ids = set(
-            BankStatementRow.objects.filter(
-                transfer__isnull=False,
-                upload__account=account,
-            ).values_list('transfer_id', flat=True),
-        )
-        settled_upload_ids: set[int] = set()
-        settled = 0
-        for row in rows:
-            if row.amount is None or row.transaction_date is None:
-                continue
-            row_date = timezone.localtime(row.transaction_date).date()
-            transfer = (
-                TransferMoneyLog.objects.filter(
-                    user_id=account.user_id,
-                    to_account=account,
-                    amount=row.amount,
-                    exchange_date__date__gte=row_date - timedelta(days=1),
-                    exchange_date__date__lte=row_date + timedelta(days=1),
-                )
-                .exclude(pk__in=used_ids)
-                .order_by('exchange_date', 'pk')
-                .first()
-            )
-            if transfer is None:
-                continue
-            row.transfer = transfer
-            row.decision = BankStatementRow.Decision.TRANSFERRED
-            row.decided_at = timezone.now()
-            row.save(update_fields=['transfer', 'decision', 'decided_at'])
-            BankStatementDecisionAudit.objects.create(
-                row=row,
-                actor_id=account.user_id,
-                decision=row.decision,
-            )
-            used_ids.add(transfer.pk)
-            settled_upload_ids.add(row.upload_id)
-            settled += 1
-        for upload in BankStatementUpload.objects.filter(
-            pk__in=settled_upload_ids,
-        ):
-            self.refresh_outcome_counts(upload)
-        return settled

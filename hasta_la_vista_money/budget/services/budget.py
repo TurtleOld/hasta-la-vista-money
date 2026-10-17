@@ -249,6 +249,8 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, Decimal]]:
         if not months:
@@ -268,6 +270,7 @@ class BudgetService:
             self.transaction_repository.filter_analytical(
                 user__in=scope_users,
                 type=type_value,
+                account__currency=currency,
                 category_id__in=category_ids,
                 date__gte=start_date,
                 date__lte=end_date,
@@ -297,6 +300,8 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> BudgetLimitOverviewDict:
         """Aggregate monthly and category expense-limit progress."""
@@ -312,12 +317,14 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
         scope_users = _scope_users(user, users)
         budgets = self.budget_repository.filter(
             user__in=scope_users,
             period__in=months,
+            currency=currency,
         )
         budget_by_key: dict[tuple[date, int], Budget] = {}
         monthly_limit_by_period: dict[date, Decimal] = defaultdict(
@@ -393,6 +400,8 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, Decimal]]:
         scope_users = _scope_users(user, users)
@@ -400,6 +409,7 @@ class BudgetService:
             user__in=scope_users,
             date__in=months,
             planning_type=type_value,
+            currency=currency,
             category__in=categories,
         ).values('category_id', 'date', 'amount')
 
@@ -419,6 +429,8 @@ class BudgetService:
         months: list[date],
         expense_categories: list[Category],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateBudgetDataDict:
         """Aggregate all budget data for the dashboard context."""
@@ -443,6 +455,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
         expense_plan_map = self._get_plan_map_decimal(
@@ -450,6 +463,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
 
@@ -472,6 +486,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
@@ -479,6 +494,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
         total_fact_income, total_plan_income = _calculate_income_totals(
@@ -509,6 +525,7 @@ class BudgetService:
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
+                currency=currency,
                 users=users,
             ),
             'months': months,
@@ -525,6 +542,8 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateExpenseTableDict:
         """Aggregate data for the expense table view."""
@@ -536,6 +555,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
         expense_plan_map = self._get_plan_map_decimal(
@@ -543,6 +563,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
 
@@ -571,6 +592,8 @@ class BudgetService:
         user: User,
         months: list[date],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateIncomeTableDict:
         """Aggregate data for the income table view."""
@@ -582,6 +605,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
@@ -589,6 +613,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
 
@@ -617,6 +642,8 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateExpenseApiDict:
         """Aggregate data for the expense API endpoint."""
@@ -628,6 +655,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
         expense_plan_map = self._get_plan_map_decimal(
@@ -635,6 +663,7 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            currency=currency,
             users=users,
         )
 
@@ -655,6 +684,8 @@ class BudgetService:
         user: User,
         months: list[date],
         income_categories: list[Category],
+        *,
+        currency: str,
         users: Iterable[User] | None = None,
     ) -> AggregateIncomeApiDict:
         """Aggregate data for the income API endpoint."""
@@ -666,6 +697,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
@@ -673,6 +705,7 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            currency=currency,
             users=users,
         )
 
