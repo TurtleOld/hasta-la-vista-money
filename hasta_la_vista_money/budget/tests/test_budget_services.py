@@ -90,6 +90,7 @@ class BudgetServicesTestCase(TestCase):
             months=self.months,
             expense_categories=self.expense_categories,
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertIn('expense_data', data)
         self.assertIn('income_data', data)
@@ -104,6 +105,7 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 self.expense_categories,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -111,6 +113,7 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.expense_categories,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -118,6 +121,7 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 None,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -125,6 +129,7 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 self.expense_categories,
                 None,
+                currency='RUB',
             )
 
     def test_aggregate_budget_data_empty_months(self) -> None:
@@ -133,6 +138,7 @@ class BudgetServicesTestCase(TestCase):
             months=[],
             expense_categories=self.expense_categories,
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertEqual(data['months'], [])
         for row in data['expense_data']:
@@ -152,6 +158,7 @@ class BudgetServicesTestCase(TestCase):
             months=self.months,
             expense_categories=[],
             income_categories=[],
+            currency='RUB',
         )
         self.assertEqual(data['expense_data'], [])
         self.assertEqual(data['income_data'], [])
@@ -161,6 +168,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
         self.assertIn('expense_data', data)
         self.assertIn('total_fact_expense', data)
@@ -188,6 +196,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
 
         self.assertEqual(data['expense_data'][0]['fact'][0], 125)
@@ -220,6 +229,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
 
         self.assertEqual(
@@ -283,6 +293,7 @@ class BudgetServicesTestCase(TestCase):
             users=[self.user, member],
             months=self.months,
             expense_categories=[member_category],
+            currency='RUB',
         )
         family_row = data['expense_data'][0]
 
@@ -327,6 +338,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
 
         self.assertEqual(overview['current_month'], date(2026, 2, 1))
@@ -339,18 +351,21 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 None,
                 self.expense_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 self.months,
                 None,
+                currency='RUB',
             )
 
     def test_aggregate_expense_table_empty_months(self) -> None:
@@ -358,6 +373,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=[],
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
         self.assertEqual(data['months'], [])
         for row in data['expense_data']:
@@ -371,6 +387,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=[],
+            currency='RUB',
         )
         self.assertEqual(data['expense_data'], [])
 
@@ -379,6 +396,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertIn('income_data', data)
         self.assertIn('total_fact_income', data)
@@ -391,18 +409,21 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 None,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 self.months,
                 None,
+                currency='RUB',
             )
 
     def test_aggregate_income_table_empty_months(self) -> None:
@@ -410,6 +431,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=[],
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertEqual(data['months'], [])
         for row in data['income_data']:
@@ -423,6 +445,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             income_categories=[],
+            currency='RUB',
         )
         self.assertEqual(data['income_data'], [])
 
@@ -431,6 +454,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
         self.assertIn('months', data)
         self.assertIn('data', data)
@@ -442,18 +466,21 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 None,
                 self.expense_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 self.months,
                 None,
+                currency='RUB',
             )
 
     def test_aggregate_expense_api_empty_months(self) -> None:
@@ -461,6 +488,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=[],
             expense_categories=self.expense_categories,
+            currency='RUB',
         )
         self.assertEqual(data['months'], [])
 
@@ -469,6 +497,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             expense_categories=[],
+            currency='RUB',
         )
         self.assertEqual(data['data'], [])
 
@@ -477,6 +506,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertIn('months', data)
         self.assertIn('data', data)
@@ -488,18 +518,21 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 None,
                 self.income_categories,
+                currency='RUB',
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 self.months,
                 None,
+                currency='RUB',
             )
 
     def test_aggregate_income_api_empty_months(self) -> None:
@@ -507,6 +540,7 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=[],
             income_categories=self.income_categories,
+            currency='RUB',
         )
         self.assertEqual(data['months'], [])
 
@@ -515,5 +549,6 @@ class BudgetServicesTestCase(TestCase):
             user=self.user,
             months=self.months,
             income_categories=[],
+            currency='RUB',
         )
         self.assertEqual(data['data'], [])

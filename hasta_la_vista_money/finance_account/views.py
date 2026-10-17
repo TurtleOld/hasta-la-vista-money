@@ -57,6 +57,9 @@ from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     InterestPayoutDestination,
 )
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     BalanceAdjustmentForm,
@@ -1778,21 +1781,22 @@ class AccountView(
             group_id,
         )
 
-        # Get balance trend period from query parameters
+        users_in_group = readable_users(current_user, group_id) or [
+            current_user,
+        ]
+        analytics_currency = get_analytics_currency(request, users_in_group)
         balance_trend_period = request.GET.get('balance_trend_period', '30d')
 
         page_context = page_context_service.build_account_list_context(
             user,
             accounts,
             group_id=group_id,
+            currency=analytics_currency.currency,
             balance_trend_period=balance_trend_period,
         )
 
         context.update(page_context)
-
-        users_in_group = readable_users(current_user, group_id) or [
-            current_user,
-        ]
+        context['analytics_currency'] = analytics_currency
         context['last_operations'] = _recent_transactions(
             current_user,
             users_in_group,

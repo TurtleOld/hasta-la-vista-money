@@ -37,12 +37,12 @@
         {% if balance_trend.delta_absolute >= 0 %}
             <span class="accounts-chip-pos">
                 <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M7 14l5-5 5 5"/></svg>
-                <span class="hide-target">+{{ balance_trend.delta_absolute|comma }} ₽</span>
+                <span class="hide-target">+{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
             </span>
         {% else %}
             <span class="accounts-chip-neg">
                 <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5"/></svg>
-                <span class="hide-target">{{ balance_trend.delta_absolute|comma }} ₽</span>
+                <span class="hide-target">{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
             </span>
         {% endif %}
         <span>{% translate 'за период' %} · {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%</span>

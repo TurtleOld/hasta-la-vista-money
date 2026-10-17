@@ -25,6 +25,9 @@ from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.services.budget import get_categories
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -435,6 +438,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             user=user,
             months=[month_start],
             expense_categories=expense_categories,
+            currency=get_analytics_currency(request, [user]).currency,
             users=[user],
         )
         hot_categories = [
