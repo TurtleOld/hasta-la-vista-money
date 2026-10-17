@@ -57,8 +57,7 @@
                 <div class="statistics-field">
                     <label for="statistics-currency" class="statistics-label">{% translate 'Валюта' %}</label>
                     <select id="statistics-currency" name="currency" class="statistics-input">
-                        <option value="">{% translate 'Все валюты' %}</option>
-                        {% for currency in statistics_currency_choices %}
+                        {% for currency in analytics_currency.currencies %}
                             <option value="{{ currency }}" {% if statistics_filter.currency == currency %}selected{% endif %}>{{ currency }}</option>
                         {% endfor %}
                     </select>

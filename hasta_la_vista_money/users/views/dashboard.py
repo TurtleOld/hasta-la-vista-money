@@ -25,6 +25,9 @@ from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.services.budget import get_categories
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -161,8 +164,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if isinstance(user, User):
             scope = self.request.GET.get('group_id', 'family')
             users = readable_users(user, scope)
+            analytics_currency = get_analytics_currency(self.request, users)
+            context['analytics_currency'] = analytics_currency
             context['kpi_cards'] = _build_kpi_cards(
-                get_dashboard_month_kpis(user, users),
+                get_dashboard_month_kpis(
+                    user,
+                    users,
+                    currency=analytics_currency.currency,
+                ),
             )
             context['selected_group_id'] = scope
 

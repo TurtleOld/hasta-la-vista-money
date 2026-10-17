@@ -168,7 +168,7 @@ class BudgetChartsTest(TestCase):
         cache.clear()
 
     def test_budget_charts(self) -> None:
-        charts_data = budget_charts(self.user)
+        charts_data = budget_charts(self.user, currency='RUB')
         self.assertIsInstance(charts_data, dict)
         self.assertIn('chart_labels', charts_data)
         self.assertIn('chart_income', charts_data)
@@ -224,7 +224,7 @@ class BudgetChartsTest(TestCase):
             date=transaction_date,
         )
 
-        charts_data = budget_charts(self.user)
+        charts_data = budget_charts(self.user, currency='RUB')
 
         self.assertEqual(charts_data['chart_income'], [1000.0])
         self.assertEqual(charts_data['chart_expense'], [250.0])
@@ -279,15 +279,43 @@ class BudgetChartsTest(TestCase):
             ),
         )
 
-        charts_data = budget_charts(self.user, period='m')
+        charts_data = budget_charts(self.user, period='m', currency='RUB')
 
         self.assertEqual(charts_data['total_income'], 100.0)
 
     def test_budget_charts_uses_cache(self) -> None:
-        budget_charts(self.user)
+        budget_charts(self.user, currency='RUB')
 
         with CaptureQueriesContext(connection) as queries:
-            charts_data = budget_charts(self.user)
+            charts_data = budget_charts(self.user, currency='RUB')
 
         self.assertIn('chart_labels', charts_data)
         self.assertEqual(len(queries), 0)
+
+    def test_budget_charts_count_only_selected_currency(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+        for currency, amount in (('RUB', '300.00'), ('USD', '7.00')):
+            Transaction.objects.create(
+                user=self.user,
+                account=Account.objects.create(
+                    user=self.user,
+                    name_account=currency,
+                    currency=currency,
+                ),
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal(amount),
+                date=timezone.now(),
+            )
+
+        rub_charts = budget_charts(self.user, currency='RUB')
+        usd_charts = budget_charts(self.user, currency='USD')
+
+        self.assertEqual(rub_charts['total_expense'], 300.0)
+        self.assertEqual(rub_charts['pie_values'], [300.0])
+        self.assertEqual(usd_charts['total_expense'], 7.0)
+        self.assertEqual(usd_charts['pie_values'], [7.0])

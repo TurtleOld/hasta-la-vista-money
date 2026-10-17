@@ -693,6 +693,8 @@ def _budgets_data(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> list[BudgetDataDict]:
     """Build budget vs actual data for all budgets within the period."""
     users_list = list(users)
@@ -718,6 +720,7 @@ def _budgets_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user__in=users_list,
+                account__currency=currency,
                 type=TransactionType.EXPENSE,
                 date__gte=_date_to_aware(period_start.replace(day=1)),
                 date__lte=_date_to_aware(
@@ -781,6 +784,8 @@ def _plan_fact_summary(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> PlanFactSummaryDict:
     """Aggregate Planning vs actual totals for the period, by type."""
     users_list = list(users)
@@ -802,6 +807,7 @@ def _plan_fact_summary(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             date__gte=start_dt,
             date__lte=end_dt,
@@ -829,6 +835,8 @@ def _plan_fact_top_deviations(
     period_start: date,
     period_end: date,
     limit: int = 5,
+    *,
+    currency: str,
 ) -> list[PlanFactDeviationDict]:
     """Top categories by absolute |fact - plan| deviation in the period."""
     users_list = list(users)
@@ -854,6 +862,7 @@ def _plan_fact_top_deviations(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             category_id__in=[key[0] for key in plan_by_category],
             date__gte=start_dt,
@@ -894,6 +903,8 @@ def _plan_fact_engagement(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> PlanFactEngagementDict:
     """Motivating feedback: how many expense categories stayed within plan."""
     users_list = list(users)
@@ -916,6 +927,7 @@ def _plan_fact_engagement(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             category_id__in=plan_by_category,
             date__gte=start_dt,
@@ -950,6 +962,8 @@ def _suggested_plan_categories(
     period_start: date,
     period_end: date,
     limit: int = 5,
+    *,
+    currency: str,
 ) -> list[SuggestedPlanCategoryDict]:
     """Top expense categories worth planning, from a fixed 3-month window.
 
@@ -975,6 +989,7 @@ def _suggested_plan_categories(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             category_id__isnull=False,
             date__gte=window_start_dt,
