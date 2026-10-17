@@ -764,11 +764,26 @@ class TransferCandidateDecisionTest(TransferDedupeBaseTest):
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
 
     def test_transfer_can_close_source_row_and_target_reminder(self) -> None:
-        transfer = self._create_transfer(
+        card_upload = self._create_upload(self.card, 'card.pdf')
+        reminder = BankStatementRow.objects.create(
+            upload=card_upload,
+            source_row_position=0,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('300.00'),
+            description='Перевод на карту',
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer = transfer_service.transfer_money(
             from_account=self.source,
             to_account=self.card,
             amount=Decimal('300.00'),
-            when=WHEN,
+            user=self.user,
+            exchange_date=WHEN,
+            statement_row_id=reminder.pk,
         )
         source_upload = self._create_upload(self.source, 'source.pdf')
         outgoing = self._create_candidate_row(
@@ -786,20 +801,9 @@ class TransferCandidateDecisionTest(TransferDedupeBaseTest):
             self.user.pk,
             outgoing.candidates.get().pk,
         )
-        card_upload = self._create_upload(self.card, 'card.pdf')
-        reminder = BankStatementRow.objects.create(
-            upload=card_upload,
-            source_row_position=0,
-            transaction_type=BankStatementRow.TransactionType.INCOME,
-            transaction_date=WHEN,
-            amount=Decimal('300.00'),
-            description='Перевод на карту',
-            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
-        )
 
-        settled = self.service.settle_pending_transfers(self.card)
-
-        self.assertEqual(settled, 1)
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.transfer, transfer)
         reminder.refresh_from_db()
         self.assertEqual(
             reminder.decision,

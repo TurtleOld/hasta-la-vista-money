@@ -56,6 +56,9 @@
                 <form method="post" action="{% url 'finance_account:transfer_money' %}" class="space-y-5">
                     {% csrf_token %}
                     {% if form %}
+                    {% for error in form.non_field_errors %}
+                    <div class="text-sm text-red-600 dark:text-red-400">{{ error }}</div>
+                    {% endfor %}
                     <div class="space-y-1.5{% if form.from_account.errors %} has-error{% endif %}">
                         <div class="transfer-account-field relative">
                             {% include 'forms/_field.html' with field=form.from_account %}
