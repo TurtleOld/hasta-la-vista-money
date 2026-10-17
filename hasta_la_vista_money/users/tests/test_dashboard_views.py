@@ -377,6 +377,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
             category_id='5',
             date_str='2025-01-01',
             data_type='income',
+            currency='RUB',
         )
 
     def test_dashboard_drilldown_requires_authentication(self) -> None:

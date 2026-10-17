@@ -90,6 +90,19 @@ class DashboardDataCurrencyTest(TestCase):
             | {'planned': 3000.0},
         )
 
+    def test_drilldown_uses_selected_currency(self) -> None:
+        self._data('USD')
+        url = reverse('users:dashboard_drilldown')
+
+        top = self.client.get(url).json()['data']
+        category = self.client.get(
+            url,
+            {'category_id': top[0]['category_id']},
+        ).json()['data']
+
+        self.assertEqual([item['value'] for item in top], [7.0])
+        self.assertEqual([item['value'] for item in category], [7.0])
+
     def test_comparison_endpoint_uses_selected_currency(self) -> None:
         self._data('USD')
 

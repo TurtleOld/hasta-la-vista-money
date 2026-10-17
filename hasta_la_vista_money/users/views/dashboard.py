@@ -696,6 +696,7 @@ class DashboardDrillDownView(LoginRequiredMixin, View):
             category_id=category_id,
             date_str=date_str,
             data_type=data_type,
+            currency=_dashboard_currency(request, user),
         )
 
         return JsonResponse(drill_data)

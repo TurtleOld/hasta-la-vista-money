@@ -272,14 +272,17 @@ def get_drill_down_data(
     category_id: str | None,
     date_str: str | None,
     data_type: str = 'expense',
+    *,
+    currency: str,
 ) -> dict[str, Any]:
-    """Get category drill-down data.
+    """Get category drill-down data in one currency.
 
     Args:
         user: User to get data for.
         category_id: Category ID (if None, returns top categories).
         date_str: Date in YYYY-MM format (if None, current month).
         data_type: Data type ('expense' or 'income').
+        currency: Only accounts in this currency are counted.
 
     Returns:
         Dictionary with drill-down chart data. Keys: 'period', 'data',
@@ -312,6 +315,7 @@ def get_drill_down_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
@@ -354,6 +358,7 @@ def get_drill_down_data(
         Transaction.objects.without_adjustments()
         .filter(
             user=user,
+            account__currency=currency,
             type=type_value,
             date__gte=month_start_dt,
             date__lte=month_end_dt,
@@ -378,6 +383,7 @@ def get_drill_down_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,

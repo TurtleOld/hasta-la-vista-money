@@ -221,6 +221,7 @@ class GetDrillDownDataTest(TestCase):
             str(self.expense_category.pk),
             date_str=None,
             data_type='expense',
+            currency='RUB',
         )
 
         self.assertIn('data', result)
@@ -232,6 +233,7 @@ class GetDrillDownDataTest(TestCase):
             str(self.income_category.pk),
             date_str=None,
             data_type='income',
+            currency='RUB',
         )
 
         self.assertIn('data', result)
@@ -245,6 +247,7 @@ class GetDrillDownDataTest(TestCase):
             str(invalid_category_id),
             date_str=None,
             data_type='expense',
+            currency='RUB',
         )
 
         self.assertIn('data', result)

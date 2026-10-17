@@ -846,6 +846,7 @@ class DashboardManager {
             const response = await this._safeFetch('drilldown/', {
                 category_id: String(category.category__id),
                 type: String(type),
+                currency: this.currency,
             });
             const data = await response.json();
             if (data.data && data.data.length > 0) {
