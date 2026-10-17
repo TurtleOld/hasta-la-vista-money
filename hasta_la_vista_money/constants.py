@@ -614,6 +614,8 @@ MONTH_NAMES: Final = {
 # Constants for session management
 
 SESSION_COOKIE_AGE: Final = 60 * 60 * 24 * 30
+ANALYTICS_CURRENCY_SESSION_KEY: Final = 'analytics_currency'
+ANALYTICS_CURRENCY_PARAM: Final = 'currency'
 
 # ============================================================================
 # Webhook Constants

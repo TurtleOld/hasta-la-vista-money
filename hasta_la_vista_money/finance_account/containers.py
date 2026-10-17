@@ -11,6 +11,8 @@ from hasta_la_vista_money.finance_account.repositories import (
 )
 from hasta_la_vista_money.finance_account.services import (
     AccountService,
+    AnalyticsCurrencyService,
+    AnalyticsCurrencyServiceProtocol,
     BalanceHistoryService,
     BalanceTrendService,
     BankService,
@@ -48,6 +50,12 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
         transfer_money_log_repository=transfer_money_log_repository,
     )
     balance_trend_service = providers.Factory(BalanceTrendService)
+    analytics_currency_service: providers.Factory[
+        AnalyticsCurrencyServiceProtocol
+    ] = providers.Factory(
+        AnalyticsCurrencyService,
+        account_repository=account_repository,
+    )
     bank_service = providers.Factory(
         BankService,
         bank_repository=bank_repository,

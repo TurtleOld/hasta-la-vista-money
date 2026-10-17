@@ -1,0 +1,9 @@
+{% load i18n %}{% if analytics_currency.currencies|length > 1 %}
+<div class="btn-group btn-group-sm" role="group" aria-label="{% translate 'Валюта аналитики' %}">
+  {% for code in analytics_currency.currencies %}
+    <a href="{% querystring currency=code %}"
+       class="btn {% if code == analytics_currency.currency %}btn-primary active{% else %}btn-outline-primary{% endif %}"
+       {% if code == analytics_currency.currency %}aria-current="true"{% endif %}>{{ code }}</a>
+  {% endfor %}
+</div>
+{% endif %}
