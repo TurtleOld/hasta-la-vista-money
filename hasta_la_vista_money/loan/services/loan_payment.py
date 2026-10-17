@@ -95,3 +95,28 @@ class LoanPaymentService:
                 amount=amount,
                 is_posted=True,
             )
+
+    def delete_payment(self, payment: PaymentMakeLoan) -> None:
+        """Delete a payment; a posted one gives back both balances."""
+        with (
+            db_transaction.atomic(),
+            audit_operation(
+                kind=AuditOperationKind.LOAN_PAYMENT_DELETE,
+            ),
+        ):
+            # Lock the row: a double click must not refund twice.
+            locked = (
+                self.payment_repository.filter(pk=payment.pk)
+                .select_related('loan')
+                .select_for_update()
+                .first()
+            )
+            if locked is None:
+                return
+            payment = locked
+            if payment.is_posted:
+                deltas = {payment.loan.account_id: -payment.amount}
+                if payment.account_id is not None:
+                    deltas[payment.account_id] = payment.amount
+                self.account_service.apply_account_deltas(deltas)
+            payment.delete()

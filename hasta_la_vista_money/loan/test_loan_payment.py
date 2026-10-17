@@ -199,6 +199,116 @@ class PostLoanPaymentTest(TestCase):
         self.assertContains(response, 'не проведён')
         self.assertEqual(self._balance(self.source), Decimal('1000.00'))
 
+    def _payment(
+        self,
+        account: Account | None,
+        *,
+        is_posted: bool = True,
+    ) -> PaymentMakeLoan:
+        return PaymentMakeLoan.objects.create(
+            user=self.user,
+            account=account,
+            date=timezone.now(),
+            loan=self.loan,
+            amount=Decimal('300.00'),
+            is_posted=is_posted,
+        )
+
+    def _delete_payment(self, payment: PaymentMakeLoan) -> int:
+        return self.client.post(
+            reverse('loan:payment_delete', args=[payment.pk]),
+        ).status_code
+
+    def test_delete_posted_payment_restores_both_balances(self) -> None:
+        self._post(self.loan, self.source)
+        payment = PaymentMakeLoan.objects.get()
+
+        self._delete_payment(payment)
+
+        self.assertFalse(PaymentMakeLoan.objects.exists())
+        self.assertEqual(self._balance(self.source), Decimal('1000.00'))
+        self.assertEqual(
+            self._balance(self.loan.account),
+            Decimal('2000.00'),
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                kind=AuditOperationKind.LOAN_PAYMENT_DELETE,
+            ).exists(),
+        )
+
+    def test_delete_external_payment_restores_only_loan_account(
+        self,
+    ) -> None:
+        self._post(self.loan, None)
+
+        self._delete_payment(PaymentMakeLoan.objects.get())
+
+        self.assertFalse(PaymentMakeLoan.objects.exists())
+        self.assertEqual(self._balance(self.source), Decimal('1000.00'))
+        self.assertEqual(
+            self._balance(self.loan.account),
+            Decimal('2000.00'),
+        )
+
+    def test_delete_unposted_payment_keeps_balances(self) -> None:
+        payment = self._payment(self.source, is_posted=False)
+
+        self._delete_payment(payment)
+
+        self.assertFalse(PaymentMakeLoan.objects.exists())
+        self.assertEqual(self._balance(self.source), Decimal('1000.00'))
+        self.assertEqual(
+            self._balance(self.loan.account),
+            Decimal('2000.00'),
+        )
+
+    def test_repeated_delete_refunds_once(self) -> None:
+        self._post(self.loan, self.source)
+        stale = PaymentMakeLoan.objects.get()
+        service = ApplicationContainer().loan.loan_payment_service()
+
+        service.delete_payment(stale)
+        service.delete_payment(stale)
+
+        self.assertEqual(self._balance(self.source), Decimal('1000.00'))
+        self.assertEqual(
+            self._balance(self.loan.account),
+            Decimal('2000.00'),
+        )
+
+    def test_delete_foreign_payment_is_not_found(self) -> None:
+        other = User.objects.create_user(username='other')
+        foreign = PaymentMakeLoan.objects.create(
+            user=other,
+            account=None,
+            date=timezone.now(),
+            loan=self._loan(other),
+            amount=Decimal('300.00'),
+        )
+
+        self.assertEqual(self._delete_payment(foreign), 404)
+        self.assertTrue(PaymentMakeLoan.objects.filter(pk=foreign.pk).exists())
+
+    def test_loan_with_posted_payment_cannot_be_deleted(self) -> None:
+        self._payment(self.source)
+
+        self.client.post(reverse('loan:delete', args=[self.loan.pk]))
+
+        self.assertTrue(Loan.objects.filter(pk=self.loan.pk).exists())
+        self.assertTrue(
+            Account.objects.filter(pk=self.loan.account_id).exists(),
+        )
+        self.assertTrue(PaymentMakeLoan.objects.exists())
+
+    def test_loan_with_only_unposted_payments_is_deleted(self) -> None:
+        self._payment(self.source, is_posted=False)
+
+        self.client.post(reverse('loan:delete', args=[self.loan.pk]))
+
+        self.assertFalse(Loan.objects.filter(pk=self.loan.pk).exists())
+        self.assertFalse(PaymentMakeLoan.objects.exists())
+
 
 class PaymentMigrationTest(TransactionTestCase):
     """Existing payments become unposted and keep every balance."""
