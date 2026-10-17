@@ -483,7 +483,6 @@ RECENT_RECEIPTS_LIMIT: Final = 20
 TRANSFER_LOG_LIMIT: Final = 20
 DASHBOARD_CACHE_TIMEOUT: Final = 300
 DASHBOARD_COMPARISON_CACHE_TIMEOUT: Final = 120
-REPORTS_CACHE_TIMEOUT: Final = 300
 STATISTICS_CACHE_TIMEOUT: Final = 600
 
 # ============================================================================

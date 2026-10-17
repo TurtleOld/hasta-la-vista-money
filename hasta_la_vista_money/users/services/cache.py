@@ -31,18 +31,8 @@ def get_period_comparison_cache_key(user_id: int, period_type: str) -> str:
     return f'user_period_comparison_{user_id}_{period_type}'
 
 
-def get_reports_budget_charts_cache_key(
-    user_id: int,
-    period: str,
-    currency: str,
-) -> str:
-    """Return cache key for cached reports budget charts."""
-    version = cache.get(_user_statistics_version_key(user_id), 1)
-    return f'user_reports_budget_charts_{user_id}_{version}_{period}_{currency}'
-
-
 def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
-    """Invalidate cached dashboard and reports data for a user."""
+    """Invalidate cached dashboard and statistics data for a user."""
     version_key = _user_statistics_version_key(user_id)
     cache.set(version_key, int(cache.get(version_key, 1)) + 1)
     cache.delete(get_dashboard_summary_cache_key(user_id))

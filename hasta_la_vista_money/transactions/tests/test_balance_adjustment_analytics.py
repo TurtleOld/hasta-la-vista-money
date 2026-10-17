@@ -13,9 +13,6 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
     BalanceHistoryService,
 )
-from hasta_la_vista_money.reports.services.aggregation import (
-    pie_expense_category,
-)
 from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
@@ -90,12 +87,6 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
             repository.get_income_sum_by_period(self.user, start),
             Decimal(0),
         )
-
-    def test_category_report_ignores_adjustments(self) -> None:
-        report = str(pie_expense_category(self.user))
-
-        self.assertIn('Food', report)
-        self.assertNotIn(self.adjustment_expense.name, report)
 
     def test_budget_fact_ignores_adjustments(self) -> None:
         month = self.now.date().replace(day=1)

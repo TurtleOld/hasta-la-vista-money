@@ -5,7 +5,6 @@ from threading import Barrier, Thread
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections
 from django.db.models.deletion import ProtectedError
@@ -51,7 +50,6 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
-from hasta_la_vista_money.reports.services.aggregation import budget_charts
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.services.dashboard_kpis import (
@@ -2284,11 +2282,6 @@ class CapitalizeInterestServiceTests(TestCase):
         self.assertEqual(kpis['expenses'], Decimal('650.00'))
         self.assertEqual(kpis['net_result'], Decimal('4350.00'))
         self.assertEqual(kpis['savings_rate'], Decimal('87.00'))
-        cache.clear()
-        charts = budget_charts(user, currency='RUB')
-        self.assertEqual(charts['total_income'], 5000.0)
-        self.assertEqual(charts['total_expense'], 650.0)
-        self.assertEqual(charts['net_balance'], 4350.0)
 
     def test_capitalize_rolls_back_on_event_failure(self) -> None:
         user = cast('User', UserFactory())
@@ -2976,10 +2969,6 @@ class CloseDepositEarlyServiceTests(TestCase):
         self.assertEqual(kpis['income'], Decimal('1500.00'))
         self.assertEqual(kpis['expenses'], Decimal('945.00'))
         self.assertEqual(kpis['net_result'], Decimal('555.00'))
-        cache.clear()
-        charts = budget_charts(user, period='y', currency='RUB')
-        self.assertEqual(charts['total_income'], 1500.0)
-        self.assertEqual(charts['total_expense'], 945.0)
 
         service.reverse_deposit_event(
             ReverseDepositEventCommand(
@@ -2996,10 +2985,6 @@ class CloseDepositEarlyServiceTests(TestCase):
         self.assertEqual(reversed_kpis['income'], Decimal('1750.00'))
         self.assertEqual(reversed_kpis['expenses'], Decimal('880.00'))
         self.assertEqual(reversed_kpis['net_result'], Decimal('870.00'))
-        cache.clear()
-        reversed_charts = budget_charts(user, period='y', currency='RUB')
-        self.assertEqual(reversed_charts['total_income'], 1750.0)
-        self.assertEqual(reversed_charts['total_expense'], 880.0)
 
     def test_close_rolls_back_when_final_event_storage_fails(self) -> None:
         user = cast('User', UserFactory())
