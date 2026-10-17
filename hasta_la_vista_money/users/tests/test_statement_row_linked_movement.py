@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import cast
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -23,23 +24,27 @@ from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
+    User,
 )
 
 
 class StatementRowLinkedMovementTest(TestCase):
     def setUp(self) -> None:
-        self.user = UserFactory()
+        self.user = cast('User', UserFactory())
         container = ApplicationContainer()
         self.transaction_service = container.transactions.transaction_service()
         self.transfer_service = container.finance_account.transfer_service()
-        self.account = AccountFactory(
-            user=self.user,
-            balance=Decimal('1000.00'),
+        self.account = cast(
+            'Account',
+            AccountFactory(user=self.user, balance=Decimal('1000.00')),
         )
-        self.other_account = AccountFactory(
-            user=self.user,
-            balance=Decimal('500.00'),
-            currency=self.account.currency,
+        self.other_account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('500.00'),
+                currency=self.account.currency,
+            ),
         )
         self.category = Category.objects.create(
             user=self.user,
