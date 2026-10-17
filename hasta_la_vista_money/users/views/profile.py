@@ -277,6 +277,7 @@ class ReceiptCategoryProductsView(LoginRequiredMixin, View):
             'users/partials/_receipt_category_products.html',
             {
                 'category_name': category_name,
+                'currency': stats_filter.currency,
                 'products': products,
             },
         )
@@ -325,6 +326,7 @@ class ReceiptFrequentProductPurchasesView(LoginRequiredMixin, View):
             'users/partials/_receipt_product_purchases.html',
             {
                 'product_name': product_name,
+                'currency': stats_filter.currency,
                 'purchases': purchases,
             },
         )

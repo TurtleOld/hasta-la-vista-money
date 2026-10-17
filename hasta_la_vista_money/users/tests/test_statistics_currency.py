@@ -52,6 +52,17 @@ class StatisticsCurrencyTest(TestCase):
     def test_default_currency_excludes_other_currency(self) -> None:
         self.assertEqual(self._month_expenses(), 300.0)
 
+    def test_account_choices_only_in_selected_currency(self) -> None:
+        response = self.client.get(reverse('users:statistics'))
+
+        self.assertEqual(
+            [
+                account.currency
+                for account in response.context['statistics_account_choices']
+            ],
+            ['RUB'],
+        )
+
     def test_budget_and_plan_fact_exclude_other_currency(self) -> None:
         month = timezone.localdate().replace(day=1)
         category = self.category

@@ -1773,7 +1773,9 @@ def _with_statistics_tables(
             'accounts': accounts,
             'user': user,
             'statistics_filter': stats_filter,
-            'statistics_account_choices': account_choices,
+            'statistics_account_choices': account_choices.filter(
+                currency=stats_filter.currency,
+            ),
             'statistics_member_choices': _member_choices(user, request),
             'statistics_members': users,
         },
