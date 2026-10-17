@@ -7,7 +7,7 @@ including filtering by user, group, type, and currency.
 from collections.abc import Iterable
 from decimal import Decimal
 
-from django.db.models import QuerySet
+from django.db.models import Min, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account, AccountQuerySet
@@ -122,6 +122,17 @@ class AccountRepository:
             Account.objects.get_queryset()
             .filter(user__in=users)
             .select_related('user')
+        )
+
+    def get_currencies_by_users(self, users: Iterable[User]) -> list[str]:
+        """Distinct account currencies of the users, oldest account first."""
+        return list(
+            Account.objects.get_queryset()
+            .filter(user__in=users)
+            .values('currency')
+            .annotate(first_pk=Min('pk'))
+            .order_by('first_pk')
+            .values_list('currency', flat=True),
         )
 
     def get_credit_accounts(self) -> QuerySet[Account]:

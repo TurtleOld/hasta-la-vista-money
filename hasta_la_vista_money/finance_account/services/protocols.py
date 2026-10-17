@@ -1,8 +1,9 @@
 """Protocols for finance account services."""
 
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
@@ -10,6 +11,9 @@ from hasta_la_vista_money.finance_account.services.types import (
     FinancialMovement,
     RaiffeisenbankScheduleDict,
 )
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
@@ -154,5 +158,25 @@ class FinancialMovementSourceProtocol(Protocol):
 
         Returns:
             Normalized movements, in no particular order.
+        """
+        ...
+
+
+class AnalyticsCurrencyServiceProtocol(Protocol):
+    """Pick the one currency analytics pages show."""
+
+    def available_currencies(self, users: Iterable['User']) -> list[str]:
+        """Currencies of the users' accounts, first account's first."""
+        ...
+
+    def resolve(
+        self,
+        request_value: str | None,
+        session_value: str | None,
+        available: Sequence[str],
+    ) -> str:
+        """Request, then session, then RUB, then first available currency.
+
+        Values outside ``available`` are ignored.
         """
         ...
