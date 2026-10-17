@@ -73,7 +73,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
         )
 
     def test_dashboard_kpis_ignore_adjustments(self) -> None:
-        kpis = get_dashboard_month_kpis(self.user)
+        kpis = get_dashboard_month_kpis(self.user, currency='RUB')
 
         self.assertEqual(kpis['income'], Decimal(0))
         self.assertEqual(kpis['expenses'], Decimal(100))
@@ -124,6 +124,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
             users=[self.user],
             accounts=[self.account],
             today=self.now.date(),
+            currency='RUB',
         )
 
         self.assertEqual(

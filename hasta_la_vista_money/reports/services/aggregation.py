@@ -238,6 +238,7 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
 
 def _fact_map_for_categories(
     user: User,
+    currency: str,
     type_value: str,
     categories: Sequence[Category],
     months: list[date],
@@ -271,6 +272,7 @@ def _fact_map_for_categories(
         Transaction.objects.without_adjustments()
         .filter(
             user=user,
+            account__currency=currency,
             type=type_value,
             category__in=categories,
             date__gte=first_month_start,
@@ -333,9 +335,14 @@ def _pie_for_categories(
     return labels, values, category_keys
 
 
-def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
-    """Build chart data for the reports dashboard."""
-    cache_key = f'{get_reports_budget_charts_cache_key(user.pk)}:{period}'
+def budget_charts(
+    user: User,
+    period: str = 'y',
+    *,
+    currency: str,
+) -> BudgetChartsDict:
+    """Build chart data for the reports dashboard in one currency."""
+    cache_key = get_reports_budget_charts_cache_key(user.pk, period, currency)
     cached_charts = cache.get(cache_key)
     if cached_charts is not None:
         return cast('BudgetChartsDict', cached_charts)
@@ -343,9 +350,11 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
     period_range = report_period_range(period)
     transactions_qs = Transaction.objects.without_adjustments().filter(
         user=user,
+        account__currency=currency,
     )
     interest_events = DepositCapitalizationEvent.objects.filter(
         deposit__account__user=user,
+        deposit__account__currency=currency,
     )
     if period_range is not None:
         start, end = period_range
@@ -402,12 +411,14 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
 
     expense_fact = _fact_map_for_categories(
         user,
+        currency,
         TransactionType.EXPENSE,
         expense_categories,
         months,
     )
     income_fact = _fact_map_for_categories(
         user,
+        currency,
         TransactionType.INCOME,
         income_categories,
         months,

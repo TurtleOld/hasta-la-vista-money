@@ -53,6 +53,7 @@ def _aware_bounds(start: date, end: date) -> tuple[datetime, datetime]:
 def _sum_for_month(
     type_value: str,
     users: Iterable[User],
+    currency: str,
     start: datetime,
     end: datetime,
 ) -> Decimal:
@@ -60,6 +61,7 @@ def _sum_for_month(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users,
+            account__currency=currency,
             type=type_value,
             date__gte=start,
             date__lte=end,
@@ -72,11 +74,13 @@ def _sum_for_month(
 def _sum_interest_for_month(
     field: str,
     users: Iterable[User],
+    currency: str,
     start: date,
     end: date,
 ) -> Decimal:
     total = DepositCapitalizationEvent.objects.filter(
         deposit__account__user__in=users,
+        deposit__account__currency=currency,
         posting_on__gte=start,
         posting_on__lte=end,
     ).aggregate(total=Sum(signed_interest(field)))['total']
@@ -85,11 +89,13 @@ def _sum_interest_for_month(
 
 def _interest_adjustment_for_month(
     users: Iterable[User],
+    currency: str,
     start: date,
     end: date,
 ) -> tuple[Decimal, Decimal]:
     totals = DepositCapitalizationEvent.objects.filter(
         deposit__account__user__in=users,
+        deposit__account__currency=currency,
         posting_on__gte=start,
         posting_on__lte=end,
     ).aggregate(
@@ -105,13 +111,16 @@ def _interest_adjustment_for_month(
 def get_dashboard_month_kpis(
     user: User,
     users: Iterable[User] | None = None,
+    *,
+    currency: str,
 ) -> DashboardKpiDict:
-    """Return current-month KPI values for the dashboard strip."""
+    """Return current-month KPI values in one currency."""
     period_start, period_end = _current_month_bounds()
     start_dt, end_dt = _aware_bounds(period_start, period_end)
     selected_users = list(users or [user])
     adjustment_income, adjustment_expenses = _interest_adjustment_for_month(
         selected_users,
+        currency,
         period_start,
         period_end,
     )
@@ -120,12 +129,14 @@ def get_dashboard_month_kpis(
         _sum_for_month(
             TransactionType.INCOME,
             selected_users,
+            currency,
             start_dt,
             end_dt,
         )
         + _sum_interest_for_month(
             'gross',
             selected_users,
+            currency,
             period_start,
             period_end,
         )
@@ -135,12 +146,14 @@ def get_dashboard_month_kpis(
         _sum_for_month(
             TransactionType.EXPENSE,
             selected_users,
+            currency,
             start_dt,
             end_dt,
         )
         + _sum_interest_for_month(
             'withholding',
             selected_users,
+            currency,
             period_start,
             period_end,
         )
@@ -157,6 +170,7 @@ def get_dashboard_month_kpis(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=selected_users,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             date__gte=start_dt,
             date__lte=end_dt,

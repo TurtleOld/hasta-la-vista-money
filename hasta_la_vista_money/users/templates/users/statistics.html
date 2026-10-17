@@ -57,8 +57,7 @@
                 <div class="statistics-field">
                     <label for="statistics-currency" class="statistics-label">{% translate 'Валюта' %}</label>
                     <select id="statistics-currency" name="currency" class="statistics-input">
-                        <option value="">{% translate 'Все валюты' %}</option>
-                        {% for currency in statistics_currency_choices %}
+                        {% for currency in analytics_currency.currencies %}
                             <option value="{{ currency }}" {% if statistics_filter.currency == currency %}selected{% endif %}>{{ currency }}</option>
                         {% endfor %}
                     </select>
@@ -150,15 +149,15 @@
                     {% for card in summary_cards %}
                         <div class="statistics-summary-card {% if card.key == 'expenses' %}statistics-summary-warn{% elif card.key == 'income' %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
                             <p class="statistics-summary-label">{{ card.label }}</p>
-                            <p class="statistics-summary-value">{{ card.value|comma }} ₽</p>
+                            <p class="statistics-summary-value">{{ card.value|comma }} {{ statistics_filter.currency }}</p>
                             {% if card.delta is not None %}
                                 {% if card.delta >= 0 %}
                                     <span class="statistics-badge {% if card.positive_is_good %}statistics-badge-positive{% else %}statistics-badge-negative{% endif %}">
-                                        ↑ {{ card.delta|comma }} ₽{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
+                                        ↑ {{ card.delta|comma }} {{ statistics_filter.currency }}{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
                                     </span>
                                 {% else %}
                                     <span class="statistics-badge {% if card.positive_is_good %}statistics-badge-negative{% else %}statistics-badge-positive{% endif %}">
-                                        ↓ {{ card.delta|comma }} ₽{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
+                                        ↓ {{ card.delta|comma }} {{ statistics_filter.currency }}{% if card.delta_percent is not None %} ({{ card.delta_percent|floatformat:1 }}%){% endif %}
                                     </span>
                                 {% endif %}
                             {% else %}
@@ -221,9 +220,9 @@
                                 {% for month in months_data %}
                                     <tr>
                                         <td>{{ month.month }}</td>
-                                        <td class="statistics-money-positive statistics-cell-right">{{ month.income|comma }} ₽</td>
-                                        <td class="statistics-money-negative statistics-cell-right">{{ month.expenses|comma }} ₽</td>
-                                        <td class="{% if month.savings >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">{{ month.savings|comma }} ₽</td>
+                                        <td class="statistics-money-positive statistics-cell-right">{{ month.income|comma }} {{ statistics_filter.currency }}</td>
+                                        <td class="statistics-money-negative statistics-cell-right">{{ month.expenses|comma }} {{ statistics_filter.currency }}</td>
+                                        <td class="{% if month.savings >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">{{ month.savings|comma }} {{ statistics_filter.currency }}</td>
                                         <td class="statistics-cell-center">
                                             {% if month.income > 0 %}
                                                 <span class="statistics-badge {% if month.savings >= 0 %}statistics-badge-positive{% else %}statistics-badge-negative{% endif %}">{{ month.savings_percent|floatformat:1 }}%</span>
@@ -232,13 +231,13 @@
                                             {% endif %}
                                         </td>
                                         <td class="statistics-cell-right">
-                                            {% if month.planned_income %}{{ month.planned_income|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                            {% if month.planned_income %}{{ month.planned_income|comma }} {{ statistics_filter.currency }}{% else %}<span class="statistics-muted">—</span>{% endif %}
                                         </td>
                                         <td class="statistics-cell-right">
-                                            {% if month.planned_expenses %}{{ month.planned_expenses|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                            {% if month.planned_expenses %}{{ month.planned_expenses|comma }} {{ statistics_filter.currency }}{% else %}<span class="statistics-muted">—</span>{% endif %}
                                         </td>
                                         <td class="{% if month.deviation >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">
-                                            {% if month.planned_income or month.planned_expenses %}{{ month.deviation|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                            {% if month.planned_income or month.planned_expenses %}{{ month.deviation|comma }} {{ statistics_filter.currency }}{% else %}<span class="statistics-muted">—</span>{% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -279,7 +278,7 @@
                                 {% for product in top_receipt_products %}
                                     <div class="statistics-list-row">
                                         <span>{{ product.product_name }}</span>
-                                        <span class="statistics-badge">{{ product.total|comma }} ₽</span>
+                                        <span class="statistics-badge">{{ product.total|comma }} {{ statistics_filter.currency }}</span>
                                     </div>
                                 {% empty %}
                                     <p class="statistics-empty">{% translate 'Нет товарной детализации' %}</p>
@@ -292,7 +291,7 @@
                                 {% for seller in top_receipt_sellers %}
                                     <div class="statistics-list-row">
                                         <span>{{ seller.seller__name_seller|default:'Без продавца' }}</span>
-                                        <span class="statistics-badge">{{ seller.total|comma }} ₽ · {{ seller.count }}</span>
+                                        <span class="statistics-badge">{{ seller.total|comma }} {{ statistics_filter.currency }} · {{ seller.count }}</span>
                                     </div>
                                 {% empty %}
                                     <p class="statistics-empty">{% translate 'Нет данных по магазинам' %}</p>
@@ -354,7 +353,7 @@
                                     <tr>
                                         <td>{{ average.month|date:'F Y' }}</td>
                                         <td class="statistics-cell-center">{{ average.count }}</td>
-                                        <td class="statistics-cell-right">{{ average.avg_total|comma }} ₽</td>
+                                        <td class="statistics-cell-right">{{ average.avg_total|comma }} {{ statistics_filter.currency }}</td>
                                     </tr>
                                 {% empty %}
                                     <tr><td colspan="3" class="statistics-empty">{% translate 'Нет данных о среднем чеке' %}</td></tr>
@@ -638,13 +637,13 @@
                                             <button class="statistics-button statistics-button-secondary" type="button" data-dialog-open="expense-category-{{ category.category__id }}">{% translate 'Детализация' %}</button>
                                             <dialog id="expense-category-{{ category.category__id }}" class="statistics-panel">
                                                 <h6 class="statistics-category-title">{{ category.category__name }}</h6>
-                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} ₽</span>{% endfor %}
+                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} {{ statistics_filter.currency }}</span>{% endfor %}
                                                 <div class="statistics-table-wrap statistics-section">
                                                     <table class="statistics-table statistics-table-compact">
                                                         <thead><tr><th>{% translate 'Дата' %}</th><th>{% translate 'Категория' %}</th><th>{% translate 'Счёт' %}</th><th>{% translate 'Кто внёс' %}</th><th class="statistics-cell-right">{% translate 'Сумма' %}</th></tr></thead>
                                                         <tbody>
                                                             {% for transaction in category.transactions %}
-                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} ₽</td></tr>
+                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} {{ statistics_filter.currency }}</td></tr>
                                                             {% empty %}
                                                                 <tr><td colspan="5" class="statistics-empty">{% translate 'Нет транзакций' %}</td></tr>
                                                             {% endfor %}
@@ -654,7 +653,7 @@
                                                 <button class="statistics-button statistics-button-secondary" type="button" data-dialog-close>{% translate 'Закрыть' %}</button>
                                             </dialog>
                                         </div>
-                                        <span class="statistics-badge statistics-badge-negative">{{ category.total|comma }} ₽ · {% translate 'было' %} {{ category.previous_total|comma }} ₽ · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} ₽{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
+                                        <span class="statistics-badge statistics-badge-negative">{{ category.total|comma }} {{ statistics_filter.currency }} · {% translate 'было' %} {{ category.previous_total|comma }} {{ statistics_filter.currency }} · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} {{ statistics_filter.currency }}{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
                                     </div>
                                 {% empty %}
                                     <p class="statistics-empty">{% translate 'Нет данных о расходах' %}</p>
@@ -671,13 +670,13 @@
                                             <button class="statistics-button statistics-button-secondary" type="button" data-dialog-open="income-category-{{ category.category__id }}">{% translate 'Детализация' %}</button>
                                             <dialog id="income-category-{{ category.category__id }}" class="statistics-panel">
                                                 <h6 class="statistics-category-title">{{ category.category__name }}</h6>
-                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} ₽</span>{% endfor %}
+                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} {{ statistics_filter.currency }}</span>{% endfor %}
                                                 <div class="statistics-table-wrap statistics-section">
                                                     <table class="statistics-table">
                                                         <thead><tr><th>{% translate 'Дата' %}</th><th>{% translate 'Категория' %}</th><th>{% translate 'Счёт' %}</th><th>{% translate 'Кто внёс' %}</th><th class="statistics-cell-right">{% translate 'Сумма' %}</th></tr></thead>
                                                         <tbody>
                                                             {% for transaction in category.transactions %}
-                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} ₽</td></tr>
+                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} {{ statistics_filter.currency }}</td></tr>
                                                             {% empty %}
                                                                 <tr><td colspan="5" class="statistics-empty">{% translate 'Нет транзакций' %}</td></tr>
                                                             {% endfor %}
@@ -687,7 +686,7 @@
                                                 <button class="statistics-button statistics-button-secondary" type="button" data-dialog-close>{% translate 'Закрыть' %}</button>
                                             </dialog>
                                         </div>
-                                        <span class="statistics-badge statistics-badge-positive">{{ category.total|comma }} ₽ · {% translate 'было' %} {{ category.previous_total|comma }} ₽ · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} ₽{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
+                                        <span class="statistics-badge statistics-badge-positive">{{ category.total|comma }} {{ statistics_filter.currency }} · {% translate 'было' %} {{ category.previous_total|comma }} {{ statistics_filter.currency }} · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} {{ statistics_filter.currency }}{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
                                     </div>
                                 {% empty %}
                                     <p class="statistics-empty">{% translate 'Нет данных о доходах' %}</p>
@@ -886,8 +885,8 @@
                             {% blocktranslate with within=plan_fact_engagement.categories_within_plan total=plan_fact_engagement.categories_with_plan %}Уложились в план по {{ within }} из {{ total }} категорий{% endblocktranslate %}
                         </span>
                         <span class="statistics-badge {% if plan_fact_engagement.diff > 0 %}statistics-badge-negative{% elif plan_fact_engagement.diff < 0 %}statistics-badge-positive{% else %}statistics-badge-warning{% endif %}">
-                            {% if plan_fact_engagement.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_engagement.abs_diff|comma }} ₽
-                            {% elif plan_fact_engagement.diff < 0 %}{% translate 'Сэкономлено' %} {{ plan_fact_engagement.abs_diff|comma }} ₽
+                            {% if plan_fact_engagement.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_engagement.abs_diff|comma }} {{ statistics_filter.currency }}
+                            {% elif plan_fact_engagement.diff < 0 %}{% translate 'Сэкономлено' %} {{ plan_fact_engagement.abs_diff|comma }} {{ statistics_filter.currency }}
                             {% else %}{% translate 'Точно по плану' %}{% endif %}
                         </span>
                     </div>
@@ -895,19 +894,19 @@
                     <div class="statistics-summary-grid">
                         <div class="statistics-summary-card {% if plan_fact_summary.expense.diff > 0 %}statistics-summary-danger{% elif plan_fact_summary.expense.diff < 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
                             <p class="statistics-summary-label">{% translate 'Расходы: факт / план' %}</p>
-                            <p class="statistics-summary-value">{{ plan_fact_summary.expense.fact|comma }} ₽ / {{ plan_fact_summary.expense.plan|comma }} ₽</p>
+                            <p class="statistics-summary-value">{{ plan_fact_summary.expense.fact|comma }} {{ statistics_filter.currency }} / {{ plan_fact_summary.expense.plan|comma }} {{ statistics_filter.currency }}</p>
                             <p class="statistics-summary-label">
-                                {% if plan_fact_summary.expense.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_summary.expense.diff|comma }} ₽
-                                {% elif plan_fact_summary.expense.diff < 0 %}{% translate 'Экономия' %} {{ plan_fact_summary.expense.diff|comma }} ₽
+                                {% if plan_fact_summary.expense.diff > 0 %}{% translate 'Перерасход' %} {{ plan_fact_summary.expense.diff|comma }} {{ statistics_filter.currency }}
+                                {% elif plan_fact_summary.expense.diff < 0 %}{% translate 'Экономия' %} {{ plan_fact_summary.expense.diff|comma }} {{ statistics_filter.currency }}
                                 {% else %}{% translate 'Точно по плану' %}{% endif %}
                             </p>
                         </div>
                         <div class="statistics-summary-card {% if plan_fact_summary.income.diff < 0 %}statistics-summary-danger{% elif plan_fact_summary.income.diff > 0 %}statistics-summary-positive{% else %}statistics-summary-cyan{% endif %}">
                             <p class="statistics-summary-label">{% translate 'Доходы: факт / план' %}</p>
-                            <p class="statistics-summary-value">{{ plan_fact_summary.income.fact|comma }} ₽ / {{ plan_fact_summary.income.plan|comma }} ₽</p>
+                            <p class="statistics-summary-value">{{ plan_fact_summary.income.fact|comma }} {{ statistics_filter.currency }} / {{ plan_fact_summary.income.plan|comma }} {{ statistics_filter.currency }}</p>
                             <p class="statistics-summary-label">
-                                {% if plan_fact_summary.income.diff < 0 %}{% translate 'Недобор' %} {{ plan_fact_summary.income.diff|comma }} ₽
-                                {% elif plan_fact_summary.income.diff > 0 %}{% translate 'Перевыполнение' %} {{ plan_fact_summary.income.diff|comma }} ₽
+                                {% if plan_fact_summary.income.diff < 0 %}{% translate 'Недобор' %} {{ plan_fact_summary.income.diff|comma }} {{ statistics_filter.currency }}
+                                {% elif plan_fact_summary.income.diff > 0 %}{% translate 'Перевыполнение' %} {{ plan_fact_summary.income.diff|comma }} {{ statistics_filter.currency }}
                                 {% else %}{% translate 'Точно по плану' %}{% endif %}
                             </p>
                         </div>
@@ -921,7 +920,7 @@
                                     <div class="statistics-list-row">
                                         <span>{{ deviation.category_name }}</span>
                                         <span class="statistics-badge {% if deviation.diff > 0 %}statistics-badge-negative{% elif deviation.diff < 0 %}statistics-badge-positive{% else %}statistics-badge-warning{% endif %}">
-                                            {{ deviation.fact|comma }} ₽ / {{ deviation.plan|comma }} ₽ · {% if deviation.diff >= 0 %}+{% endif %}{{ deviation.diff|comma }} ₽
+                                            {{ deviation.fact|comma }} {{ statistics_filter.currency }} / {{ deviation.plan|comma }} {{ statistics_filter.currency }} · {% if deviation.diff >= 0 %}+{% endif %}{{ deviation.diff|comma }} {{ statistics_filter.currency }}
                                         </span>
                                     </div>
                                 {% endfor %}
@@ -941,7 +940,7 @@
                                             <span class="statistics-budget-name">{{ budget.category_name }}</span>
                                             <span class="statistics-budget-period">{{ budget.period }}</span>
                                             <span class="statistics-budget-amounts">
-                                                {{ budget.actual_expenses|comma }} ₽ / {{ budget.amount_limit|comma }} ₽
+                                                {{ budget.actual_expenses|comma }} {{ statistics_filter.currency }} / {{ budget.amount_limit|comma }} {{ statistics_filter.currency }}
                                             </span>
                                             <span class="statistics-badge {% if budget.over_limit %}statistics-badge-negative{% elif budget.near_limit %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
                                                 {{ budget.usage_percent|floatformat:1 }}%
@@ -982,7 +981,7 @@
                                 {% for suggestion in suggested_plan_categories %}
                                     <div class="statistics-list-row">
                                         <span>{{ suggestion.category_name }}</span>
-                                        <span class="statistics-badge">{{ suggestion.suggested_amount|comma }} ₽</span>
+                                        <span class="statistics-badge">{{ suggestion.suggested_amount|comma }} {{ statistics_filter.currency }}</span>
                                         <a class="statistics-button statistics-button-secondary" href="{% url 'budget:list' %}">{% translate 'Задать план' %}</a>
                                     </div>
                                 {% endfor %}
@@ -1065,7 +1064,7 @@
     }
 
     function formatRuble(value) {
-        return value.toLocaleString('ru-RU') + ' ₽';
+        return value.toLocaleString('ru-RU') + ' {{ statistics_filter.currency }}';
     }
 
     function chartTooltipOptions(themeColors) {
@@ -1181,7 +1180,7 @@
                     tooltip: chartTooltipOptions(themeColors),
                 },
                 scales: (function() {
-                    const axisOptions = chartAxisOptions(themeColors, 'Сумма (₽)');
+                    const axisOptions = chartAxisOptions(themeColors, 'Сумма ({{ statistics_filter.currency }})');
                     axisOptions.y.beginAtZero = true;
                     return axisOptions;
                 })(),
@@ -1267,7 +1266,7 @@
                     },
                     tooltip: chartTooltipOptions(themeColors),
                 },
-                scales: chartAxisOptions(themeColors, 'Баланс (₽)'),
+                scales: chartAxisOptions(themeColors, 'Баланс ({{ statistics_filter.currency }})'),
             },
         });
     }
