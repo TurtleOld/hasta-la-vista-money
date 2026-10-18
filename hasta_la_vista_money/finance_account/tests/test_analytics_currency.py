@@ -171,15 +171,20 @@ class AnalyticsCurrencyViewHelperTest(TestCase):
 
         self.assertEqual(selected.currency, 'RUB')
 
-    def test_stale_session_currency_is_cleared(self) -> None:
-        AccountFactory(user=self.user, currency='USD')
+    def test_session_currency_survives_narrower_scope(self) -> None:
+        spouse = cast('User', UserFactory())
         AccountFactory(user=self.user, currency='RUB')
-        self.session[constants.ANALYTICS_CURRENCY_SESSION_KEY] = 'EUR'
+        AccountFactory(user=spouse, currency='USD')
+        get_analytics_currency(
+            self._request('?currency=USD'),
+            [self.user, spouse],
+        )
 
-        selected = get_analytics_currency(self._request(), [self.user])
+        narrow = get_analytics_currency(self._request(), [self.user])
+        wide = get_analytics_currency(self._request(), [self.user, spouse])
 
-        self.assertEqual(selected.currency, 'RUB')
-        self.assertNotIn(constants.ANALYTICS_CURRENCY_SESSION_KEY, self.session)
+        self.assertEqual(narrow.currency, 'RUB')
+        self.assertEqual(wide.currency, 'USD')
 
     def test_switcher_links_keep_other_query_params(self) -> None:
         AccountFactory(user=self.user, currency='RUB')

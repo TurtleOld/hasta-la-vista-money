@@ -47,6 +47,4 @@ def get_analytics_currency(
     currency = service.resolve(requested, stored, currencies)
     if remember and requested == currency:
         request.session[key] = currency
-    elif remember and stored is not None and stored not in currencies:
-        del request.session[key]
     return AnalyticsCurrency(currency=currency, currencies=currencies)
