@@ -355,6 +355,37 @@ class BankStatementCandidate(Model):
         ]
 
 
+class MerchantCategory(Model):
+    """Category the user last chose for a statement merchant key."""
+
+    user = ForeignKey(
+        User,
+        on_delete=CASCADE,
+        related_name='merchant_categories',
+    )
+    merchant_key = CharField(max_length=250)
+    transaction_type = CharField(
+        max_length=10,
+        choices=BankStatementRow.TransactionType.choices,
+    )
+    category = ForeignKey(
+        'transactions.Category',
+        on_delete=CASCADE,
+        related_name='merchant_categories',
+    )
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=['user', 'merchant_key', 'transaction_type'],
+                name='unique_merchant_category',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.merchant_key} -> {self.category_id}'
+
+
 class BankStatementDecisionAudit(Model):
     """Immutable audit entry for a statement reconciliation decision."""
 

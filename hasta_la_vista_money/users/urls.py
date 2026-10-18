@@ -6,6 +6,7 @@ from hasta_la_vista_money.users.views import (
     BankStatementMarkupBulkView,
     BankStatementMarkupCategoryView,
     BankStatementMarkupDecisionView,
+    BankStatementMarkupRememberedView,
     BankStatementMarkupView,
     BankStatementPendingTransferDismissView,
     BankStatementPendingTransferLinkView,
@@ -113,6 +114,11 @@ urlpatterns = [
         'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/',
         BankStatementMarkupDecisionView.as_view(),
         name='bank_statement_markup_decide',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/markup/remembered/',
+        BankStatementMarkupRememberedView.as_view(),
+        name='bank_statement_markup_post_remembered',
     ),
     path(
         'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/category/',

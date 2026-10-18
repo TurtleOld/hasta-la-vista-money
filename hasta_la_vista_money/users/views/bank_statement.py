@@ -413,6 +413,7 @@ class BankStatementMarkupView(
             .order_by('name_account'),
         )
         by_number = {a.account_number: a for a in accounts if a.account_number}
+        remembered = service.remembered_categories(self.object)
         page = Paginator(
             service.pending_rows(self.object),
             STATEMENT_RECONCILIATION_PAGE_SIZE,
@@ -423,6 +424,8 @@ class BankStatementMarkupView(
             {'label': label, 'categories': categories[value]}
             for value, label in BankStatementRow.TransactionType.choices
         ]
+
+        context['remembered_count'] = len(remembered)
         context['rows'] = [
             {
                 'row': row,
@@ -433,6 +436,7 @@ class BankStatementMarkupView(
                     else None
                 ),
                 'categories': categories.get(row.transaction_type or '', []),
+                'remembered_id': remembered.get(row.pk),
                 'kind_label': ROW_KIND_LABELS.get(row.kind, ''),
                 'refund_default': row.kind == RosDorBankRowKind.CANCEL
                 and not any(
@@ -539,6 +543,35 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
             )
         except ValidationError:
             messages.error(request, _('Не удалось провести строки.'))
+        return redirect(
+            reverse('users:bank_statement_markup', args=[upload_id]),
+        )
+
+
+class BankStatementMarkupRememberedView(LoginRequiredMixin, View):
+    """Post every row of the upload with a remembered category."""
+
+    def post(self, request: HttpRequest, upload_id: int) -> HttpResponse:
+        user = cast('User', request.user)
+        get_object_or_404(
+            BankStatementUpload,
+            pk=upload_id,
+            user=user,
+            account__user=user,
+        )
+        posted, skipped = _markup_service(request).post_remembered(
+            upload_id,
+            user.pk,
+        )
+        messages.success(
+            request,
+            _('Проведено строк: %(count)s') % {'count': posted},
+        )
+        if skipped:
+            messages.error(
+                request,
+                _('Не удалось провести строк: %(count)s') % {'count': skipped},
+            )
         return redirect(
             reverse('users:bank_statement_markup', args=[upload_id]),
         )

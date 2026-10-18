@@ -16,6 +16,7 @@ from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
+    MerchantCategory,
     User,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
@@ -574,6 +575,152 @@ class StatementMarkupCategoryModalTest(StatementMarkupFixture):
             self.client.post(self.url, {'name': 'Х'}).status_code,
             404,
         )
+
+
+class RememberedMerchantCategoryTest(StatementMarkupFixture):
+    def _keyed(
+        self,
+        position: int,
+        key: str = 'PYATEROCHKA',
+        kind: str = 'card',
+        transaction_type: str = 'expense',
+    ) -> BankStatementRow:
+        row = self._row(position, transaction_type, kind)
+        row.merchant_key = key
+        row.save(update_fields=['merchant_key'])
+        return row
+
+    def test_markup_remembers_last_category(self) -> None:
+        first = self._category('Продукты')
+        second = self._category('Хозтовары')
+
+        self.service.post(self._keyed(1).pk, self.user.pk, first.pk)
+        self.service.post(self._keyed(2).pk, self.user.pk, second.pk)
+
+        memory = MerchantCategory.objects.get()
+        self.assertEqual(memory.category, second)
+        self.assertEqual(memory.merchant_key, 'PYATEROCHKA')
+
+    def test_type_is_part_of_the_key(self) -> None:
+        expense = self._category('Продукты')
+        income = self._category('Кэшбэк', 'income')
+
+        self.service.post(self._keyed(1).pk, self.user.pk, expense.pk)
+        self.service.post(
+            self._keyed(2, transaction_type='income').pk,
+            self.user.pk,
+            income.pk,
+        )
+
+        self.assertEqual(MerchantCategory.objects.count(), 2)
+
+    def test_c2c_and_skip_remember_nothing(self) -> None:
+        category = self._category('Подарки')
+
+        self.service.post(
+            self._keyed(1, key='', kind='c2c').pk,
+            self.user.pk,
+            category.pk,
+        )
+        self.service.skip(self._keyed(2).pk, self.user.pk)
+
+        self.assertFalse(MerchantCategory.objects.exists())
+
+    def test_remembered_rows_map_pending_rows_to_category(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        known = self._keyed(2)
+        self._keyed(3, key='OTHER')
+
+        self.assertEqual(
+            self.service.remembered_categories(self.upload),
+            {known.pk: category.pk},
+        )
+
+    def test_post_remembered_posts_known_rows_as_one_operation(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        known = [self._keyed(2), self._keyed(3)]
+        unknown = self._keyed(4, key='OTHER')
+        AuditLog.objects.all().delete()
+
+        posted = self.service.post_remembered(self.upload.pk, self.user.pk)
+
+        self.assertEqual(posted, (2, 0))
+        for row in known:
+            row.refresh_from_db()
+            self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+            if row.transaction is None:
+                self.fail('row is not linked to a movement')
+            self.assertEqual(row.transaction.category, category)
+        unknown.refresh_from_db()
+        self.assertEqual(
+            unknown.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            AuditLog.objects.values('operation_id').distinct().count(),
+            1,
+        )
+
+    def test_post_remembered_skips_conflicting_rows(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        row = self._keyed(2)
+        self.upload.expires_at = timezone.now()
+        self.upload.save(update_fields=['expires_at'])
+
+        result = self.service.post_remembered(self.upload.pk, self.user.pk)
+
+        self.assertEqual(result, (0, 1))
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def test_page_preselects_remembered_category(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        self._keyed(2)
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertContains(response, f'value="{category.pk}" selected')
+        self.assertContains(response, 'Провести все с подставленной')
+
+    def test_post_remembered_view_posts_and_redirects(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        row = self._keyed(2)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_markup_post_remembered',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+
+    def test_other_user_cannot_post_remembered(self) -> None:
+        other = User.objects.create_user(username='other', password='x')
+        self.client.force_login(other)
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_markup_post_remembered',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 404)
 
 
 class StatementBulkMarkupTest(StatementMarkupFixture):

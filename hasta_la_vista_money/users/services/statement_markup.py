@@ -31,6 +31,7 @@ from hasta_la_vista_money.users.models import (
     BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
+    MerchantCategory,
     User,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
@@ -41,6 +42,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 )
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
+_NO_MERCHANT_KINDS: Final = frozenset(
+    {RosDorBankRowKind.C2C, RosDorBankRowKind.OWN_C2C},
+)
 
 
 class StatementMarkupConflictError(ValueError):
@@ -80,6 +84,31 @@ class StatementMarkupService:
             .order_by(F('last_used').desc(nulls_last=True), 'name'),
         )
 
+    def remembered_categories(
+        self,
+        upload: BankStatementUpload,
+    ) -> dict[int, int]:
+        """Map pending row ids to the category remembered for their key."""
+        rows = list(
+            self.pending_rows(upload)
+            .exclude(merchant_key='')
+            .values_list('pk', 'merchant_key', 'transaction_type'),
+        )
+        remembered: dict[tuple[str, str | None], int] = {
+            (key, transaction_type): category_id
+            for key, transaction_type, category_id in (
+                MerchantCategory.objects.filter(
+                    user_id=upload.user_id,
+                    merchant_key__in={key for _, key, _ in rows},
+                ).values_list('merchant_key', 'transaction_type', 'category_id')
+            )
+        }
+        return {
+            pk: remembered[key, transaction_type]
+            for pk, key, transaction_type in rows
+            if (key, transaction_type) in remembered
+        }
+
     def post(
         self,
         row_id: int,
@@ -117,6 +146,35 @@ class StatementMarkupService:
                 for row_id in row_ids
             ]
 
+    def post_remembered(
+        self,
+        upload_id: int,
+        user_id: int,
+    ) -> tuple[int, int]:
+        """Post rows with a remembered category as one operation.
+
+        Returns the posted and the skipped (conflicting) row counts.
+        """
+        upload = BankStatementUpload.objects.get(pk=upload_id, user_id=user_id)
+        remembered = self.remembered_categories(upload)
+        posted = 0
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            for row_id, category_id in remembered.items():
+                try:
+                    self._decide(
+                        row_id,
+                        user_id,
+                        category_id,
+                        skip=False,
+                        finalize=False,
+                    )
+                except StatementMarkupConflictError:
+                    continue
+                posted += 1
+            if posted:
+                self._finalize(upload)
+        return posted, len(remembered) - posted
+
     def post_transfer(
         self,
         row_id: int,
@@ -149,6 +207,7 @@ class StatementMarkupService:
         skip: bool,
         transfer_account_id: int | None = None,
         as_transfer: bool = False,
+        finalize: bool = True,
     ) -> BankStatementRow:
         upload = (
             BankStatementUpload.objects.select_for_update()
@@ -179,6 +238,7 @@ class StatementMarkupService:
                 upload,
                 category_id,
             )
+            self._remember(row, upload.user, row.transaction)
             row.decision = BankStatementRow.Decision.NEW
         row.decided_at = timezone.now()
         row.save(
@@ -190,11 +250,15 @@ class StatementMarkupService:
             decision=row.decision,
             transaction=row.transaction,
         )
+        if finalize:
+            self._finalize(upload)
+        return row
+
+    def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
         if not self.pending_rows(upload).exists():
             upload.status = BankStatementUpload.Status.COMPLETED
             upload.save(update_fields=['status'])
-        return row
 
     def _create_movement(
         self,
@@ -246,6 +310,22 @@ class StatementMarkupService:
             check_funds=False,
         )
         return created
+
+    @staticmethod
+    def _remember(
+        row: BankStatementRow,
+        user: User,
+        movement: Transaction,
+    ) -> None:
+        # A transfer to a person has no merchant key: nothing to remember.
+        if not row.merchant_key or row.kind in _NO_MERCHANT_KINDS:
+            return
+        MerchantCategory.objects.update_or_create(
+            user=user,
+            merchant_key=row.merchant_key,
+            transaction_type=movement.type,
+            defaults={'category': movement.category},
+        )
 
     @staticmethod
     def _moment(statement_date: datetime) -> datetime:
