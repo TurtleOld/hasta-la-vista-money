@@ -43,18 +43,15 @@
                             {{ receipt.seller.retail_place|default:receipt.seller.name_seller|default:unknown_seller }}
                             {% if receipt.operation_type == 2 %}
                                 <span class="receipts-chip is-active" style="--receipts-accent: var(--receipts-negative);">
-                                    <i class="bi bi-arrow-return-left"></i>
                                     {% translate 'Возврат' %}
                                 </span>
                             {% endif %}
                         </h3>
                         <div class="receipt-card-meta">
-                            <i class="bi bi-calendar-event"></i>
                             {{ receipt.receipt_date|date:"d.m.Y H:i" }}
                         </div>
                         {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}
                             <div class="receipt-card-owner">
-                                <i class="bi bi-person"></i>
                                 {% translate 'Владелец:' %} {{ receipt.user.username }}
                             </div>
                         {% endif %}
@@ -81,11 +78,11 @@
 
                 <footer class="receipt-card-actions receipts-row-actions swipe-hide-mobile">
                     <a href="{% url 'receipts:view' receipt.id %}" class="receipts-chip">
-                        <i class="bi bi-eye"></i>
+                        {% include 'partials/_swipe_icons.html' with icon='view' %}
                         {% translate 'Просмотр' %}
                     </a>
                     <a href="{% url 'receipts:update' receipt.id %}" class="receipts-chip">
-                        <i class="bi bi-pencil"></i>
+                        {% include 'partials/_swipe_icons.html' with icon='edit' %}
                         {% translate 'Редактировать' %}
                     </a>
                     <form class="form-remove-receipt-button" action="{% url 'receipts:delete' receipt.id %}" method="post">
@@ -96,7 +93,7 @@
                                 type="submit"
                                 name="delete_receipt_button"
                                 title="{% translate 'Удалить чек' %}">
-                            <i class="bi bi-trash"></i>
+                            {% include 'partials/_swipe_icons.html' with icon='delete' %}
                             {% translate 'Удалить' %}
                         </button>
                     </form>
