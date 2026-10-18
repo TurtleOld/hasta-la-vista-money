@@ -103,6 +103,10 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     Formatter.FK,
                     related=Related.BANK,
                 ),
+                'account_number': AuditField(
+                    _('Номер счёта'),
+                    Formatter.TEXT,
+                ),
                 'balance': AuditField(
                     _('Остаток'),
                     Formatter.MONEY,

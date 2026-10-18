@@ -2,6 +2,7 @@ from datetime import date
 from typing import ClassVar
 
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
 from django.urls import reverse
@@ -213,6 +214,21 @@ class Account(TimeStampedModel):
         verbose_name=_('Банк'),
         help_text=_('Банк, выпустивший карту или обслуживающий счёт'),
         default=_get_default_bank_pk,
+    )
+    account_number = models.CharField(
+        max_length=constants.TWENTY,
+        null=True,
+        blank=True,
+        unique=True,
+        validators=[
+            RegexValidator(
+                rf'^\d{{{constants.TWENTY}}}$',
+                _('Номер счёта должен состоять из 20 цифр'),
+            ),
+        ],
+        error_messages={'unique': _('Номер счёта уже используется')},
+        verbose_name=_('Номер счёта'),
+        help_text=_('20 цифр, как в выписке банка'),
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,

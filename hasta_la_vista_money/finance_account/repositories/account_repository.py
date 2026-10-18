@@ -54,6 +54,17 @@ class AccountRepository:
         except Account.DoesNotExist:
             return None
 
+    def get_by_user_and_account_number(
+        self,
+        user: User,
+        account_number: str,
+    ) -> Account | None:
+        """Get the user's account by its bank account number."""
+        return Account.objects.filter(
+            user=user,
+            account_number=account_number,
+        ).first()
+
     def get_by_ids_for_update(
         self,
         account_ids: set[int],

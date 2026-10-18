@@ -2,12 +2,17 @@
 
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.repositories import (
+    AccountRepository,
     TransferMoneyLogRepository,
 )
+from hasta_la_vista_money.users.models import User
 
 
 class TestTransferMoneyLogRepository(SimpleTestCase):
@@ -44,3 +49,36 @@ class TestTransferMoneyLogRepository(SimpleTestCase):
         )
         locked_queryset.get.assert_called_once_with(pk=9, user=user)
         self.assertEqual(result, transfer_log)
+
+
+class TestAccountRepositoryAccountNumber(TestCase):
+    """Lookup of a user's account by its bank account number."""
+
+    def test_get_by_user_and_account_number(self) -> None:
+        user = User.objects.create_user(username='owner')
+        other = User.objects.create_user(username='other')
+        account = Account.objects.create(
+            user=user,
+            name_account='Дебетовая',
+            account_number='40817810000000000001',
+        )
+        Account.objects.create(
+            user=other,
+            name_account='Чужой',
+            account_number='40817810000000000002',
+        )
+        repository = AccountRepository()
+
+        self.assertEqual(
+            repository.get_by_user_and_account_number(
+                user,
+                '40817810000000000001',
+            ),
+            account,
+        )
+        self.assertIsNone(
+            repository.get_by_user_and_account_number(
+                user,
+                '40817810000000000002',
+            ),
+        )
