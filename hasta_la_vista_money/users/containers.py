@@ -4,6 +4,9 @@ from dependency_injector import containers, providers
 from django.conf import settings
 
 from core.services.external_model import ExternalModelTransport
+from hasta_la_vista_money.finance_account.repositories import (
+    AccountRepository,
+)
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
@@ -114,4 +117,5 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         BankStatementImportService,
         classifier=category_classifier,
+        account_repository=providers.Singleton(AccountRepository),
     )

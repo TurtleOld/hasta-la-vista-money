@@ -67,6 +67,7 @@ class BankStatementRetentionService:
                 in {
                     BankStatementRow.Decision.PENDING,
                     BankStatementRow.Decision.NEEDS_TRANSFER,
+                    BankStatementRow.Decision.AWAITING_MARKUP,
                 }
             ]
             unresolved_ids = [row.pk for row in unresolved]
@@ -86,6 +87,8 @@ class BankStatementRetentionService:
                 description='',
                 candidate_description='',
                 suggested_category='',
+                merchant_key='',
+                counterparty_account='',
                 source_ref=None,
                 source_row_position=None,
                 candidate=None,
