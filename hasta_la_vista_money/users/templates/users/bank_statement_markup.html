@@ -20,10 +20,29 @@
                         {% endfor %}
                     </div>
                 {% endif %}
+                <form id="bulk-form" method="post" action="{% url 'users:bank_statement_markup_bulk' upload.pk %}" class="flex flex-col gap-3 p-5 border-b border-gray-200 dark:border-gray-700 sm:flex-row sm:items-center">
+                    {% csrf_token %}
+                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                        <input type="checkbox" id="select-all-rows">
+                        {% translate 'Выбрать все' %}
+                    </label>
+                    <select name="category" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                        <option value="">{% translate 'Категория для выбранных…' %}</option>
+                        {% for group in bulk_categories %}
+                            <optgroup label="{{ group.label }}">
+                                {% for category in group.categories %}
+                                    <option value="{{ category.pk }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Назначить и провести' %}</button>
+                </form>
                 <div class="divide-y divide-gray-200 dark:divide-gray-700">
                     {% for item in rows %}{% with row=item.row %}
                         <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
                             {% csrf_token %}
+                            {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" form="bulk-form" class="bulk-row">{% endif %}
                             <div class="min-w-0">
                                 <p class="font-medium text-gray-900 dark:text-white break-words">{{ row.description }}</p>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -68,6 +87,11 @@
                 </nav>
             {% endif %}
             <div id="category-modal"></div>
+            <script nonce="{{ request.csp_nonce }}">
+                document.getElementById('select-all-rows').addEventListener('change', function (event) {
+                    document.querySelectorAll('.bulk-row').forEach(function (box) { box.checked = event.target.checked; });
+                });
+            </script>
             <a class="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 underline" href="{% url 'users:bank_statement_upload' %}">{% translate 'К загрузкам выписок' %}</a>
         </div>
     </div>

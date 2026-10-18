@@ -90,6 +90,33 @@ class StatementMarkupService:
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
             return self._decide(row_id, user_id, category_id, skip=False)
 
+    @transaction.atomic
+    def post_many(
+        self,
+        row_ids: list[int],
+        user_id: int,
+        category_id: int | None,
+    ) -> list[BankStatementRow]:
+        """Post rows of one direction with one category, all or nothing."""
+        rows = BankStatementRow.objects.filter(
+            pk__in=row_ids,
+            upload__user_id=user_id,
+        )
+        kinds = {row.kind for row in rows}
+        types = {row.transaction_type for row in rows}
+        if (
+            not row_ids
+            or len(rows) != len(set(row_ids))
+            or len(types) != 1
+            or RosDorBankRowKind.OWN_C2C in kinds
+        ):
+            raise StatementMarkupConflictError('selection')
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            return [
+                self._decide(row_id, user_id, category_id, skip=False)
+                for row_id in row_ids
+            ]
+
     def post_transfer(
         self,
         row_id: int,
