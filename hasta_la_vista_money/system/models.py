@@ -38,6 +38,7 @@ class AuditOperationKind(models.TextChoices):
         'statement_import_resolution',
         _('Разбор нерешённых строк'),
     )
+    STATEMENT_MARKUP = 'statement_markup', _('Разметка выписки')
 
 
 class AuditLog(models.Model):

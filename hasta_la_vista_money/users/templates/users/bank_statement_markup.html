@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% translate 'Разметка выписки' %}{% endblock %}
+
+{% block content %}
+    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{% translate 'Разметка выписки' %}</h2>
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {% translate 'Выберите категорию и проведите строку либо пропустите её. Остаток счёта меняется сразу при проводке.' %}
+                    </p>
+                </div>
+                {% if messages %}
+                    <div class="px-6 pt-4">
+                        {% for message in messages %}
+                            <p class="text-sm text-red-600 dark:text-red-400">{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for item in rows %}{% with row=item.row %}
+                        <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+                            {% csrf_token %}
+                            <div class="min-w-0">
+                                <p class="font-medium text-gray-900 dark:text-white break-words">{{ row.description }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }} · {{ row.amount }} · {{ item.kind_label }}
+                                </p>
+                            </div>
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <select name="category" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                                    {% if item.refund_default %}
+                                        <option value="">{% translate 'Возвраты' %}</option>
+                                    {% else %}
+                                        <option value="">{% translate 'Категория…' %}</option>
+                                    {% endif %}
+                                    {% for category in item.categories %}
+                                        <option value="{{ category.pk }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" name="decision" value="post" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести' %}</button>
+                                <button type="submit" name="decision" value="skip" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Пропустить' %}</button>
+                            </div>
+                        </form>
+                        {% endwith %}
+                    {% empty %}
+                        <p class="p-5 text-sm text-gray-500 dark:text-gray-400">{% translate 'Строк, ждущих разметки, нет.' %}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% if page_obj.has_other_pages %}
+                <nav class="mt-4 flex gap-4 text-sm">
+                    {% if page_obj.has_previous %}<a class="text-blue-600 dark:text-blue-400 underline" href="?page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                    {% if page_obj.has_next %}<a class="text-blue-600 dark:text-blue-400 underline" href="?page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                </nav>
+            {% endif %}
+            <a class="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 underline" href="{% url 'users:bank_statement_upload' %}">{% translate 'К загрузкам выписок' %}</a>
+        </div>
+    </div>
+{% endblock %}

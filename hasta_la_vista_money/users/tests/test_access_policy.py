@@ -147,6 +147,8 @@ OWN_ONLY_SURFACES = frozenset(
         'users:ajax:groups_for_user',
         'users:ajax:groups_not_for_user',
         'users:available_groups',
+        'users:bank_statement_markup',
+        'users:bank_statement_markup_decide',
         'users:bank_statement_pending_transfer_dismiss',
         'users:bank_statement_pending_transfer_link',
         'users:bank_statement_reconciliation',

@@ -131,6 +131,7 @@ class AuditOperationKindTests(TestCase):
             'loan_payment_delete',
             'statement_import',
             'statement_import_resolution',
+            'statement_markup',
         }
         self.assertEqual(
             {value for value, _ in AuditOperationKind.choices},

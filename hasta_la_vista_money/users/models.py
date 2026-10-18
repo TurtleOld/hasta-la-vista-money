@@ -231,6 +231,7 @@ class BankStatementRow(Model):
         EXPIRED = 'expired', _('Срок решения истёк')
         AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
         MUTUAL_CANCEL = 'mutual_cancel', _('Взаимная отмена')
+        SKIPPED = 'skipped', _('Пропущена')
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
