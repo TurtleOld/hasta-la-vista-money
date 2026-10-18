@@ -811,11 +811,21 @@ class DashboardMarkupReminderTest(StatementMarkupFixture):
 
         response = self.client.get(reverse('users:dashboard'))
 
-        self.assertContains(response, '2 строк ждут разметки')
+        self.assertContains(response, '2 строки ждут разметки')
         self.assertContains(
             response,
             reverse('users:bank_statement_markup', args=[self.upload.pk]),
         )
+
+    def test_banner_uses_russian_plural_forms(self) -> None:
+        for count, text in ((1, '1 строка ждёт'), (3, '3 строки ждут')):
+            BankStatementRow.objects.all().delete()
+            for position in range(count):
+                self._row(position)
+
+            response = self.client.get(reverse('users:dashboard'))
+
+            self.assertContains(response, f'{text} разметки')
 
     def test_no_banner_without_pending_rows(self) -> None:
         response = self.client.get(reverse('users:dashboard'))
