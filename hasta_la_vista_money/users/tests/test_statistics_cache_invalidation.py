@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.test import TestCase
 
 from hasta_la_vista_money.budget.models import Budget, Planning
@@ -16,7 +17,24 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.cache import (
     get_user_detailed_statistics_cache_key,
+    invalidate_user_detailed_statistics_cache,
 )
+
+
+class StatisticsVersionResetTest(TestCase):
+    def test_lost_version_key_does_not_revive_old_cache_keys(self) -> None:
+        user_id = 987654
+        initial = get_user_detailed_statistics_cache_key(user_id)
+        invalidate_user_detailed_statistics_cache(user_id)
+        invalidated = get_user_detailed_statistics_cache_key(user_id)
+
+        # Ключ версии истёк или вытеснен из кеша.
+        cache.delete(f'user_stats_version_{user_id}')
+
+        self.assertNotIn(
+            get_user_detailed_statistics_cache_key(user_id),
+            {initial, invalidated},
+        )
 
 
 class StatisticsCacheInvalidationTest(TestCase):
