@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -721,6 +721,116 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         )
 
         self.assertEqual(response.status_code, 404)
+
+
+class StatementMarkupRemindersTest(StatementMarkupFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.upload.statement_closing_balance = Decimal('880.00')
+        self.upload.save()
+
+    def test_discrepancy_appears_when_no_rows_await_markup(self) -> None:
+        first = self._row(1)
+        second = self._row(2)
+
+        self.service.post(first.pk, self.user.pk, self._category('Еда').pk)
+        self.upload.refresh_from_db()
+        self.assertIsNone(self.upload.balance_discrepancy)
+
+        self.service.skip(second.pk, self.user.pk)
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.account_balance_after, Decimal('900.00'))
+        self.assertEqual(self.upload.balance_discrepancy, Decimal('-20.00'))
+
+    def test_discrepancy_needs_statement_closing_balance(self) -> None:
+        self.upload.statement_closing_balance = None
+        self.upload.save()
+        row = self._row(1)
+
+        self.service.skip(row.pk, self.user.pk)
+
+        self.upload.refresh_from_db()
+        self.assertIsNone(self.upload.balance_discrepancy)
+
+    def test_awaiting_rows_expire_with_the_upload(self) -> None:
+        row = self._row(1)
+        self.assertGreater(
+            self.upload.expires_at - timezone.now(),
+            timedelta(days=constants.STATEMENT_RETENTION_DAYS - 1),
+        )
+
+        container = ApplicationContainer()
+        cleaned = (
+            container.users.bank_statement_retention_service().cleanup_expired(
+                self.upload.expires_at,
+            )
+        )
+
+        self.assertEqual(cleaned, 1)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+
+    def test_pending_count_ignores_other_users_and_expired(self) -> None:
+        self._row(1)
+        self._row(2)
+        expired = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='old.pdf',
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        BankStatementRow.objects.create(
+            upload=expired,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        newer = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='newer.pdf',
+            expires_at=self.upload.expires_at,
+        )
+        BankStatementRow.objects.create(
+            upload=newer,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+        count, upload_id = self.service.pending_summary(self.user.pk)
+
+        self.assertEqual((count, upload_id), (1, newer.pk))
+        self.assertEqual(self.service.pending_summary(999999), (0, None))
+
+
+class DashboardMarkupReminderTest(StatementMarkupFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def test_banner_links_to_markup_screen(self) -> None:
+        self._row(1)
+        self._row(2)
+
+        response = self.client.get(reverse('users:dashboard'))
+
+        self.assertContains(response, '2 строки ждут разметки')
+        self.assertContains(
+            response,
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+    def test_banner_uses_russian_plural_forms(self) -> None:
+        for count, text in ((1, '1 строка ждёт'), (3, '3 строки ждут')):
+            BankStatementRow.objects.all().delete()
+            for position in range(count):
+                self._row(position)
+
+            response = self.client.get(reverse('users:dashboard'))
+
+            self.assertContains(response, f'{text} разметки')
+
+    def test_no_banner_without_pending_rows(self) -> None:
+        response = self.client.get(reverse('users:dashboard'))
+
+        self.assertNotContains(response, 'ждут разметки')
 
 
 class StatementBulkMarkupTest(StatementMarkupFixture):

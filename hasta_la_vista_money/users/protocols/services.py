@@ -86,6 +86,8 @@ class StatementMarkupServiceProtocol(Protocol):
         upload: BankStatementUpload,
     ) -> QuerySet[BankStatementRow]: ...
 
+    def pending_summary(self, user_id: int) -> tuple[int, int | None]: ...
+
     def categories(
         self,
         user: User,

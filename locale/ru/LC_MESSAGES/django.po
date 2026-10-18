@@ -1,0 +1,13 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: hasta_la_vista_money/users/templates/users/dashboard.html
+#, python-format
+msgid "%(n)s строка ждёт разметки"
+msgid_plural "%(n)s строк ждут разметки"
+msgstr[0] "%(n)s строка ждёт разметки"
+msgstr[1] "%(n)s строки ждут разметки"
+msgstr[2] "%(n)s строк ждут разметки"
