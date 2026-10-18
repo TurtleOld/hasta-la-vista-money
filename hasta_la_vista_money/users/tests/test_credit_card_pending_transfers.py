@@ -502,7 +502,6 @@ class PendingRepaymentListQueriesTest(CreditCardStatementBaseTest):
     def setUp(self) -> None:
         super().setUp()
         self.upload = self._create_upload()
-        self.client.force_login(self.user)
 
     def _row_with_candidate(self, position: int) -> None:
         amount = Decimal('100.00') + position
@@ -522,6 +521,8 @@ class PendingRepaymentListQueriesTest(CreditCardStatementBaseTest):
 
     def _page_queries(self) -> int:
         cache.clear()
+        # Without DEBUG sessions live in the cache, so log in again.
+        self.client.force_login(self.user)
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse('finance_account:list'))
         self.assertEqual(response.status_code, 200)
