@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.constants import FAMILY_INVITE_TTL
+from hasta_la_vista_money.constants import FAMILY_INVITE_TTL, FAMILY_SCOPE
 from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
     FamilyInvite,
@@ -159,7 +159,7 @@ def readable_users(user: User, group_id: str | None = None) -> list[User]:
     if not group_id or group_id == 'my':
         return [user]
     memberships = FamilyGroupMembership.objects.filter(user=user)
-    if group_id != 'family':
+    if group_id != FAMILY_SCOPE:
         if not group_id.isdigit():
             return []
         memberships = memberships.filter(group_id=int(group_id))
@@ -167,7 +167,7 @@ def readable_users(user: User, group_id: str | None = None) -> list[User]:
         family_memberships__group_id__in=memberships.values('group_id'),
     )
     users = list(members.distinct().order_by('username'))
-    return users or ([user] if group_id == 'family' else [])
+    return users or ([user] if group_id == FAMILY_SCOPE else [])
 
 
 def can_write(user: User, obj: Any) -> bool:

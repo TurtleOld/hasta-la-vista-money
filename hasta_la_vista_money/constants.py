@@ -272,6 +272,7 @@ UNSUCCESSFULLY_MESSAGE_LOAN_DELETE_POSTED: Final = _(
 # Family groups
 
 FAMILY_INVITE_TTL: Final = timedelta(days=7)
+FAMILY_SCOPE: Final = 'family'
 
 # ============================================================================
 # User Messages - Profile Operations

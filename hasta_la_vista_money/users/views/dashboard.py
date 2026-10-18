@@ -66,9 +66,14 @@ def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
 
 
+def _dashboard_scope(request: HttpRequest) -> str:
+    """Dashboard group scope from GET, the whole family by default."""
+    return request.GET.get('group_id', constants.FAMILY_SCOPE)
+
+
 def _dashboard_currency(request: HttpRequest, user: User) -> str:
     """Analytics currency over the same users as the dashboard page."""
-    users = readable_users(user, request.GET.get('group_id', 'family'))
+    users = readable_users(user, _dashboard_scope(request))
     return get_analytics_currency(request, users).currency
 
 
@@ -169,7 +174,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ]
         user = self.request.user
         if isinstance(user, User):
-            scope = self.request.GET.get('group_id', 'family')
+            scope = _dashboard_scope(self.request)
             users = readable_users(user, scope)
             analytics_currency = get_analytics_currency(self.request, users)
             context['analytics_currency'] = analytics_currency
