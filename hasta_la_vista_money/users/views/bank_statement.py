@@ -16,7 +16,7 @@ from django.http import (
     HttpResponse,
     JsonResponse,
 )
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -27,6 +27,8 @@ from django.views.generic.edit import FormView
 from hasta_la_vista_money.constants import (
     STATEMENT_RECONCILIATION_PAGE_SIZE,
 )
+from hasta_la_vista_money.transactions.forms import CategoryForm
+from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.forms import (
     BankStatementUploadForm,
     RepaymentTransferLinkForm,
@@ -454,6 +456,98 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
         if reason == 'category':
             return str(_('Выберите категорию подходящего типа.'))
         return str(_('Строка уже размечена или срок разметки истёк.'))
+
+
+class BankStatementMarkupCategoryView(LoginRequiredMixin, View):
+    """HTMX modal creating a category of the row type."""
+
+    modal_template = 'users/partials/statement_category_modal.html'
+    created_template = 'users/partials/statement_category_created.html'
+
+    def get(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        row = self._row(request, upload_id, row_id)
+        if 'close' in request.GET:
+            return HttpResponse()
+        return self._modal(
+            request,
+            row,
+            CategoryForm(**self._form_kwargs(row)),
+        )
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        row = self._row(request, upload_id, row_id)
+        user = cast('User', request.user)
+        data = request.POST.copy()
+        data['type'] = row.transaction_type or ''
+        form = CategoryForm(data, **self._form_kwargs(row))
+        if (
+            form.is_valid()
+            and Category.objects.filter(
+                user=user,
+                type=row.transaction_type,
+                name=form.cleaned_data['name'],
+            ).exists()
+        ):
+            form.add_error('name', _('Такая категория уже существует.'))
+        if not form.is_valid():
+            return self._modal(request, row, form)
+        request_with_container = cast('RequestWithContainer', request)
+        category_service = (
+            request_with_container.container.transactions.category_service()
+        )
+        category = category_service.create_category(user, form)
+        return render(
+            request,
+            self.created_template,
+            {'category': category, 'row': row},
+        )
+
+    @staticmethod
+    def _row(
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> BankStatementRow:
+        user = cast('User', request.user)
+        row = get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=user,
+            upload__account__user=user,
+        )
+        if row.transaction_type not in BankStatementRow.TransactionType.values:
+            raise Http404
+        return row
+
+    def _form_kwargs(self, row: BankStatementRow) -> dict[str, Any]:
+        user = row.upload.user
+        return {
+            'initial': {'type': row.transaction_type},
+            'category_queryset': Category.objects.filter(
+                user=user,
+                type=row.transaction_type,
+                system_kind='',
+            ),
+        }
+
+    def _modal(
+        self,
+        request: HttpRequest,
+        row: BankStatementRow,
+        form: CategoryForm,
+    ) -> HttpResponse:
+        return render(request, self.modal_template, {'form': form, 'row': row})
 
 
 class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):

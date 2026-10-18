@@ -1,0 +1,19 @@
+{% load i18n %}
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <form method="post" hx-post="{% url 'users:bank_statement_markup_category' row.upload_id row.pk %}" hx-target="#category-modal" class="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+        {% csrf_token %}
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% translate 'Новая категория' %}</h3>
+        {{ form.non_field_errors }}
+        {% for field in form.visible_fields %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>{% endfor %}
+            </div>
+        {% endfor %}
+        <div class="flex justify-end gap-2">
+            <button type="button" hx-get="{% url 'users:bank_statement_markup_category' row.upload_id row.pk %}?close=1" hx-target="#category-modal" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200">{% translate 'Отмена' %}</button>
+            <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Создать' %}</button>
+        </div>
+    </form>
+</div>

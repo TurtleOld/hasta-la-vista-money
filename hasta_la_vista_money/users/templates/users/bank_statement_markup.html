@@ -31,7 +31,7 @@
                                 </p>
                             </div>
                             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <select name="category" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                                <select name="category" id="category-{{ row.pk }}" class="category-select-{{ row.transaction_type }} rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
                                     {% if item.refund_default %}
                                         <option value="">{% translate 'Возвраты' %}</option>
                                     {% else %}
@@ -41,6 +41,7 @@
                                         <option value="{{ category.pk }}">{{ category.name }}</option>
                                     {% endfor %}
                                 </select>
+                                <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Новая категория' %}</button>
                                 <button type="submit" name="decision" value="post" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести' %}</button>
                                 <button type="submit" name="decision" value="skip" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Пропустить' %}</button>
                             </div>
@@ -57,6 +58,7 @@
                     {% if page_obj.has_next %}<a class="text-blue-600 dark:text-blue-400 underline" href="?page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
                 </nav>
             {% endif %}
+            <div id="category-modal"></div>
             <a class="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 underline" href="{% url 'users:bank_statement_upload' %}">{% translate 'К загрузкам выписок' %}</a>
         </div>
     </div>

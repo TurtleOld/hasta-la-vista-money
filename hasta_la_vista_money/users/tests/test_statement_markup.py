@@ -315,3 +315,58 @@ class StatementMarkupViewTest(StatementMarkupFixture):
             response,
             reverse('users:bank_statement_markup', args=[self.upload.pk]),
         )
+
+
+class StatementMarkupCategoryModalTest(StatementMarkupFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.client.force_login(self.user)
+        self.row = self._row(1, transaction_type='expense')
+        self.url = reverse(
+            'users:bank_statement_markup_category',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+    def test_modal_offers_parents_of_row_type_only(self) -> None:
+        self._category('Еда')
+        self._category('Зарплата', kind='income')
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'Еда')
+        self.assertNotContains(response, 'Зарплата')
+
+    def test_create_uses_row_type_and_selects_in_origin_row(self) -> None:
+        parent = self._category('Еда')
+
+        response = self.client.post(
+            self.url,
+            {'name': 'Кафе', 'parent_category': parent.pk, 'type': 'income'},
+        )
+
+        category = Category.objects.get(user=self.user, name='Кафе')
+        self.assertEqual(category.type, 'expense')
+        self.assertEqual(category.parent_category, parent)
+        self.assertContains(response, f'value="{category.pk}" selected')
+        self.assertContains(
+            response,
+            f'beforeend:#category-{self.row.pk}',
+        )
+
+    def test_invalid_form_keeps_modal_and_creates_nothing(self) -> None:
+        self._category('Кафе')
+
+        response = self.client.post(self.url, {'name': 'Кафе'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Category.objects.filter(name='Кафе').count(), 1)
+        self.assertNotContains(response, 'hx-swap-oob')
+
+    def test_other_user_gets_404(self) -> None:
+        other = User.objects.create_user(username='other', password='x')
+        self.client.force_login(other)
+
+        self.assertEqual(
+            self.client.post(self.url, {'name': 'Х'}).status_code,
+            404,
+        )
