@@ -123,10 +123,19 @@ class BudgetCurrencyTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertContains(response, '2222')
         self.assertNotContains(response, '1111')
+
+    def test_limit_form_lets_user_change_currency(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('budget:list'), {'currency': 'USD'})
+
+        self.assertContains(response, '<select name="currency"')
         self.assertContains(
             response,
-            '<input type="hidden" name="currency" value="USD">',
+            '<option value="USD" selected>USD</option>',
         )
+        self.assertContains(response, '<option value="RUB">RUB</option>')
+        self.assertNotContains(response, 'type="hidden" name="currency"')
 
     def test_new_limit_defaults_to_analytics_currency(self) -> None:
         self.client.force_login(self.user)

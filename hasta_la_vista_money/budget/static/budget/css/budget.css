@@ -376,6 +376,7 @@
 }
 
 .budget-limit-form input,
+.budget-limit-form select,
 .budget-table-input {
   background: var(--budget-surface);
   border: 1px solid var(--budget-border);
@@ -388,6 +389,7 @@
 }
 
 .budget-limit-form input:focus,
+.budget-limit-form select:focus,
 .budget-table-input:focus {
   border-color: var(--budget-accent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--budget-accent) 15%, transparent);
