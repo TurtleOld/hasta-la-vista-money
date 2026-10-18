@@ -197,3 +197,32 @@ class PendingTransferViewTest(TestCase):
         )
         self.card.refresh_from_db()
         self.assertEqual(self.card.balance, Decimal('1000.00'))
+
+    def test_link_rejects_row_of_another_upload(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            exchange_date=datetime(2026, 2, 10, 9, 0, tzinfo=UTC),
+        )
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.card,
+            pdf_file='bank_statements/other.pdf',
+        )
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_pending_transfer_link',
+                args=[other_upload.pk, self.row.pk],
+            ),
+            {'transfer': transfer.pk},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )

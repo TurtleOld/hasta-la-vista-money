@@ -533,11 +533,17 @@ class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
         row_id: int,
     ) -> HttpResponse:
         """Link the pending repayment to the transfer the owner picked."""
-        del upload_id  # the row id alone identifies the owner's row
+        get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
         form = RepaymentTransferLinkForm(request.POST)
+        if not form.is_valid():
+            return self._reject(request)
         try:
-            if not form.is_valid():
-                raise StaleStatementCandidateError(form.errors)
             _link_service(request).link_repayment(
                 row_id,
                 form.cleaned_data['transfer'],
@@ -548,13 +554,14 @@ class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except StaleStatementCandidateError:
-            messages.error(
-                request,
-                _('Перевод не подходит для этой строки выписки.'),
-            )
-        else:
-            messages.success(
-                request,
-                _('Погашение связано с переводом.'),
-            )
+            return self._reject(request)
+        messages.success(request, _('Погашение связано с переводом.'))
+        return redirect('finance_account:list')
+
+    @staticmethod
+    def _reject(request: HttpRequest) -> HttpResponse:
+        messages.error(
+            request,
+            _('Перевод не подходит для этой строки выписки.'),
+        )
         return redirect('finance_account:list')
