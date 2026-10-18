@@ -139,8 +139,7 @@ class TestBankStatementUploadView(TestCase):
         # Check redirect and message
         self.assertRedirects(response, self.upload_url)
         messages = list(get_messages(response.wsgi_request))
-        # Check that there's a success message
-        self.assertTrue(len(messages) > 0)
+        self.assertEqual(len(messages), 1)
 
     @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
     def test_repeated_file_does_not_start_second_import(

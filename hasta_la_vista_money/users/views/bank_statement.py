@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -127,7 +126,6 @@ def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
 
 class BankStatementUploadView(
     LoginRequiredMixin,
-    SuccessMessageMixin[BankStatementUploadForm],
     FormView[BankStatementUploadForm],
 ):
     """View for uploading bank statements in PDF format."""
