@@ -35,7 +35,6 @@ from hasta_la_vista_money.core.mixins import (
     UserAuthMixin,
 )
 from hasta_la_vista_money.finance_account.analytics_currency import (
-    AnalyticsCurrency,
     get_analytics_currency,
 )
 from hasta_la_vista_money.services.generate_dates import generate_date_list
@@ -59,26 +58,17 @@ def _budget_range_from_request(request: Request) -> str:
     return str(range_value or '6')
 
 
-def _analytics_currency(
-    request: Request,
-    users: list[User],
-    *,
-    remember: bool = True,
-) -> AnalyticsCurrency:
-    return get_analytics_currency(
-        cast('HttpRequest', request),
-        users,
-        remember=remember,
-    )
-
-
 def _requested_currency(request: Request, users: list[User]) -> str:
     """Posted currency, else the analytics one; a save never remembers it."""
     serializer = BudgetCurrencySerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     return str(
         serializer.validated_data.get('currency')
-        or _analytics_currency(request, users, remember=False).currency,
+        or get_analytics_currency(
+            cast('HttpRequest', request),
+            users,
+            remember=False,
+        ).currency,
     )
 
 
@@ -98,7 +88,10 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
     )
     months = sorted({month.replace(day=1) for month in dates})
     budget_service = request_with_container.container.budget.budget_service()
-    analytics_currency = _analytics_currency(request, scope_users)
+    analytics_currency = get_analytics_currency(
+        cast('HttpRequest', request),
+        scope_users,
+    )
 
     if table_type == TransactionType.EXPENSE:
         categories = list(
@@ -168,7 +161,10 @@ def _render_budget_limits(request: Request) -> Any:
         get_categories(user, TransactionType.EXPENSE, users=scope_users),
     )
     budget_service = request_with_container.container.budget.budget_service()
-    analytics_currency = _analytics_currency(request, scope_users)
+    analytics_currency = get_analytics_currency(
+        cast('HttpRequest', request),
+        scope_users,
+    )
     context = {
         'budget_limit_overview': budget_service.aggregate_budget_limit_overview(
             user=user,
@@ -236,8 +232,8 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
         _scope, scope_users, _choices = _resolve_budget_scope(user, request)
-        currency = _analytics_currency(
-            request,
+        currency = get_analytics_currency(
+            cast('HttpRequest', request),
             scope_users,
             remember=False,
         ).currency
