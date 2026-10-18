@@ -17,6 +17,16 @@ from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
 
+def _currency_field() -> 'models.CharField[str, str]':
+    """Currency of a budget limit or plan, same choices as an account."""
+    return models.CharField(
+        max_length=3,
+        choices=currency_choices('ru'),
+        default=get_default_currency,
+        verbose_name=_('Валюта'),
+    )
+
+
 class DateListQuerySet(models.QuerySet['DateList']):
     def for_user(self, user: User) -> 'models.QuerySet[DateList]':
         """Filter date lists by user."""
@@ -148,12 +158,7 @@ class Planning(models.Model):
         verbose_name=_('Сумма'),
         help_text=_('Планируемая сумма'),
     )
-    currency: str = models.CharField(  # type: ignore[assignment]
-        max_length=3,
-        choices=currency_choices('ru'),
-        default=get_default_currency,
-        verbose_name=_('Валюта'),
-    )
+    currency: str = _currency_field()  # type: ignore[assignment]
     planning_type: str = models.CharField(  # type: ignore[assignment]
         max_length=10,
         choices=TransactionType.choices,
@@ -252,12 +257,7 @@ class Budget(models.Model):
         verbose_name=_('Лимит'),
         help_text=_('Максимальная сумма расходов за период'),
     )
-    currency: str = models.CharField(  # type: ignore[assignment]
-        max_length=3,
-        choices=currency_choices('ru'),
-        default=get_default_currency,
-        verbose_name=_('Валюта'),
-    )
+    currency: str = _currency_field()  # type: ignore[assignment]
     alert_threshold: int = models.PositiveSmallIntegerField(  # type: ignore[assignment]
         default=constants.EIGHTY,
         validators=[
