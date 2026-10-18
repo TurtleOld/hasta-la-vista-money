@@ -9,19 +9,23 @@ def _user_statistics_version_key(user_id: int) -> str:
     return f'user_stats_version_{user_id}'
 
 
+def _user_statistics_version(user_id: int) -> int:
+    return int(cache.get(_user_statistics_version_key(user_id), 1))
+
+
 def get_user_detailed_statistics_cache_key(
     user_id: int,
     suffix: str = 'default',
 ) -> str:
     """Return cache key for detailed dashboard statistics."""
-    version = cache.get(_user_statistics_version_key(user_id), 1)
+    version = _user_statistics_version(user_id)
     suffix_hash = hashlib.sha256(suffix.encode()).hexdigest()[:16]
     return f'user_stats_{user_id}_{version}_{suffix_hash}'
 
 
 def get_dashboard_summary_cache_key(user_id: int, currency: str) -> str:
     """Return cache key for dashboard summary data."""
-    version = cache.get(_user_statistics_version_key(user_id), 1)
+    version = _user_statistics_version(user_id)
     return f'user_dashboard_summary_{user_id}_{version}_{currency}'
 
 
@@ -31,7 +35,7 @@ def get_period_comparison_cache_key(
     currency: str,
 ) -> str:
     """Return cache key for cached period comparison data."""
-    version = cache.get(_user_statistics_version_key(user_id), 1)
+    version = _user_statistics_version(user_id)
     return (
         f'user_period_comparison_{user_id}_{version}_{period_type}_{currency}'
     )
@@ -39,8 +43,10 @@ def get_period_comparison_cache_key(
 
 def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
     """Invalidate cached dashboard and statistics data for a user."""
-    version_key = _user_statistics_version_key(user_id)
-    cache.set(version_key, int(cache.get(version_key, 1)) + 1)
+    cache.set(
+        _user_statistics_version_key(user_id),
+        _user_statistics_version(user_id) + 1,
+    )
 
 
 def invalidate_group_statistics_cache(
