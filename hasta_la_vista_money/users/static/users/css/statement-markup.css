@@ -1,0 +1,43 @@
+.statement-markup .markup-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.statement-markup .markup-actions button,
+.statement-markup #bulk-form button {
+  white-space: nowrap;
+}
+
+.statement-markup .markup-select {
+  appearance: none;
+  background-color: var(--app-surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.15rem) 55%, calc(100% - 0.8rem) 55%;
+  background-repeat: no-repeat;
+  background-size: 0.35rem 0.35rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--app-text);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  max-width: 100%;
+  min-width: 13rem;
+  padding: 0.5rem 2.5rem 0.5rem 0.875rem;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.statement-markup .markup-select:hover {
+  border-color: var(--app-accent);
+}
+
+.statement-markup .markup-select:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--app-accent) 25%, transparent);
+  outline: none;
+}
