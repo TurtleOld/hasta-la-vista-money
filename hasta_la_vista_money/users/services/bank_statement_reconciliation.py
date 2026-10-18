@@ -26,7 +26,7 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
-from hasta_la_vista_money.users.services.statement_transfer_matching import (
+from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
 )

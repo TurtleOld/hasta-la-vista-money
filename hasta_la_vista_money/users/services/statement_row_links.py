@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import (
@@ -26,24 +25,6 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     StaleStatementCandidateError,
 )
-from hasta_la_vista_money.users.services.statement_transfer_matching import (
-    TRANSFER_DATE_WINDOW,
-    local_row_date,
-)
-
-
-def _pays(row: BankStatementRow, transfer: TransferMoneyLog) -> bool:
-    if row.amount is None or row.transaction_date is None:
-        return False
-    days_apart = abs(
-        timezone.localdate(transfer.exchange_date)
-        - local_row_date(row.transaction_date),
-    )
-    return (
-        transfer.to_account_id == row.upload.account_id
-        and transfer.amount == row.amount
-        and days_apart <= TRANSFER_DATE_WINDOW
-    )
 
 
 class StatementRowLinkService:
@@ -109,11 +90,7 @@ class StatementRowLinkService:
         rows: Sequence[BankStatementRow],
     ) -> dict[int, list[TransferMoneyLog]]:
         """Recorded transfers that may have paid each repayment row."""
-        transfers = self.statement_row_repository.transfers_into_rows(rows)
-        return {
-            row.pk: [transfer for transfer in transfers if _pays(row, transfer)]
-            for row in rows
-        }
+        return self.statement_row_repository.repayment_candidates(rows)
 
     def link_repayment(
         self,

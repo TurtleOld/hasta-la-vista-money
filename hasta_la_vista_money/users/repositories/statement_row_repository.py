@@ -4,7 +4,14 @@ from collections.abc import Sequence
 from functools import reduce
 from operator import or_
 
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import (
+    BooleanField,
+    Exists,
+    ExpressionWrapper,
+    OuterRef,
+    Q,
+    QuerySet,
+)
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
@@ -18,9 +25,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
 )
-from hasta_la_vista_money.users.services.statement_transfer_matching import (
-    TRANSFER_DATE_WINDOW,
+from hasta_la_vista_money.users.repositories.transfer_matching import (
     local_row_date,
+    mirroring_transfer_q,
 )
 
 _REPAYMENT_ROW = Q(
@@ -108,43 +115,52 @@ class StatementRowRepository:
             .first()
         )
 
-    def transfers_into_rows(
+    def repayment_candidates(
         self,
         rows: Sequence[BankStatementRow],
-    ) -> list[TransferMoneyLog]:
-        """Transfers that may have paid any of the repayment rows, one query.
+    ) -> dict[int, list[TransferMoneyLog]]:
+        """Transfers that may have paid each repayment row, one query.
 
-        Same rule as ``find_mirroring_transfers``: into the row's account,
-        the same amount, within the date window, not bound to another row
-        of that account. Rows without amount or date match nothing.
+        Rule of ``mirroring_transfer_q``, not bound to another row of that
+        account. Rows without amount or date match nothing.
         """
-        matches = [
-            Q(
+        rules = {
+            f'pays_row_{row.pk}': mirroring_transfer_q(
+                account_id=row.upload.account_id,
                 user_id=row.upload.user_id,
-                to_account_id=row.upload.account_id,
+                transaction_type=BankStatementRow.TransactionType.INCOME,
                 amount=row.amount,
-                exchange_date__date__gte=(
-                    local_row_date(row.transaction_date) - TRANSFER_DATE_WINDOW
-                ),
-                exchange_date__date__lte=(
-                    local_row_date(row.transaction_date) + TRANSFER_DATE_WINDOW
-                ),
+                row_date=local_row_date(row.transaction_date),
             )
             for row in rows
             if row.amount is not None and row.transaction_date is not None
-        ]
-        if not matches:
-            return []
+        }
+        candidates: dict[int, list[TransferMoneyLog]] = {
+            row.pk: [] for row in rows
+        }
+        if not rules:
+            return candidates
         occupied = BankStatementRow.objects.filter(
             transfer_id=OuterRef('pk'),
             upload__account_id=OuterRef('to_account_id'),
         )
-        return list(
-            TransferMoneyLog.objects.filter(reduce(or_, matches))
+        transfers = (
+            TransferMoneyLog.objects.filter(reduce(or_, rules.values()))
             .exclude(Exists(occupied))
+            .annotate(
+                **{
+                    name: ExpressionWrapper(rule, output_field=BooleanField())
+                    for name, rule in rules.items()
+                },
+            )
             .select_related('from_account')
-            .order_by('exchange_date', 'pk'),
+            .order_by('exchange_date', 'pk')
         )
+        for transfer in transfers:
+            for row_pk, paid_by in candidates.items():
+                if getattr(transfer, f'pays_row_{row_pk}', False):
+                    paid_by.append(transfer)
+        return candidates
 
     def close_row(
         self,
