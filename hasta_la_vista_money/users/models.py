@@ -229,6 +229,8 @@ class BankStatementRow(Model):
         TRANSFERRED = 'transferred', _('Уже учтена')
         NOT_A_PAYMENT = 'not_a_payment', _('Не погашение')
         EXPIRED = 'expired', _('Срок решения истёк')
+        AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
+        MUTUAL_CANCEL = 'mutual_cancel', _('Взаимная отмена')
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
@@ -258,6 +260,10 @@ class BankStatementRow(Model):
     source_ref = CharField(max_length=64, blank=True, null=True)
     source_row_position = PositiveIntegerField(blank=True, null=True)
     match_calendar_date = BooleanField(default=False)
+    # RosDorBankRowKind of a row awaiting markup.
+    kind = CharField(max_length=10, blank=True, default='')
+    merchant_key = CharField(max_length=250, blank=True, default='')
+    counterparty_account = CharField(max_length=20, blank=True, default='')
     candidate = ForeignKey(
         'transactions.Transaction',
         on_delete=SET_NULL,

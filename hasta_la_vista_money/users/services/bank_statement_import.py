@@ -15,7 +15,7 @@ from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -45,7 +45,9 @@ from hasta_la_vista_money.users.repositories.transfer_matching import (
     local_row_date,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
+    BankStatementParseError,
     BankStatementParser,
+    RosDorBankRowKind,
 )
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 
@@ -53,6 +55,9 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
     from hasta_la_vista_money.finance_account.models import Account
+    from hasta_la_vista_money.finance_account.repositories import (
+        AccountRepository,
+    )
     from hasta_la_vista_money.users.services.category_classifier import (
         CategoryClassifier,
     )
@@ -93,9 +98,14 @@ class ProbableDuplicate:
 class BankStatementImportService:
     """Разбирает PDF-выписку и проводит по ней финансовые движения."""
 
-    def __init__(self, classifier: CategoryClassifier) -> None:
-        """Инициализировать сервис категоризатором операций."""
+    def __init__(
+        self,
+        classifier: CategoryClassifier,
+        account_repository: AccountRepository,
+    ) -> None:
+        """Инициализировать сервис категоризатором и репозиторием счетов."""
         self.classifier = classifier
+        self.account_repository = account_repository
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -158,6 +168,9 @@ class BankStatementImportService:
         parser = BankStatementParser(upload.pdf_file.path)
         parse_result = parser.parse()
         transactions = parse_result.transactions
+        if parse_result.account_number:
+            with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+                self._match_account(upload, parse_result.account_number)
 
         upload.total_transactions = len(transactions)
         upload.save(update_fields=['total_transactions'])
@@ -167,6 +180,16 @@ class BankStatementImportService:
             upload_id=upload.pk,
             transactions=len(transactions),
         )
+
+        if parse_result.requires_markup:
+            self._save_markup_rows(upload, transactions)
+            return StatementImportResult(
+                income_count=0,
+                expense_count=0,
+                skipped_count=upload.skipped_count,
+                needs_transfer_count=0,
+                closing_balance=parse_result.closing_balance,
+            )
 
         existing_categories = list(
             Category.objects.filter(user=upload.user)
@@ -424,6 +447,139 @@ class BankStatementImportService:
             period_to=period_to,
         )
         return income_count, expense_count, skipped_count, needs_transfer_count
+
+    def _match_account(
+        self,
+        upload: BankStatementUpload,
+        account_number: str,
+    ) -> None:
+        """Pick the account by the statement number or record the number.
+
+        Raises:
+            BankStatementParseError: The selected account has another
+                number, or the number cannot be recorded.
+        """
+        account = upload.account
+        if account.account_number == account_number:
+            return
+        if account.account_number:
+            raise BankStatementParseError(
+                _(
+                    'Номер счёта в выписке {number} не совпадает '
+                    'с номером выбранного счёта.',
+                ).format(number=account_number),
+            )
+        matched = self.account_repository.get_by_user_and_account_number(
+            upload.user,
+            account_number,
+        )
+        if matched is None:
+            account.account_number = account_number
+            try:
+                with transaction.atomic():
+                    account.save(update_fields=['account_number'])
+            except IntegrityError as e:
+                raise BankStatementParseError(
+                    _('Номер счёта уже используется'),
+                ) from e
+            return
+        if matched.is_archived or matched.is_deposit:
+            raise BankStatementParseError(
+                _('Архивный счёт или счёт вклада недоступен для импорта.'),
+            )
+        upload.account = matched
+        try:
+            with transaction.atomic():
+                upload.save(update_fields=['account'])
+        except IntegrityError as e:
+            raise BankStatementParseError(
+                _('Эта выписка уже была загружена.'),
+            ) from e
+
+    def _save_markup_rows(
+        self,
+        upload: BankStatementUpload,
+        transactions: list[dict[str, Any]],
+    ) -> None:
+        """Save rows awaiting user markup; none of them is posted.
+
+        Rows already known on the account, marked up or still awaiting
+        markup, are skipped, so an overlapping period adds only new rows.
+        """
+        refs = [trans['source_ref'] for trans in transactions]
+        with transaction.atomic():
+            # Serialize overlapping uploads of one account.
+            self.account_repository.get_by_ids_for_update({upload.account_id})
+            created = self._create_markup_rows(upload, transactions, refs)
+        upload.processed_transactions = len(transactions)
+        upload.skipped_count = len(transactions) - created
+        upload.progress = 100
+        upload.save(
+            update_fields=[
+                'processed_transactions',
+                'skipped_count',
+                'progress',
+                'updated_at',
+            ],
+        )
+
+    def _create_markup_rows(
+        self,
+        upload: BankStatementUpload,
+        transactions: list[dict[str, Any]],
+        refs: list[str],
+    ) -> int:
+        known_refs = set(
+            BankStatementRow.objects.filter(
+                upload__account=upload.account,
+                source_ref__in=refs,
+            )
+            .exclude(upload=upload)
+            .exclude(decision=BankStatementRow.Decision.EXPIRED)
+            .values_list('source_ref', flat=True),
+        ) | set(
+            Transaction.objects.filter(
+                account=upload.account,
+                source_ref__in=refs,
+            ).values_list('source_ref', flat=True),
+        )
+        new_rows = {
+            idx: trans
+            for idx, trans in enumerate(transactions)
+            if trans['source_ref'] not in known_refs
+        }
+        # A cancel of a debit from an earlier upload is an income to mark up.
+        cancelled = _mutual_cancel_positions(new_rows)
+        rows = [
+            BankStatementRow(
+                upload=upload,
+                transaction_type=(
+                    TransactionType.INCOME
+                    if trans['amount'] > 0
+                    else TransactionType.EXPENSE
+                ),
+                transaction_date=trans['date'],
+                amount=abs(trans['amount']),
+                description=strip_pii(str(trans['description']))[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                source_ref=trans['source_ref'],
+                source_row_position=idx,
+                match_calendar_date=True,
+                kind=str(trans['kind']),
+                merchant_key=trans['merchant_key'] or '',
+                counterparty_account=trans['counterparty_account'] or '',
+                decision=(
+                    BankStatementRow.Decision.MUTUAL_CANCEL
+                    if idx in cancelled
+                    else BankStatementRow.Decision.AWAITING_MARKUP
+                ),
+            )
+            for idx, trans in new_rows.items()
+        ]
+        # A rerun of the same upload hits the per-upload row constraint.
+        BankStatementRow.objects.bulk_create(rows, ignore_conflicts=True)
+        return len(rows)
 
     def _save_needs_transfer_row(
         self,
@@ -752,3 +908,22 @@ class BankStatementImportService:
                 source_row_position=source_row_position,
             ).exists(),
         )
+
+
+def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
+    """Pair each cancel with a debit of the same device owner and amount."""
+    debits: dict[tuple[str, Decimal], list[int]] = {}
+    for idx, trans in rows.items():
+        if trans['kind'] == RosDorBankRowKind.CARD and trans['amount'] < 0:
+            debits.setdefault(
+                (trans['description'], -trans['amount']),
+                [],
+            ).append(idx)
+    positions: set[int] = set()
+    for idx, trans in rows.items():
+        if trans['kind'] != RosDorBankRowKind.CANCEL:
+            continue
+        matches = debits.get((trans['description'], trans['amount']))
+        if matches:
+            positions |= {matches.pop(0), idx}
+    return positions
