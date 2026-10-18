@@ -7,11 +7,15 @@ that also accounts for domains `finance_account` does not own (currently
 just deposits, via `movement_sources`; see ADR-0010).
 """
 
-from datetime import datetime, timedelta
+from collections import defaultdict
+from collections.abc import Iterator, Sequence
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Q
+from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -56,48 +60,118 @@ class BalanceHistoryService:
         Returns:
             The account's balance immediately after `moment`.
         """
-        balance = account.balance
-
-        later_receipts = Receipt.objects.filter(
-            account_id=account.pk,
-            receipt_date__gt=moment,
+        later = sum(
+            (delta for _, delta in self._events_after([account], moment)),
+            Decimal(constants.ZERO),
         )
-        for later_receipt in later_receipts:
-            balance -= receipt_balance_delta(
-                later_receipt.operation_type,
-                later_receipt.total_sum,
+        return account.balance - later
+
+    def daily_balances(
+        self,
+        accounts: Sequence[Account],
+        start: date,
+        end: date,
+    ) -> dict[date, Decimal]:
+        """Return the summed balance of `accounts` at the end of each day.
+
+        Same events as `balance_at`, read once for the whole period and
+        undone day by day from the current balances.
+
+        Args:
+            accounts: Accounts whose balances are summed.
+            start: First day of the series.
+            end: Last day of the series.
+
+        Returns:
+            Day -> summed end-of-day balance, from `start` to `end`.
+        """
+        start_moment = timezone.make_aware(datetime.combine(start, time.max))
+        by_day: defaultdict[date, Decimal] = defaultdict(Decimal)
+        for day, delta in self._events_after(accounts, start_moment):
+            by_day[day] += delta
+        balance = sum(
+            (account.balance for account in accounts),
+            Decimal(constants.ZERO),
+        )
+        balance -= sum(
+            (delta for day, delta in by_day.items() if day > end),
+            Decimal(constants.ZERO),
+        )
+        balances: dict[date, Decimal] = {}
+        day = end
+        while day >= start:
+            balances[day] = balance
+            balance -= by_day[day]
+            day -= timedelta(days=1)
+        return dict(reversed(balances.items()))
+
+    def _events_after(
+        self,
+        accounts: Sequence[Account],
+        moment: datetime,
+    ) -> Iterator[tuple[date, Decimal]]:
+        """Yield `(day, balance delta)` of every event later than `moment`.
+
+        Timestamped events are compared with `moment` exactly; movement
+        source events from the day after `moment`'s calendar day.
+        """
+        account_ids = {account.pk for account in accounts}
+        receipts = (
+            Receipt.objects.filter(
+                account_id__in=account_ids,
+                receipt_date__gt=moment,
+            )
+            .order_by()
+            .values_list('receipt_date', 'operation_type', 'total_sum')
+        )
+        for at, operation_type, total_sum in receipts:
+            yield (
+                timezone.localdate(at),
+                receipt_balance_delta(operation_type, total_sum),
             )
 
-        later_transactions = Transaction.objects.filter(
-            account_id=account.pk,
-            date__gt=moment,
-        )
-        for later_transaction in later_transactions:
-            delta = (
-                later_transaction.amount
-                if later_transaction.type == TransactionType.INCOME
-                else -later_transaction.amount
+        transactions = (
+            Transaction.objects.filter(
+                account_id__in=account_ids,
+                date__gt=moment,
             )
-            balance -= delta
-
-        later_transfers = TransferMoneyLog.objects.filter(
-            Q(from_account_id=account.pk) | Q(to_account_id=account.pk),
-            exchange_date__gt=moment,
+            .order_by()
+            .values_list('date', 'type', 'amount')
         )
-        for transfer in later_transfers:
-            delta = Decimal('0.00')
-            if transfer.from_account_id == account.pk:
-                delta -= transfer.amount
-            if transfer.to_account_id == account.pk:
-                delta += transfer.amount
-            balance -= delta
+        for at, transaction_type, amount in transactions:
+            yield (
+                timezone.localdate(at),
+                amount
+                if transaction_type == TransactionType.INCOME
+                else -amount,
+            )
+
+        transfers = (
+            TransferMoneyLog.objects.filter(
+                Q(from_account_id__in=account_ids)
+                | Q(to_account_id__in=account_ids),
+                exchange_date__gt=moment,
+            )
+            .order_by()
+            .values_list(
+                'exchange_date',
+                'from_account_id',
+                'to_account_id',
+                'amount',
+            )
+        )
+        for at, from_id, to_id, amount in transfers:
+            delta = Decimal(constants.ZERO)
+            if from_id in account_ids:
+                delta -= amount
+            if to_id in account_ids:
+                delta += amount
+            yield timezone.localdate(at), delta
 
         since = moment.date() + timedelta(days=1)
         for source in self.movement_sources:
             for movement in source.list_financial_movements(
-                account,
+                accounts,
                 since=since,
             ):
-                balance -= movement.delta
-
-        return balance
+                yield movement.effective_on, movement.delta

@@ -20,8 +20,6 @@ from typing import Any, Final
 
 from django.utils.translation import gettext_lazy as _
 
-REPORTS_BUDGET_CHART_PERIODS: Final = ('m', 'q', 'y', 'all')
-
 # ============================================================================
 # Receipt JSON Parsing Constants
 # ============================================================================
@@ -274,6 +272,7 @@ UNSUCCESSFULLY_MESSAGE_LOAN_DELETE_POSTED: Final = _(
 # Family groups
 
 FAMILY_INVITE_TTL: Final = timedelta(days=7)
+FAMILY_SCOPE: Final = 'family'
 
 # ============================================================================
 # User Messages - Profile Operations
@@ -473,6 +472,7 @@ RECENT_ITEMS_LIMIT: Final = 5
 PAGINATE_BY_DEFAULT: Final = 10
 STATEMENT_RECONCILIATION_PAGE_SIZE: Final = 25
 STATEMENT_RETENTION_DAYS: Final = 30
+STATEMENT_TRANSFER_DATE_WINDOW_DAYS: Final = 1
 STATEMENT_UPLOAD_STALE_MINUTES: Final = 30
 STATEMENT_IMPORT_MAX_RETRIES: Final = 3
 STATEMENT_IMPORT_RETRY_DELAY_SECONDS: Final = 60
@@ -484,7 +484,6 @@ RECENT_RECEIPTS_LIMIT: Final = 20
 TRANSFER_LOG_LIMIT: Final = 20
 DASHBOARD_CACHE_TIMEOUT: Final = 300
 DASHBOARD_COMPARISON_CACHE_TIMEOUT: Final = 120
-REPORTS_CACHE_TIMEOUT: Final = 300
 STATISTICS_CACHE_TIMEOUT: Final = 600
 
 # ============================================================================
@@ -614,6 +613,8 @@ MONTH_NAMES: Final = {
 # Constants for session management
 
 SESSION_COOKIE_AGE: Final = 60 * 60 * 24 * 30
+ANALYTICS_CURRENCY_SESSION_KEY: Final = 'analytics_currency'
+ANALYTICS_CURRENCY_PARAM: Final = 'currency'
 
 # ============================================================================
 # Webhook Constants

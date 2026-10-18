@@ -7,6 +7,7 @@ ADR-0010 and `config/containers.py` for how the two containers are wired
 together without a circular dependency).
 """
 
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from typing import Final
@@ -49,17 +50,18 @@ class DepositMovementSource:
 
     def list_financial_movements(
         self,
-        account: Account,
+        accounts: Sequence[Account],
         since: date,
     ) -> list[FinancialMovement]:
+        account_ids = {account.pk for account in accounts}
         return [
-            *self._principal_movements(account, since),
-            *self._capitalization_movements(account, since),
+            *self._principal_movements(account_ids, since),
+            *self._capitalization_movements(account_ids, since),
         ]
 
     def _principal_movements(
         self,
-        account: Account,
+        account_ids: set[int],
         since: date,
     ) -> list[FinancialMovement]:
         """Publish principal events not already recorded as transfers.
@@ -75,9 +77,9 @@ class DepositMovementSource:
                 'deposit',
             )
             .filter(
-                Q(source_account=account)
-                | Q(destination_account=account)
-                | Q(deposit__account=account),
+                Q(source_account_id__in=account_ids)
+                | Q(destination_account_id__in=account_ids)
+                | Q(deposit__account_id__in=account_ids),
                 effective_on__gte=since,
             )
             .exclude(
@@ -92,11 +94,11 @@ class DepositMovementSource:
         for event in events:
             sign = -1 if event.reversal_of_id else 1
             delta = Decimal('0.00')
-            if event.source_account_id == account.pk:
+            if event.source_account_id in account_ids:
                 delta -= event.amount
-            if event.destination_account_id == account.pk:
+            if event.destination_account_id in account_ids:
                 delta += event.amount
-            if event.deposit.account_id == account.pk:
+            if event.deposit.account_id in account_ids:
                 delta += _deposit_account_delta(event)
             if delta:
                 movements.append(
@@ -110,16 +112,16 @@ class DepositMovementSource:
 
     def _capitalization_movements(
         self,
-        account: Account,
+        account_ids: set[int],
         since: date,
     ) -> list[FinancialMovement]:
         capitalized_on_own_account = DepositCapitalizationEvent.objects.filter(
-            deposit__account=account,
+            deposit__account_id__in=account_ids,
             destination=DepositCapitalizationEvent.Destination.CAPITALIZATION,
             posting_on__gte=since,
         )
         paid_to_own_account = DepositCapitalizationEvent.objects.filter(
-            destination_account=account,
+            destination_account_id__in=account_ids,
             posting_on__gte=since,
         )
         return [

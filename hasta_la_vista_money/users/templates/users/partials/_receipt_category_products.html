@@ -17,7 +17,7 @@
                     <tr>
                         <td>{{ product.product_name }}</td>
                         <td class="statistics-cell-center">{{ product.quantity|comma }}</td>
-                        <td class="statistics-cell-right">{{ product.total|comma }} ₽</td>
+                        <td class="statistics-cell-right">{{ product.total|comma }} {{ currency }}</td>
                     </tr>
                 {% empty %}
                     <tr><td colspan="3" class="statistics-empty">{% translate 'Нет товарной детализации по этой категории' %}</td></tr>

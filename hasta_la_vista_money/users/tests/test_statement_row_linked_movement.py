@@ -122,6 +122,9 @@ class StatementRowLinkedMovementTest(TestCase):
         self._assert_pending(row)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1100.00'))
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.awaiting_decision_count, 1)
+        self.assertEqual(self.upload.linked_count, 0)
 
     def test_delete_transfer_returns_row_to_pending(self) -> None:
         transfer = self.transfer_service.transfer_money(

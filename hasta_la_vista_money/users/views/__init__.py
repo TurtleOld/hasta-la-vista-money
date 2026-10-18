@@ -18,6 +18,7 @@ from hasta_la_vista_money.users.views.auth import (
 )
 from hasta_la_vista_money.users.views.bank_statement import (
     BankStatementPendingTransferDismissView,
+    BankStatementPendingTransferLinkView,
     BankStatementReconciliationBulkView,
     BankStatementReconciliationDecisionView,
     BankStatementReconciliationRevisionView,
@@ -54,6 +55,7 @@ from hasta_la_vista_money.users.views.profile import (
 __all__ = [
     'AuthRequest',
     'BankStatementPendingTransferDismissView',
+    'BankStatementPendingTransferLinkView',
     'BankStatementReconciliationBulkView',
     'BankStatementReconciliationDecisionView',
     'BankStatementReconciliationRevisionView',

@@ -40,14 +40,14 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.repositories.transfer_matching import (
+    find_mirroring_transfers,
+    local_row_date,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParser,
 )
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
-from hasta_la_vista_money.users.services.statement_transfer_matching import (
-    find_mirroring_transfers,
-    local_row_date,
-)
 
 if TYPE_CHECKING:
     from decimal import Decimal

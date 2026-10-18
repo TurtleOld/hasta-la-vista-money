@@ -20,8 +20,9 @@ class StatisticsRepository:
     def get_accounts_aggregate(
         self,
         user: User,
+        currency: str,
     ) -> dict[str, Decimal | int]:
-        accounts_qs = Account.objects.filter(user=user)
+        accounts_qs = Account.objects.filter(user=user, currency=currency)
         accounts_data = accounts_qs.aggregate(
             total_balance=Sum('balance'),
             accounts_count=Count('id'),
@@ -34,11 +35,13 @@ class StatisticsRepository:
     def get_expenses_sum_by_period(
         self,
         user: User,
+        currency: str,
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
         qs = Transaction.objects.without_adjustments().filter(
             user=user,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             date__gte=start_date,
         )
@@ -50,11 +53,13 @@ class StatisticsRepository:
     def get_income_sum_by_period(
         self,
         user: User,
+        currency: str,
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
         qs = Transaction.objects.without_adjustments().filter(
             user=user,
+            account__currency=currency,
             type=TransactionType.INCOME,
             date__gte=start_date,
         )
@@ -91,6 +96,7 @@ class StatisticsRepository:
     def get_top_expense_categories(
         self,
         user: User,
+        currency: str,
         start_date: datetime,
         limit: int = 5,
     ) -> QuerySet[Transaction, dict[str, str | Decimal]]:
@@ -98,6 +104,7 @@ class StatisticsRepository:
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=TransactionType.EXPENSE,
                 date__gte=start_date,
             )

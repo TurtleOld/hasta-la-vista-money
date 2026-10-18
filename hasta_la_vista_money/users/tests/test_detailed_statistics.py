@@ -727,6 +727,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
         container = ApplicationContainer()
         stats_filter = StatisticsFilters(
+            currency='RUB',
             period='range',
             date_from=date(2026, 1, 1),
             date_to=date(2026, 1, 31),
@@ -806,6 +807,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
         container = ApplicationContainer()
         stats_filter = StatisticsFilters(
+            currency='RUB',
             period='range',
             date_from=period_start,
             date_to=period_end,
@@ -942,6 +944,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
         container = ApplicationContainer()
         stats_filter = StatisticsFilters(
+            currency='RUB',
             period='range',
             date_from=today.replace(day=1) - relativedelta(months=6),
             date_to=today,

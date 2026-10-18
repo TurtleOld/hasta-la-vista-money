@@ -33,6 +33,7 @@ def _aware_day(day: date, *, end_of_day: bool = False) -> datetime:
 
 def _monthly_net_flows(
     users: Iterable[User],
+    currency: str,
     start: date,
     end: date,
 ) -> list[Decimal]:
@@ -40,6 +41,7 @@ def _monthly_net_flows(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users,
+            account__currency=currency,
             date__gte=_aware_day(start),
             date__lte=_aware_day(end, end_of_day=True),
         )
@@ -69,11 +71,12 @@ def build_cashflow_forecast(
     users: Iterable[User],
     accounts: Iterable[Account],
     today: date,
+    currency: str,
     months: int = 6,
 ) -> CashflowForecastDict:
     """Return 3/6 month cash-flow forecast from the latest 6 months."""
     history_start = today.replace(day=1) - relativedelta(months=5)
-    flows = _monthly_net_flows(users, history_start, today)
+    flows = _monthly_net_flows(users, currency, history_start, today)
     if not flows:
         return {
             'forecast_labels': [],

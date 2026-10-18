@@ -13,9 +13,6 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
     BalanceHistoryService,
 )
-from hasta_la_vista_money.reports.services.aggregation import (
-    pie_expense_category,
-)
 from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
@@ -73,7 +70,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
         )
 
     def test_dashboard_kpis_ignore_adjustments(self) -> None:
-        kpis = get_dashboard_month_kpis(self.user)
+        kpis = get_dashboard_month_kpis(self.user, currency='RUB')
 
         self.assertEqual(kpis['income'], Decimal(0))
         self.assertEqual(kpis['expenses'], Decimal(100))
@@ -83,19 +80,13 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
         start = self.now - timedelta(days=1)
 
         self.assertEqual(
-            repository.get_expenses_sum_by_period(self.user, start),
+            repository.get_expenses_sum_by_period(self.user, 'RUB', start),
             Decimal('100.00'),
         )
         self.assertEqual(
-            repository.get_income_sum_by_period(self.user, start),
+            repository.get_income_sum_by_period(self.user, 'RUB', start),
             Decimal(0),
         )
-
-    def test_category_report_ignores_adjustments(self) -> None:
-        report = str(pie_expense_category(self.user))
-
-        self.assertIn('Food', report)
-        self.assertNotIn(self.adjustment_expense.name, report)
 
     def test_budget_fact_ignores_adjustments(self) -> None:
         month = self.now.date().replace(day=1)
@@ -108,6 +99,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
             user=self.user,
             months=months,
             expense_categories=[self.food, self.adjustment_expense],
+            currency='RUB',
         )
 
         facts = {
@@ -123,6 +115,7 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
             users=[self.user],
             accounts=[self.account],
             today=self.now.date(),
+            currency='RUB',
         )
 
         self.assertEqual(

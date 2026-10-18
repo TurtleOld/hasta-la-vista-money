@@ -10,6 +10,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db.models import QuerySet
 from django.http import (
+    Http404,
     HttpRequest,
     HttpResponse,
     JsonResponse,
@@ -27,6 +28,7 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.users.forms import (
     BankStatementUploadForm,
+    RepaymentTransferLinkForm,
 )
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
@@ -36,6 +38,7 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
+    StatementRowLinkServiceProtocol,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     InvalidReconciliationDecisionError,
@@ -74,6 +77,15 @@ def _reconciliation_service(
     return cast(
         'BankStatementReconciliationServiceProtocol',
         request_with_container.container.users.bank_statement_reconciliation_service(),
+    )
+
+
+def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
+    """Resolve statement row links through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'StatementRowLinkServiceProtocol',
+        request_with_container.container.users.statement_row_link_service(),
     )
 
 
@@ -508,4 +520,48 @@ class BankStatementPendingTransferDismissView(LoginRequiredMixin, View):
             return HttpResponse(status=410)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
+        return redirect('finance_account:list')
+
+
+class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
+    """Close an unperformed repayment row by a recorded transfer."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        """Link the pending repayment to the transfer the owner picked."""
+        get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        form = RepaymentTransferLinkForm(request.POST)
+        if not form.is_valid():
+            return self._reject(request)
+        try:
+            _link_service(request).link_repayment(
+                row_id,
+                form.cleaned_data['transfer'],
+                cast('User', request.user).pk,
+            )
+        except BankStatementRow.DoesNotExist as error:
+            raise Http404 from error
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        except StaleStatementCandidateError:
+            return self._reject(request)
+        messages.success(request, _('Погашение связано с переводом.'))
+        return redirect('finance_account:list')
+
+    @staticmethod
+    def _reject(request: HttpRequest) -> HttpResponse:
+        messages.error(
+            request,
+            _('Перевод не подходит для этой строки выписки.'),
+        )
         return redirect('finance_account:list')

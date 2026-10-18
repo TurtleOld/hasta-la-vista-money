@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 from django.db.models import Case, DecimalField, F, Q, Sum, Value, When
 from django.db.models.expressions import Expression
-from django.db.models.functions import TruncMonth
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
@@ -73,73 +72,12 @@ def signed_adjustment_expense() -> Expression:
     )
 
 
-def actual_interest_totals(
-    users: Iterable['User'],
-    start: date | None = None,
-    end: date | None = None,
-) -> tuple[Decimal, Decimal]:
-    """Return actual deposit income and expense for a reporting period."""
-    events = DepositCapitalizationEvent.objects.filter(
-        deposit__account__user__in=users,
-    )
-    if start is not None:
-        events = events.filter(posting_on__gte=start)
-    if end is not None:
-        events = events.filter(posting_on__lte=end)
-    totals = events.aggregate(
-        gross=Sum(signed_interest('gross')),
-        withholding=Sum(signed_interest('withholding')),
-        adjustment_income=Sum(signed_adjustment_income()),
-        adjustment_expense=Sum(signed_adjustment_expense()),
-    )
-    income = Decimal(totals['gross'] or constants.ZERO) + Decimal(
-        totals['adjustment_income'] or constants.ZERO,
-    )
-    expense = Decimal(totals['withholding'] or constants.ZERO) + Decimal(
-        totals['adjustment_expense'] or constants.ZERO,
-    )
-    return income, expense
-
-
-def actual_interest_totals_by_month(
-    user: 'User',
-    year: int,
-) -> dict[int, tuple[Decimal, Decimal]]:
-    """Return actual deposit income and expense grouped by month."""
-    rows = (
-        DepositCapitalizationEvent.objects.filter(
-            deposit__account__user=user,
-            posting_on__year=year,
-        )
-        .annotate(month=TruncMonth('posting_on'))
-        .values('month')
-        .annotate(
-            gross=Sum(signed_interest('gross')),
-            withholding=Sum(signed_interest('withholding')),
-            adjustment_income=Sum(signed_adjustment_income()),
-            adjustment_expense=Sum(signed_adjustment_expense()),
-        )
-    )
-    result: dict[int, tuple[Decimal, Decimal]] = {}
-    for row in rows:
-        month = row['month']
-        if month is None:
-            continue
-        income = Decimal(row['gross'] or constants.ZERO) + Decimal(
-            row['adjustment_income'] or constants.ZERO,
-        )
-        expense = Decimal(row['withholding'] or constants.ZERO) + Decimal(
-            row['adjustment_expense'] or constants.ZERO,
-        )
-        result[month.month] = income, expense
-    return result
-
-
 def actual_interest_totals_for_periods(
     users: Iterable['User'],
     periods: dict[str, tuple[date, date]],
+    currency: str,
 ) -> dict[str, tuple[Decimal, Decimal]]:
-    """Return actual deposit totals for named periods in one query."""
+    """Return actual deposit totals in `currency` for named periods."""
     aggregates: dict[str, Any] = {}
     for name, (start, end) in periods.items():
         period_filter = Q(posting_on__gte=start, posting_on__lte=end)
@@ -165,6 +103,7 @@ def actual_interest_totals_for_periods(
         )
     totals = DepositCapitalizationEvent.objects.filter(
         deposit__account__user__in=users,
+        deposit__account__currency=currency,
     ).aggregate(**aggregates)
     return {
         name: (

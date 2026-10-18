@@ -13,6 +13,7 @@
                 <p class="budget-lead">{% translate 'План, факт и прогресс по расходным категориям.' %}</p>
             </div>
             <div class="budget-actions">
+                {% include 'includes/analytics_currency_switcher.html' %}
                 <a href="{% url 'budget:list' %}?scope={{ budget_scope }}" class="budget-button budget-button-secondary">{% translate 'Назад к бюджету' %}</a>
             </div>
         </header>

@@ -23,11 +23,13 @@ class BudgetRepository:
         user: User,
         period: date,
         category: Category | None,
+        currency: str,
         defaults: dict[str, object] | None = None,
     ) -> tuple[Budget, bool]:
         return Budget.objects.get_or_create(
             user=user,
             period=period.replace(day=1),
             category=category,
+            currency=currency,
             defaults=defaults or {},
         )

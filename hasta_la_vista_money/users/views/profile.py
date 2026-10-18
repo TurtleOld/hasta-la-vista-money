@@ -1,5 +1,6 @@
 import json
 from csv import writer
+from dataclasses import replace
 from functools import partial
 from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
@@ -24,6 +25,10 @@ from django.views.generic import TemplateView, UpdateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    AnalyticsCurrency,
+    get_analytics_currency,
+)
 from hasta_la_vista_money.users.forms import (
     UpdateUserForm,
 )
@@ -63,6 +68,22 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
 
 
+def _statistics_filter(
+    request: HttpRequest,
+    user: User,
+) -> tuple[StatisticsFilters, AnalyticsCurrency]:
+    """Filters from GET with the currency resolved as analytics currency."""
+    stats_filter = StatisticsFilters.from_query(request.GET)
+    analytics_currency = get_analytics_currency(
+        request,
+        _resolve_statistics_members(user, stats_filter),
+    )
+    return (
+        replace(stats_filter, currency=analytics_currency.currency),
+        analytics_currency,
+    )
+
+
 class ListUsers(
     LoginRequiredMixin,
     SuccessMessageMixin[BaseForm],
@@ -84,6 +105,7 @@ class ListUsers(
         statistics_service = container.users.user_statistics_service()
         user_statistics = statistics_service.get_user_statistics(
             user,
+            get_analytics_currency(self.request, [user]).currency,
         )
         context['user_update'] = user_update
         context['user_update_pass_form'] = user_update_pass_form
@@ -196,7 +218,11 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         request_with_container = cast('RequestWithContainer', self.request)
         if isinstance(user, User):
-            statistics_filter = StatisticsFilters.from_query(self.request.GET)
+            statistics_filter, analytics_currency = _statistics_filter(
+                self.request,
+                user,
+            )
+            context['analytics_currency'] = analytics_currency
             context.update(
                 get_user_detailed_statistics(
                     user,
@@ -226,7 +252,7 @@ class ReceiptCategoryProductsView(LoginRequiredMixin, View):
         if not isinstance(user, User):
             return HttpResponse(status=401)
 
-        stats_filter = StatisticsFilters.from_query(request.GET)
+        stats_filter, _ = _statistics_filter(request, user)
         today = timezone.now().date()
         period_start, period_end = stats_filter.date_range(today)
         users = _resolve_statistics_members(user, stats_filter)
@@ -252,6 +278,7 @@ class ReceiptCategoryProductsView(LoginRequiredMixin, View):
             'users/partials/_receipt_category_products.html',
             {
                 'category_name': category_name,
+                'currency': stats_filter.currency,
                 'products': products,
             },
         )
@@ -276,7 +303,7 @@ class ReceiptFrequentProductPurchasesView(LoginRequiredMixin, View):
         if not isinstance(user, User):
             return HttpResponse(status=401)
 
-        stats_filter = StatisticsFilters.from_query(request.GET)
+        stats_filter, _ = _statistics_filter(request, user)
         today = timezone.now().date()
         period_start, period_end = stats_filter.date_range(today)
         users = _resolve_statistics_members(user, stats_filter)
@@ -300,6 +327,7 @@ class ReceiptFrequentProductPurchasesView(LoginRequiredMixin, View):
             'users/partials/_receipt_product_purchases.html',
             {
                 'product_name': product_name,
+                'currency': stats_filter.currency,
                 'purchases': purchases,
             },
         )
@@ -318,7 +346,7 @@ class UserStatisticsExportView(LoginRequiredMixin, View):
             return HttpResponse('Unauthorized', status=401)
 
         request_with_container = cast('RequestWithContainer', request)
-        statistics_filter = StatisticsFilters.from_query(request.GET)
+        statistics_filter, _ = _statistics_filter(request, user)
         stats = get_user_detailed_statistics(
             user,
             container=request_with_container.container,

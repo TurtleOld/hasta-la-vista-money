@@ -34,7 +34,11 @@ class DateListGeneratorTest(TestCase):
         )
 
     def test_init(self) -> None:
-        generator = DateListGenerator(user=self.user, type_='expense')
+        generator = DateListGenerator(
+            user=self.user,
+            type_='expense',
+            currency='RUB',
+        )
         self.assertEqual(generator.user, self.user)
         self.assertEqual(generator.type_, 'expense')
 
@@ -103,7 +107,11 @@ class DateListGeneratorTest(TestCase):
         self.assertEqual(count, 2)
 
     def test_ensure_planning_expense(self) -> None:
-        generator = DateListGenerator(user=self.user, type_='expense')
+        generator = DateListGenerator(
+            user=self.user,
+            type_='expense',
+            currency='RUB',
+        )
         months = [date(2025, 1, 1)]
         generator._ensure_planning(months)
         count = Planning.objects.filter(
@@ -115,7 +123,11 @@ class DateListGeneratorTest(TestCase):
         self.assertEqual(count, 1)
 
     def test_ensure_planning_income(self) -> None:
-        generator = DateListGenerator(user=self.user, type_='income')
+        generator = DateListGenerator(
+            user=self.user,
+            type_='income',
+            currency='RUB',
+        )
         months = [date(2025, 1, 1)]
         generator._ensure_planning(months)
         count = Planning.objects.filter(
@@ -127,7 +139,11 @@ class DateListGeneratorTest(TestCase):
         self.assertEqual(count, 1)
 
     def test_ensure_planning_invalid_type(self) -> None:
-        generator = DateListGenerator(user=self.user, type_='invalid')
+        generator = DateListGenerator(
+            user=self.user,
+            type_='invalid',
+            currency='RUB',
+        )
         months = [date(2025, 1, 1)]
         generator._ensure_planning(months)
         count = Planning.objects.filter(user=self.user).count()
@@ -173,12 +189,12 @@ class GenerateDateListTest(TestCase):
     def test_generate_date_list_with_queryset(self) -> None:
         DateList.objects.create(user=self.user, date=date(2025, 1, 1))
         queryset: QuerySet[DateList] = DateList.objects.filter(user=self.user)
-        generate_date_list(queryset, self.user, 'expense')
+        generate_date_list(queryset, self.user, 'expense', currency='RUB')
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
 
     def test_generate_date_list_with_type(self) -> None:
         test_datetime = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
-        generate_date_list(test_datetime, self.user, 'income')
+        generate_date_list(test_datetime, self.user, 'income', currency='RUB')
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)

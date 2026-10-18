@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
+    from decimal import Decimal
 
     from django.db.models import QuerySet
 
     from config.containers import ApplicationContainer
-    from hasta_la_vista_money.finance_account.models import Account
+    from hasta_la_vista_money.finance_account.models import (
+        Account,
+        TransferMoneyLog,
+    )
     from hasta_la_vista_money.transactions.models import Transaction
     from hasta_la_vista_money.users.models import (
         BankStatementRow,
@@ -37,9 +42,13 @@ if TYPE_CHECKING:
 class UserStatisticsServiceProtocol(Protocol):
     """Protocol for cached profile statistics service."""
 
-    def get_user_statistics(self, user: User) -> UserStatistics: ...
+    def get_user_statistics(
+        self,
+        user: User,
+        currency: str,
+    ) -> UserStatistics: ...
 
-    def invalidate_cache(self, user: User) -> None: ...
+    def invalidate_cache(self, user: User, currency: str) -> None: ...
 
 
 @runtime_checkable
@@ -49,7 +58,7 @@ class DashboardSummaryStatisticsServiceProtocol(Protocol):
     def __call__(
         self,
         user: User,
-        container: ApplicationContainer,
+        currency: str,
     ) -> DashboardSummaryStatisticsDict: ...
 
 
@@ -121,16 +130,53 @@ class BankStatementReconciliationServiceProtocol(Protocol):
         user: User,
     ) -> QuerySet[BankStatementRow]: ...
 
-    def settle_pending_transfers(self, account: Account) -> int: ...
-
-    def settle_transfers_for_user(self, user: User) -> int: ...
-
     def current_candidates(
         self,
         row: BankStatementRow,
     ) -> QuerySet[Transaction]: ...
 
     def refresh_outcome_counts(self, upload: BankStatementUpload) -> None: ...
+
+
+@runtime_checkable
+class StatementRowLinkServiceProtocol(Protocol):
+    """Statement rows closed by movements; credit-card repayment rows."""
+
+    def has_linked_row(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> bool: ...
+
+    def release_linked_rows(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> None: ...
+
+    def lock_repayment_row(
+        self,
+        row_id: int,
+        *,
+        to_account: Account,
+        amount: Decimal,
+    ) -> BankStatementRow: ...
+
+    def close_repayment_row(
+        self,
+        row: BankStatementRow,
+        transfer: TransferMoneyLog,
+    ) -> None: ...
+
+    def repayment_candidates(
+        self,
+        rows: Sequence[BankStatementRow],
+    ) -> dict[int, list[TransferMoneyLog]]: ...
+
+    def link_repayment(
+        self,
+        row_id: int,
+        transfer_id: int,
+        user_id: int,
+    ) -> BankStatementRow: ...
 
 
 @runtime_checkable

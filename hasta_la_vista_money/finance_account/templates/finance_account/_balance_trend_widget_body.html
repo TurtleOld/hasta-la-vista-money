@@ -7,12 +7,13 @@
         </span>
         <span>{% translate 'Динамика баланса' %}</span>
     </h3>
+    {% include 'includes/analytics_currency_switcher.html' %}
 </div>
 
 <div class="accounts-trend-body">
     <div class="accounts-trend-lbl">{% translate 'Текущий баланс' %}</div>
     <div class="accounts-trend-amt">
-        <span class="hide-target">{{ balance_trend.current_balance|default:0|comma }}<span class="cur">₽</span></span>
+        <span class="hide-target">{{ balance_trend.current_balance|default:0|comma }}<span class="cur">{{ analytics_currency.currency }}</span></span>
     </div>
 
     <div class="accounts-trend-periods">
@@ -47,7 +48,7 @@
             <div class="accounts-trend-stat">
                 <div class="lbl">{% translate 'CHANGE' %}</div>
                 <div class="val {% if balance_trend.delta_absolute >= 0 %}pos{% else %}neg{% endif %}">
-                    <span class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} ₽</span>
+                    <span class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
                 </div>
             </div>
             <div class="accounts-trend-stat">

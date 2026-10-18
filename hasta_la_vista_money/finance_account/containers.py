@@ -11,8 +11,12 @@ from hasta_la_vista_money.finance_account.repositories import (
 )
 from hasta_la_vista_money.finance_account.services import (
     AccountService,
+    AnalyticsCurrencyService,
+    AnalyticsCurrencyServiceProtocol,
     BalanceHistoryService,
+    BalanceHistoryServiceProtocol,
     BalanceTrendService,
+    BalanceTrendServiceProtocol,
     BankService,
     TransferService,
 )
@@ -23,13 +27,16 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     receipts = providers.DependenciesContainer()
     transactions = providers.DependenciesContainer()
     deposits = providers.DependenciesContainer()
+    users = providers.DependenciesContainer()
 
     account_repository = providers.Singleton(AccountRepository)
     transfer_money_log_repository = providers.Singleton(
         TransferMoneyLogRepository,
     )
     bank_repository = providers.Singleton(BankRepository)
-    balance_history_service = providers.Factory(
+    balance_history_service: providers.Factory[
+        BalanceHistoryServiceProtocol
+    ] = providers.Factory(
         BalanceHistoryService,
         movement_sources=providers.List(deposits.deposit_movement_source),
     )
@@ -46,8 +53,20 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     transfer_service = providers.Factory(
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
+        statement_row_links=users.statement_row_link_service,
     )
-    balance_trend_service = providers.Factory(BalanceTrendService)
+    balance_trend_service: providers.Factory[BalanceTrendServiceProtocol] = (
+        providers.Factory(
+            BalanceTrendService,
+            balance_history_service=balance_history_service,
+        )
+    )
+    analytics_currency_service: providers.Factory[
+        AnalyticsCurrencyServiceProtocol
+    ] = providers.Factory(
+        AnalyticsCurrencyService,
+        account_repository=account_repository,
+    )
     bank_service = providers.Factory(
         BankService,
         bank_repository=bank_repository,

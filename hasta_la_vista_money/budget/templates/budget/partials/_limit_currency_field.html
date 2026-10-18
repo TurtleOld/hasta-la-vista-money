@@ -1,0 +1,12 @@
+{% load i18n %}{% if analytics_currency.currencies|length > 1 %}
+<label>
+    <span>{% translate 'Валюта' %}</span>
+    <select name="currency">
+        {% for code in analytics_currency.currencies %}
+            <option value="{{ code }}"{% if code == analytics_currency.currency %} selected{% endif %}>{{ code }}</option>
+        {% endfor %}
+    </select>
+</label>
+{% else %}
+<input type="hidden" name="currency" value="{{ analytics_currency.currency }}">
+{% endif %}

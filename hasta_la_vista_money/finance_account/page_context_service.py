@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         TransferMoneyLogRepository,
     )
     from hasta_la_vista_money.finance_account.services import (
-        BalanceTrendService,
+        BalanceTrendServiceProtocol,
         TransferService,
     )
 
@@ -41,7 +41,7 @@ class AccountPageContextService:
         transfer_money_log_repository: 'TransferMoneyLogRepository',
         account_service: 'AccountServiceProtocol',
         transfer_service: 'TransferService',
-        balance_trend_service: 'BalanceTrendService',
+        balance_trend_service: 'BalanceTrendServiceProtocol',
     ) -> None:
         """Initialize service with required repositories and services.
 
@@ -97,6 +97,8 @@ class AccountPageContextService:
         user: User,
         accounts: QuerySet[Account],
         group_id: str | None = None,
+        *,
+        currency: str,
         balance_trend_period: str = '30d',
     ) -> dict[str, Any]:
         """Build complete context for account list page.
@@ -105,6 +107,7 @@ class AccountPageContextService:
             user: User instance with prefetched groups.
             accounts: QuerySet of accounts to display.
             group_id: Optional group ID for filtering.
+            currency: Analytics currency of the balance trend.
             balance_trend_period: Period for balance trend ('7d', '30d', '12m').
 
         Returns:
@@ -121,6 +124,7 @@ class AccountPageContextService:
         context.update(
             self._build_balance_trend_context(
                 accounts,
+                currency,
                 balance_trend_period,
             ),
         )
@@ -207,12 +211,14 @@ class AccountPageContextService:
     def _build_balance_trend_context(
         self,
         accounts: QuerySet[Account],
+        currency: str,
         period: str = '30d',
     ) -> dict[str, Any]:
         """Build context with balance trend data.
 
         Args:
             accounts: QuerySet of accounts to compute trend for.
+            currency: Currency of the trend.
             period: Period for trend ('7d', '30d', '12m').
 
         Returns:
@@ -220,6 +226,7 @@ class AccountPageContextService:
         """
         balance_trend = self.balance_trend_service.get_balance_trend(
             accounts,
+            currency,
             period,
         )
 

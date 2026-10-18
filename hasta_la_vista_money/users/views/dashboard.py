@@ -25,6 +25,9 @@ from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.services.budget import get_categories
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -63,11 +66,25 @@ def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
 
 
+def _dashboard_scope(request: HttpRequest) -> str:
+    """Dashboard group scope from GET, the whole family by default."""
+    return request.GET.get('group_id', constants.FAMILY_SCOPE)
+
+
+def _dashboard_currency(request: HttpRequest, user: User) -> str:
+    """Analytics currency of the user's own accounts, as widgets count them.
+
+    The choice stays in the session for the wider family page scope.
+    """
+    return get_analytics_currency(request, [user], remember=False).currency
+
+
 class TransactionDict(TypedDict):
     id: int
     type: Literal['expense', 'income']
     date: str
     amount: str
+    currency: str
     category: str
     account: str
 
@@ -159,10 +176,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ]
         user = self.request.user
         if isinstance(user, User):
-            scope = self.request.GET.get('group_id', 'family')
+            scope = _dashboard_scope(self.request)
             users = readable_users(user, scope)
+            analytics_currency = get_analytics_currency(self.request, users)
+            context['analytics_currency'] = analytics_currency
             context['kpi_cards'] = _build_kpi_cards(
-                get_dashboard_month_kpis(user, users),
+                get_dashboard_month_kpis(
+                    user,
+                    users,
+                    currency=analytics_currency.currency,
+                ),
             )
             context['selected_group_id'] = scope
 
@@ -365,6 +388,7 @@ class DashboardDataView(LoginRequiredMixin, View):
                 'type': 'expense',
                 'date': expense.date.isoformat(),
                 'amount': str(expense.amount),
+                'currency': expense.account.currency,
                 'category': expense.category.name,
                 'account': expense.account.name_account,
             }
@@ -376,6 +400,7 @@ class DashboardDataView(LoginRequiredMixin, View):
                 'type': 'income',
                 'date': income.date.isoformat(),
                 'amount': str(income.amount),
+                'currency': income.account.currency,
                 'category': income.category.name,
                 'account': income.account.name_account,
             }
@@ -391,6 +416,7 @@ class DashboardDataView(LoginRequiredMixin, View):
         self,
         user: User,
         period: str,
+        currency: str,
     ) -> list[list[Any]]:
         """Return daily expense totals for the current selected period."""
         period_dates = get_period_dates(period_type=period)
@@ -401,6 +427,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=TransactionType.EXPENSE,
                 date__gte=current_start,
                 date__lte=current_end,
@@ -421,6 +448,7 @@ class DashboardDataView(LoginRequiredMixin, View):
         self,
         request: HttpRequest,
         user: User,
+        currency: str,
     ) -> list[dict[str, Any]]:
         """Return over-limit and near-limit categories for current month."""
         request_with_container = cast('RequestWithContainer', request)
@@ -435,6 +463,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             user=user,
             months=[month_start],
             expense_categories=expense_categories,
+            currency=currency,
             users=[user],
         )
         hot_categories = [
@@ -471,7 +500,6 @@ class DashboardDataView(LoginRequiredMixin, View):
         **kwargs: Any,
     ) -> JsonResponse:
         try:
-            request_with_container = cast('RequestWithContainer', request)
             user = request.user
             if not isinstance(user, User):
                 return JsonResponse(
@@ -480,6 +508,7 @@ class DashboardDataView(LoginRequiredMixin, View):
                 )
 
             period = request.GET.get('period', 'month')
+            currency = _dashboard_currency(request, user)
 
             widgets = DashboardWidget.objects.filter(
                 user=user,
@@ -489,7 +518,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             stats: DashboardSummaryStatisticsDict = (
                 _views_module().get_dashboard_summary_statistics(
                     user,
-                    container=request_with_container.container,
+                    currency,
                 )
             )
 
@@ -503,10 +532,12 @@ class DashboardDataView(LoginRequiredMixin, View):
             comparison_data = _views_module().get_period_comparison(
                 user,
                 period,
+                currency,
             )
             recent_transactions = self._get_recent_transactions(user)
 
             data = {
+                'currency': currency,
                 'widgets': list(widgets.values()),
                 'analytics': {
                     'stats': serializable_stats,
@@ -514,10 +545,12 @@ class DashboardDataView(LoginRequiredMixin, View):
                     'expense_heatmap': self._get_expense_heatmap_data(
                         user,
                         period,
+                        currency,
                     ),
                     'hot_budget_categories': self._get_hot_budget_categories(
                         request,
                         user,
+                        currency,
                     ),
                 },
                 'comparison': comparison_data,
@@ -670,6 +703,7 @@ class DashboardDrillDownView(LoginRequiredMixin, View):
             category_id=category_id,
             date_str=date_str,
             data_type=data_type,
+            currency=_dashboard_currency(request, user),
         )
 
         return JsonResponse(drill_data)
@@ -697,6 +731,7 @@ class DashboardComparisonView(LoginRequiredMixin, View):
         comparison_data = _views_module().get_period_comparison(
             user=user,
             period_type=period_type,
+            currency=_dashboard_currency(request, user),
         )
 
         return JsonResponse(comparison_data)

@@ -1,15 +1,22 @@
 """Protocols for finance account services."""
 
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
+    BalanceTrendData,
     FinancialMovement,
     RaiffeisenbankScheduleDict,
 )
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
+    from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
@@ -143,16 +150,68 @@ class FinancialMovementSourceProtocol(Protocol):
 
     def list_financial_movements(
         self,
-        account: Account,
+        accounts: Sequence[Account],
         since: date,
     ) -> list[FinancialMovement]:
-        """List this domain's balance-affecting events for an account.
+        """List this domain's balance-affecting events for the accounts.
+
+        Each movement's delta is its net effect on the accounts together.
 
         Args:
-            account: Account to list movements for.
+            accounts: Accounts to list movements for.
             since: Only movements effective on or after this date.
 
         Returns:
             Normalized movements, in no particular order.
         """
+        ...
+
+
+class AnalyticsCurrencyServiceProtocol(Protocol):
+    """Pick the one currency analytics pages show."""
+
+    def available_currencies(self, users: Iterable['User']) -> list[str]:
+        """Currencies of the users' accounts, first account's first."""
+        ...
+
+    def resolve(
+        self,
+        request_value: str | None,
+        session_value: str | None,
+        available: Sequence[str],
+    ) -> str:
+        """Request, then session, then RUB, then first available currency.
+
+        Values outside ``available`` are ignored.
+        """
+        ...
+
+
+class BalanceHistoryServiceProtocol(Protocol):
+    """Reconstruct account balances at past moments."""
+
+    def balance_at(self, account: Account, moment: datetime) -> Decimal:
+        """Account balance immediately after `moment`."""
+        ...
+
+    def daily_balances(
+        self,
+        accounts: Sequence[Account],
+        start: date,
+        end: date,
+    ) -> dict[date, Decimal]:
+        """Summed end-of-day balance of `accounts`, `start` to `end`."""
+        ...
+
+
+class BalanceTrendServiceProtocol(Protocol):
+    """Daily balance trend of one currency's accounts."""
+
+    def get_balance_trend(
+        self,
+        accounts: 'QuerySet[Account]',
+        currency: str,
+        period: str = '30d',
+    ) -> BalanceTrendData:
+        """Current balance, delta and daily series for `period`."""
         ...

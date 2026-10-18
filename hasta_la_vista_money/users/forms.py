@@ -419,3 +419,9 @@ class BankStatementUploadForm(forms.Form):
                 )
             pdf_file.seek(0)
         return pdf_file
+
+
+class RepaymentTransferLinkForm(forms.Form):
+    """The transfer an owner picked to close a repayment row."""
+
+    transfer = forms.IntegerField(min_value=1)

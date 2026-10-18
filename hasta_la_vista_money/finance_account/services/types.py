@@ -35,6 +35,23 @@ class FinancialMovement:
     description: str
 
 
+class BalanceTrendPoint(TypedDict):
+    """Type definition for a balance trend data point."""
+
+    date: str
+    balance: float
+
+
+class BalanceTrendData(TypedDict):
+    """Type definition for balance trend response."""
+
+    current_balance: float
+    delta_absolute: float
+    delta_percent: float
+    series: list[BalanceTrendPoint]
+    has_data: bool
+
+
 class GracePeriodInfoDict(TypedDict, total=False):
     """Information about credit card grace period.
 

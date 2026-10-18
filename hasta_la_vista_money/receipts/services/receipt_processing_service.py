@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import (
-    BalanceHistoryService,
+    BalanceHistoryServiceProtocol,
 )
 from hasta_la_vista_money.receipts.models import (
     Receipt,
@@ -59,7 +59,7 @@ class ReceiptProcessingService:
         self,
         receipt_creator_service: ReceiptCreatorServiceProtocol,
         processing_log_repository: ReceiptProcessingLogRepository,
-        balance_history_service: BalanceHistoryService,
+        balance_history_service: BalanceHistoryServiceProtocol,
     ) -> None:
         self.receipt_creator_service = receipt_creator_service
         self.processing_log_repository = processing_log_repository

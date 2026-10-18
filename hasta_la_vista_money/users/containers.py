@@ -8,7 +8,11 @@ from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
@@ -26,6 +30,9 @@ from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     ExternalModelCategoryClassifier,
     NoopClassifier,
+)
+from hasta_la_vista_money.users.services.statement_row_links import (
+    StatementRowLinkService,
 )
 from hasta_la_vista_money.users.services.statistics import (
     UserStatisticsService,
@@ -84,6 +91,16 @@ class UsersContainer(containers.DeclarativeContainer):
     bank_statement_reconciliation_service: providers.Factory[
         BankStatementReconciliationServiceProtocol
     ] = providers.Factory(BankStatementReconciliationService)
+
+    statement_row_repository = providers.Singleton(StatementRowRepository)
+
+    statement_row_link_service: providers.Factory[
+        StatementRowLinkServiceProtocol
+    ] = providers.Factory(
+        StatementRowLinkService,
+        statement_row_repository=statement_row_repository,
+        reconciliation_service=bank_statement_reconciliation_service,
+    )
 
     bank_statement_retention_service: providers.Factory[
         BankStatementRetentionServiceProtocol
