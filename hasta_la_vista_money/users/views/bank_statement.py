@@ -420,6 +420,11 @@ class BankStatementMarkupView(
         ).get_page(self.request.GET.get('page'))
         context['page_obj'] = page
         context['accounts'] = accounts
+        context['bulk_categories'] = [
+            {'label': label, 'categories': categories[value]}
+            for value, label in BankStatementRow.TransactionType.choices
+        ]
+
         context['remembered_count'] = len(remembered)
         context['rows'] = [
             {
@@ -442,6 +447,20 @@ class BankStatementMarkupView(
             for row in page
         ]
         return context
+
+
+def _markup_message(reason: str) -> str:
+    if reason == 'selection':
+        return str(
+            _('Выберите строки одного направления, кроме своих переводов.'),
+        )
+    if reason == 'category':
+        return str(_('Выберите категорию подходящего типа.'))
+    if reason == 'account':
+        return str(_('Выберите свой счёт для перевода.'))
+    if reason == 'account_number':
+        return str(_('Номер счёта выбранного счёта не подходит.'))
+    return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
 class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
@@ -481,22 +500,52 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
                     int(category) if category.isdigit() else None,
                 )
         except StatementMarkupConflictError as error:
-            messages.error(request, self._message(str(error)))
+            messages.error(request, _markup_message(str(error)))
         except ValidationError:
             messages.error(request, _('Не удалось провести строку.'))
         return redirect(
             reverse('users:bank_statement_markup', args=[upload_id]),
         )
 
-    @staticmethod
-    def _message(reason: str) -> str:
-        if reason == 'category':
-            return str(_('Выберите категорию подходящего типа.'))
-        if reason == 'account':
-            return str(_('Выберите свой счёт для перевода.'))
-        if reason == 'account_number':
-            return str(_('Номер счёта выбранного счёта не подходит.'))
-        return str(_('Строка уже размечена или срок разметки истёк.'))
+
+class BankStatementMarkupBulkView(LoginRequiredMixin, View):
+    """Post the selected rows of one direction with one category."""
+
+    def post(self, request: HttpRequest, upload_id: int) -> HttpResponse:
+        user = cast('User', request.user)
+        get_object_or_404(
+            BankStatementUpload,
+            pk=upload_id,
+            user=user,
+            account__user=user,
+        )
+        row_ids = [
+            int(value)
+            for value in request.POST.getlist('rows')
+            if value.isdigit()
+        ]
+        category = request.POST.get('category', '')
+        try:
+            _markup_service(request).post_many(
+                list(
+                    BankStatementRow.objects.filter(
+                        pk__in=row_ids,
+                        upload_id=upload_id,
+                    ).values_list('pk', flat=True),
+                ),
+                user.pk,
+                int(category) if category.isdigit() else None,
+            )
+        except StatementMarkupConflictError as error:
+            messages.error(
+                request,
+                _markup_message(str(error)),
+            )
+        except ValidationError:
+            messages.error(request, _('Не удалось провести строки.'))
+        return redirect(
+            reverse('users:bank_statement_markup', args=[upload_id]),
+        )
 
 
 class BankStatementMarkupRememberedView(LoginRequiredMixin, View):

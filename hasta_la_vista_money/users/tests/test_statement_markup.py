@@ -831,3 +831,137 @@ class DashboardMarkupReminderTest(StatementMarkupFixture):
         response = self.client.get(reverse('users:dashboard'))
 
         self.assertNotContains(response, 'ждут разметки')
+
+
+class StatementBulkMarkupTest(StatementMarkupFixture):
+    def test_posts_all_rows_in_one_audit_operation(self) -> None:
+        rows = [self._row(1), self._row(2)]
+        category = self._category('Продукты')
+        AuditLog.objects.all().delete()
+
+        self.service.post_many(
+            [row.pk for row in rows],
+            self.user.pk,
+            category.pk,
+        )
+
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('800.00'))
+        self.assertEqual(
+            Transaction.objects.filter(category=category).count(),
+            2,
+        )
+        logs = AuditLog.objects.all()
+        self.assertEqual(
+            set(logs.values_list('kind', flat=True)),
+            {AuditOperationKind.STATEMENT_MARKUP},
+        )
+        self.assertEqual(logs.values('operation_id').distinct().count(), 1)
+
+    def test_mixed_directions_are_rejected_without_changes(self) -> None:
+        rows = [self._row(1), self._row(2, transaction_type='income')]
+        category = self._category('Продукты')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many(
+                [row.pk for row in rows],
+                self.user.pk,
+                category.pk,
+            )
+
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_own_transfer_row_is_rejected(self) -> None:
+        rows = [self._row(1), self._row(2, kind='own_c2c')]
+        category = self._category('Продукты')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many(
+                [row.pk for row in rows],
+                self.user.pk,
+                category.pk,
+            )
+
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_already_decided_row_rolls_everything_back(self) -> None:
+        first, second = self._row(1), self._row(2)
+        self.service.skip(second.pk, self.user.pk)
+        category = self._category('Продукты')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many(
+                [first.pk, second.pk],
+                self.user.pk,
+                category.pk,
+            )
+
+        first.refresh_from_db()
+        self.assertEqual(
+            first.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def test_category_of_other_direction_is_rejected(self) -> None:
+        row = self._row(1)
+        category = self._category('Зарплата', 'income')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many([row.pk], self.user.pk, category.pk)
+
+    def test_empty_selection_is_rejected(self) -> None:
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many([], self.user.pk, None)
+
+    def test_foreign_row_is_rejected(self) -> None:
+        other = User.objects.create_user(username='other', password='x')
+        row = self._row(1)
+        category = self._category('Продукты')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many([row.pk], other.pk, category.pk)
+
+    def test_bulk_view_posts_selected_rows(self) -> None:
+        self.client.force_login(self.user)
+        rows = [self._row(1), self._row(2)]
+        category = self._category('Продукты')
+
+        response = self.client.post(
+            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            {'rows': [row.pk for row in rows], 'category': category.pk},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            2,
+        )
+
+    def test_bulk_view_without_selection_changes_nothing(self) -> None:
+        self.client.force_login(self.user)
+        row = self._row(1)
+
+        self.client.post(
+            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            {'category': self._category('Продукты').pk},
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def test_page_has_checkboxes_but_not_for_own_transfers(self) -> None:
+        self.client.force_login(self.user)
+        card = self._row(1)
+        own = self._row(2, kind='own_c2c')
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertContains(response, f'name="rows" value="{card.pk}"')
+        self.assertNotContains(response, f'name="rows" value="{own.pk}"')

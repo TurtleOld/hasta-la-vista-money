@@ -101,6 +101,13 @@ class StatementMarkupServiceProtocol(Protocol):
         category_id: int | None,
     ) -> BankStatementRow: ...
 
+    def post_many(
+        self,
+        row_ids: list[int],
+        user_id: int,
+        category_id: int | None,
+    ) -> list[BankStatementRow]: ...
+
     def remembered_categories(
         self,
         upload: BankStatementUpload,

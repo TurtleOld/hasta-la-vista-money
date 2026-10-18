@@ -148,6 +148,7 @@ OWN_ONLY_SURFACES = frozenset(
         'users:ajax:groups_not_for_user',
         'users:available_groups',
         'users:bank_statement_markup',
+        'users:bank_statement_markup_bulk',
         'users:bank_statement_markup_category',
         'users:bank_statement_markup_decide',
         'users:bank_statement_markup_post_remembered',

@@ -1,10 +1,16 @@
 {% extends 'base.html' %}
 {% load i18n %}
+{% load static %}
+{% load word_hash %}
 
 {% block title %}{% translate 'Разметка выписки' %}{% endblock %}
 
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'users/css/statement-markup.css' %}?v={% word_hash %}">
+{% endblock %}
+
 {% block content %}
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="statement-markup min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
         <div class="max-w-5xl mx-auto">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -20,6 +26,24 @@
                         {% endfor %}
                     </div>
                 {% endif %}
+                <form id="bulk-form" method="post" action="{% url 'users:bank_statement_markup_bulk' upload.pk %}" class="flex flex-col gap-3 p-5 border-b border-gray-200 dark:border-gray-700 sm:flex-row sm:items-center">
+                    {% csrf_token %}
+                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                        <input type="checkbox" id="select-all-rows">
+                        {% translate 'Выбрать все' %}
+                    </label>
+                    <select name="category" class="markup-select">
+                        <option value="">{% translate 'Категория для выбранных…' %}</option>
+                        {% for group in bulk_categories %}
+                            <optgroup label="{{ group.label }}">
+                                {% for category in group.categories %}
+                                    <option value="{{ category.pk }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Назначить и провести' %}</button>
+                </form>
                 {% if remembered_count %}
                     <form method="post" action="{% url 'users:bank_statement_markup_post_remembered' upload.pk %}" class="px-6 pt-4">
                         {% csrf_token %}
@@ -30,14 +54,15 @@
                     {% for item in rows %}{% with row=item.row %}
                         <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
                             {% csrf_token %}
+                            {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" form="bulk-form" class="bulk-row">{% endif %}
                             <div class="min-w-0">
                                 <p class="font-medium text-gray-900 dark:text-white break-words">{{ row.description }}</p>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                     {{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }} · {{ row.amount }} · {{ item.kind_label }}
                                 </p>
                             </div>
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <select name="category" id="category-{{ row.pk }}" class="category-select-{{ row.transaction_type }} rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                            <div class="markup-actions">
+                                <select name="category" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}">
                                     {% if item.refund_default %}
                                         <option value="">{% translate 'Возвраты' %}</option>
                                     {% else %}
@@ -50,7 +75,7 @@
                                 <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Новая категория' %}</button>
                                 <button type="submit" name="decision" value="post" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести' %}</button>
                                 {% if item.can_transfer %}
-                                    <select name="account" class="rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm">
+                                    <select name="account" class="markup-select">
                                         <option value="">{% translate 'Счёт для перевода…' %}</option>
                                         {% for account in accounts %}
                                             <option value="{{ account.pk }}"{% if account.pk == item.transfer_account.pk %} selected{% endif %}>{{ account.name_account }}</option>
@@ -74,6 +99,11 @@
                 </nav>
             {% endif %}
             <div id="category-modal"></div>
+            <script nonce="{{ request.csp_nonce }}">
+                document.getElementById('select-all-rows').addEventListener('change', function (event) {
+                    document.querySelectorAll('.bulk-row').forEach(function (box) { box.checked = event.target.checked; });
+                });
+            </script>
             <a class="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 underline" href="{% url 'users:bank_statement_upload' %}">{% translate 'К загрузкам выписок' %}</a>
         </div>
     </div>
