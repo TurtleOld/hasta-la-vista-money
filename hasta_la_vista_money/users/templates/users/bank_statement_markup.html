@@ -16,9 +16,15 @@
                 {% if messages %}
                     <div class="px-6 pt-4">
                         {% for message in messages %}
-                            <p class="text-sm text-red-600 dark:text-red-400">{{ message }}</p>
+                            <p class="text-sm {% if message.level_tag == 'success' %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">{{ message }}</p>
                         {% endfor %}
                     </div>
+                {% endif %}
+                {% if remembered_count %}
+                    <form method="post" action="{% url 'users:bank_statement_markup_post_remembered' upload.pk %}" class="px-6 pt-4">
+                        {% csrf_token %}
+                        <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести все с подставленной категорией' %} ({{ remembered_count }})</button>
+                    </form>
                 {% endif %}
                 <div class="divide-y divide-gray-200 dark:divide-gray-700">
                     {% for item in rows %}{% with row=item.row %}
@@ -38,7 +44,7 @@
                                         <option value="">{% translate 'Категория…' %}</option>
                                     {% endif %}
                                     {% for category in item.categories %}
-                                        <option value="{{ category.pk }}">{{ category.name }}</option>
+                                        <option value="{{ category.pk }}"{% if category.pk == item.remembered_id %} selected{% endif %}>{{ category.name }}</option>
                                     {% endfor %}
                                 </select>
                                 <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Новая категория' %}</button>
