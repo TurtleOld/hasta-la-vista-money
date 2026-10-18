@@ -99,6 +99,13 @@ class StatementMarkupServiceProtocol(Protocol):
         category_id: int | None,
     ) -> BankStatementRow: ...
 
+    def post_transfer(
+        self,
+        row_id: int,
+        user_id: int,
+        account_id: int | None,
+    ) -> BankStatementRow: ...
+
     def skip(self, row_id: int, user_id: int) -> BankStatementRow: ...
 
 

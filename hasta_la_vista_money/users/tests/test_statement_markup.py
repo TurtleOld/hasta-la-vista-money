@@ -7,7 +7,10 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
@@ -233,6 +236,201 @@ class StatementMarkupTest(StatementMarkupFixture):
         self.assertEqual(names[0], 'Яблоки')
         self.assertEqual(names[1:], ['Аптека', 'Книги'])
         self.assertNotIn(old.name, names[:1])
+
+
+OWN_NUMBER = '40817810000000000001'
+
+
+class StatementOwnTransferTest(StatementMarkupFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+            account_number=OWN_NUMBER,
+        )
+        self.client.force_login(self.user)
+
+    def _own_row(
+        self,
+        transaction_type: str = 'expense',
+        counterparty: str = OWN_NUMBER,
+        kind: str = 'own_c2c',
+    ) -> BankStatementRow:
+        row = self._row(1, transaction_type, kind)
+        row.counterparty_account = counterparty
+        row.save(update_fields=['counterparty_account'])
+        return row
+
+    def test_expense_row_transfers_to_account_found_by_number(self) -> None:
+        row = self._own_row()
+
+        self.service.post_transfer(row.pk, self.user.pk, None)
+
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.other.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        self.assertEqual(self.other.balance, Decimal('600.00'))
+        self.assertEqual(row.decision, BankStatementRow.Decision.TRANSFERRED)
+        transfer = row.transfer
+        if transfer is None:
+            self.fail('row is not linked to a transfer')
+        self.assertEqual(transfer.from_account, self.account)
+        self.assertEqual(transfer.to_account, self.other)
+        self.assertIsNone(row.transaction)
+
+    def test_income_row_transfers_from_chosen_account(self) -> None:
+        row = self._own_row('income')
+
+        self.service.post_transfer(row.pk, self.user.pk, None)
+
+        self.account.refresh_from_db()
+        self.other.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1100.00'))
+        self.assertEqual(self.other.balance, Decimal('400.00'))
+
+    def test_chosen_account_receives_the_counterparty_number(self) -> None:
+        number = '40817810000000000002'
+        row = self._own_row(counterparty=number)
+        self.other.account_number = None
+        self.other.save(update_fields=['account_number'])
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_transfer(row.pk, self.user.pk, None)
+        self.service.post_transfer(row.pk, self.user.pk, self.other.pk)
+
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.account_number, number)
+
+    def test_chosen_account_with_other_number_is_rejected(self) -> None:
+        row = self._own_row(counterparty='40817810000000000002')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_transfer(row.pk, self.user.pk, self.other.pk)
+
+        self.assertEqual(TransferMoneyLog.objects.count(), 0)
+
+    def test_number_of_foreign_account_is_rejected(self) -> None:
+        number = '40817810000000000002'
+        stranger = User.objects.create_user(username='stranger', password='x')
+        Account.objects.create(
+            user=stranger,
+            name_account='Чужой',
+            balance=Decimal('0.00'),
+            currency='RUB',
+            account_number=number,
+        )
+        row = self._own_row(counterparty=number)
+        mine = Account.objects.create(
+            user=self.user,
+            name_account='Мой',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_transfer(row.pk, self.user.pk, mine.pk)
+
+    def test_transfer_to_credit_card_is_a_repayment(self) -> None:
+        Account.objects.filter(pk=self.other.pk).update(
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+            limit_credit=Decimal('1000.00'),
+            balance=Decimal('300.00'),
+        )
+        row = self._own_row()
+
+        self.service.post_transfer(row.pk, self.user.pk, None)
+
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.balance, Decimal('400.00'))
+
+    def test_unknown_row_transfers_to_chosen_account(self) -> None:
+        row = self._own_row(counterparty='', kind='unknown')
+
+        self.service.post_transfer(row.pk, self.user.pk, self.other.pk)
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.TRANSFERRED)
+
+    def test_card_row_cannot_be_a_transfer(self) -> None:
+        row = self._own_row(kind='card')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_transfer(row.pk, self.user.pk, self.other.pk)
+
+    def test_same_account_is_rejected(self) -> None:
+        row = self._own_row(counterparty='', kind='unknown')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_transfer(row.pk, self.user.pk, self.account.pk)
+
+    def test_transfer_is_one_markup_audit_operation(self) -> None:
+        row = self._own_row()
+        AuditLog.objects.all().delete()
+
+        self.service.post_transfer(row.pk, self.user.pk, None)
+
+        logs = AuditLog.objects.all()
+        self.assertTrue(logs.exists())
+        self.assertEqual(
+            set(logs.values_list('kind', flat=True)),
+            {AuditOperationKind.STATEMENT_MARKUP},
+        )
+        self.assertEqual(logs.values('operation_id').distinct().count(), 1)
+
+    def test_deleting_the_transfer_reopens_the_row(self) -> None:
+        row = self._own_row()
+        self.service.post_transfer(row.pk, self.user.pk, None)
+        row.refresh_from_db()
+        if row.transfer is None:
+            self.fail('row is not linked to a transfer')
+
+        ApplicationContainer().finance_account.transfer_service().delete_transfer(
+            transfer_id=row.transfer.pk,
+            user=self.user,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+
+    def test_page_preselects_account_found_by_number(self) -> None:
+        self._own_row()
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertContains(
+            response,
+            f'<option value="{self.other.pk}" selected>Накопительный',
+        )
+
+    def test_card_row_has_no_transfer_button(self) -> None:
+        self._row(1)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertNotContains(response, 'value="transfer"')
+
+    def test_decide_transfer_closes_row(self) -> None:
+        row = self._own_row()
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_markup_decide',
+                args=[self.upload.pk, row.pk],
+            ),
+            {'decision': 'transfer', 'account': self.other.pk},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.TRANSFERRED)
 
 
 class StatementMarkupViewTest(StatementMarkupFixture):
