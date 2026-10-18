@@ -32,7 +32,7 @@
                     <form action="{% url 'receipts:processing_retry' processing_log.id %}" method="post">
                         {% csrf_token %}
                         <button type="submit" class="receipts-chip pending-card-retry">
-                            <i class="bi bi-arrow-clockwise"></i>
+                            {% include 'partials/_swipe_icons.html' with icon='retry' %}
                             {% translate 'Повторить' %}
                         </button>
                     </form>
@@ -40,7 +40,7 @@
                 <form action="{% url 'receipts:processing_delete' processing_log.id %}" method="post">
                     {% csrf_token %}
                     <button type="submit" class="receipts-chip">
-                        <i class="bi bi-trash"></i>
+                        {% include 'partials/_swipe_icons.html' with icon='delete' %}
                         {% translate 'Удалить' %}
                     </button>
                 </form>
