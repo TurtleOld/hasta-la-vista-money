@@ -239,20 +239,45 @@ class BankStatementImportService:
                 period_from = min(period_from or row_date, row_date)
                 period_to = max(period_to or row_date, row_date)
                 continue
-            with transaction.atomic():
-                amount = trans['amount']
-                description = trans['description']
-                trans_date = trans['date']
-                source_ref = trans.get('source_ref')
-                row_position = trans.get('row_position', idx)
-                source = trans.get('source')
-                abs_amount = abs(amount)
-                is_credit_income = (
-                    amount > 0
-                    and upload.account.type_account
-                    in constants.CREDIT_ACCOUNT_TYPES
+            amount = trans['amount']
+            description = trans['description']
+            trans_date = trans['date']
+            source_ref = trans.get('source_ref')
+            row_position = trans.get('row_position', idx)
+            source = trans.get('source')
+            abs_amount = abs(amount)
+            is_credit_income = (
+                amount > 0
+                and upload.account.type_account
+                in constants.CREDIT_ACCOUNT_TYPES
+            )
+            if amount > 0:
+                type_value = TransactionType.INCOME
+                balance_change = abs_amount
+            else:
+                type_value = TransactionType.EXPENSE
+                balance_change = -abs_amount
+
+            # The classifier is a network call: keep it out of the row
+            # transaction so a slow model does not hold it open.
+            category_name = trans.get('category_name')
+            if (
+                category_name is None
+                and not is_credit_income
+                and not self._is_exact_duplicate(
+                    account=upload.account,
+                    source_ref=source_ref,
+                    source_file_hash=upload.file_hash,
+                    source_row_position=row_position,
+                )
+            ):
+                category_name = self._classify_category(
+                    strip_pii(str(description)),
+                    type_value,
+                    existing_categories,
                 )
 
+            with transaction.atomic():
                 if is_credit_income:
                     self._save_needs_transfer_row(
                         upload=upload,
@@ -261,13 +286,9 @@ class BankStatementImportService:
                     )
                     needs_transfer_count += 1
                 else:
-                    if amount > 0:
-                        type_value = TransactionType.INCOME
-                        balance_change = abs_amount
-                    else:
-                        type_value = TransactionType.EXPENSE
-                        balance_change = -abs_amount
-
+                    # Unclassified only if the row stopped being a duplicate
+                    # after the check above.
+                    row_category = str(category_name or FALLBACK_CATEGORY)
                     candidates: list[ProbableDuplicate]
                     if self._is_exact_duplicate(
                         account=upload.account,
@@ -297,7 +318,7 @@ class BankStatementImportService:
                             candidates=candidates,
                             type_value=type_value,
                             row_position=row_position,
-                            existing_categories=existing_categories,
+                            category_name=row_category,
                             match_calendar_date=source == 'ozon',
                         )
                         skipped_count += 1
@@ -316,21 +337,13 @@ class BankStatementImportService:
                         skipped_count += 1
                         created = False
                     elif created:
-                        category_name = trans.get('category_name')
-                        if category_name is None:
-                            clean_desc = strip_pii(description)
-                            category_name = self._classify_category(
-                                clean_desc,
-                                type_value,
-                                existing_categories,
-                            )
-                        if category_name not in existing_categories:
-                            existing_categories.append(category_name)
+                        if row_category not in existing_categories:
+                            existing_categories.append(row_category)
 
                         category, _created_category = (
                             Category.objects.get_or_create(
                                 user=upload.user,
-                                name=category_name[
+                                name=row_category[
                                     : constants.TWO_HUNDRED_FIFTY
                                 ],
                                 type=type_value,
@@ -464,17 +477,10 @@ class BankStatementImportService:
         candidates: list[ProbableDuplicate],
         type_value: str,
         row_position: int,
-        existing_categories: list[str],
+        category_name: str,
         match_calendar_date: bool,
     ) -> bool:
         clean_desc = strip_pii(str(trans['description']))
-        category_name = trans.get('category_name')
-        if category_name is None:
-            category_name = self._classify_category(
-                clean_desc,
-                type_value,
-                existing_categories,
-            )
         first_transaction = next(
             (
                 candidate.movement
@@ -499,7 +505,7 @@ class BankStatementImportService:
                 'candidate_description': candidate_description[
                     : constants.TWO_HUNDRED_FIFTY
                 ],
-                'suggested_category': str(category_name)[
+                'suggested_category': category_name[
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
