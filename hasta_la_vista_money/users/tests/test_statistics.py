@@ -38,7 +38,7 @@ class GetUserStatisticsServiceTest(TestCase):
         self.user: UserType = user
 
     def test_get_user_statistics(self) -> None:
-        stats: UserStatistics = get_user_statistics(self.user)
+        stats: UserStatistics = get_user_statistics(self.user, 'RUB')
         self.assertIn('total_balance', stats)
         self.assertIn('accounts_count', stats)
         self.assertIn('current_month_expenses', stats)

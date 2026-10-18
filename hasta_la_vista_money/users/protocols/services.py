@@ -42,9 +42,13 @@ if TYPE_CHECKING:
 class UserStatisticsServiceProtocol(Protocol):
     """Protocol for cached profile statistics service."""
 
-    def get_user_statistics(self, user: User) -> UserStatistics: ...
+    def get_user_statistics(
+        self,
+        user: User,
+        currency: str,
+    ) -> UserStatistics: ...
 
-    def invalidate_cache(self, user: User) -> None: ...
+    def invalidate_cache(self, user: User, currency: str) -> None: ...
 
 
 @runtime_checkable

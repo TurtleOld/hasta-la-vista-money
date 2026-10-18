@@ -105,6 +105,7 @@ class ListUsers(
         statistics_service = container.users.user_statistics_service()
         user_statistics = statistics_service.get_user_statistics(
             user,
+            get_analytics_currency(self.request, [user]).currency,
         )
         context['user_update'] = user_update
         context['user_update_pass_form'] = user_update_pass_form

@@ -80,11 +80,11 @@ class BalanceAdjustmentAnalyticsTest(TestCase):
         start = self.now - timedelta(days=1)
 
         self.assertEqual(
-            repository.get_expenses_sum_by_period(self.user, start),
+            repository.get_expenses_sum_by_period(self.user, 'RUB', start),
             Decimal('100.00'),
         )
         self.assertEqual(
-            repository.get_income_sum_by_period(self.user, start),
+            repository.get_income_sum_by_period(self.user, 'RUB', start),
             Decimal(0),
         )
 
