@@ -171,8 +171,10 @@ class StatementRowRepository:
         row.decision = BankStatementRow.Decision.TRANSFERRED
         row.decided_at = timezone.now()
         row.save(update_fields=['transfer', 'decision', 'decided_at'])
+
+    def record_decision(self, row: BankStatementRow, actor_id: int) -> None:
         BankStatementDecisionAudit.objects.create(
             row=row,
-            actor_id=transfer.user_id,
+            actor_id=actor_id,
             decision=row.decision,
         )

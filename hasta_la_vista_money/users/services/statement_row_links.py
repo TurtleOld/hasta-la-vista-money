@@ -83,6 +83,7 @@ class StatementRowLinkService:
     ) -> None:
         """Close a locked repayment row by the transfer that paid it."""
         self.statement_row_repository.close_row(row, transfer)
+        self.statement_row_repository.record_decision(row, transfer.user_id)
         self.reconciliation_service.refresh_outcome_counts(row.upload)
 
     def repayment_candidates(
