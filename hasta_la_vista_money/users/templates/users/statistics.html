@@ -18,6 +18,7 @@
                 </h2>
                 <p class="statistics-subtitle">{% translate 'Сводная аналитика по выбранному периоду и семейному контуру' %}</p>
             </div>
+            {% include 'includes/analytics_currency_switcher.html' %}
             <a href="{% url 'users:profile' user.id %}" class="statistics-button statistics-button-secondary">
                 <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"></path>
@@ -37,6 +38,7 @@
             hx-push-url="true"
             hx-include="#statistics-active-tab"
         >
+            <input type="hidden" name="currency" value="{{ analytics_currency.currency }}">
             <div class="statistics-filter-grid">
                 <div class="statistics-field">
                     <label for="statistics-period" class="statistics-label">{% translate 'Период' %}</label>
@@ -53,14 +55,6 @@
                 <div class="statistics-field">
                     <label for="statistics-date-to" class="statistics-label">{% translate 'По дату' %}</label>
                     <input id="statistics-date-to" type="text" name="date_to" value="{{ statistics_filter.date_to|date:'d/m/Y' }}" placeholder="DD/MM/YYYY" class="statistics-input">
-                </div>
-                <div class="statistics-field">
-                    <label for="statistics-currency" class="statistics-label">{% translate 'Валюта' %}</label>
-                    <select id="statistics-currency" name="currency" class="statistics-input">
-                        {% for currency in analytics_currency.currencies %}
-                            <option value="{{ currency }}" {% if statistics_filter.currency == currency %}selected{% endif %}>{{ currency }}</option>
-                        {% endfor %}
-                    </select>
                 </div>
                 <div class="statistics-field">
                     <label for="statistics-member" class="statistics-label">{% translate 'Участник' %}</label>

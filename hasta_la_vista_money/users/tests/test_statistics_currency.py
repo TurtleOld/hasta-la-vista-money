@@ -110,3 +110,22 @@ class StatisticsCurrencyTest(TestCase):
         self.assertEqual(self._month_expenses('?currency=RUB'), 300.0)
         self.assertEqual(self._month_expenses('?currency=USD'), 7.0)
         self.assertEqual(self._month_expenses(), 7.0)
+
+    def test_switcher_links_to_each_currency(self) -> None:
+        response = self.client.get(reverse('users:statistics'))
+
+        self.assertContains(response, '?currency=USD')
+        self.assertContains(response, '?currency=RUB')
+
+
+class StatisticsSingleCurrencyTest(TestCase):
+    def test_no_currency_switcher_with_one_currency(self) -> None:
+        cache.clear()
+        user = User.objects.create_user(username='stats-one-currency')
+        Account.objects.create(user=user, name_account='RUB', currency='RUB')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('users:statistics'))
+
+        self.assertNotContains(response, 'statistics-currency')
+        self.assertNotContains(response, 'Валюта аналитики')
