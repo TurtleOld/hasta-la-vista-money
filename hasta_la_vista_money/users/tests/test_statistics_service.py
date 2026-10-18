@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.finance_account.factories import AccountFactory
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -106,8 +106,9 @@ class UserStatisticsCurrencyTest(TestCase):
             ('RUB', '100.00', '300.00'),
             ('USD', '5.00', '7.00'),
         ):
-            account = AccountFactory(
+            account = Account.objects.create(
                 user=self.user,
+                name_account=currency,
                 currency=currency,
                 balance=Decimal(balance),
             )
