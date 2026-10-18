@@ -362,6 +362,12 @@ class StatementMarkupCategoryModalTest(StatementMarkupFixture):
         self.assertEqual(Category.objects.filter(name='Кафе').count(), 1)
         self.assertNotContains(response, 'hx-swap-oob')
 
+    def test_close_returns_empty_body(self) -> None:
+        response = self.client.get(f'{self.url}?close=1')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'')
+
     def test_other_user_gets_404(self) -> None:
         other = User.objects.create_user(username='other', password='x')
         self.client.force_login(other)

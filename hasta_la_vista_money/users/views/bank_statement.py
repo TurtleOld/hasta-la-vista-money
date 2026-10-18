@@ -9,6 +9,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 from django.http import (
     Http404,
@@ -476,7 +477,9 @@ class BankStatementMarkupCategoryView(LoginRequiredMixin, View):
         return self._modal(
             request,
             row,
-            CategoryForm(**self._form_kwargs(row)),
+            CategoryForm(
+                **self._form_kwargs(cast('User', request.user), row),
+            ),
         )
 
     def post(
@@ -489,23 +492,19 @@ class BankStatementMarkupCategoryView(LoginRequiredMixin, View):
         user = cast('User', request.user)
         data = request.POST.copy()
         data['type'] = row.transaction_type or ''
-        form = CategoryForm(data, **self._form_kwargs(row))
-        if (
-            form.is_valid()
-            and Category.objects.filter(
-                user=user,
-                type=row.transaction_type,
-                name=form.cleaned_data['name'],
-            ).exists()
-        ):
-            form.add_error('name', _('Такая категория уже существует.'))
+        form = CategoryForm(data, **self._form_kwargs(user, row))
         if not form.is_valid():
             return self._modal(request, row, form)
         request_with_container = cast('RequestWithContainer', request)
         category_service = (
             request_with_container.container.transactions.category_service()
         )
-        category = category_service.create_category(user, form)
+        try:
+            with transaction.atomic():
+                category = category_service.create_category(user, form)
+        except IntegrityError:
+            form.add_error('name', _('Такая категория уже существует.'))
+            return self._modal(request, row, form)
         return render(
             request,
             self.created_template,
@@ -530,8 +529,8 @@ class BankStatementMarkupCategoryView(LoginRequiredMixin, View):
             raise Http404
         return row
 
-    def _form_kwargs(self, row: BankStatementRow) -> dict[str, Any]:
-        user = row.upload.user
+    @staticmethod
+    def _form_kwargs(user: User, row: BankStatementRow) -> dict[str, Any]:
         return {
             'initial': {'type': row.transaction_type},
             'category_queryset': Category.objects.filter(
