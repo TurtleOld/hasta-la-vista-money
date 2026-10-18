@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import DatabaseError, transaction
-from django.db.models import Count, QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
@@ -69,10 +69,24 @@ class BankStatementReconciliationService:
 
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
-        return BankStatementUpload.objects.filter(
-            user_id=user_id,
-            account__user_id=user_id,
-        ).select_related('account')[:10]
+        return (
+            BankStatementUpload.objects.filter(
+                user_id=user_id,
+                account__user_id=user_id,
+            )
+            .select_related('account')
+            .annotate(
+                markup_count=Count(
+                    'statement_rows',
+                    filter=Q(
+                        statement_rows__decision=(
+                            BankStatementRow.Decision.AWAITING_MARKUP
+                        ),
+                    ),
+                ),
+            )
+            .order_by('-created_at')[:10]
+        )
 
     @staticmethod
     def reconciliation_rows(

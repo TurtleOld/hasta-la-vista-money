@@ -16,7 +16,7 @@ if TYPE_CHECKING:
         Account,
         TransferMoneyLog,
     )
-    from hasta_la_vista_money.transactions.models import Transaction
+    from hasta_la_vista_money.transactions.models import Category, Transaction
     from hasta_la_vista_money.users.models import (
         BankStatementRow,
         BankStatementUpload,
@@ -75,6 +75,31 @@ class UserDetailedStatisticsServiceProtocol(Protocol):
         income_expense_page_number: int = 1,
         transfer_page_number: int = 1,
     ) -> UserDetailedStatisticsDict: ...
+
+
+@runtime_checkable
+class StatementMarkupServiceProtocol(Protocol):
+    """Protocol for posting RosDorBank rows after user markup."""
+
+    def pending_rows(
+        self,
+        upload: BankStatementUpload,
+    ) -> QuerySet[BankStatementRow]: ...
+
+    def categories(
+        self,
+        user: User,
+        transaction_type: str,
+    ) -> list[Category]: ...
+
+    def post(
+        self,
+        row_id: int,
+        user_id: int,
+        category_id: int | None,
+    ) -> BankStatementRow: ...
+
+    def skip(self, row_id: int, user_id: int) -> BankStatementRow: ...
 
 
 @runtime_checkable

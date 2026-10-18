@@ -7,10 +7,14 @@ from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
 )
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
 )
@@ -33,6 +37,9 @@ from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     ExternalModelCategoryClassifier,
     NoopClassifier,
+)
+from hasta_la_vista_money.users.services.statement_markup import (
+    StatementMarkupService,
 )
 from hasta_la_vista_money.users.services.statement_row_links import (
     StatementRowLinkService,
@@ -110,6 +117,13 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         BankStatementRetentionService,
         reconciliation_service=bank_statement_reconciliation_service,
+    )
+
+    statement_markup_service: providers.Factory[
+        StatementMarkupServiceProtocol
+    ] = providers.Factory(
+        StatementMarkupService,
+        balance_service=providers.Factory(BalanceService),
     )
 
     bank_statement_import_service: providers.Factory[

@@ -1,12 +1,13 @@
 import sys
 from decimal import Decimal
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import QuerySet
 from django.http import (
@@ -38,7 +39,11 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
+    StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
+)
+from hasta_la_vista_money.users.services.bank_statement import (
+    RosDorBankRowKind,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     InvalidReconciliationDecisionError,
@@ -46,12 +51,25 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationExpiredError,
     StaleStatementCandidateError,
 )
+from hasta_la_vista_money.users.services.statement_markup import (
+    REFUND_CATEGORY_NAME,
+    StatementMarkupConflictError,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 logger = structlog.get_logger(__name__)
+
+ROW_KIND_LABELS: Final[dict[str, Any]] = {
+    RosDorBankRowKind.CARD: _('Оплата картой'),
+    RosDorBankRowKind.CANCEL: _('Отмена'),
+    RosDorBankRowKind.OWN_C2C: _('Перевод между своими счетами'),
+    RosDorBankRowKind.C2C: _('Перевод по СБП'),
+    RosDorBankRowKind.C2B: _('Оплата по СБП'),
+    RosDorBankRowKind.UNKNOWN: _('Прочее'),
+}
 
 
 def _views_module() -> Any:
@@ -77,6 +95,15 @@ def _reconciliation_service(
     return cast(
         'BankStatementReconciliationServiceProtocol',
         request_with_container.container.users.bank_statement_reconciliation_service(),
+    )
+
+
+def _markup_service(request: HttpRequest) -> StatementMarkupServiceProtocol:
+    """Resolve statement row markup through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'StatementMarkupServiceProtocol',
+        request_with_container.container.users.statement_markup_service(),
     )
 
 
@@ -273,7 +300,11 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     ),
                     'reconciliation_url': (
                         reverse(
-                            'users:bank_statement_reconciliation',
+                            'users:bank_statement_markup'
+                            if _markup_service(request)
+                            .pending_rows(upload)
+                            .exists()
+                            else 'users:bank_statement_reconciliation',
                             args=[upload.pk],
                         )
                         if upload.status
@@ -335,6 +366,94 @@ class BankStatementReconciliationView(
             timezone.now() < self.object.expires_at
         )
         return context
+
+
+class BankStatementMarkupView(
+    LoginRequiredMixin,
+    DetailView[BankStatementUpload],
+):
+    """Rows of an upload awaiting the user's markup."""
+
+    template_name = 'users/bank_statement_markup.html'
+    context_object_name = 'upload'
+
+    def get_queryset(self) -> QuerySet[BankStatementUpload]:
+        user = cast('User', self.request.user)
+        return BankStatementUpload.objects.filter(
+            user=user,
+            account__user=user,
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        user = cast('User', self.request.user)
+        service = _markup_service(self.request)
+        categories = {
+            transaction_type: service.categories(user, transaction_type)
+            for transaction_type in BankStatementRow.TransactionType.values
+        }
+        page = Paginator(
+            service.pending_rows(self.object),
+            STATEMENT_RECONCILIATION_PAGE_SIZE,
+        ).get_page(self.request.GET.get('page'))
+        context['page_obj'] = page
+        context['rows'] = [
+            {
+                'row': row,
+                'categories': categories.get(row.transaction_type or '', []),
+                'kind_label': ROW_KIND_LABELS.get(row.kind, ''),
+                'refund_default': row.kind == RosDorBankRowKind.CANCEL
+                and not any(
+                    c.name == REFUND_CATEGORY_NAME
+                    for c in categories.get(row.transaction_type or '', [])
+                ),
+            }
+            for row in page
+        ]
+        return context
+
+
+class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
+    """Post or skip one row awaiting markup."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        user = cast('User', request.user)
+        row = get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=user,
+            upload__account__user=user,
+        )
+        service = _markup_service(request)
+        category = request.POST.get('category', '')
+        try:
+            if request.POST.get('decision') == 'skip':
+                service.skip(row.pk, user.pk)
+            else:
+                service.post(
+                    row.pk,
+                    user.pk,
+                    int(category) if category.isdigit() else None,
+                )
+        except StatementMarkupConflictError as error:
+            messages.error(request, self._message(str(error)))
+        except ValidationError:
+            messages.error(request, _('Не удалось провести строку.'))
+        return redirect(
+            reverse('users:bank_statement_markup', args=[upload_id]),
+        )
+
+    @staticmethod
+    def _message(reason: str) -> str:
+        if reason == 'category':
+            return str(_('Выберите категорию подходящего типа.'))
+        return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
 class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):

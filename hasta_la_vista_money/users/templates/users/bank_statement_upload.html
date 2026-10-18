@@ -137,7 +137,9 @@
                                     </p>
                                 {% endif %}
                             </div>
-                            {% if history_upload.status == 'awaiting_confirmation' %}
+                            {% if history_upload.markup_count %}
+                                <a class="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" href="{% url 'users:bank_statement_markup' history_upload.pk %}">{% blocktranslate with count=history_upload.markup_count %}Разметить ({{ count }}){% endblocktranslate %}</a>
+                            {% elif history_upload.status == 'awaiting_confirmation' %}
                                 <a class="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" href="{% url 'users:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
                             {% endif %}
                         </div>

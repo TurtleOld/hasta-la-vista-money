@@ -3,6 +3,8 @@
 from django.urls import include, path
 
 from hasta_la_vista_money.users.views import (
+    BankStatementMarkupDecisionView,
+    BankStatementMarkupView,
     BankStatementPendingTransferDismissView,
     BankStatementPendingTransferLinkView,
     BankStatementReconciliationBulkView,
@@ -94,6 +96,16 @@ urlpatterns = [
         'bank-statement-upload/status/<int:upload_id>/',
         BankStatementUploadStatusView.as_view(),
         name='bank_statement_upload_status',
+    ),
+    path(
+        'bank-statement-upload/<int:pk>/markup/',
+        BankStatementMarkupView.as_view(),
+        name='bank_statement_markup',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/',
+        BankStatementMarkupDecisionView.as_view(),
+        name='bank_statement_markup_decide',
     ),
     path(
         'bank-statement-upload/<int:pk>/reconciliation/',
