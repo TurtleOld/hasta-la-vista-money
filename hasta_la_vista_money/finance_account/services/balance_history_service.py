@@ -15,6 +15,7 @@ from decimal import Decimal
 from django.db.models import Q
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -61,7 +62,7 @@ class BalanceHistoryService:
         """
         later = sum(
             (delta for _, delta in self._events_after([account], moment)),
-            Decimal('0.00'),
+            Decimal(constants.ZERO),
         )
         return account.balance - later
 
@@ -88,10 +89,13 @@ class BalanceHistoryService:
         by_day: defaultdict[date, Decimal] = defaultdict(Decimal)
         for day, delta in self._events_after(accounts, start_moment):
             by_day[day] += delta
-        balance = sum((account.balance for account in accounts), Decimal(0))
+        balance = sum(
+            (account.balance for account in accounts),
+            Decimal(constants.ZERO),
+        )
         balance -= sum(
             (delta for day, delta in by_day.items() if day > end),
-            Decimal(0),
+            Decimal(constants.ZERO),
         )
         balances: dict[date, Decimal] = {}
         day = end
@@ -157,7 +161,7 @@ class BalanceHistoryService:
             )
         )
         for at, from_id, to_id, amount in transfers:
-            delta = Decimal('0.00')
+            delta = Decimal(constants.ZERO)
             if from_id in account_ids:
                 delta -= amount
             if to_id in account_ids:
