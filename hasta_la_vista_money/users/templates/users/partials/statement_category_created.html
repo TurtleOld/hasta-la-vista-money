@@ -1,0 +1,2 @@
+<div hx-swap-oob="beforeend:#category-{{ row.pk }}"><option value="{{ category.pk }}" selected>{{ category.name }}</option></div>
+<div hx-swap-oob="beforeend:.category-select-{{ row.transaction_type }}:not(#category-{{ row.pk }})"><option value="{{ category.pk }}">{{ category.name }}</option></div>
