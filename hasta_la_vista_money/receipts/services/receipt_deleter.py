@@ -32,7 +32,5 @@ class ReceiptDeleterService:
             },
         )
 
-        for product in receipt.product.all():
-            product.delete()
-
+        receipt.product.all().delete()
         receipt.delete()

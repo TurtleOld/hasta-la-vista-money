@@ -181,17 +181,19 @@ TEMPLATES = [
 CONN_MAX_AGE = config('CONN_MAX_AGE', default=60, cast=int)
 
 # Cache configuration
-if DEBUG:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'unique-snowflake',
-            'TIMEOUT': 300,
-            'OPTIONS': {
-                'MAX_ENTRIES': 1000,
-            },
+_LOCMEM_CACHES: dict[str, dict[str, Any]] = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
         },
-    }
+    },
+}
+
+if DEBUG or IS_TESTING:
+    CACHES = _LOCMEM_CACHES
 else:
     redis_location = config('REDIS_LOCATION', cast=str, default='')
     allowed_hosts_str = str(config('ALLOWED_HOSTS', default=''))
@@ -202,20 +204,8 @@ else:
     is_local_dev = any(
         host in {'localhost', '127.0.0.1'} for host in normalized_hosts
     )
-    is_testing = IS_TESTING
 
-    if is_testing:
-        CACHES = {
-            'default': {
-                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-                'LOCATION': 'unique-snowflake',
-                'TIMEOUT': 300,
-                'OPTIONS': {
-                    'MAX_ENTRIES': 1000,
-                },
-            },
-        }
-    elif redis_location:
+    if redis_location:
         CACHES = {
             'default': {
                 'BACKEND': 'django_redis.cache.RedisCache',
@@ -231,16 +221,7 @@ else:
             },
         }
     elif is_local_dev:
-        CACHES = {
-            'default': {
-                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-                'LOCATION': 'unique-snowflake',
-                'TIMEOUT': 300,
-                'OPTIONS': {
-                    'MAX_ENTRIES': 1000,
-                },
-            },
-        }
+        CACHES = _LOCMEM_CACHES
     else:
         raise ImproperlyConfigured(
             'REDIS_LOCATION is required when DEBUG=False',
