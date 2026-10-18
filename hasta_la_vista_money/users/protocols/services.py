@@ -99,6 +99,17 @@ class StatementMarkupServiceProtocol(Protocol):
         category_id: int | None,
     ) -> BankStatementRow: ...
 
+    def remembered_categories(
+        self,
+        upload: BankStatementUpload,
+    ) -> dict[int, int]: ...
+
+    def post_remembered(
+        self,
+        upload_id: int,
+        user_id: int,
+    ) -> tuple[int, int]: ...
+
     def post_transfer(
         self,
         row_id: int,

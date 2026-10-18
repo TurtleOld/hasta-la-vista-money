@@ -19,6 +19,7 @@ from hasta_la_vista_money.users.views.auth import (
 from hasta_la_vista_money.users.views.bank_statement import (
     BankStatementMarkupCategoryView,
     BankStatementMarkupDecisionView,
+    BankStatementMarkupRememberedView,
     BankStatementMarkupView,
     BankStatementPendingTransferDismissView,
     BankStatementPendingTransferLinkView,
@@ -59,6 +60,7 @@ __all__ = [
     'AuthRequest',
     'BankStatementMarkupCategoryView',
     'BankStatementMarkupDecisionView',
+    'BankStatementMarkupRememberedView',
     'BankStatementMarkupView',
     'BankStatementPendingTransferDismissView',
     'BankStatementPendingTransferLinkView',
