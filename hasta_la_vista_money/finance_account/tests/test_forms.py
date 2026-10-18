@@ -250,6 +250,68 @@ class TestAddAccountForm(TestCase):
         )
         self.assertTrue(form.is_valid(), msg=form.errors)
 
+    def _debit_data(self, account_number: str) -> dict[str, object]:
+        return {
+            'name_account': 'Дебетовая',
+            'type_account': 'Debit',
+            'balance': Decimal('0.00'),
+            'currency': 'RUB',
+            'account_number': account_number,
+        }
+
+    def test_account_number_saved(self) -> None:
+        form = AddAccountForm(
+            data=self._debit_data('40817810000000000001'),
+            user=self.user,
+        )
+        self.assertTrue(form.is_valid(), msg=form.errors)
+        account = form.save()
+        self.assertEqual(account.account_number, '40817810000000000001')
+
+    def test_blank_account_number_stored_as_null(self) -> None:
+        form = AddAccountForm(data=self._debit_data(''), user=self.user)
+        self.assertTrue(form.is_valid(), msg=form.errors)
+        self.assertIsNone(form.save().account_number)
+
+    def test_account_number_must_be_twenty_digits(self) -> None:
+        for value in ('4081781000000000000A', '408178100'):
+            form = AddAccountForm(
+                data=self._debit_data(value),
+                user=self.user,
+            )
+            self.assertFalse(form.is_valid(), msg=value)
+            self.assertIn('account_number', form.errors)
+
+    def test_account_number_taken_by_another_user(self) -> None:
+        other = User.objects.create_user(username='other')
+        Account.objects.create(
+            user=other,
+            name_account='Чужой',
+            account_number='40817810000000000001',
+        )
+        form = AddAccountForm(
+            data=self._debit_data('40817810000000000001'),
+            user=self.user,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['account_number'],
+            ['Номер счёта уже используется'],
+        )
+
+    def test_edit_keeps_own_account_number(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Дебетовая',
+            account_number='40817810000000000001',
+        )
+        form = AddAccountForm(
+            data=self._debit_data('40817810000000000001'),
+            instance=account,
+            user=self.user,
+        )
+        self.assertTrue(form.is_valid(), msg=form.errors)
+
 
 class TestTransferMoneyAccountForm(TestCase):
     """Test cases for TransferMoneyAccountForm."""

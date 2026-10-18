@@ -238,6 +238,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             'name_account',
             'type_account',
             'bank',
+            'account_number',
             'limit_credit',
             'payment_due_date',
             'grace_period_days',
