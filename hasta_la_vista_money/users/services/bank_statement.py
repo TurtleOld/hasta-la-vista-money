@@ -49,6 +49,7 @@ class StatementParseResult:
         closing_balance_date: Дата конечного остатка, если известна.
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
+        requires_markup: Строки не проводятся до разметки пользователем.
     """
 
     transactions: list[dict[str, Any]] = field(default_factory=list)
@@ -56,6 +57,7 @@ class StatementParseResult:
     closing_balance_date: date_type | None = None
     account_number: str | None = None
     period_start: date_type | None = None
+    requires_markup: bool = False
 
 
 # General parsing constants
@@ -1269,6 +1271,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             closing_balance_date=self._parse_day(header.group(3)),
             account_number=header.group(1),
             period_start=self._parse_day(header.group(2)),
+            requires_markup=True,
         )
 
     def _split_totals(

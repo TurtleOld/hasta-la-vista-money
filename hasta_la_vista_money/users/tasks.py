@@ -85,17 +85,26 @@ def process_bank_statement_task(
         result = service.import_statement(upload)
 
         upload.account.refresh_from_db(fields=['balance'])
+        awaiting_markup = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        ).exists()
         if result.closing_balance is not None:
             upload.statement_closing_balance = result.closing_balance
+        # Until every row is marked up the discrepancy is known to be false.
+        if result.closing_balance is not None and not awaiting_markup:
             upload.account_balance_after = upload.account.balance
             upload.balance_discrepancy = (
                 result.closing_balance - upload.account.balance
             )
 
-        if BankStatementRow.objects.filter(
-            upload=upload,
-            decision=BankStatementRow.Decision.PENDING,
-        ).exists():
+        if (
+            awaiting_markup
+            or BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.PENDING,
+            ).exists()
+        ):
             upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         else:
             upload.status = BankStatementUpload.Status.COMPLETED
