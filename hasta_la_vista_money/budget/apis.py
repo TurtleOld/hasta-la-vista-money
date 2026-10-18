@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
     OpenApiResponse,
@@ -28,6 +27,7 @@ from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
+from hasta_la_vista_money.budget.serializers import BudgetCurrencySerializer
 from hasta_la_vista_money.budget.services.budget import get_categories
 from hasta_la_vista_money.budget.views import _resolve_budget_scope
 from hasta_la_vista_money.core.mixins import (
@@ -38,7 +38,6 @@ from hasta_la_vista_money.finance_account.analytics_currency import (
     AnalyticsCurrency,
     get_analytics_currency,
 )
-from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
@@ -75,16 +74,12 @@ def _analytics_currency(
 
 def _requested_currency(request: Request, users: list[User]) -> str:
     """Posted currency, else the analytics one; a save never remembers it."""
-    currency = str(
-        request.data.get(constants.ANALYTICS_CURRENCY_PARAM)
+    serializer = BudgetCurrencySerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    return str(
+        serializer.validated_data.get('currency')
         or _analytics_currency(request, users, remember=False).currency,
     )
-    if currency not in dict(currency_choices()):
-        raise ValidationError(
-            {constants.ANALYTICS_CURRENCY_PARAM: _('Неизвестная валюта.')},
-            code='invalid_currency',
-        )
-    return currency
 
 
 def _render_budget_matrix(request: Request, table_type: str) -> Any:

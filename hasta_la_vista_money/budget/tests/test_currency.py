@@ -175,7 +175,7 @@ class BudgetCurrencyTest(TestCase):
         self.assertFalse(Budget.objects.exists())
         self.assertEqual(
             response.json()['currency'],
-            'Неизвестная валюта.',
+            ['Неизвестная валюта.'],
         )
 
     def test_add_months_creates_plans_in_analytics_currency(self) -> None:
