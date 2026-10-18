@@ -72,9 +72,11 @@ def _dashboard_scope(request: HttpRequest) -> str:
 
 
 def _dashboard_currency(request: HttpRequest, user: User) -> str:
-    """Analytics currency over the same users as the dashboard page."""
-    users = readable_users(user, _dashboard_scope(request))
-    return get_analytics_currency(request, users).currency
+    """Analytics currency of the user's own accounts, as widgets count them.
+
+    The choice stays in the session for the wider family page scope.
+    """
+    return get_analytics_currency(request, [user], remember=False).currency
 
 
 class TransactionDict(TypedDict):

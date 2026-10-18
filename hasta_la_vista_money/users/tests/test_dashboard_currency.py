@@ -3,11 +3,13 @@
 from decimal import Decimal
 from typing import Any
 
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
@@ -15,7 +17,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 
 
 class DashboardDataCurrencyTest(TestCase):
@@ -94,10 +96,10 @@ class DashboardDataCurrencyTest(TestCase):
         self._data('USD')
         url = reverse('users:dashboard_drilldown')
 
-        top = self.client.get(url).json()['data']
+        top = self.client.get(url, {'currency': 'USD'}).json()['data']
         category = self.client.get(
             url,
-            {'category_id': top[0]['category_id']},
+            {'category_id': top[0]['category_id'], 'currency': 'USD'},
         ).json()['data']
 
         self.assertEqual([item['value'] for item in top], [7.0])
@@ -106,6 +108,35 @@ class DashboardDataCurrencyTest(TestCase):
     def test_comparison_endpoint_uses_selected_currency(self) -> None:
         self._data('USD')
 
-        response = self.client.get(reverse('users:dashboard_comparison'))
+        response = self.client.get(
+            reverse('users:dashboard_comparison'),
+            {'currency': 'USD'},
+        )
 
         self.assertEqual(response.json()['current']['expenses'], 7.0)
+
+
+class DashboardDataFamilyCurrencyTest(TestCase):
+    def test_widgets_ignore_family_currency_the_user_lacks(self) -> None:
+        cache.clear()
+        user = User.objects.create_user(username='dashboard-own')
+        spouse = User.objects.create_user(username='dashboard-spouse')
+        group = Group.objects.create(name='dashboard-family')
+        for member in (user, spouse):
+            FamilyGroupMembership.objects.create(group=group, user=member)
+        Account.objects.create(user=user, name_account='RUB', currency='RUB')
+        Account.objects.create(
+            user=spouse,
+            name_account='USD',
+            currency='USD',
+        )
+        self.client.force_login(user)
+        self.client.get(reverse('users:dashboard'), {'currency': 'USD'})
+
+        response = self.client.get(reverse('users:dashboard_data'))
+
+        self.assertEqual(response.json()['currency'], 'RUB')
+        self.assertEqual(
+            self.client.session[constants.ANALYTICS_CURRENCY_SESSION_KEY],
+            'USD',
+        )
