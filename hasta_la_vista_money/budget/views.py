@@ -143,6 +143,7 @@ class BudgetView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         budget_context = self.get_budget_context()
+        analytics_currency = budget_context['analytics_currency']
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_budget_data(
@@ -150,7 +151,7 @@ class BudgetView(
             months=budget_context['months'],
             expense_categories=budget_context['expense_categories'],
             income_categories=budget_context['income_categories'],
-            currency=budget_context['analytics_currency'].currency,
+            currency=analytics_currency.currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -159,7 +160,7 @@ class BudgetView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
-                'analytics_currency': budget_context['analytics_currency'],
+                'analytics_currency': analytics_currency,
             },
         )
         context.update(
@@ -198,13 +199,14 @@ class ExpenseTableView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         budget_context = self.get_budget_context()
+        analytics_currency = budget_context['analytics_currency']
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_expense_table(
             user=budget_context['user'],
             months=budget_context['months'],
             expense_categories=budget_context['expense_categories'],
-            currency=budget_context['analytics_currency'].currency,
+            currency=analytics_currency.currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -222,7 +224,7 @@ class ExpenseTableView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
-                'analytics_currency': budget_context['analytics_currency'],
+                'analytics_currency': analytics_currency,
             },
         )
         return context
@@ -245,13 +247,14 @@ class IncomeTableView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         budget_context = self.get_budget_context()
+        analytics_currency = budget_context['analytics_currency']
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_income_table(
             user=budget_context['user'],
             months=budget_context['months'],
             income_categories=budget_context['income_categories'],
-            currency=budget_context['analytics_currency'].currency,
+            currency=analytics_currency.currency,
             users=budget_context['scope_users'],
         )
         context.update(data)
@@ -269,7 +272,7 @@ class IncomeTableView(
             {
                 'budget_scope': budget_context['budget_scope'],
                 'budget_scope_choices': budget_context['budget_scope_choices'],
-                'analytics_currency': budget_context['analytics_currency'],
+                'analytics_currency': analytics_currency,
             },
         )
         return context
