@@ -4,6 +4,7 @@ Supports multiple bank formats with auto-detection:
 - Raiffeisen (Райффайзенбанк)
 - Sberbank credit card (Выписка по счёту кредитной карты)
 - Ozon Bank (Справка о движении средств)
+- RosDorBank (ПАО "РосДорБанк", Выписка по счету)
 - Generic Russian bank format (fallback)
 """
 
@@ -15,13 +16,15 @@ from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import camelot
 import structlog
 from django.utils import timezone
-from pdfminer.high_level import extract_text
+from pdfminer.high_level import extract_pages, extract_text
+from pdfminer.layout import LTTextContainer, LTTextLine
 from pdfminer.pdfparser import PDFSyntaxError
 
 from hasta_la_vista_money.transactions.models import Category
@@ -44,11 +47,15 @@ class StatementParseResult:
             ``source_ref``.
         closing_balance: Конечный остаток по выписке, если удалось извлечь.
         closing_balance_date: Дата конечного остатка, если известна.
+        account_number: Номер счёта из шапки выписки, если есть.
+        period_start: Начало периода выписки, если известно.
     """
 
     transactions: list[dict[str, Any]] = field(default_factory=list)
     closing_balance: Decimal | None = None
     closing_balance_date: date_type | None = None
+    account_number: str | None = None
+    period_start: date_type | None = None
 
 
 # General parsing constants
@@ -63,6 +70,8 @@ RAIFFEISEN_BANK_NAME = 'Райффайзенбанк'
 SBERBANK_CREDIT_CARD_TITLE = 'Выписка по счёту кредитной карты'
 OZON_BANK_NAME = 'ОЗОН Банк'
 OZON_STATEMENT_TITLE = 'Справка о движении средств'
+ROSDORBANK_BANK_NAME = 'ПАО "РосДорБанк"'
+ROSDORBANK_STATEMENT_TITLE = 'Выписка по счету'
 
 # Raiffeisen column indices
 RAIFFEISEN_NUM_COL = 0
@@ -87,6 +96,30 @@ OZON_AMOUNT_COL = 3
 OZON_PURCHASE_CATEGORY = 'Покупки Ozon'
 OZON_REFUND_CATEGORY = 'Возвраты Ozon'
 OZON_TIP_CATEGORY = 'Чаевые Ozon'
+
+# RosDorBank table headers; their x positions locate the columns.
+ROSDORBANK_NUMBER_HEADER = '№'
+ROSDORBANK_DEBIT_HEADER = 'Списание'
+ROSDORBANK_CREDIT_HEADER = 'Зачисление'
+ROSDORBANK_TABLE_HEADERS = frozenset(
+    {
+        ROSDORBANK_NUMBER_HEADER,
+        'Контрагент/Операция',
+        ROSDORBANK_DEBIT_HEADER,
+        ROSDORBANK_CREDIT_HEADER,
+    },
+)
+ROSDORBANK_CLOSING_LABEL = 'Исходящий остаток:'
+ROSDORBANK_TOTAL_LABELS = (
+    'Входящий остаток:',
+    'Обороты',
+    ROSDORBANK_CLOSING_LABEL,
+)
+ROSDORBANK_MERCHANT_PREFIXES = ('PMP', '3DI2')
+ROSDORBANK_MIN_MERCHANT_KEY_LETTERS = 4
+ROSDORBANK_C2C_FALLBACK_DESCRIPTION = 'Перевод СБП'
+# Lines at the same baseline differ by rounding only.
+ROSDORBANK_SAME_LINE_TOLERANCE = 2.0
 
 
 class BankStatementParseError(Exception):
@@ -1108,6 +1141,349 @@ class _OzonBankParser(BaseBankStatementParser):
         return None
 
 
+class RosDorBankRowKind(StrEnum):
+    """Вид строки выписки РосДорБанка."""
+
+    CARD = 'card'
+    CANCEL = 'cancel'
+    OWN_C2C = 'own_c2c'
+    C2C = 'c2c'
+    C2B = 'c2b'
+    UNKNOWN = 'unknown'
+
+
+def rosdorbank_merchant_key(text: str) -> str:
+    """Ключ продавца: имя без префиксов, номеров терминалов и пунктуации."""
+    prefixes = '|'.join(ROSDORBANK_MERCHANT_PREFIXES)
+    name = re.sub(rf'^(?:{prefixes})\s+', '', text.strip())
+    letters = ''.join(
+        char for char in re.split(r'\d', name, maxsplit=1)[0] if char.isalpha()
+    )
+    if len(letters) < ROSDORBANK_MIN_MERCHANT_KEY_LETTERS:
+        return ''.join(char for char in name if char.isalnum()).upper()
+    return letters.upper()
+
+
+@dataclass(frozen=True)
+class _PdfLine:
+    page: int
+    top: float
+    x0: float
+    x1: float
+    text: str
+
+
+@dataclass
+class _RosDorBankRow:
+    date: date_type
+    lines: list[str] = field(default_factory=list)
+    number: str | None = None
+    amount: Decimal | None = None
+    is_credit: bool = False
+
+
+class _RosDorBankParser(BaseBankStatementParser):
+    """Parser for RosDorBank account statements.
+
+    camelot splits this layout into different columns on every page, so
+    rows are read from pdfminer text lines and placed by x position.
+    A row starts at its ``БИК:`` line; the day date comes from the block
+    header above it.
+    """
+
+    _header_pattern = re.compile(
+        r'Выписка по счету (\d{20}) с (\d{2}\.\d{2}\.\d{4}) '
+        r'по (\d{2}\.\d{2}\.\d{4})',
+    )
+    _date_pattern = re.compile(r'\d{2}\.\d{2}\.\d{4}')
+    _amount_pattern = re.compile(r'\d{1,3}(?: \d{3})*\.\d{2}')
+    _number_pattern = re.compile(r'\d+')
+    _operation_pattern = re.compile(
+        r'Отмена\. |Списание суммы операции|СБП- ',
+    )
+    _phone_pattern = re.compile(r'\+?\d[\d\s()\-]{9,}\d')
+
+    def parse(self) -> StatementParseResult:
+        """Parse every row; none of them is final until the user marks it."""
+        try:
+            logger.info('bank_statement_parse_started', parser='rosdorbank')
+            result = self._parse_lines(self._read_lines())
+            result.transactions = _dedup_transactions(result.transactions)
+            logger.info(
+                'bank_statement_parse_completed',
+                parser='rosdorbank',
+                transactions=len(result.transactions),
+            )
+        except BankStatementParseError:
+            raise
+        except Exception as e:
+            logger.exception('bank_statement_parse_failed', parser='rosdorbank')
+            error_msg = f'Не удалось обработать PDF РосДорБанка: {e!s}'
+            raise BankStatementParseError(error_msg) from e
+        else:
+            return result
+
+    def _read_lines(self) -> list[_PdfLine]:
+        lines: list[_PdfLine] = []
+        for page_index, page in enumerate(extract_pages(str(self.pdf_path))):
+            for element in page:
+                if not isinstance(element, LTTextContainer):
+                    continue
+                for line in element:
+                    text = line.get_text().strip()
+                    if isinstance(line, LTTextLine) and text:
+                        lines.append(
+                            _PdfLine(
+                                page=page_index,
+                                top=-line.y1,
+                                x0=line.x0,
+                                x1=line.x1,
+                                text=text,
+                            ),
+                        )
+        lines.sort(key=lambda line: (line.page, line.top, line.x0))
+        return lines
+
+    def _parse_lines(self, lines: list[_PdfLine]) -> StatementParseResult:
+        header = next(
+            (
+                match
+                for line in lines
+                if (match := self._header_pattern.search(line.text))
+            ),
+            None,
+        )
+        columns: dict[str, _PdfLine] = {}
+        for line in lines:
+            if line.text in ROSDORBANK_TABLE_HEADERS:
+                columns.setdefault(line.text, line)
+        if header is None or len(columns) < len(ROSDORBANK_TABLE_HEADERS):
+            error_msg = 'В выписке РосДорБанка не найдены шапка или таблица'
+            raise BankStatementParseError(error_msg)
+
+        table_lines, closing_balance = self._split_totals(lines, columns)
+        rows = self._group_rows(table_lines, columns)
+        return StatementParseResult(
+            transactions=[self._build_transaction(row) for row in rows],
+            closing_balance=closing_balance,
+            closing_balance_date=self._parse_day(header.group(3)),
+            account_number=header.group(1),
+            period_start=self._parse_day(header.group(2)),
+        )
+
+    def _split_totals(
+        self,
+        lines: list[_PdfLine],
+        columns: dict[str, _PdfLine],
+    ) -> tuple[list[_PdfLine], Decimal | None]:
+        """Drop amounts of balance/turnover lines, keep the closing one."""
+        totals: dict[int, list[tuple[float, str]]] = {}
+        for line in lines:
+            if line.text.startswith(ROSDORBANK_TOTAL_LABELS):
+                totals.setdefault(line.page, []).append((line.top, line.text))
+
+        table_lines: list[_PdfLine] = []
+        closing_balance: Decimal | None = None
+        for line in lines:
+            label = (
+                self._total_label(line, totals)
+                if self._cell_kind(line, columns) == 'amount'
+                else None
+            )
+            if label is None:
+                table_lines.append(line)
+            elif label.startswith(ROSDORBANK_CLOSING_LABEL):
+                closing_balance = Decimal(line.text.replace(' ', ''))
+        return table_lines, closing_balance
+
+    def _group_rows(
+        self,
+        lines: list[_PdfLine],
+        columns: dict[str, _PdfLine],
+    ) -> list[_RosDorBankRow]:
+        rows: list[_RosDorBankRow] = []
+        current: _RosDorBankRow | None = None
+        # A № or amount on the baseline of the next БИК line sorts before
+        # it, so it opens that row ahead of time.
+        upcoming: _RosDorBankRow | None = None
+        day: date_type | None = None
+        for line in lines:
+            if line.text in ROSDORBANK_TABLE_HEADERS:
+                continue
+            if self._date_pattern.fullmatch(line.text):
+                day = self._parse_day(line.text)
+                continue
+            cell = self._cell_kind(line, columns)
+            if cell is not None:
+                row = current
+                if (
+                    row is None
+                    or (row.amount if cell == 'amount' else row.number)
+                    is not None
+                ):
+                    upcoming = upcoming or self._open_row(rows, day)
+                    row = upcoming
+                self._fill_cell(row, line, cell, columns)
+                continue
+            if line.text.startswith(ROSDORBANK_TOTAL_LABELS):
+                current = None
+                continue
+            if line.text.startswith('БИК:'):
+                current = upcoming or self._open_row(rows, day)
+                upcoming = None
+            if current is not None:
+                current.lines.append(line.text)
+        return rows
+
+    def _cell_kind(
+        self,
+        line: _PdfLine,
+        columns: dict[str, _PdfLine],
+    ) -> str | None:
+        if line.x1 > columns[ROSDORBANK_DEBIT_HEADER].x0:
+            return (
+                'amount' if self._amount_pattern.fullmatch(line.text) else None
+            )
+        if line.x0 < columns[ROSDORBANK_NUMBER_HEADER].x1:
+            return (
+                'number' if self._number_pattern.fullmatch(line.text) else None
+            )
+        return None
+
+    @staticmethod
+    def _total_label(
+        line: _PdfLine,
+        totals: dict[int, list[tuple[float, str]]],
+    ) -> str | None:
+        return next(
+            (
+                text
+                for top, text in totals.get(line.page, [])
+                if abs(top - line.top) <= ROSDORBANK_SAME_LINE_TOLERANCE
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _fill_cell(
+        row: _RosDorBankRow,
+        line: _PdfLine,
+        cell: str,
+        columns: dict[str, _PdfLine],
+    ) -> None:
+        if cell == 'amount':
+            row.amount = Decimal(line.text.replace(' ', ''))
+            row.is_credit = line.x1 > columns[ROSDORBANK_CREDIT_HEADER].x0
+        else:
+            row.number = line.text
+
+    @staticmethod
+    def _parse_day(text: str) -> date_type:
+        return (
+            datetime.strptime(text, '%d.%m.%Y')
+            .replace(tzinfo=timezone.get_current_timezone())
+            .date()
+        )
+
+    @staticmethod
+    def _open_row(
+        rows: list[_RosDorBankRow],
+        day: date_type | None,
+    ) -> _RosDorBankRow:
+        if day is None:
+            error_msg = 'Строка операции до даты дня в выписке'
+            raise BankStatementParseError(error_msg)
+        row = _RosDorBankRow(date=day)
+        rows.append(row)
+        return row
+
+    def _build_transaction(self, row: _RosDorBankRow) -> dict[str, Any]:
+        if row.number is None or row.amount is None or not row.lines:
+            error_msg = 'Не удалось разобрать строку операции РосДорБанка'
+            raise BankStatementParseError(error_msg)
+        bik_line, *body_lines = row.lines
+        account = re.search(r'р/с: (\d{20})', bik_line)
+        body = ' '.join(body_lines)
+        marker = self._operation_pattern.search(body)
+        if marker is not None:
+            party, operation = body[: marker.start()], body[marker.start() :]
+        else:
+            # shortcut: an address wrapped from the ИНН line stays in the
+            # description; seen only in SBP rows so far, split if it shows up.
+            party = body_lines[0] if body_lines else ''
+            operation = ' '.join(body_lines[1:])
+        kind, description, merchant_key = self._classify(party, operation)
+        return {
+            'date': datetime.combine(
+                row.date,
+                datetime.min.time(),
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            'amount': row.amount if row.is_credit else -row.amount,
+            'description': description,
+            'source_ref': f'{row.number}-{row.date:%d.%m.%Y}',
+            'source': 'rosdorbank',
+            'kind': kind,
+            'merchant_key': merchant_key,
+            'counterparty_account': account.group(1) if account else None,
+        }
+
+    def _classify(
+        self,
+        party: str,
+        operation: str,
+    ) -> tuple[RosDorBankRowKind, str, str | None]:
+        owner = re.search(r'Владелец устройства:\s*(.+)$', operation)
+        if owner is not None:
+            device_owner = owner.group(1).strip()
+            kind = (
+                RosDorBankRowKind.CANCEL
+                if operation.startswith('Отмена.')
+                else RosDorBankRowKind.CARD
+            )
+            return kind, device_owner, rosdorbank_merchant_key(device_owner)
+
+        if re.match(r'СБП- C2c\.', operation, re.IGNORECASE):
+            payer = re.search(r'тел c:\s*(\+\d+)', operation)
+            payee = re.search(r'тел C:\s*(\+\d+)', operation)
+            is_own = (
+                payer is not None
+                and payee is not None
+                and payer.group(1) == payee.group(1)
+            )
+            name = re.search(r', c: ([^,]+),', operation)
+            description = (
+                name.group(1).strip()
+                if name
+                else re.sub(r'^ИНН:\s*\d+\s*', '', party).split('//')[0].strip()
+            ) or ROSDORBANK_C2C_FALLBACK_DESCRIPTION
+            kind = (
+                RosDorBankRowKind.OWN_C2C if is_own else RosDorBankRowKind.C2C
+            )
+            return kind, description, None
+
+        c2b = re.match(
+            r'СБП- C2b\..*?ТСП: "(.*?)"(?: Назначение: "(.*?)")?',
+            operation,
+        )
+        if c2b is not None:
+            merchant = c2b.group(1)
+            purpose = self._strip_phones(c2b.group(2) or '')
+            description = f'{merchant} — {purpose}' if purpose else merchant
+            return (
+                RosDorBankRowKind.C2B,
+                description,
+                rosdorbank_merchant_key(merchant),
+            )
+
+        return RosDorBankRowKind.UNKNOWN, self._strip_phones(operation), None
+
+    def _strip_phones(self, text: str) -> str:
+        return re.sub(r'\s+', ' ', self._phone_pattern.sub('', text)).strip(
+            ' :',
+        )
+
+
 # ---------------------------------------------------------------------------
 # Detection + factory
 # ---------------------------------------------------------------------------
@@ -1129,17 +1505,23 @@ def _create_parser(pdf_path: Path) -> BaseBankStatementParser:
         )
         text = ''
 
-    if RAIFFEISEN_BANK_NAME in text:
-        logger.info('bank_statement_bank_detected', bank='raiffeisen')
-        return _RaiffeisenBankParser(pdf_path)
-
-    if SBERBANK_CREDIT_CARD_TITLE in text:
-        logger.info('bank_statement_bank_detected', bank='sberbank')
-        return _SberbankParser(pdf_path)
-
-    if OZON_BANK_NAME in text and OZON_STATEMENT_TITLE in text:
-        logger.info('bank_statement_bank_detected', bank='ozon')
-        return _OzonBankParser(pdf_path)
+    bank_markers: tuple[
+        tuple[tuple[str, ...], str, type[BaseBankStatementParser]],
+        ...,
+    ] = (
+        ((RAIFFEISEN_BANK_NAME,), 'raiffeisen', _RaiffeisenBankParser),
+        ((SBERBANK_CREDIT_CARD_TITLE,), 'sberbank', _SberbankParser),
+        ((OZON_BANK_NAME, OZON_STATEMENT_TITLE), 'ozon', _OzonBankParser),
+        (
+            (ROSDORBANK_BANK_NAME, ROSDORBANK_STATEMENT_TITLE),
+            'rosdorbank',
+            _RosDorBankParser,
+        ),
+    )
+    for markers, bank, parser_class in bank_markers:
+        if all(marker in text for marker in markers):
+            logger.info('bank_statement_bank_detected', bank=bank)
+            return parser_class(pdf_path)
 
     # Fallback: column-header-based detection
     if 'Поступления' in text and '№ П/П' in text:
