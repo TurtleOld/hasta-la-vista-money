@@ -1,4 +1,6 @@
 import hashlib
+import time
+from typing import cast
 
 from django.core.cache import cache
 
@@ -10,7 +12,15 @@ def _user_statistics_version_key(user_id: int) -> str:
 
 
 def _user_statistics_version(user_id: int) -> int:
-    return int(cache.get(_user_statistics_version_key(user_id), 1))
+    # Fresh timestamp after expiry or eviction never revives old cache keys.
+    return cast(
+        'int',
+        cache.get_or_set(
+            _user_statistics_version_key(user_id),
+            time.time_ns,
+            timeout=None,
+        ),
+    )
 
 
 def get_user_detailed_statistics_cache_key(
@@ -45,7 +55,8 @@ def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
     """Invalidate cached dashboard and statistics data for a user."""
     cache.set(
         _user_statistics_version_key(user_id),
-        _user_statistics_version(user_id) + 1,
+        time.time_ns(),
+        timeout=None,
     )
 
 
