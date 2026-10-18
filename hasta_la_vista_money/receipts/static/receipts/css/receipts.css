@@ -126,7 +126,7 @@
 
 .receipts-row-actions button {
   cursor: pointer;
-  font: inherit;
+  font-family: inherit;
 }
 
 /* Кнопки */
@@ -188,6 +188,12 @@
   text-decoration: none;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
   white-space: nowrap;
+}
+
+.receipts-chip > svg {
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
 }
 
 .receipts-chip:hover {
@@ -604,6 +610,7 @@
 .receipt-card-content[data-swipe-content] {
   background: var(--receipts-surface);
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.85rem;
   padding: 1.1rem 1.15rem;
@@ -689,6 +696,7 @@
   flex-wrap: wrap;
   gap: 0.45rem;
   justify-content: flex-end;
+  margin-top: auto;
   padding-top: 0.85rem;
 }
 
@@ -719,6 +727,7 @@
 
 .pending-card-content[data-swipe-content] {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.85rem;
   padding: 1.1rem 1.15rem;
@@ -846,6 +855,7 @@
   flex-wrap: wrap;
   gap: 0.45rem;
   justify-content: flex-end;
+  margin-top: auto;
   padding-top: 0.75rem;
 }
 
