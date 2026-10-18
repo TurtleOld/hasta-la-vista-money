@@ -6,6 +6,7 @@ from django.conf import settings
 from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
+    TransferMoneyLogRepository,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
@@ -124,6 +125,10 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         StatementMarkupService,
         balance_service=providers.Factory(BalanceService),
+        account_repository=providers.Singleton(AccountRepository),
+        transfer_log_repository=providers.Singleton(
+            TransferMoneyLogRepository,
+        ),
     )
 
     bank_statement_import_service: providers.Factory[

@@ -1,13 +1,24 @@
 from datetime import datetime
 from typing import Final
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F, Max, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
+from hasta_la_vista_money.finance_account.repositories import (
+    AccountRepository,
+    TransferMoneyLogRepository,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
+)
+from hasta_la_vista_money.finance_account.validators import (
+    validate_same_currency,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -39,8 +50,15 @@ class StatementMarkupConflictError(ValueError):
 class StatementMarkupService:
     """Post or skip RosDorBank statement rows after user markup."""
 
-    def __init__(self, balance_service: BalanceService) -> None:
+    def __init__(
+        self,
+        balance_service: BalanceService,
+        account_repository: AccountRepository,
+        transfer_log_repository: TransferMoneyLogRepository,
+    ) -> None:
         self._balance_service = balance_service
+        self._account_repository = account_repository
+        self._transfer_log_repository = transfer_log_repository
 
     @staticmethod
     def pending_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
@@ -72,6 +90,23 @@ class StatementMarkupService:
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
             return self._decide(row_id, user_id, category_id, skip=False)
 
+    def post_transfer(
+        self,
+        row_id: int,
+        user_id: int,
+        account_id: int | None,
+    ) -> BankStatementRow:
+        """Close the row with a transfer to or from an own account."""
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            return self._decide(
+                row_id,
+                user_id,
+                None,
+                skip=False,
+                transfer_account_id=account_id,
+                as_transfer=True,
+            )
+
     def skip(self, row_id: int, user_id: int) -> BankStatementRow:
         """Skip the row without touching the balance."""
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
@@ -85,6 +120,8 @@ class StatementMarkupService:
         category_id: int | None,
         *,
         skip: bool,
+        transfer_account_id: int | None = None,
+        as_transfer: bool = False,
     ) -> BankStatementRow:
         upload = (
             BankStatementUpload.objects.select_for_update()
@@ -102,6 +139,13 @@ class StatementMarkupService:
 
         if skip:
             row.decision = BankStatementRow.Decision.SKIPPED
+        elif as_transfer:
+            row.transfer = self._create_transfer(
+                row,
+                upload,
+                transfer_account_id,
+            )
+            row.decision = BankStatementRow.Decision.TRANSFERRED
         else:
             row.transaction = self._create_movement(
                 row,
@@ -110,7 +154,9 @@ class StatementMarkupService:
             )
             row.decision = BankStatementRow.Decision.NEW
         row.decided_at = timezone.now()
-        row.save(update_fields=['transaction', 'decision', 'decided_at'])
+        row.save(
+            update_fields=['transaction', 'transfer', 'decision', 'decided_at'],
+        )
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=user_id,
@@ -136,6 +182,7 @@ class StatementMarkupService:
             or row.transaction_date is None
         ):
             raise StatementMarkupConflictError('row')
+        transaction_date = row.transaction_date
         account = upload.account
         if account.is_archived or account.is_deposit:
             raise StatementMarkupConflictError('account')
@@ -147,13 +194,7 @@ class StatementMarkupService:
                 constants.CREDIT_CARD_INCOME_BAN,
             )
         category = self._category(row, upload.user, category_id)
-        # The statement has no time of day: use the moment of markup.
-        now = timezone.localtime()
-        moment = datetime.combine(
-            timezone.localtime(row.transaction_date).date(),
-            now.time(),
-            tzinfo=now.tzinfo,
-        )
+        moment = self._moment(transaction_date)
         created = Transaction.objects.create(
             user=upload.user,
             account=account,
@@ -178,6 +219,97 @@ class StatementMarkupService:
             check_funds=False,
         )
         return created
+
+    @staticmethod
+    def _moment(statement_date: datetime) -> datetime:
+        # The statement has no time of day: use the moment of markup.
+        now = timezone.localtime()
+        return datetime.combine(
+            timezone.localtime(statement_date).date(),
+            now.time(),
+            tzinfo=now.tzinfo,
+        )
+
+    def _create_transfer(
+        self,
+        row: BankStatementRow,
+        upload: BankStatementUpload,
+        account_id: int | None,
+    ) -> TransferMoneyLog:
+        if (
+            row.kind
+            not in {RosDorBankRowKind.OWN_C2C, RosDorBankRowKind.UNKNOWN}
+            or row.transaction_type is None
+            or row.amount is None
+            or row.transaction_date is None
+        ):
+            raise StatementMarkupConflictError('row')
+        own = upload.account
+        other = self._counterparty(row, upload, account_id)
+        if other.pk == own.pk:
+            raise StatementMarkupConflictError('account')
+        if own.is_deposit or other.is_deposit:
+            raise StatementMarkupConflictError('account')
+        validate_same_currency(own, other)
+        source, target = (
+            (own, other)
+            if row.transaction_type == TransactionType.EXPENSE
+            else (other, own)
+        )
+        # The bank is the source of truth: no funds check.
+        locked = self._balance_service.apply_account_deltas(
+            {source.pk: -row.amount, target.pk: row.amount},
+            check_funds=False,
+        )
+        return self._transfer_log_repository.create_log(
+            user=upload.user,
+            from_account=locked[source.pk],
+            to_account=locked[target.pk],
+            amount=row.amount,
+            exchange_date=self._moment(row.transaction_date),
+            notes=row.description,
+        )
+
+    def _counterparty(
+        self,
+        row: BankStatementRow,
+        upload: BankStatementUpload,
+        account_id: int | None,
+    ) -> Account:
+        """Own account of the transfer: by number, else the chosen one."""
+        number = (
+            row.counterparty_account
+            if row.kind == RosDorBankRowKind.OWN_C2C
+            else ''
+        )
+        if number:
+            found = self._account_repository.get_by_user_and_account_number(
+                upload.user,
+                number,
+            )
+            if found is not None:
+                return found
+        chosen = (
+            Account.objects.filter(
+                pk=account_id,
+                user_id=upload.user_id,
+            ).first()
+            if account_id is not None
+            else None
+        )
+        if chosen is None:
+            raise StatementMarkupConflictError('account')
+        if number:
+            if chosen.account_number:
+                raise StatementMarkupConflictError('account_number')
+            chosen.account_number = number
+            try:
+                # The unique index rejects a number another account holds.
+                with transaction.atomic():
+                    chosen.save(update_fields=['account_number'])
+            except IntegrityError as error:
+                raise StatementMarkupConflictError('account_number') from error
+        return chosen
 
     @staticmethod
     def _category(

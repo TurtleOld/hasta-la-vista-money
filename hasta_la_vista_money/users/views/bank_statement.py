@@ -25,9 +25,11 @@ from django.views import View
 from django.views.generic import DetailView
 from django.views.generic.edit import FormView
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     STATEMENT_RECONCILIATION_PAGE_SIZE,
 )
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.forms import CategoryForm
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.forms import (
@@ -64,6 +66,10 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+TRANSFER_ROW_KINDS: Final = frozenset(
+    {RosDorBankRowKind.OWN_C2C, RosDorBankRowKind.UNKNOWN},
+)
 
 ROW_KIND_LABELS: Final[dict[str, Any]] = {
     RosDorBankRowKind.CARD: _('Оплата картой'),
@@ -395,14 +401,33 @@ class BankStatementMarkupView(
             transaction_type: service.categories(user, transaction_type)
             for transaction_type in BankStatementRow.TransactionType.values
         }
+        accounts = list(
+            Account.objects.filter(
+                user=user,
+                archived_at__isnull=True,
+            )
+            .exclude(
+                pk=self.object.account_id,
+            )
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            .order_by('name_account'),
+        )
+        by_number = {a.account_number: a for a in accounts if a.account_number}
         page = Paginator(
             service.pending_rows(self.object),
             STATEMENT_RECONCILIATION_PAGE_SIZE,
         ).get_page(self.request.GET.get('page'))
         context['page_obj'] = page
+        context['accounts'] = accounts
         context['rows'] = [
             {
                 'row': row,
+                'can_transfer': row.kind in TRANSFER_ROW_KINDS,
+                'transfer_account': (
+                    by_number.get(row.counterparty_account)
+                    if row.kind == RosDorBankRowKind.OWN_C2C
+                    else None
+                ),
                 'categories': categories.get(row.transaction_type or '', []),
                 'kind_label': ROW_KIND_LABELS.get(row.kind, ''),
                 'refund_default': row.kind == RosDorBankRowKind.CANCEL
@@ -436,8 +461,16 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
         service = _markup_service(request)
         category = request.POST.get('category', '')
         try:
-            if request.POST.get('decision') == 'skip':
+            decision = request.POST.get('decision')
+            if decision == 'skip':
                 service.skip(row.pk, user.pk)
+            elif decision == 'transfer':
+                account = request.POST.get('account', '')
+                service.post_transfer(
+                    row.pk,
+                    user.pk,
+                    int(account) if account.isdigit() else None,
+                )
             else:
                 service.post(
                     row.pk,
@@ -456,6 +489,10 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
     def _message(reason: str) -> str:
         if reason == 'category':
             return str(_('Выберите категорию подходящего типа.'))
+        if reason == 'account':
+            return str(_('Выберите свой счёт для перевода.'))
+        if reason == 'account_number':
+            return str(_('Номер счёта выбранного счёта не подходит.'))
         return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
