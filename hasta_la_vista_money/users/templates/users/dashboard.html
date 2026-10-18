@@ -10,6 +10,13 @@
 {% block content %}
 <div class="dashboard-app">
     <div class="dashboard-wrap">
+        {% if markup_pending_count %}
+        <div class="alert alert-warning">
+            <a href="{% url 'users:bank_statement_markup' markup_upload_id %}">
+                {% blocktranslate count n=markup_pending_count %}{{ n }} строка ждёт разметки{% plural %}{{ n }} строк ждут разметки{% endblocktranslate %}
+            </a>
+        </div>
+        {% endif %}
         <div>
             <div class="dashboard-header">
                 <div>

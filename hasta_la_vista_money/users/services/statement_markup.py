@@ -72,6 +72,24 @@ class StatementMarkupService:
         ).order_by('transaction_date', 'pk')
 
     @staticmethod
+    def pending_summary(user_id: int) -> tuple[int, int | None]:
+        """Return rows awaiting markup in the newest upload and its id."""
+        rows = BankStatementRow.objects.filter(
+            upload__user_id=user_id,
+            upload__expires_at__gt=timezone.now(),
+            upload__retention_cleaned_at__isnull=True,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        newest = (
+            rows.order_by('-upload_id')
+            .values_list('upload_id', flat=True)
+            .first()
+        )
+        if newest is None:
+            return 0, None
+        return rows.filter(upload_id=newest).count(), newest
+
+    @staticmethod
     def categories(user: User, transaction_type: str) -> list[Category]:
         """Return the user's categories, recently used first."""
         return list(
@@ -229,9 +247,17 @@ class StatementMarkupService:
 
     def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if not self.pending_rows(upload).exists():
-            upload.status = BankStatementUpload.Status.COMPLETED
-            upload.save(update_fields=['status'])
+        if self.pending_rows(upload).exists():
+            return
+        upload.status = BankStatementUpload.Status.COMPLETED
+        fields = ['status']
+        closing = upload.statement_closing_balance
+        if closing is not None:
+            upload.account.refresh_from_db(fields=['balance'])
+            upload.account_balance_after = upload.account.balance
+            upload.balance_discrepancy = closing - upload.account.balance
+            fields += ['account_balance_after', 'balance_discrepancy']
+        upload.save(update_fields=fields)
 
     def _create_movement(
         self,
