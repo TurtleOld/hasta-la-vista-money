@@ -2,14 +2,15 @@ import hashlib
 
 from django.core.cache import cache
 
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import FamilyGroupMembership
-
-PERIOD_TYPES = ('month', 'quarter', 'year')
 
 
 def _user_statistics_version_key(user_id: int) -> str:
     return f'user_stats_version_{user_id}'
+
+
+def _user_statistics_version(user_id: int) -> int:
+    return int(cache.get(_user_statistics_version_key(user_id), 1))
 
 
 def get_user_detailed_statistics_cache_key(
@@ -17,46 +18,34 @@ def get_user_detailed_statistics_cache_key(
     suffix: str = 'default',
 ) -> str:
     """Return cache key for detailed dashboard statistics."""
-    version = cache.get(_user_statistics_version_key(user_id), 1)
+    version = _user_statistics_version(user_id)
     suffix_hash = hashlib.sha256(suffix.encode()).hexdigest()[:16]
     return f'user_stats_{user_id}_{version}_{suffix_hash}'
 
 
-def get_dashboard_summary_cache_key(user_id: int) -> str:
+def get_dashboard_summary_cache_key(user_id: int, currency: str) -> str:
     """Return cache key for dashboard summary data."""
-    return f'user_dashboard_summary_{user_id}'
+    version = _user_statistics_version(user_id)
+    return f'user_dashboard_summary_{user_id}_{version}_{currency}'
 
 
-def get_period_comparison_cache_key(user_id: int, period_type: str) -> str:
+def get_period_comparison_cache_key(
+    user_id: int,
+    period_type: str,
+    currency: str,
+) -> str:
     """Return cache key for cached period comparison data."""
-    return f'user_period_comparison_{user_id}_{period_type}'
-
-
-def get_reports_budget_charts_cache_key(user_id: int) -> str:
-    """Return cache key for cached reports budget charts."""
-    return f'user_reports_budget_charts_{user_id}'
+    version = _user_statistics_version(user_id)
+    return (
+        f'user_period_comparison_{user_id}_{version}_{period_type}_{currency}'
+    )
 
 
 def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
-    """Invalidate cached dashboard and reports data for a user."""
-    version_key = _user_statistics_version_key(user_id)
-    cache.set(version_key, int(cache.get(version_key, 1)) + 1)
-    cache.delete(get_dashboard_summary_cache_key(user_id))
-    reports_key = get_reports_budget_charts_cache_key(user_id)
-    cache.delete_many(
-        [
-            reports_key,
-            *(
-                f'{reports_key}:{period}'
-                for period in constants.REPORTS_BUDGET_CHART_PERIODS
-            ),
-        ],
-    )
-    cache.delete_many(
-        [
-            get_period_comparison_cache_key(user_id, period_type)
-            for period_type in PERIOD_TYPES
-        ],
+    """Invalidate cached dashboard and statistics data for a user."""
+    cache.set(
+        _user_statistics_version_key(user_id),
+        _user_statistics_version(user_id) + 1,
     )
 
 

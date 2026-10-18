@@ -65,6 +65,7 @@ class TransactionServiceTest(TestCase):
         self.service = TransactionService(
             account_service=container.core.account_service(),
             transaction_repository=TransactionRepository(),
+            statement_row_links=container.users.statement_row_link_service(),
         )
 
     def _create_command(
@@ -435,6 +436,7 @@ class CreditCardIncomeBanServiceTest(TestCase):
         self.service = TransactionService(
             account_service=container.core.account_service(),
             transaction_repository=TransactionRepository(),
+            statement_row_links=container.users.statement_row_link_service(),
         )
 
     def _create_command(

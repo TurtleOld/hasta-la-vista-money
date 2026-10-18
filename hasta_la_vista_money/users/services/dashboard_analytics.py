@@ -111,19 +111,25 @@ def calculate_linear_trend(
 def get_period_comparison(
     user: User,
     period_type: str,
+    currency: str,
 ) -> dict[str, Any]:
-    """Compare current and previous period.
+    """Compare current and previous period in one currency.
 
     Args:
         user: User to compare periods for.
         period_type: Period type ('month', 'quarter', 'year').
+        currency: Only accounts in this currency are counted.
 
     Returns:
         Dictionary with current and previous period data.
         Keys: 'current', 'previous', 'change_percent'. Each period
         contains: 'start', 'end', 'expenses', 'income', 'savings'.
     """
-    cache_key = get_period_comparison_cache_key(user.pk, period_type)
+    cache_key = get_period_comparison_cache_key(
+        user.pk,
+        period_type,
+        currency,
+    )
     cached_data = cache.get(cache_key)
     if cached_data is not None:
         return cached_data  # type: ignore[no-any-return]
@@ -136,7 +142,7 @@ def get_period_comparison(
 
     transaction_totals = (
         Transaction.objects.without_adjustments()
-        .filter(user=user)
+        .filter(user=user, account__currency=currency)
         .aggregate(
             current_expense=Sum(
                 'amount',
@@ -181,6 +187,7 @@ def get_period_comparison(
                 previous_end_dt.date(),
             ),
         },
+        currency,
     )
     current_interest_income, current_interest_expense = interest_totals[
         'current'
@@ -265,14 +272,17 @@ def get_drill_down_data(
     category_id: str | None,
     date_str: str | None,
     data_type: str = 'expense',
+    *,
+    currency: str,
 ) -> dict[str, Any]:
-    """Get category drill-down data.
+    """Get category drill-down data in one currency.
 
     Args:
         user: User to get data for.
         category_id: Category ID (if None, returns top categories).
         date_str: Date in YYYY-MM format (if None, current month).
         data_type: Data type ('expense' or 'income').
+        currency: Only accounts in this currency are counted.
 
     Returns:
         Dictionary with drill-down chart data. Keys: 'period', 'data',
@@ -305,6 +315,7 @@ def get_drill_down_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
@@ -347,6 +358,7 @@ def get_drill_down_data(
         Transaction.objects.without_adjustments()
         .filter(
             user=user,
+            account__currency=currency,
             type=type_value,
             date__gte=month_start_dt,
             date__lte=month_end_dt,
@@ -371,6 +383,7 @@ def get_drill_down_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user=user,
+                account__currency=currency,
                 type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,

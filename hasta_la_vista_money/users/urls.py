@@ -4,6 +4,7 @@ from django.urls import include, path
 
 from hasta_la_vista_money.users.views import (
     BankStatementPendingTransferDismissView,
+    BankStatementPendingTransferLinkView,
     BankStatementReconciliationBulkView,
     BankStatementReconciliationDecisionView,
     BankStatementReconciliationRevisionView,
@@ -121,5 +122,11 @@ urlpatterns = [
         '<int:row_id>/dismiss/',
         BankStatementPendingTransferDismissView.as_view(),
         name='bank_statement_pending_transfer_dismiss',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/pending-transfer/'
+        '<int:row_id>/link/',
+        BankStatementPendingTransferLinkView.as_view(),
+        name='bank_statement_pending_transfer_link',
     ),
 ]

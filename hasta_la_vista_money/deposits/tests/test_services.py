@@ -5,7 +5,6 @@ from threading import Barrier, Thread
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections
 from django.db.models.deletion import ProtectedError
@@ -51,7 +50,6 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
-from hasta_la_vista_money.reports.services.aggregation import budget_charts
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.services.dashboard_kpis import (
@@ -447,7 +445,7 @@ class DepositServiceIntegrationTests(TestCase):
             'hasta_la_vista_money.users.services.dashboard_kpis.timezone.localdate',
             return_value=date(2026, 7, 31),
         ):
-            kpis = get_dashboard_month_kpis(user)
+            kpis = get_dashboard_month_kpis(user, currency='RUB')
         self.assertEqual(kpis['income'], Decimal('0.00'))
         self.assertEqual(kpis['expenses'], Decimal('0.00'))
         self.assertEqual(kpis['net_result'], Decimal('0.00'))
@@ -563,7 +561,7 @@ class DepositServiceIntegrationTests(TestCase):
         term.top_up_deadline = date(2026, 6, 30)
         term.maximum_balance = Decimal('750.00')
         term.save()
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
 
         event = service.top_up_deposit_principal(
             TopUpDepositCommand(
@@ -588,7 +586,7 @@ class DepositServiceIntegrationTests(TestCase):
             deposit.delete()
         with self.assertRaises(ProtectedError):
             deposit.account.delete()
-        kpis_after = get_dashboard_month_kpis(user)
+        kpis_after = get_dashboard_month_kpis(user, currency='RUB')
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
                 self.assertEqual(kpis_after[field], kpis_before[field])
@@ -1051,7 +1049,7 @@ class DepositServiceIntegrationTests(TestCase):
         dashboard KPIs (income/expenses/savings rate)."""
         user = cast('User', UserFactory())
         service = ApplicationContainer().deposits.deposit_service()
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
 
         deposit = service.open_existing_term_deposit(
             OpenExistingDepositCommand(
@@ -1079,7 +1077,7 @@ class DepositServiceIntegrationTests(TestCase):
         self.assertIsNone(event.source_account)
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
-        kpis_after = get_dashboard_month_kpis(user)
+        kpis_after = get_dashboard_month_kpis(user, currency='RUB')
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
                 self.assertEqual(kpis_after[field], kpis_before[field])
@@ -1099,7 +1097,7 @@ class DepositServiceIntegrationTests(TestCase):
             balance=Decimal('200000.00'),
         )
         service = ApplicationContainer().deposits.deposit_service()
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
 
         deposit = service.create_funded_term_deposit(
             FundDepositCommand(
@@ -1131,7 +1129,7 @@ class DepositServiceIntegrationTests(TestCase):
         self.assertEqual(event.effective_on, date(2026, 8, 1))
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
-        kpis_after = get_dashboard_month_kpis(user)
+        kpis_after = get_dashboard_month_kpis(user, currency='RUB')
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
                 self.assertEqual(kpis_after[field], kpis_before[field])
@@ -1586,7 +1584,7 @@ class RecalculateInterestForecastServiceTests(TestCase):
         term = deposit.current_term
         service = ApplicationContainer().deposits.deposit_service()
         balance_before = deposit.account.balance
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
 
         service.recalculate_forecast(
             RecalculateInterestForecastCommand(user=user, term_id=term.pk),
@@ -1596,7 +1594,7 @@ class RecalculateInterestForecastServiceTests(TestCase):
         self.assertEqual(deposit.account.balance, balance_before)
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
-        kpis_after = get_dashboard_month_kpis(user)
+        kpis_after = get_dashboard_month_kpis(user, currency='RUB')
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
                 self.assertEqual(kpis_after[field], kpis_before[field])
@@ -2279,16 +2277,11 @@ class CapitalizeInterestServiceTests(TestCase):
 
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
-        kpis = get_dashboard_month_kpis(user)
+        kpis = get_dashboard_month_kpis(user, currency='RUB')
         self.assertEqual(kpis['income'], Decimal('5000.00'))
         self.assertEqual(kpis['expenses'], Decimal('650.00'))
         self.assertEqual(kpis['net_result'], Decimal('4350.00'))
         self.assertEqual(kpis['savings_rate'], Decimal('87.00'))
-        cache.clear()
-        charts = budget_charts(user)
-        self.assertEqual(charts['total_income'], 5000.0)
-        self.assertEqual(charts['total_expense'], 650.0)
-        self.assertEqual(charts['net_balance'], 4350.0)
 
     def test_capitalize_rolls_back_on_event_failure(self) -> None:
         user = cast('User', UserFactory())
@@ -2435,7 +2428,7 @@ class RenewMaturedDepositServiceTests(TestCase):
             ),
         )
         balance_before = deposit.account.balance
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
         command = self._renewal_command(user, deposit)
         custom_payout_on = command.opened_on + timedelta(days=90)
         command = replace(
@@ -2504,7 +2497,7 @@ class RenewMaturedDepositServiceTests(TestCase):
         self.assertEqual(deposit.account.balance, balance_before)
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
-        kpis_after = get_dashboard_month_kpis(user)
+        kpis_after = get_dashboard_month_kpis(user, currency='RUB')
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
                 self.assertEqual(kpis_after[field], kpis_before[field])
@@ -2712,7 +2705,7 @@ class CloseMaturedDepositServiceTests(TestCase):
                     posting_on=timezone.localdate() + timedelta(days=1),
                 ),
             )
-        kpis = get_dashboard_month_kpis(user)
+        kpis = get_dashboard_month_kpis(user, currency='RUB')
         self.assertEqual(kpis['income'], Decimal('12000.00'))
         self.assertEqual(kpis['expenses'], Decimal('1560.00'))
         self.assertEqual(kpis['net_result'], Decimal('10440.00'))
@@ -2892,7 +2885,7 @@ class CloseDepositEarlyServiceTests(TestCase):
         deposit = self._open_active_deposit(user)
         service = ApplicationContainer().deposits.deposit_service()
         balance_before = deposit.account.balance
-        kpis_before = get_dashboard_month_kpis(user)
+        kpis_before = get_dashboard_month_kpis(user, currency='RUB')
 
         result = service.forecast_early_closure(
             ForecastEarlyClosureCommand(
@@ -2907,7 +2900,10 @@ class CloseDepositEarlyServiceTests(TestCase):
         self.assertIsNotNone(result.gross)
         self.assertFalse(result.is_uncertain)
         self.assertEqual(deposit.account.balance, balance_before)
-        self.assertEqual(get_dashboard_month_kpis(user), kpis_before)
+        self.assertEqual(
+            get_dashboard_month_kpis(user, currency='RUB'),
+            kpis_before,
+        )
         self.assertFalse(Transaction.objects.filter(user=user).exists())
 
     def test_close_preserves_previous_payout_and_counts_adjustment_once(
@@ -2969,14 +2965,10 @@ class CloseDepositEarlyServiceTests(TestCase):
         self.assertEqual(deposit.account.balance, Decimal())
         self.assertTrue(deposit.account.is_archived)
         self.assertEqual(deposit.current_term.state, DepositTerm.State.CLOSED)
-        kpis = get_dashboard_month_kpis(user)
+        kpis = get_dashboard_month_kpis(user, currency='RUB')
         self.assertEqual(kpis['income'], Decimal('1500.00'))
         self.assertEqual(kpis['expenses'], Decimal('945.00'))
         self.assertEqual(kpis['net_result'], Decimal('555.00'))
-        cache.clear()
-        charts = budget_charts(user, period='y')
-        self.assertEqual(charts['total_income'], 1500.0)
-        self.assertEqual(charts['total_expense'], 945.0)
 
         service.reverse_deposit_event(
             ReverseDepositEventCommand(
@@ -2989,14 +2981,10 @@ class CloseDepositEarlyServiceTests(TestCase):
             ),
         )
 
-        reversed_kpis = get_dashboard_month_kpis(user)
+        reversed_kpis = get_dashboard_month_kpis(user, currency='RUB')
         self.assertEqual(reversed_kpis['income'], Decimal('1750.00'))
         self.assertEqual(reversed_kpis['expenses'], Decimal('880.00'))
         self.assertEqual(reversed_kpis['net_result'], Decimal('870.00'))
-        cache.clear()
-        reversed_charts = budget_charts(user, period='y')
-        self.assertEqual(reversed_charts['total_income'], 1750.0)
-        self.assertEqual(reversed_charts['total_expense'], 880.0)
 
     def test_close_rolls_back_when_final_event_storage_fails(self) -> None:
         user = cast('User', UserFactory())

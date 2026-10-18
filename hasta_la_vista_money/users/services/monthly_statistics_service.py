@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
@@ -13,9 +13,6 @@ from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
-
-if TYPE_CHECKING:
-    from config.containers import ApplicationContainer
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Budget, Planning
@@ -232,29 +229,6 @@ class StatisticsFilters:
             operations_search=query.get('operations_search', '').strip(),
             transfers_search=query.get('transfers_search', '').strip(),
             receipts_search=query.get('receipts_search', '').strip(),
-        )
-
-    @property
-    def is_default(self) -> bool:
-        return not any(
-            (
-                self.period != '6',
-                self.date_from,
-                self.date_to,
-                self.account_ids,
-                self.currency,
-                self.category_keys,
-                self.member != 'my',
-                self.operations_page != 1,
-                self.transfers_page != 1,
-                self.receipts_page != 1,
-                self.operations_sort != '-date',
-                self.transfers_sort != '-exchange_date',
-                self.receipts_sort != '-receipt_date',
-                bool(self.operations_search),
-                bool(self.transfers_search),
-                bool(self.receipts_search),
-            ),
         )
 
     def _query_params(
@@ -499,14 +473,16 @@ def _planning_amounts_by_month(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    currency: str,
 ) -> tuple[dict[date, float], dict[date, float]]:
     """Aggregate planned income and expense amounts by month."""
+    plans = Planning.objects.filter(
+        user__in=list(users),
+        date__range=(period_start, period_end),
+        currency=currency,
+    )
     qs = (
-        Planning.objects.filter(
-            user__in=list(users),
-            date__range=(period_start, period_end),
-        )
-        .select_related(None)
+        plans.select_related(None)
         .annotate(month=TruncMonth('date'))
         .values('month', 'planning_type')
         .annotate(total=Sum('amount'))
@@ -608,6 +584,7 @@ def _six_months_data(
                 users,
                 period_start,
                 period_end,
+                stats_filter.currency,
             )
         )
     else:
@@ -693,12 +670,15 @@ def _budgets_data(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> list[BudgetDataDict]:
     """Build budget vs actual data for all budgets within the period."""
     users_list = list(users)
     budgets = (
         Budget.objects.filter(
             user__in=users_list,
+            currency=currency,
             period__gte=period_start.replace(day=1),
             period__lte=period_end.replace(day=1),
         )
@@ -718,6 +698,7 @@ def _budgets_data(
             Transaction.objects.without_adjustments()
             .filter(
                 user__in=users_list,
+                account__currency=currency,
                 type=TransactionType.EXPENSE,
                 date__gte=_date_to_aware(period_start.replace(day=1)),
                 date__lte=_date_to_aware(
@@ -781,6 +762,8 @@ def _plan_fact_summary(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> PlanFactSummaryDict:
     """Aggregate Planning vs actual totals for the period, by type."""
     users_list = list(users)
@@ -789,6 +772,7 @@ def _plan_fact_summary(
     plan_totals = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             date__range=(period_start, period_end),
         )
         .values('planning_type')
@@ -802,6 +786,7 @@ def _plan_fact_summary(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             date__gte=start_dt,
             date__lte=end_dt,
@@ -829,6 +814,8 @@ def _plan_fact_top_deviations(
     period_start: date,
     period_end: date,
     limit: int = 5,
+    *,
+    currency: str,
 ) -> list[PlanFactDeviationDict]:
     """Top categories by absolute |fact - plan| deviation in the period."""
     users_list = list(users)
@@ -837,6 +824,7 @@ def _plan_fact_top_deviations(
     plan_rows = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             date__range=(period_start, period_end),
         )
         .values('category_id', 'category__name', 'planning_type')
@@ -854,6 +842,7 @@ def _plan_fact_top_deviations(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
             category_id__in=[key[0] for key in plan_by_category],
             date__gte=start_dt,
@@ -894,6 +883,8 @@ def _plan_fact_engagement(
     users: Iterable[User],
     period_start: date,
     period_end: date,
+    *,
+    currency: str,
 ) -> PlanFactEngagementDict:
     """Motivating feedback: how many expense categories stayed within plan."""
     users_list = list(users)
@@ -902,6 +893,7 @@ def _plan_fact_engagement(
     plan_rows = (
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             planning_type=TransactionType.EXPENSE,
             date__range=(period_start, period_end),
         )
@@ -916,6 +908,7 @@ def _plan_fact_engagement(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             category_id__in=plan_by_category,
             date__gte=start_dt,
@@ -950,6 +943,8 @@ def _suggested_plan_categories(
     period_start: date,
     period_end: date,
     limit: int = 5,
+    *,
+    currency: str,
 ) -> list[SuggestedPlanCategoryDict]:
     """Top expense categories worth planning, from a fixed 3-month window.
 
@@ -966,6 +961,7 @@ def _suggested_plan_categories(
     planned_category_ids = set(
         Planning.objects.filter(
             user__in=users_list,
+            currency=currency,
             planning_type=TransactionType.EXPENSE,
             date__range=(period_start, period_end),
         ).values_list('category_id', flat=True),
@@ -975,6 +971,7 @@ def _suggested_plan_categories(
         Transaction.objects.without_adjustments()
         .filter(
             user__in=users_list,
+            account__currency=currency,
             type=TransactionType.EXPENSE,
             category_id__isnull=False,
             date__gte=window_start_dt,
@@ -1005,12 +1002,10 @@ class DashboardSummaryStatisticsDict(TypedDict):
 
 def get_dashboard_summary_statistics(
     user: User,
-    container: 'ApplicationContainer',
+    currency: str,
 ) -> DashboardSummaryStatisticsDict:
-    """Return the dashboard widget payload without heavyweight sections."""
-    del container
-
-    cache_key = get_dashboard_summary_cache_key(user.pk)
+    """Return the dashboard widget payload in one currency."""
+    cache_key = get_dashboard_summary_cache_key(user.pk, currency)
     cached_stats = cache.get(cache_key)
 
     if cached_stats is not None:
@@ -1018,7 +1013,7 @@ def get_dashboard_summary_statistics(
 
     now = timezone.now()
     today = now.date()
-    stats_filter = StatisticsFilters()
+    stats_filter = StatisticsFilters(currency=currency)
     start, end = stats_filter.date_range(today)
     users = [user]
 

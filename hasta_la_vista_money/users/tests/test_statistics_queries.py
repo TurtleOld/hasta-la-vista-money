@@ -93,12 +93,17 @@ class BudgetsDataQueriesTest(TestCase):
     def _count_queries(self, months: int) -> int:
         last = self._seed(months)
         with CaptureQueriesContext(connection) as ctx:
-            _budgets_data([self.user], date(2024, 1, 1), last)
+            _budgets_data([self.user], date(2024, 1, 1), last, currency='RUB')
         return len(ctx)
 
     def test_actual_expenses_per_budget(self) -> None:
         last = self._seed(2)
-        rows = _budgets_data([self.user], date(2024, 1, 1), last)
+        rows = _budgets_data(
+            [self.user],
+            date(2024, 1, 1),
+            last,
+            currency='RUB',
+        )
         self.assertEqual(len(rows), 6)
         by_key = {(r['period'], r['category_name']): r for r in rows}
         january = date(2024, 1, 1).strftime('%B %Y')

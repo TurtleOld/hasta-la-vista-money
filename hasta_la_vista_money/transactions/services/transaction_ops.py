@@ -29,14 +29,13 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_row_links import (
-    has_linked_row,
-    release_linked_rows,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
         TransactionRepository,
+    )
+    from hasta_la_vista_money.users.protocols.services import (
+        StatementRowLinkServiceProtocol,
     )
 
 
@@ -47,9 +46,11 @@ class TransactionService:
         self,
         account_service: AccountServiceProtocol,
         transaction_repository: 'TransactionRepository',
+        statement_row_links: 'StatementRowLinkServiceProtocol',
     ) -> None:
         self.account_service = account_service
         self.transaction_repository = transaction_repository
+        self.statement_row_links = statement_row_links
 
     @staticmethod
     def _validate_account_owner(user: User, account: Account) -> None:
@@ -204,7 +205,7 @@ class TransactionService:
             old_amount = transaction_obj.amount
             old_type = transaction_obj.type
 
-            if has_linked_row(transaction_obj) and (
+            if self.statement_row_links.has_linked_row(transaction_obj) and (
                 command.account.pk != old_account.pk
                 or command.amount != old_amount
                 or command.type_value != old_type
@@ -262,7 +263,7 @@ class TransactionService:
                 transaction_obj.amount,
                 transaction_obj.type,
             )
-            release_linked_rows(transaction_obj)
+            self.statement_row_links.release_linked_rows(transaction_obj)
             transaction_obj.delete()
 
     def copy_transaction(

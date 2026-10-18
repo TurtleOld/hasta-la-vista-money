@@ -44,6 +44,7 @@
                     <a class="dashboard-scope-link{% if selected_group_id == 'family' %} dashboard-scope-link-active{% endif %}" href="?group_id=family">{% translate 'Семья' %}</a>
                     <a class="dashboard-scope-link{% if selected_group_id == 'my' %} dashboard-scope-link-active{% endif %}" href="?group_id=my">{% translate 'Мои' %}</a>
                 </div>
+                {% include 'includes/analytics_currency_switcher.html' %}
                 <label for="period-select" class="dashboard-filter-label">
                     {% translate 'Период:' %}
                 </label>
@@ -63,7 +64,7 @@
                     <div>
                         <p class="dashboard-kpi-label">{{ card.title }}</p>
                         <p class="dashboard-kpi-value">
-                            {{ card.value|floatformat:2 }} ₽
+                            {{ card.value|floatformat:2 }} {{ analytics_currency.currency }}
                         </p>
                     </div>
                     <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg {% if card.tone == 'green' %}bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300{% elif card.tone == 'red' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300{% elif card.tone == 'amber' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300{% endif %}">

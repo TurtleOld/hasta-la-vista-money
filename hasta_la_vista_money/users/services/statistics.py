@@ -79,8 +79,12 @@ class UserStatisticsService:
         self.statistics_repository = statistics_repository
         self.cache_timeout = 300
 
-    def get_user_statistics(self, user: User) -> UserStatistics:
-        """Get complete user statistics.
+    def get_user_statistics(
+        self,
+        user: User,
+        currency: str,
+    ) -> UserStatistics:
+        """Get complete user statistics in one currency.
 
         Retrieves user statistics including account balances, expenses and
         income for current and last month, recent transactions, and top
@@ -88,6 +92,7 @@ class UserStatisticsService:
 
         Args:
             user: User to get statistics for.
+            currency: Only accounts and movements in this currency count.
 
         Returns:
             UserStatistics: Dictionary with user statistics.
@@ -97,7 +102,7 @@ class UserStatisticsService:
             DatabaseError: On database errors.
         """
         try:
-            cache_key = self._get_cache_key(user)
+            cache_key = self._get_cache_key(user, currency)
             cached_statistics = cache.get(cache_key)
 
             if cached_statistics is not None:
@@ -108,7 +113,7 @@ class UserStatisticsService:
                 )
                 return cast('UserStatistics', cached_statistics)
 
-            statistics = self._calculate_statistics(user)
+            statistics = self._calculate_statistics(user, currency)
             cache.set(cache_key, statistics, timeout=self.cache_timeout)
 
             logger.debug(
@@ -127,7 +132,11 @@ class UserStatisticsService:
 
         return statistics
 
-    def _calculate_statistics(self, user: User) -> UserStatistics:
+    def _calculate_statistics(
+        self,
+        user: User,
+        currency: str,
+    ) -> UserStatistics:
         """Calculate user statistics.
 
         Args:
@@ -138,15 +147,20 @@ class UserStatisticsService:
         """
         period_dates = self._calculate_period_dates()
 
-        accounts_stats = self._get_accounts_statistics(user)
+        accounts_stats = self.statistics_repository.get_accounts_aggregate(
+            user,
+            currency,
+        )
         expenses_stats = self._get_expenses_statistics(
             user,
+            currency,
             period_dates['month_start'],
             period_dates['last_month_start'],
             period_dates['last_month_end'],
         )
         income_stats = self._get_income_statistics(
             user,
+            currency,
             period_dates['month_start'],
             period_dates['last_month_start'],
             period_dates['last_month_end'],
@@ -154,6 +168,7 @@ class UserStatisticsService:
         recent_transactions = self._get_recent_transactions(user)
         top_categories = self._get_top_categories(
             user,
+            currency,
             period_dates['month_start'],
         )
 
@@ -212,23 +227,10 @@ class UserStatisticsService:
             'last_month_end': last_month_end,
         }
 
-    def _get_accounts_statistics(
-        self,
-        user: User,
-    ) -> dict[str, Decimal | int]:
-        """Get account statistics for user.
-
-        Args:
-            user: User to get statistics for.
-
-        Returns:
-            Dictionary with 'total_balance' and 'accounts_count' keys.
-        """
-        return self.statistics_repository.get_accounts_aggregate(user)
-
     def _get_expenses_statistics(
         self,
         user: User,
+        currency: str,
         month_start: datetime,
         last_month_start: datetime,
         last_month_end: datetime,
@@ -247,12 +249,14 @@ class UserStatisticsService:
         current_expenses = (
             self.statistics_repository.get_expenses_sum_by_period(
                 user,
+                currency,
                 month_start,
             )
         )
         last_month_expenses = (
             self.statistics_repository.get_expenses_sum_by_period(
                 user,
+                currency,
                 last_month_start,
                 last_month_end,
             )
@@ -266,6 +270,7 @@ class UserStatisticsService:
     def _get_income_statistics(
         self,
         user: User,
+        currency: str,
         month_start: datetime,
         last_month_start: datetime,
         last_month_end: datetime,
@@ -283,10 +288,12 @@ class UserStatisticsService:
         """
         current_income = self.statistics_repository.get_income_sum_by_period(
             user,
+            currency,
             month_start,
         )
         last_month_income = self.statistics_repository.get_income_sum_by_period(
             user,
+            currency,
             last_month_start,
             last_month_end,
         )
@@ -325,6 +332,7 @@ class UserStatisticsService:
     def _get_top_categories(
         self,
         user: User,
+        currency: str,
         month_start: datetime,
     ) -> list[dict[str, str | Decimal]]:
         """Get top expense categories for current month.
@@ -339,31 +347,21 @@ class UserStatisticsService:
         return list(
             self.statistics_repository.get_top_expense_categories(
                 user,
+                currency,
                 month_start,
                 limit=constants.RECENT_ITEMS_LIMIT,
             ),
         )
 
-    def _get_cache_key(self, user: User) -> str:
-        """Get cache key for user statistics.
-
-        Args:
-            user: User to generate key for.
-
-        Returns:
-            Cache key in format 'user_statistics_{user_id}_{month}'.
-        """
+    def _get_cache_key(self, user: User, currency: str) -> str:
+        """Cache key 'user_statistics_{user_id}_{month}_{currency}'."""
         today = timezone.now().date()
         current_month = today.strftime('%Y-%m')
-        return f'user_statistics_{user.id}_{current_month}'
+        return f'user_statistics_{user.id}_{current_month}_{currency}'
 
-    def invalidate_cache(self, user: User) -> None:
-        """Invalidate user statistics cache.
-
-        Args:
-            user: User to invalidate cache for.
-        """
-        cache_key = self._get_cache_key(user)
+    def invalidate_cache(self, user: User, currency: str) -> None:
+        """Invalidate user statistics cache for one currency."""
+        cache_key = self._get_cache_key(user, currency)
         cache.delete(cache_key)
         logger.debug(
             'Statistics cache invalidated',
@@ -372,7 +370,7 @@ class UserStatisticsService:
         )
 
 
-def get_user_statistics(user: User) -> UserStatistics:
+def get_user_statistics(user: User, currency: str) -> UserStatistics:
     """Get user statistics (legacy function).
 
     Function for backward compatibility. Creates service and repository
@@ -380,6 +378,7 @@ def get_user_statistics(user: User) -> UserStatistics:
 
     Args:
         user: User to get statistics for.
+        currency: Only accounts and movements in this currency count.
 
     Returns:
         UserStatistics: Dictionary with user statistics.
@@ -390,4 +389,4 @@ def get_user_statistics(user: User) -> UserStatistics:
     """
     repository = StatisticsRepository()
     service = UserStatisticsService(statistics_repository=repository)
-    return service.get_user_statistics(user)
+    return service.get_user_statistics(user, currency)

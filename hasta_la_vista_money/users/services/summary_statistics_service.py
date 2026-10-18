@@ -290,7 +290,6 @@ class UserDetailedStatisticsDict(TypedDict):
     statistics_filter: StatisticsFilters
     statistics_period_choices: list[StatisticsChoiceDict]
     statistics_account_choices: QuerySet[Account]
-    statistics_currency_choices: list[str]
     statistics_category_choices: list[StatisticsChoiceDict]
     statistics_member_choices: list[StatisticsChoiceDict]
     statistics_members: list[User]
@@ -1485,23 +1484,37 @@ def _build_statistics_aggregates(
         today,
         stats_filter,
     )
-    budgets_data = _budgets_data(users, period_start, period_end)
-    plan_fact_summary = _plan_fact_summary(users, period_start, period_end)
+    currency = stats_filter.currency
+    budgets_data = _budgets_data(
+        users,
+        period_start,
+        period_end,
+        currency=currency,
+    )
+    plan_fact_summary = _plan_fact_summary(
+        users,
+        period_start,
+        period_end,
+        currency=currency,
+    )
     plan_fact_top_deviations = _plan_fact_top_deviations(
         users,
         period_start,
         period_end,
+        currency=currency,
     )
     plan_fact_engagement = _plan_fact_engagement(
         users,
         period_start,
         period_end,
+        currency=currency,
     )
     suggested_plan_categories = _suggested_plan_categories(
         users,
         today,
         period_start,
         period_end,
+        currency=currency,
     )
     top_expense_categories = _top_categories_with_comparison(
         TransactionType.EXPENSE,
@@ -1606,6 +1619,7 @@ def _build_statistics_aggregates(
         users=users,
         accounts=accounts,
         today=today,
+        currency=currency,
     )
     chart_combined = _build_chart(
         users,
@@ -1628,10 +1642,6 @@ def _build_statistics_aggregates(
         credit_cards_data,
         today,
     )
-    currency_choices = sorted(
-        set(account_choices.values_list('currency', flat=True)),
-    )
-
     return {
         'months_data': months_data,
         'summary_cards': _summary_cards(months_data),
@@ -1659,7 +1669,6 @@ def _build_statistics_aggregates(
         ],
         'credit_cards_summary': credit_cards_summary,
         'statistics_period_choices': _period_choices(),
-        'statistics_currency_choices': currency_choices,
         'statistics_category_choices': _category_choices(users),
         'statistics_alerts': statistics_alerts,
         'payment_calendar': payment_calendar,
@@ -1764,7 +1773,9 @@ def _with_statistics_tables(
             'accounts': accounts,
             'user': user,
             'statistics_filter': stats_filter,
-            'statistics_account_choices': account_choices,
+            'statistics_account_choices': account_choices.filter(
+                currency=stats_filter.currency,
+            ),
             'statistics_member_choices': _member_choices(user, request),
             'statistics_members': users,
         },

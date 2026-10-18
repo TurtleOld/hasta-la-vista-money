@@ -57,6 +57,9 @@ from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     InterestPayoutDestination,
 )
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     BalanceAdjustmentForm,
@@ -1778,21 +1781,22 @@ class AccountView(
             group_id,
         )
 
-        # Get balance trend period from query parameters
+        users_in_group = readable_users(current_user, group_id) or [
+            current_user,
+        ]
+        analytics_currency = get_analytics_currency(request, users_in_group)
         balance_trend_period = request.GET.get('balance_trend_period', '30d')
 
         page_context = page_context_service.build_account_list_context(
             user,
             accounts,
             group_id=group_id,
+            currency=analytics_currency.currency,
             balance_trend_period=balance_trend_period,
         )
 
         context.update(page_context)
-
-        users_in_group = readable_users(current_user, group_id) or [
-            current_user,
-        ]
+        context['analytics_currency'] = analytics_currency
         context['last_operations'] = _recent_transactions(
             current_user,
             users_in_group,
@@ -1819,12 +1823,14 @@ class AccountView(
         reconciliation_service = (
             request.container.users.bank_statement_reconciliation_service()
         )
-        reconciliation_service.settle_transfers_for_user(current_user)
+        link_service = request.container.users.statement_row_link_service()
+        pending_rows = list(
+            reconciliation_service.pending_transfers_for_user(current_user),
+        )
+        candidates = link_service.repayment_candidates(pending_rows)
         now = timezone.now()
         grouped_transfers: dict[int, dict[str, Any]] = {}
-        for row in reconciliation_service.pending_transfers_for_user(
-            current_user,
-        ):
+        for row in pending_rows:
             account = row.upload.account
             group = grouped_transfers.setdefault(
                 account.pk,
@@ -1834,6 +1840,7 @@ class AccountView(
                 {
                     'row': row,
                     'days_left': max((row.upload.expires_at - now).days, 0),
+                    'candidates': candidates[row.pk],
                 },
             )
         context['pending_card_transfers'] = list(grouped_transfers.values())
@@ -2132,6 +2139,7 @@ class TransferMoneyAccountView(
             'to_account',
         )
         self._apply_amount_initial(initial, request)
+        initial['statement_row'] = request.GET.get('statement_row')
         self._apply_exchange_date_initial(initial, request)
         return initial
 
@@ -2205,24 +2213,12 @@ class TransferMoneyAccountView(
                 user=cleaned_data['from_account'].user,
                 exchange_date=cleaned_data.get('exchange_date'),
                 notes=cleaned_data.get('notes'),
+                statement_row_id=cleaned_data.get('statement_row'),
             )
-            try:
-                users_container = request.container.users
-                reconciliation_service = (
-                    users_container.bank_statement_reconciliation_service()
-                )
-                reconciliation_service.settle_pending_transfers(
-                    cleaned_data['to_account'],
-                )
-            except Exception:
-                logger.exception(
-                    'Ошибка при закрытии непроведённых погашений',
-                    user_id=getattr(request.user, 'id', None),
-                )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:
-            messages.error(request, str(e))
+            form.add_error(None, e)
             return self.form_invalid(form)  # type: ignore[return-value]
         except Exception:
             logger.exception(

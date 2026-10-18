@@ -14,16 +14,13 @@ from typing import Any
 from django.test import TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
-    TransferMoneyLogRepository,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
-)
-from hasta_la_vista_money.finance_account.services.transfer_service import (
-    TransferService,
 )
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.users.models import User
@@ -76,8 +73,8 @@ class BalanceChainContinuityTests(TestCase):
         )
         self.balance_service = BalanceService()
         self.account_repository = AccountRepository()
-        self.transfer_service = TransferService(
-            transfer_money_log_repository=TransferMoneyLogRepository(),
+        self.transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
         )
 
     def test_chain_survives_a_realistic_sequence_of_actions(self) -> None:

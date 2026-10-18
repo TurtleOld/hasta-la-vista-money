@@ -27,17 +27,23 @@ from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
+from hasta_la_vista_money.budget.serializers import BudgetCurrencySerializer
 from hasta_la_vista_money.budget.services.budget import get_categories
 from hasta_la_vista_money.budget.views import _resolve_budget_scope
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
 )
+from hasta_la_vista_money.finance_account.analytics_currency import (
+    get_analytics_currency,
+)
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
+
     from hasta_la_vista_money.core.types import RequestWithContainer
 
 
@@ -50,6 +56,20 @@ def _budget_range_from_request(request: Request) -> str:
     if range_value is None:
         range_value = request.data.get('range')
     return str(range_value or '6')
+
+
+def _requested_currency(request: Request, users: list[User]) -> str:
+    """Posted currency, else the analytics one; a save never remembers it."""
+    serializer = BudgetCurrencySerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    return str(
+        serializer.validated_data.get('currency')
+        or get_analytics_currency(
+            cast('HttpRequest', request),
+            users,
+            remember=False,
+        ).currency,
+    )
 
 
 def _render_budget_matrix(request: Request, table_type: str) -> Any:
@@ -68,6 +88,10 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
     )
     months = sorted({month.replace(day=1) for month in dates})
     budget_service = request_with_container.container.budget.budget_service()
+    analytics_currency = get_analytics_currency(
+        cast('HttpRequest', request),
+        scope_users,
+    )
 
     if table_type == TransactionType.EXPENSE:
         categories = list(
@@ -77,6 +101,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             user=user,
             months=months,
             expense_categories=categories,
+            currency=analytics_currency.currency,
             users=scope_users,
         )
         context = build_budget_matrix_context(
@@ -95,6 +120,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             user=user,
             months=months,
             income_categories=categories,
+            currency=analytics_currency.currency,
             users=scope_users,
         )
         context = build_budget_matrix_context(
@@ -110,6 +136,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
         {
             'budget_scope': budget_scope,
             'budget_scope_choices': budget_scope_choices,
+            'analytics_currency': analytics_currency,
         },
     )
     return render(request, 'budget/partials/_budget_matrix.html', context)
@@ -134,15 +161,21 @@ def _render_budget_limits(request: Request) -> Any:
         get_categories(user, TransactionType.EXPENSE, users=scope_users),
     )
     budget_service = request_with_container.container.budget.budget_service()
+    analytics_currency = get_analytics_currency(
+        cast('HttpRequest', request),
+        scope_users,
+    )
     context = {
         'budget_limit_overview': budget_service.aggregate_budget_limit_overview(
             user=user,
             months=months,
             expense_categories=expense_categories,
+            currency=analytics_currency.currency,
             users=scope_users,
         ),
         'budget_scope': budget_scope,
         'budget_scope_choices': budget_scope_choices,
+        'analytics_currency': analytics_currency,
     }
     return render(request, 'budget/partials/_budget_limits.html', context)
 
@@ -198,6 +231,12 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         """
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
+        _scope, scope_users, _choices = _resolve_budget_scope(user, request)
+        currency = get_analytics_currency(
+            cast('HttpRequest', request),
+            scope_users,
+            remember=False,
+        ).currency
 
         last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
@@ -208,8 +247,13 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             queryset_last_date = timezone.now().replace(day=1)
 
         # Generate dates for both income and expense types
-        generate_date_list(queryset_last_date, queryset_user, 'expense')
-        generate_date_list(queryset_last_date, queryset_user, 'income')
+        for type_ in ('expense', 'income'):
+            generate_date_list(
+                queryset_last_date,
+                queryset_user,
+                type_,
+                currency=currency,
+            )
 
         redirect_url = str(reverse_lazy('budget:list'))
 
@@ -408,6 +452,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             category=category,
             date=month,
             planning_type=type_,
+            currency=_requested_currency(request, scope_users),
             defaults={'amount': amount},
         )
 
@@ -536,6 +581,7 @@ class SaveBudgetLimitAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             user=budget_user,
             period=month,
             category=category,
+            currency=_requested_currency(request, scope_users),
             defaults={
                 'amount_limit': amount_limit,
                 'alert_threshold': alert_threshold,

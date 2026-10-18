@@ -13,6 +13,9 @@ from hasta_la_vista_money.finance_account.bank_constants import (
 from hasta_la_vista_money.finance_account.services.account_service import (
     AccountService,
 )
+from hasta_la_vista_money.finance_account.services.analytics_currency_service import (  # noqa: E501
+    AnalyticsCurrencyService,
+)
 from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
     BalanceHistoryService,
 )
@@ -39,7 +42,10 @@ from hasta_la_vista_money.finance_account.services.credit_debt import (
     compute_total_credit_debt,
 )
 from hasta_la_vista_money.finance_account.services.protocols import (
+    AnalyticsCurrencyServiceProtocol,
+    BalanceHistoryServiceProtocol,
     BalanceServiceProtocol,
+    BalanceTrendServiceProtocol,
     BankCalculatorProtocol,
     CreditCalculationServiceProtocol,
     FinancialMovementSourceProtocol,
@@ -49,6 +55,7 @@ from hasta_la_vista_money.finance_account.services.transfer_service import (
 )
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
+    BalanceTrendData,
     FinancialMovement,
     GracePeriodInfoDict,
     PaymentScheduleItemDict,
@@ -62,11 +69,16 @@ __all__ = [
     'BANK_SBERBANK',
     'SUPPORTED_BANKS',
     'AccountService',
+    'AnalyticsCurrencyService',
+    'AnalyticsCurrencyServiceProtocol',
     'BalanceHistoryService',
+    'BalanceHistoryServiceProtocol',
     'BalanceReconcileCommand',
     'BalanceService',
     'BalanceServiceProtocol',
+    'BalanceTrendData',
     'BalanceTrendService',
+    'BalanceTrendServiceProtocol',
     'BankCalculatorProtocol',
     'BankService',
     'CreditCalculationService',

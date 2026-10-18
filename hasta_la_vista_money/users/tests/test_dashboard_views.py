@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
 from django.db import connection
 from django.test import RequestFactory, TestCase
@@ -189,6 +190,7 @@ class DashboardDataViewTest(TestCase):
         mock_stats.side_effect = ValueError('boom')
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
+        request.session = SessionStore()
         setup_container_for_request(request)
         response = DashboardDataView().get(request)
         self.assertEqual(response.status_code, 500)
@@ -217,6 +219,7 @@ class DashboardDataViewTest(TestCase):
         }
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
+        request.session = SessionStore()
         setup_container_for_request(request)
 
         with patch(
@@ -374,6 +377,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
             category_id='5',
             date_str='2025-01-01',
             data_type='income',
+            currency='RUB',
         )
 
     def test_dashboard_drilldown_requires_authentication(self) -> None:
@@ -400,6 +404,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
         mock_comparison.assert_called_once_with(
             user=self.user,
             period_type='quarter',
+            currency='RUB',
         )
 
     def test_dashboard_comparison_requires_authentication(self) -> None:
