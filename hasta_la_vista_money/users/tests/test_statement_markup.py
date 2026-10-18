@@ -645,6 +645,13 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
+    def test_category_of_other_direction_is_rejected(self) -> None:
+        row = self._row(1)
+        category = self._category('Зарплата', 'income')
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.post_many([row.pk], self.user.pk, category.pk)
+
     def test_empty_selection_is_rejected(self) -> None:
         with self.assertRaises(StatementMarkupConflictError):
             self.service.post_many([], self.user.pk, None)

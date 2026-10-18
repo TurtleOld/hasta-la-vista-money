@@ -445,6 +445,20 @@ class BankStatementMarkupView(
         return context
 
 
+def _markup_message(reason: str) -> str:
+    if reason == 'selection':
+        return str(
+            _('Выберите строки одного направления, кроме своих переводов.'),
+        )
+    if reason == 'category':
+        return str(_('Выберите категорию подходящего типа.'))
+    if reason == 'account':
+        return str(_('Выберите свой счёт для перевода.'))
+    if reason == 'account_number':
+        return str(_('Номер счёта выбранного счёта не подходит.'))
+    return str(_('Строка уже размечена или срок разметки истёк.'))
+
+
 class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
     """Post or skip one row awaiting markup."""
 
@@ -482,26 +496,12 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
                     int(category) if category.isdigit() else None,
                 )
         except StatementMarkupConflictError as error:
-            messages.error(request, self.message(str(error)))
+            messages.error(request, _markup_message(str(error)))
         except ValidationError:
             messages.error(request, _('Не удалось провести строку.'))
         return redirect(
             reverse('users:bank_statement_markup', args=[upload_id]),
         )
-
-    @staticmethod
-    def message(reason: str) -> str:
-        if reason == 'selection':
-            return str(
-                _('Выберите строки одного направления, кроме своих переводов.'),
-            )
-        if reason == 'category':
-            return str(_('Выберите категорию подходящего типа.'))
-        if reason == 'account':
-            return str(_('Выберите свой счёт для перевода.'))
-        if reason == 'account_number':
-            return str(_('Номер счёта выбранного счёта не подходит.'))
-        return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
 class BankStatementMarkupBulkView(LoginRequiredMixin, View):
@@ -535,7 +535,7 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
         except StatementMarkupConflictError as error:
             messages.error(
                 request,
-                BankStatementMarkupDecisionView.message(str(error)),
+                _markup_message(str(error)),
             )
         except ValidationError:
             messages.error(request, _('Не удалось провести строки.'))
