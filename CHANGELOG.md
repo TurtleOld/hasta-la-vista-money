@@ -1,5 +1,79 @@
 # История изменений
 
+## [2.22.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.21.0...v2.22.0) (2026-10-18)
+
+
+### Features
+
+* **expense:** add protected balance adjustment system categories ([#1113](https://github.com/TurtleOld/hasta-la-vista-money/issues/1113)) ([fdfb1e9](https://github.com/TurtleOld/hasta-la-vista-money/commit/fdfb1e958ab1250919794e367d5ad9e50f60f33b))
+* **finance_account:** add balance adjustment operation ([#1114](https://github.com/TurtleOld/hasta-la-vista-money/issues/1114)) ([236f09b](https://github.com/TurtleOld/hasta-la-vista-money/commit/236f09b80e139fb89f2fb595cb937342da227ae8))
+* **finance_account:** add optional unique account number ([#1126](https://github.com/TurtleOld/hasta-la-vista-money/issues/1126)) ([779d711](https://github.com/TurtleOld/hasta-la-vista-money/commit/779d7114a7c5d540dad00cc983efe0179ff7ef09))
+* **finance_account:** archive regular accounts and delete only without movements ([#1116](https://github.com/TurtleOld/hasta-la-vista-money/issues/1116)) ([77b360d](https://github.com/TurtleOld/hasta-la-vista-money/commit/77b360df2d8a2ab6bd60c227113e15e2548963e3))
+* **finance_account:** close repayments by user decision and show analytics in one currency ([#1121](https://github.com/TurtleOld/hasta-la-vista-money/issues/1121)) ([d22dfd8](https://github.com/TurtleOld/hasta-la-vista-money/commit/d22dfd856f519b8e1fe72a33447835775695c997))
+* **loan:** delete loan payment and guard loan deletion ([#1118](https://github.com/TurtleOld/hasta-la-vista-money/issues/1118)) ([496a3d7](https://github.com/TurtleOld/hasta-la-vista-money/commit/496a3d7054c349830932dc6372cf361b2b1651ef))
+* **loan:** post loan payment as a financial movement ([#1117](https://github.com/TurtleOld/hasta-la-vista-money/issues/1117)) ([39749be](https://github.com/TurtleOld/hasta-la-vista-money/commit/39749be3d6157d85edabefdb93ea693aebe66675))
+* **receipts:** add take photo fallback to the qr scanner ([#1107](https://github.com/TurtleOld/hasta-la-vista-money/issues/1107)) ([ac100c6](https://github.com/TurtleOld/hasta-la-vista-money/commit/ac100c6c25a3dfd2d2ac3b052acec3099e8bf7c3))
+* **receipts:** auto-zoom qr scanner instead of manual slider ([#1083](https://github.com/TurtleOld/hasta-la-vista-money/issues/1083)) ([f74cfa7](https://github.com/TurtleOld/hasta-la-vista-money/commit/f74cfa7fddc032699e6c95f3afd47c1e03e3594f))
+* **receipts:** pick main camera and magnify unread qr codes ([#1082](https://github.com/TurtleOld/hasta-la-vista-money/issues/1082)) ([0555d76](https://github.com/TurtleOld/hasta-la-vista-money/commit/0555d769c0152eddd41a47c5fbe36d442d6577c8))
+* **receipts:** show live scan hints above the qr frame ([#1084](https://github.com/TurtleOld/hasta-la-vista-money/issues/1084)) ([6353087](https://github.com/TurtleOld/hasta-la-vista-money/commit/63530874dd35fbe4af70711472b598f332478d00))
+* **users:** add markup screen for rosdorbank statement rows ([#1130](https://github.com/TurtleOld/hasta-la-vista-money/issues/1130)) ([aa7599c](https://github.com/TurtleOld/hasta-la-vista-money/commit/aa7599c7968aa830299ca4e8326be8af8cb19b2a))
+* **users:** bulk markup of statement rows ([#1134](https://github.com/TurtleOld/hasta-la-vista-money/issues/1134)) ([7d4d9e3](https://github.com/TurtleOld/hasta-la-vista-money/commit/7d4d9e390f4f1957c687ef5562527561306b30de))
+* **users:** create category from statement markup screen ([#1131](https://github.com/TurtleOld/hasta-la-vista-money/issues/1131)) ([cc73799](https://github.com/TurtleOld/hasta-la-vista-money/commit/cc7379974a04377dea0a28013a084963f27af1d1))
+* **users:** keep rosdorbank statement rows awaiting markup ([#1128](https://github.com/TurtleOld/hasta-la-vista-money/issues/1128)) ([5d4f515](https://github.com/TurtleOld/hasta-la-vista-money/commit/5d4f515d506e3e6cdf499bf9c47df6b4d7715ff0))
+* **users:** mark statement rows as own account transfers ([#1132](https://github.com/TurtleOld/hasta-la-vista-money/issues/1132)) ([d78b3dc](https://github.com/TurtleOld/hasta-la-vista-money/commit/d78b3dcc0210f0dd1f25d2a5436b7cc764eca796))
+* **users:** parse rosdorbank account statements ([#1127](https://github.com/TurtleOld/hasta-la-vista-money/issues/1127)) ([ceea2b9](https://github.com/TurtleOld/hasta-la-vista-money/commit/ceea2b9a82f58eab5ce88036b61d60ed1fb271f9))
+* **users:** remember merchant category for statement rows ([#1133](https://github.com/TurtleOld/hasta-la-vista-money/issues/1133)) ([c7274e1](https://github.com/TurtleOld/hasta-la-vista-money/commit/c7274e1f87319c489fc9f8d1d7ec89b6b0aeaf4e))
+* **users:** show balance discrepancy after markup and remind about pending rows ([#1135](https://github.com/TurtleOld/hasta-la-vista-money/issues/1135)) ([18d62f7](https://github.com/TurtleOld/hasta-la-vista-money/commit/18d62f711cd92da43bd6460a926503ff19c5c5f9))
+
+
+### Bug Fixes
+
+* **api:** block balance writes via account API and deposit receipts ([#1080](https://github.com/TurtleOld/hasta-la-vista-money/issues/1080)) ([4293a42](https://github.com/TurtleOld/hasta-la-vista-money/commit/4293a42561b43baf2623ac2536ecf12efaca4842))
+* **api:** harden minor security gaps and remove dead code ([#1103](https://github.com/TurtleOld/hasta-la-vista-money/issues/1103)) ([97f61a5](https://github.com/TurtleOld/hasta-la-vista-money/commit/97f61a55eee4e249a1f2ac143d9c2dd16ec9aabe))
+* **auth:** enforce csrf for cookie-based jwt authentication ([#1087](https://github.com/TurtleOld/hasta-la-vista-money/issues/1087)) ([0dac392](https://github.com/TurtleOld/hasta-la-vista-money/commit/0dac392de3adb2ede9a1ce8c75d8959cd4e0500b))
+* **auth:** prevent open redirect after login ([#1077](https://github.com/TurtleOld/hasta-la-vista-money/issues/1077)) ([fd11689](https://github.com/TurtleOld/hasta-la-vista-money/commit/fd116891468247d5383f64a237c89cb7c656c3a9))
+* **auth:** revoke refresh tokens on logout and password change ([#1097](https://github.com/TurtleOld/hasta-la-vista-money/issues/1097)) ([b21e85b](https://github.com/TurtleOld/hasta-la-vista-money/commit/b21e85b585ffdefa7a808b2749f8673308866926))
+* **auth:** use proxy-aware client ip for throttling ([#1096](https://github.com/TurtleOld/hasta-la-vista-money/issues/1096)) ([cecffe4](https://github.com/TurtleOld/hasta-la-vista-money/commit/cecffe47dbe81883e74f06ff7f7ba55e4ef41094))
+* **ci:** stop publishing db, redis and app ports in prod compose ([#1091](https://github.com/TurtleOld/hasta-la-vista-money/issues/1091)) ([a41c622](https://github.com/TurtleOld/hasta-la-vista-money/commit/a41c622c14f7520c8c110f0f1eb2fbf52d954520))
+* **config:** route app logs through structlog ([#1095](https://github.com/TurtleOld/hasta-la-vista-money/issues/1095)) ([eb799cc](https://github.com/TurtleOld/hasta-la-vista-money/commit/eb799ccc125dc041eaac39daebbf3f66944fc334))
+* **deposits:** stop double-counting deposit events in balance history ([#1094](https://github.com/TurtleOld/hasta-la-vista-money/issues/1094)) ([de8c5d6](https://github.com/TurtleOld/hasta-la-vista-money/commit/de8c5d61172951e80dd1e7e691a4adc119047ab2))
+* **finance_account:** count cash withdrawals as debt outside grace period ([#1104](https://github.com/TurtleOld/hasta-la-vista-money/issues/1104)) ([855ef23](https://github.com/TurtleOld/hasta-la-vista-money/commit/855ef2397d82dd143e729a44602a4b2b97973ef4))
+* **finance_account:** defer copied transactions until save ([#1089](https://github.com/TurtleOld/hasta-la-vista-money/issues/1089)) ([fc9acfb](https://github.com/TurtleOld/hasta-la-vista-money/commit/fc9acfbf0fdb227fedc31fa0a08729d2531dd44a))
+* **finance_account:** keep balance and lock currency when editing an account ([#1112](https://github.com/TurtleOld/hasta-la-vista-money/issues/1112)) ([6407148](https://github.com/TurtleOld/hasta-la-vista-money/commit/64071480ae875c56a88206d6abe0e5e72782ad23))
+* **finance_account:** make money fields read-only in admin ([#1120](https://github.com/TurtleOld/hasta-la-vista-money/issues/1120)) ([eb62e2a](https://github.com/TurtleOld/hasta-la-vista-money/commit/eb62e2ac40081accafb91fcf1aa52e1aa7758975))
+* **finance_account:** reject cross-currency transfers and deposit deletions ([#1079](https://github.com/TurtleOld/hasta-la-vista-money/issues/1079)) ([33e1829](https://github.com/TurtleOld/hasta-la-vista-money/commit/33e1829292d3c5c799d4368a518ca255bbd00cd4))
+* **finance_account:** restore finance date picker interaction and styling ([#1088](https://github.com/TurtleOld/hasta-la-vista-money/issues/1088)) ([6c47ee4](https://github.com/TurtleOld/hasta-la-vista-money/commit/6c47ee430450043a6f6774cc29a9f7a61162215b))
+* **loan:** restrict loan deletion to the owner and delete atomically ([#1074](https://github.com/TurtleOld/hasta-la-vista-money/issues/1074)) ([11a78a6](https://github.com/TurtleOld/hasta-la-vista-money/commit/11a78a632d471591b3903e42400654a8b6bc20cd))
+* **loan:** use ISO default currency for loan accounts ([#1102](https://github.com/TurtleOld/hasta-la-vista-money/issues/1102)) ([2aaa968](https://github.com/TurtleOld/hasta-la-vista-money/commit/2aaa968dde0d8ef49faeb3bce20039d0e3289797))
+* **receipts:** align receipt card actions and replace dead icons ([#1129](https://github.com/TurtleOld/hasta-la-vista-money/issues/1129)) ([6351c68](https://github.com/TurtleOld/hasta-la-vista-money/commit/6351c68960032501a925762c7cb8ca3ee271efb3))
+* **transactions:** exclude balance adjustments from analytics ([#1115](https://github.com/TurtleOld/hasta-la-vista-money/issues/1115)) ([9c4a4c3](https://github.com/TurtleOld/hasta-la-vista-money/commit/9c4a4c3cdfd44c97d187d85feb3982d58d0692d9))
+* **users:** apply readable users to receipt, deposit and transaction detail ([#1109](https://github.com/TurtleOld/hasta-la-vista-money/issues/1109)) ([7306c91](https://github.com/TurtleOld/hasta-la-vista-money/commit/7306c9134336b9e8fb39083bb3f2620c66098e15))
+* **users:** close public media access and randomize upload names ([#1090](https://github.com/TurtleOld/hasta-la-vista-money/issues/1090)) ([6657e1f](https://github.com/TurtleOld/hasta-la-vista-money/commit/6657e1f20c730be0830442b7815c2bb55a40b2ac))
+* **users:** create a personal default family group per user ([#1076](https://github.com/TurtleOld/hasta-la-vista-money/issues/1076)) ([401e7fc](https://github.com/TurtleOld/hasta-la-vista-money/commit/401e7fc884d57c189a4834a6b024f7f24331e593))
+* **users:** create family groups only explicitly ([#1105](https://github.com/TurtleOld/hasta-la-vista-money/issues/1105)) ([51c9930](https://github.com/TurtleOld/hasta-la-vista-money/commit/51c9930a1a5dbb2e0e7f0266dd36a2fdc717facc))
+* **users:** guard movements linked to statement rows ([#1119](https://github.com/TurtleOld/hasta-la-vista-money/issues/1119)) ([1e2225f](https://github.com/TurtleOld/hasta-la-vista-money/commit/1e2225fce8cc265d7a43079106bb2044fee46469))
+* **users:** invalidate statistics cache for group members, budgets and plans ([#1110](https://github.com/TurtleOld/hasta-la-vista-money/issues/1110)) ([6b9ea36](https://github.com/TurtleOld/hasta-la-vista-money/commit/6b9ea36e3d867c3db2d884e81b16fa7db22bfe9f))
+* **users:** keep statistics cache version from resetting to stale keys ([#1123](https://github.com/TurtleOld/hasta-la-vista-money/issues/1123)) ([ff80e94](https://github.com/TurtleOld/hasta-la-vista-money/commit/ff80e94dff25f6cb34a864c69c9cc418f7deb8a8))
+* **users:** make bank statement import resumable ([#1093](https://github.com/TurtleOld/hasta-la-vista-money/issues/1093)) ([ba6ea3c](https://github.com/TurtleOld/hasta-la-vista-money/commit/ba6ea3c8351ad80945433c02c514595d1d338b60))
+* **users:** remove direct group member add ([#1106](https://github.com/TurtleOld/hasta-la-vista-money/issues/1106)) ([d432688](https://github.com/TurtleOld/hasta-la-vista-money/commit/d432688c85f735f639cdebe9ae61eb1dfe0b7372))
+* **users:** require POST and expire family group invites ([#1081](https://github.com/TurtleOld/hasta-la-vista-money/issues/1081)) ([51eeff9](https://github.com/TurtleOld/hasta-la-vista-money/commit/51eeff9ea0349dada1348f647090400b0cf51ee7))
+* **users:** scope audit and export to explicit group and hide viewer write buttons ([#1111](https://github.com/TurtleOld/hasta-la-vista-money/issues/1111)) ([3e3c837](https://github.com/TurtleOld/hasta-la-vista-money/commit/3e3c837639cca16723c708063af0cd6dfff8ddf0))
+* **users:** scope profile and groups api to the current user ([#1078](https://github.com/TurtleOld/hasta-la-vista-money/issues/1078)) ([0c02ce4](https://github.com/TurtleOld/hasta-la-vista-money/commit/0c02ce46039a9b27c1a44c53d0d8e67aad76309a))
+
+
+### Performance Improvements
+
+* **finance_account:** paginate finances page in the database ([#1099](https://github.com/TurtleOld/hasta-la-vista-money/issues/1099)) ([99af604](https://github.com/TurtleOld/hasta-la-vista-money/commit/99af6049f2501fb5e2ad79b49d27f4bbe7cd5169))
+* **receipts:** bulk-delete receipt products and classify statement rows outside transactions ([#1125](https://github.com/TurtleOld/hasta-la-vista-money/issues/1125)) ([5edf8a4](https://github.com/TurtleOld/hasta-la-vista-money/commit/5edf8a4932b26ec173da863e997145021d61e95b))
+* **system:** share one read context across audit feed page ([#1100](https://github.com/TurtleOld/hasta-la-vista-money/issues/1100)) ([6d89f35](https://github.com/TurtleOld/hasta-la-vista-money/commit/6d89f3576531734e94e8052838d2b8361fc4518b))
+* **users:** cache statistics aggregates without table state ([#1098](https://github.com/TurtleOld/hasta-la-vista-money/issues/1098)) ([29d4202](https://github.com/TurtleOld/hasta-la-vista-money/commit/29d42029333e5e9603abe68d8d887cf0106856ba))
+* **users:** remove n+1 queries on detailed statistics page ([#1101](https://github.com/TurtleOld/hasta-la-vista-money/issues/1101)) ([2887233](https://github.com/TurtleOld/hasta-la-vista-money/commit/2887233574436ca1343d6faf8b1325915d720005))
+
+
+### Documentation
+
+* **budget:** allow family members to plan and edit the shared budget ([#1122](https://github.com/TurtleOld/hasta-la-vista-money/issues/1122)) ([3275080](https://github.com/TurtleOld/hasta-la-vista-money/commit/3275080ecb3248c6fbba29a8f0d955fc823a1b43))
+
 ## [2.21.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.20.0...v2.21.0) (2026-10-13)
 
 
