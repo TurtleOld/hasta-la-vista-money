@@ -23,6 +23,9 @@ if [ -d /app/nginx-runtime ] && [ -f /app/nginx/nginx.conf ]; then
     chmod 644 /app/nginx-runtime/nginx.conf
 fi
 
+echo "Applying migrations"
+python manage.py migrate --noinput
+
 echo "Collecting static files"
 python manage.py collectstatic --noinput --clear
 
