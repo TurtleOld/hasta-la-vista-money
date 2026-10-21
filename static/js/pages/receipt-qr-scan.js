@@ -17,6 +17,7 @@ import {
 const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
 const WRONG_QR_RESCAN_DELAY_MS = 500;
+const MAX_SCAN_ERRORS_IN_ROW = 5;
 const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
 const PHOTO_WORKER_TIMEOUT_MS = 8000;
@@ -277,6 +278,7 @@ function registerReceiptQRScanPage(Alpine) {
       stream: null,
       worker: null,
       workerBusy: false,
+      scanErrors: 0,
       scanTimer: null,
       lastFullFrameTime: 0,
       lastTapPoint: null,
@@ -401,9 +403,11 @@ function registerReceiptQRScanPage(Alpine) {
             return;
           }
 
+          let ready = false;
           this.worker.addEventListener('message', (event) => {
             if (event.data.type === 'ready') {
               window.clearTimeout(timeout);
+              ready = true;
               resolve();
               return;
             }
@@ -419,6 +423,10 @@ function registerReceiptQRScanPage(Alpine) {
             const error = event.error || new Error(event.message);
             this.settlePhoto({ type: 'scan-error', message: error.message });
             reject(error);
+            // A crash after startup leaves workerBusy set and stalls scanning.
+            if (ready && !this.photoBusy) {
+              this.recoverWorker();
+            }
           });
           this.worker.postMessage({ type: 'initialize', wasmUrl });
         });
@@ -442,9 +450,16 @@ function registerReceiptQRScanPage(Alpine) {
             'receipt QR scan: frame decoding failed',
             message.message,
           );
-          this.scheduleScan();
+          // An aborted WASM module fails every frame from then on.
+          this.scanErrors += 1;
+          if (this.scanErrors >= MAX_SCAN_ERRORS_IN_ROW) {
+            this.recoverWorker();
+          } else {
+            this.scheduleScan();
+          }
           return;
         }
+        this.scanErrors = 0;
         const wrongQr =
           Boolean(message.value) && !isFNSReceiptQR(message.value);
         this.updateHint(message, wrongQr);
@@ -800,6 +815,21 @@ function registerReceiptQRScanPage(Alpine) {
         }
       },
 
+      async recoverWorker() {
+        window.clearTimeout(this.scanTimer);
+        this.scanErrors = 0;
+        const restarted = await this.restartWorker();
+        if (!this.stream) {
+          return;
+        }
+        if (restarted) {
+          this.scheduleScan(0);
+          return;
+        }
+        this.errorMessage = this.messages.decoderUnavailable;
+        this.stop({ preserveError: true });
+      },
+
       async uploadPhotoAfterFailure(blob) {
         // Not awaited: the upload runs while the decoder restarts.
         const restarted = this.restartWorker();
@@ -864,6 +894,7 @@ function registerReceiptQRScanPage(Alpine) {
         this.worker?.terminate();
         this.worker = null;
         this.workerBusy = false;
+        this.scanErrors = 0;
         this.torchAvailable = false;
         this.torchEnabled = false;
         this.autozoom = null;
