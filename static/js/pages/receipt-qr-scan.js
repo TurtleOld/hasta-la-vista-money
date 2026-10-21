@@ -17,6 +17,8 @@ import {
 const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
 const WRONG_QR_RESCAN_DELAY_MS = 500;
+const MAX_SCAN_ERRORS_IN_ROW = 5;
+const NOTIFICATIONS_POLL_MS = 5000;
 const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
 const PHOTO_WORKER_TIMEOUT_MS = 8000;
@@ -73,11 +75,6 @@ function safeCapabilities(track) {
   }
 }
 
-function hasContinuousFocus(stream) {
-  const capabilities = safeCapabilities(stream.getVideoTracks()[0]);
-  return (capabilities?.focusMode || []).includes('continuous');
-}
-
 async function probeBackCameras() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const cameras = [];
@@ -108,13 +105,9 @@ async function openStream() {
   const savedId = readSavedCameraId();
   if (savedId) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(
+      return await navigator.mediaDevices.getUserMedia(
         videoConstraints(savedId),
       );
-      if (hasContinuousFocus(stream)) {
-        return stream;
-      }
-      stream.getTracks().forEach((track) => track.stop());
     } catch (error) {
       if (!CAMERA_MISSING_ERRORS.includes(error?.name)) {
         throw error;
@@ -286,7 +279,9 @@ function registerReceiptQRScanPage(Alpine) {
       stream: null,
       worker: null,
       workerBusy: false,
+      scanErrors: 0,
       scanTimer: null,
+      pollTimer: null,
       lastFullFrameTime: 0,
       lastTapPoint: null,
       lastTapTime: 0,
@@ -302,8 +297,6 @@ function registerReceiptQRScanPage(Alpine) {
 
       init() {
         this.messages = messagesFrom(this.$el);
-        this.pollNotifications();
-        window.setInterval(() => this.pollNotifications(), 5000);
         document.addEventListener(
           'receipt-scan:activate',
           this.start.bind(this),
@@ -343,6 +336,12 @@ function registerReceiptQRScanPage(Alpine) {
         if (this.stream) {
           return;
         }
+        window.clearInterval(this.pollTimer);
+        this.pollNotifications();
+        this.pollTimer = window.setInterval(
+          () => this.pollNotifications(),
+          NOTIFICATIONS_POLL_MS,
+        );
         if (
           !window.Worker ||
           !window.WebAssembly ||
@@ -371,7 +370,6 @@ function registerReceiptQRScanPage(Alpine) {
           return;
         }
 
-        await this.configureCamera();
         const video = this.$refs.video;
         if (!video) {
           this.stop();
@@ -386,6 +384,8 @@ function registerReceiptQRScanPage(Alpine) {
           this.stop({ preserveError: true });
           return;
         }
+        // Chrome on Android reports empty capabilities until frames flow.
+        await this.configureCamera();
         this.statusMessage = this.messages.scanning;
         this.hintState = createScanHints(performance.now());
         this.hintText = this.messages.hints.idle;
@@ -409,9 +409,11 @@ function registerReceiptQRScanPage(Alpine) {
             return;
           }
 
+          let ready = false;
           this.worker.addEventListener('message', (event) => {
             if (event.data.type === 'ready') {
               window.clearTimeout(timeout);
+              ready = true;
               resolve();
               return;
             }
@@ -427,6 +429,10 @@ function registerReceiptQRScanPage(Alpine) {
             const error = event.error || new Error(event.message);
             this.settlePhoto({ type: 'scan-error', message: error.message });
             reject(error);
+            // A crash after startup leaves workerBusy set and stalls scanning.
+            if (ready && !this.photoBusy) {
+              this.recoverWorker();
+            }
           });
           this.worker.postMessage({ type: 'initialize', wasmUrl });
         });
@@ -450,9 +456,16 @@ function registerReceiptQRScanPage(Alpine) {
             'receipt QR scan: frame decoding failed',
             message.message,
           );
-          this.scheduleScan();
+          // An aborted WASM module fails every frame from then on.
+          this.scanErrors += 1;
+          if (this.scanErrors >= MAX_SCAN_ERRORS_IN_ROW) {
+            this.recoverWorker();
+          } else {
+            this.scheduleScan();
+          }
           return;
         }
+        this.scanErrors = 0;
         const wrongQr =
           Boolean(message.value) && !isFNSReceiptQR(message.value);
         this.updateHint(message, wrongQr);
@@ -694,7 +707,6 @@ function registerReceiptQRScanPage(Alpine) {
         }
 
         this.workerBusy = true;
-        this.noticeMessage = '';
         const transfer = frames.map((frame) => frame.image.data.buffer);
         this.worker.postMessage(
           {
@@ -808,6 +820,21 @@ function registerReceiptQRScanPage(Alpine) {
         }
       },
 
+      async recoverWorker() {
+        window.clearTimeout(this.scanTimer);
+        this.scanErrors = 0;
+        const restarted = await this.restartWorker();
+        if (!this.stream) {
+          return;
+        }
+        if (restarted) {
+          this.scheduleScan(0);
+          return;
+        }
+        this.errorMessage = this.messages.decoderUnavailable;
+        this.stop({ preserveError: true });
+      },
+
       async uploadPhotoAfterFailure(blob) {
         // Not awaited: the upload runs while the decoder restarts.
         const restarted = this.restartWorker();
@@ -867,11 +894,14 @@ function registerReceiptQRScanPage(Alpine) {
         this.photoBusy = false;
         window.clearTimeout(this.scanTimer);
         this.scanTimer = null;
+        window.clearInterval(this.pollTimer);
+        this.pollTimer = null;
         this.stream?.getTracks().forEach((track) => track.stop());
         this.stream = null;
         this.worker?.terminate();
         this.worker = null;
         this.workerBusy = false;
+        this.scanErrors = 0;
         this.torchAvailable = false;
         this.torchEnabled = false;
         this.autozoom = null;
