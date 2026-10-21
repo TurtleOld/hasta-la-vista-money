@@ -6,6 +6,16 @@
       "package-name": "hastalavistamoney",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
+      "changelog-sections": [
+        { "type": "feat", "section": "✨ Новые возможности" },
+        { "type": "fix", "section": "🐛 Исправления" },
+        { "type": "perf", "section": "⚡ Производительность" },
+        { "type": "refactor", "section": "♻️ Рефакторинг" },
+        { "type": "docs", "section": "📚 Документация" },
+        { "type": "test", "section": "🧪 Тесты", "hidden": true },
+        { "type": "ci", "section": "🔧 CI/CD", "hidden": true },
+        { "type": "chore", "section": "🧹 Прочее", "hidden": true }
+      ],
       "extra-files": [
         {
           "type": "generic",

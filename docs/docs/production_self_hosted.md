@@ -109,3 +109,15 @@ DATABASE_URL=postgresql://hlvm:replace-with-db-password@db.example.com:5432/hlvm
 18. Убедитесь, что приложение доступно по HTTPS, а cookies помечены флагом `Secure`.
 19. Проверьте вход в систему, сохранение сессий, Redis-зависимые операции и подключение к базе данных.
 20. До ввода в эксплуатацию проверьте процедуры резервного копирования и восстановления PostgreSQL и пользовательских файлов.
+
+## Миграции и права на тома
+
+Миграции применяются автоматически при старте `hlvm-server` (`docker/entrypoint.sh`); отдельный контейнер для них не нужен. Celery-сервисы ждут, пока `hlvm-server` станет healthy.
+
+Приложение работает от пользователя `appuser` (uid 1000). Для именованных томов из `docker-compose.prod.yaml` Docker сам берёт владельца из образа, ручная настройка не требуется. Если вы заменяете тома `media`, `staticfiles` и `nginx-runtime` на bind-mount, выставьте владельца до первого запуска:
+
+```bash
+sudo chown -R 1000:1000 /path/to/media /path/to/staticfiles /path/to/nginx-runtime
+```
+
+Иначе Docker создаст каталоги от root, и `collectstatic` упадёт с `Permission denied`.
