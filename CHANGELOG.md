@@ -1,5 +1,17 @@
 # История изменений
 
+## [2.22.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.0...v2.22.1) (2026-10-21)
+
+
+### 🐛 Исправления
+
+* **receipts:** make the qr scanner camera usable on phones ([#1139](https://github.com/TurtleOld/hasta-la-vista-money/issues/1139)) ([e7f03ca](https://github.com/TurtleOld/hasta-la-vista-money/commit/e7f03cacb91ae0d6cd5b747c4c3d53222b37cf4c))
+
+
+### ♻️ Рефакторинг
+
+* **ci:** run migrations in entrypoint, drop one-shot prod services ([#1138](https://github.com/TurtleOld/hasta-la-vista-money/issues/1138)) ([71a5f09](https://github.com/TurtleOld/hasta-la-vista-money/commit/71a5f09333c9426ddf176291726b87801737269c))
+
 ## [2.22.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.21.0...v2.22.0) (2026-10-18)
 
 
