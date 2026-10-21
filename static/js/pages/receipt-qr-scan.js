@@ -18,6 +18,7 @@ const SCAN_INTERVAL_MS = 120;
 const FULL_FRAME_INTERVAL_MS = 1000;
 const WRONG_QR_RESCAN_DELAY_MS = 500;
 const MAX_SCAN_ERRORS_IN_ROW = 5;
+const NOTIFICATIONS_POLL_MS = 5000;
 const WORKER_START_TIMEOUT_MS = 10000;
 const TAP_POINT_TTL_MS = 3000;
 const PHOTO_WORKER_TIMEOUT_MS = 8000;
@@ -280,6 +281,7 @@ function registerReceiptQRScanPage(Alpine) {
       workerBusy: false,
       scanErrors: 0,
       scanTimer: null,
+      pollTimer: null,
       lastFullFrameTime: 0,
       lastTapPoint: null,
       lastTapTime: 0,
@@ -295,8 +297,6 @@ function registerReceiptQRScanPage(Alpine) {
 
       init() {
         this.messages = messagesFrom(this.$el);
-        this.pollNotifications();
-        window.setInterval(() => this.pollNotifications(), 5000);
         document.addEventListener(
           'receipt-scan:activate',
           this.start.bind(this),
@@ -336,6 +336,12 @@ function registerReceiptQRScanPage(Alpine) {
         if (this.stream) {
           return;
         }
+        window.clearInterval(this.pollTimer);
+        this.pollNotifications();
+        this.pollTimer = window.setInterval(
+          () => this.pollNotifications(),
+          NOTIFICATIONS_POLL_MS,
+        );
         if (
           !window.Worker ||
           !window.WebAssembly ||
@@ -888,6 +894,8 @@ function registerReceiptQRScanPage(Alpine) {
         this.photoBusy = false;
         window.clearTimeout(this.scanTimer);
         this.scanTimer = null;
+        window.clearInterval(this.pollTimer);
+        this.pollTimer = null;
         this.stream?.getTracks().forEach((track) => track.stop());
         this.stream = null;
         this.worker?.terminate();
