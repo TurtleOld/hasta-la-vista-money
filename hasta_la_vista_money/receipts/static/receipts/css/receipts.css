@@ -1267,8 +1267,13 @@
   touch-action: manipulation;
 }
 
+/* A portrait 9:16 stream is taller than a phone screen and pushes the
+   buttons under the bottom bar; cover crops top and bottom evenly, so the
+   frame still sits over the decoded center region. */
 .receipts-scan-video {
   display: block;
+  max-height: 60svh;
+  object-fit: cover;
   width: 100%;
 }
 
