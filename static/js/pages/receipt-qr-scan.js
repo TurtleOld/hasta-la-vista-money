@@ -73,11 +73,6 @@ function safeCapabilities(track) {
   }
 }
 
-function hasContinuousFocus(stream) {
-  const capabilities = safeCapabilities(stream.getVideoTracks()[0]);
-  return (capabilities?.focusMode || []).includes('continuous');
-}
-
 async function probeBackCameras() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const cameras = [];
@@ -108,13 +103,9 @@ async function openStream() {
   const savedId = readSavedCameraId();
   if (savedId) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(
+      return await navigator.mediaDevices.getUserMedia(
         videoConstraints(savedId),
       );
-      if (hasContinuousFocus(stream)) {
-        return stream;
-      }
-      stream.getTracks().forEach((track) => track.stop());
     } catch (error) {
       if (!CAMERA_MISSING_ERRORS.includes(error?.name)) {
         throw error;
@@ -371,7 +362,6 @@ function registerReceiptQRScanPage(Alpine) {
           return;
         }
 
-        await this.configureCamera();
         const video = this.$refs.video;
         if (!video) {
           this.stop();
@@ -386,6 +376,8 @@ function registerReceiptQRScanPage(Alpine) {
           this.stop({ preserveError: true });
           return;
         }
+        // Chrome on Android reports empty capabilities until frames flow.
+        await this.configureCamera();
         this.statusMessage = this.messages.scanning;
         this.hintState = createScanHints(performance.now());
         this.hintText = this.messages.hints.idle;
