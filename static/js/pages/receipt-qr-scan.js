@@ -701,7 +701,6 @@ function registerReceiptQRScanPage(Alpine) {
         }
 
         this.workerBusy = true;
-        this.noticeMessage = '';
         const transfer = frames.map((frame) => frame.image.data.buffer);
         this.worker.postMessage(
           {
