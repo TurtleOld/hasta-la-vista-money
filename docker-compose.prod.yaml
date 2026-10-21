@@ -48,36 +48,6 @@ services:
       retries: 5
       start_period: 60s
 
-  migrator:
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
-    entrypoint: []
-    command: ["/app/.venv/bin/python", "manage.py", "migrate", "--noinput"]
-    env_file:
-      - .env
-    environment:
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - default
-    restart: "no"
-
-  volume-permissions:
-    image: alpine:3.22
-    command:
-      - sh
-      - -c
-      - chown -R 1000:1000 /app/media /app/staticfiles /app/nginx-runtime && chmod -R u+rwX,go+rX /app/media /app/staticfiles /app/nginx-runtime
-    volumes:
-      - staticfiles_data:/app/staticfiles
-      - media_data:/app/media
-      - nginx_config_data:/app/nginx-runtime
-    networks:
-      - default
-    restart: "no"
-
   hlvm-server:
     image: ghcr.io/turtleold/hasta-la-vista-money:main
     volumes:
@@ -95,10 +65,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      migrator:
-        condition: service_completed_successfully
-      volume-permissions:
-        condition: service_completed_successfully
       embeddings:
         condition: service_started
     networks:
@@ -129,10 +95,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      migrator:
-        condition: service_completed_successfully
-      volume-permissions:
-        condition: service_completed_successfully
+      hlvm-server:
+        condition: service_healthy
       embeddings:
         condition: service_started
     networks:
@@ -159,10 +123,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      migrator:
-        condition: service_completed_successfully
-      volume-permissions:
-        condition: service_completed_successfully
+      hlvm-server:
+        condition: service_healthy
     networks:
       - default
     restart: unless-stopped
@@ -183,8 +145,6 @@ services:
     depends_on:
       hlvm-server:
         condition: service_started
-      volume-permissions:
-        condition: service_completed_successfully
     networks:
       - default
     restart: unless-stopped
