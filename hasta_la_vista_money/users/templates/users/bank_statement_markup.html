@@ -60,6 +60,9 @@
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                     {{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }} · {{ row.amount }} · {{ item.kind_label }}
                                 </p>
+                                {% if item.duplicate %}
+                                    <p class="text-sm font-medium text-amber-600 dark:text-amber-400">{% blocktranslate with movement=item.duplicate %}Похоже, уже учтена: {{ movement }}{% endblocktranslate %}</p>
+                                {% endif %}
                             </div>
                             <div class="markup-actions">
                                 <select name="category" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}">

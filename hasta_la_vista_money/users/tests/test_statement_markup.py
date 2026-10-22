@@ -225,18 +225,73 @@ class StatementMarkupTest(StatementMarkupFixture):
             BankStatementUpload.Status.COMPLETED,
         )
 
-    def test_recent_categories_come_first(self) -> None:
-        old = self._category('Аптека')
+    def test_categories_are_sorted_by_name(self) -> None:
+        self._category('Аптека')
         recent = self._category('Яблоки')
         self._category('Книги')
-        row = self._row(1)
-        self.service.post(row.pk, self.user.pk, recent.pk)
+        self.service.post(self._row(1).pk, self.user.pk, recent.pk)
 
         names = [c.name for c in self.service.categories(self.user, 'expense')]
 
-        self.assertEqual(names[0], 'Яблоки')
-        self.assertEqual(names[1:], ['Аптека', 'Книги'])
-        self.assertNotIn(old.name, names[:1])
+        self.assertEqual(names, ['Аптека', 'Книги', 'Яблоки'])
+
+    def test_manual_transaction_flags_one_row_as_duplicate(self) -> None:
+        first = self._row(1, amount='54.00')
+        second = self._row(2, amount='54.00')
+        self._row(3, amount='178.00')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self._category('Оплата проезда'),
+            type='expense',
+            amount=Decimal('54.00'),
+            date=datetime(
+                2026,
+                3,
+                1,
+                18,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        duplicates = self.service.probable_duplicates(self.upload)
+
+        self.assertEqual(list(duplicates), [first.pk])
+        self.assertEqual(duplicates[first.pk], 'Оплата проезда')
+        self.assertNotIn(second.pk, duplicates)
+
+    def test_imported_transaction_does_not_flag_row(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._row(1).pk, self.user.pk, category.pk)
+        row = self._row(2)
+
+        self.assertNotIn(row.pk, self.service.probable_duplicates(self.upload))
+
+    def test_manual_transfer_flags_row_as_duplicate(self) -> None:
+        row = self._row(1, amount='2231.00')
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Ozon',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('2231.00'),
+            exchange_date=datetime(
+                2026,
+                3,
+                1,
+                12,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        duplicates = self.service.probable_duplicates(self.upload)
+
+        self.assertEqual(duplicates, {row.pk: 'Перевод: РосДорБанк → Ozon'})
 
 
 OWN_NUMBER = '40817810000000000001'
@@ -600,6 +655,28 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         memory = MerchantCategory.objects.get()
         self.assertEqual(memory.category, second)
         self.assertEqual(memory.merchant_key, 'PYATEROCHKA')
+
+    def test_post_remembered_skips_probable_duplicates(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        row = self._keyed(2)
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type='expense',
+            amount=Decimal('100.00'),
+            date=datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()),
+        )
+
+        result = self.service.post_remembered(self.upload.pk, self.user.pk)
+
+        self.assertEqual(result, (0, 1))
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
 
     def test_type_is_part_of_the_key(self) -> None:
         expense = self._category('Продукты')

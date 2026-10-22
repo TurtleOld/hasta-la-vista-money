@@ -1,9 +1,10 @@
-from datetime import datetime
-from typing import Final
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING, Final
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, Max, QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
@@ -34,12 +35,19 @@ from hasta_la_vista_money.users.models import (
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.repositories.transfer_matching import (
+    TRANSFER_DATE_WINDOW,
+    local_row_date,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     RosDorBankRowKind,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
+
+if TYPE_CHECKING:
+    from decimal import Decimal
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
@@ -91,16 +99,94 @@ class StatementMarkupService:
 
     @staticmethod
     def categories(user: User, transaction_type: str) -> list[Category]:
-        """Return the user's categories, recently used first."""
+        """Return the user's categories in alphabetical order."""
         return list(
             Category.objects.filter(
                 user=user,
                 type=transaction_type,
                 system_kind='',
-            )
-            .annotate(last_used=Max('transactions__date'))
-            .order_by(F('last_used').desc(nulls_last=True), 'name'),
+            ).order_by('name'),
         )
+
+    def probable_duplicates(
+        self,
+        upload: BankStatementUpload,
+    ) -> dict[int, str]:
+        """Map pending rows to a movement already recorded by hand.
+
+        A movement is a transaction without ``source_ref`` of the same day,
+        type and amount, or a free mirroring transfer; each one matches at
+        most one row.
+        """
+        rows = [
+            (row, local_row_date(row.transaction_date))
+            for row in self.pending_rows(upload)
+            if row.transaction_date is not None
+        ]
+        if not rows:
+            return {}
+        start = min(day for _row, day in rows) - TRANSFER_DATE_WINDOW
+        end = max(day for _row, day in rows) + TRANSFER_DATE_WINDOW
+        account_id = upload.account_id
+        movements: list[tuple[str, Decimal, date, timedelta, str]] = [
+            (
+                movement.type,
+                movement.amount,
+                local_row_date(movement.date),
+                timedelta(0),
+                str(movement.category.name),
+            )
+            for movement in Transaction.objects.without_adjustments()
+            .filter(
+                account_id=account_id,
+                source_ref__isnull=True,
+                date__date__range=(start, end),
+            )
+            .select_related('category')
+            .order_by('date', 'pk')
+        ]
+        occupied = BankStatementRow.objects.filter(
+            transfer__isnull=False,
+            upload__account_id=account_id,
+        ).values('transfer_id')
+        movements.extend(
+            (
+                TransactionType.EXPENSE
+                if transfer.from_account_id == account_id
+                else TransactionType.INCOME,
+                transfer.amount,
+                local_row_date(transfer.exchange_date),
+                TRANSFER_DATE_WINDOW,
+                _('Перевод: {source} → {target}')
+                .format(
+                    source=getattr(transfer.from_account, 'name_account', ''),
+                    target=getattr(transfer.to_account, 'name_account', ''),
+                )
+                .strip(' →'),
+            )
+            for transfer in TransferMoneyLog.objects.filter(
+                Q(from_account_id=account_id) | Q(to_account_id=account_id),
+                user_id=upload.user_id,
+                exchange_date__date__range=(start, end),
+            )
+            .exclude(pk__in=occupied)
+            .select_related('from_account', 'to_account')
+            .order_by('exchange_date', 'pk')
+        )
+        duplicates: dict[int, str] = {}
+        for row, day in rows:
+            for idx, (kind, amount, moment, window, label) in enumerate(
+                movements,
+            ):
+                if (
+                    kind == row.transaction_type
+                    and amount == row.amount
+                    and abs(moment - day) <= window
+                ):
+                    duplicates[row.pk] = label
+                    del movements[idx]
+                    break
+        return duplicates
 
     def remembered_categories(
         self,
@@ -175,9 +261,12 @@ class StatementMarkupService:
         """
         upload = BankStatementUpload.objects.get(pk=upload_id, user_id=user_id)
         remembered = self.remembered_categories(upload)
+        duplicates = self.probable_duplicates(upload)
         posted = 0
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
             for row_id, category_id in remembered.items():
+                if row_id in duplicates:
+                    continue
                 try:
                     self._decide(
                         row_id,

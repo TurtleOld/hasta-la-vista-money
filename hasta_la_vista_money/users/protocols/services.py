@@ -113,6 +113,11 @@ class StatementMarkupServiceProtocol(Protocol):
         upload: BankStatementUpload,
     ) -> dict[int, int]: ...
 
+    def probable_duplicates(
+        self,
+        upload: BankStatementUpload,
+    ) -> dict[int, str]: ...
+
     def post_remembered(
         self,
         upload_id: int,

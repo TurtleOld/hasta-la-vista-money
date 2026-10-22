@@ -414,6 +414,7 @@ class BankStatementMarkupView(
         )
         by_number = {a.account_number: a for a in accounts if a.account_number}
         remembered = service.remembered_categories(self.object)
+        duplicates = service.probable_duplicates(self.object)
         page = Paginator(
             service.pending_rows(self.object),
             STATEMENT_RECONCILIATION_PAGE_SIZE,
@@ -437,6 +438,7 @@ class BankStatementMarkupView(
                 ),
                 'categories': categories.get(row.transaction_type or '', []),
                 'remembered_id': remembered.get(row.pk),
+                'duplicate': duplicates.get(row.pk),
                 'kind_label': ROW_KIND_LABELS.get(row.kind, ''),
                 'refund_default': row.kind == RosDorBankRowKind.CANCEL
                 and not any(
