@@ -6,33 +6,45 @@
 {% block title %}{% translate 'Разметка выписки' %}{% endblock %}
 
 {% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'transactions/css/transactions.css' %}">
     <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'users/css/statement-markup.css' %}?v={% word_hash %}">
 {% endblock %}
 
 {% block content %}
-    <div class="statement-markup min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-5xl mx-auto">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{% translate 'Разметка выписки' %}</h2>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        {% translate 'Выберите категорию и проведите строку либо пропустите её. Остаток счёта меняется сразу при проводке.' %}
-                    </p>
+<div class="finances-app statement-markup">
+    <div class="composer-crumb">
+        <a href="{% url 'users:bank_statement_upload' %}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+            {% translate 'Загрузки выписок' %}
+        </a>
+        <span class="sep">·</span>
+        <b>{% translate 'Разметка выписки' %}</b>
+    </div>
+
+    <div class="finance-categories-shell">
+        <section class="composer-card">
+            <div class="composer-hd">
+                <h1>{% translate 'Разметка выписки' %}</h1>
+                <span class="meta">{{ upload.account.name_account }} · {% translate 'строк' %}: {{ page_obj.paginator.count }}</span>
+            </div>
+            <p class="markup-hint">{% translate 'Выберите категорию и проведите строку либо пропустите её. Остаток счёта меняется сразу при проводке.' %}</p>
+
+            {% if messages %}
+                <div class="markup-messages">
+                    {% for message in messages %}
+                        <p class="{% if message.level_tag == 'success' %}finances-positive{% else %}finances-negative{% endif %}">{{ message }}</p>
+                    {% endfor %}
                 </div>
-                {% if messages %}
-                    <div class="px-6 pt-4">
-                        {% for message in messages %}
-                            <p class="text-sm {% if message.level_tag == 'success' %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">{{ message }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-                <form id="bulk-form" method="post" action="{% url 'users:bank_statement_markup_bulk' upload.pk %}" class="flex flex-col gap-3 p-5 border-b border-gray-200 dark:border-gray-700 sm:flex-row sm:items-center">
+            {% endif %}
+
+            <div class="markup-toolbar">
+                <form id="bulk-form" method="post" action="{% url 'users:bank_statement_markup_bulk' upload.pk %}" class="markup-actions">
                     {% csrf_token %}
-                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <label class="markup-check-all">
                         <input type="checkbox" id="select-all-rows">
                         {% translate 'Выбрать все' %}
                     </label>
-                    <select name="category" class="markup-select">
+                    <select name="category" class="markup-select" aria-label="{% translate 'Категория для выбранных…' %}">
                         <option value="">{% translate 'Категория для выбранных…' %}</option>
                         {% for group in bulk_categories %}
                             <optgroup label="{{ group.label }}">
@@ -42,69 +54,85 @@
                             </optgroup>
                         {% endfor %}
                     </select>
-                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Назначить и провести' %}</button>
+                    <button type="submit" class="finances-button finances-button-primary">{% translate 'Назначить и провести' %}</button>
                 </form>
                 {% if remembered_count %}
-                    <form method="post" action="{% url 'users:bank_statement_markup_post_remembered' upload.pk %}" class="px-6 pt-4">
+                    <form method="post" action="{% url 'users:bank_statement_markup_post_remembered' upload.pk %}">
                         {% csrf_token %}
-                        <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести все с подставленной категорией' %} ({{ remembered_count }})</button>
+                        <button type="submit" class="finances-button finances-button-secondary">{% translate 'Провести все с подставленной категорией' %} ({{ remembered_count }})</button>
                     </form>
                 {% endif %}
-                <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                    {% for item in rows %}{% with row=item.row %}
-                        <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
-                            {% csrf_token %}
-                            {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" form="bulk-form" class="bulk-row">{% endif %}
-                            <div class="min-w-0">
-                                <p class="font-medium text-gray-900 dark:text-white break-words">{{ row.description }}</p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                    {{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }} · {{ row.amount }} · {{ item.kind_label }}
-                                </p>
-                            </div>
-                            <div class="markup-actions">
-                                <select name="category" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}">
-                                    {% if item.refund_default %}
-                                        <option value="">{% translate 'Возвраты' %}</option>
-                                    {% else %}
-                                        <option value="">{% translate 'Категория…' %}</option>
-                                    {% endif %}
-                                    {% for category in item.categories %}
-                                        <option value="{{ category.pk }}"{% if category.pk == item.remembered_id %} selected{% endif %}>{{ category.name }}</option>
+            </div>
+
+            <div>
+                {% for item in rows %}{% with row=item.row %}
+                    <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="markup-row{% if item.can_transfer %} markup-row-stacked{% endif %}">
+                        {% csrf_token %}
+                        <span class="markup-row-check">
+                            {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" form="bulk-form" class="bulk-row" aria-label="{% translate 'Выбрать строку' %}">{% endif %}
+                        </span>
+                        <div class="finances-icon {% if row.transaction_type == 'income' %}finances-positive{% else %}finances-negative{% endif %}">
+                            {% if row.transaction_type == 'income' %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-5 5m5-5l5 5"></path></svg>
+                            {% else %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l5-5m-5 5l-5-5"></path></svg>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="finances-row-title">{{ row.description }}</div>
+                            <div class="finances-row-sub">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }}{% if item.kind_label %} · {{ item.kind_label }}{% endif %}</div>
+                            {% if item.duplicate %}
+                                <div class="markup-duplicate">{% blocktranslate with movement=item.duplicate %}Похоже, уже учтена: {{ movement }}{% endblocktranslate %}</div>
+                            {% endif %}
+                        </div>
+                        <div class="finances-row-amount {% if row.transaction_type == 'income' %}finances-positive{% else %}finances-negative{% endif %}">
+                            {% if row.transaction_type == 'income' %}+{% else %}-{% endif %}{{ row.amount|floatformat:2 }} ₽
+                        </div>
+                        <div class="markup-actions">
+                            <select name="category" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}" aria-label="{% translate 'Категория…' %}">
+                                {% if item.refund_default %}
+                                    <option value="">{% translate 'Возвраты' %}</option>
+                                {% else %}
+                                    <option value="">{% translate 'Категория…' %}</option>
+                                {% endif %}
+                                {% for category in item.categories %}
+                                    <option value="{{ category.pk }}"{% if category.pk == item.remembered_id %} selected{% endif %}>{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Новая категория' %}</button>
+                            <button type="submit" name="decision" value="post" class="finances-button finances-button-primary">{% translate 'Провести' %}</button>
+                            {% if item.can_transfer %}
+                                <select name="account" class="markup-select" aria-label="{% translate 'Счёт для перевода…' %}">
+                                    <option value="">{% translate 'Счёт для перевода…' %}</option>
+                                    {% for account in accounts %}
+                                        <option value="{{ account.pk }}"{% if account.pk == item.transfer_account.pk %} selected{% endif %}>{{ account.name_account }}</option>
                                     {% endfor %}
                                 </select>
-                                <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Новая категория' %}</button>
-                                <button type="submit" name="decision" value="post" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Провести' %}</button>
-                                {% if item.can_transfer %}
-                                    <select name="account" class="markup-select">
-                                        <option value="">{% translate 'Счёт для перевода…' %}</option>
-                                        {% for account in accounts %}
-                                            <option value="{{ account.pk }}"{% if account.pk == item.transfer_account.pk %} selected{% endif %}>{{ account.name_account }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" name="decision" value="transfer" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{% translate 'Перевести' %}</button>
-                                {% endif %}
-                                <button type="submit" name="decision" value="skip" class="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{% translate 'Пропустить' %}</button>
-                            </div>
-                        </form>
-                        {% endwith %}
-                    {% empty %}
-                        <p class="p-5 text-sm text-gray-500 dark:text-gray-400">{% translate 'Строк, ждущих разметки, нет.' %}</p>
-                    {% endfor %}
-                </div>
+                                <button type="submit" name="decision" value="transfer" class="finances-button finances-button-primary">{% translate 'Перевести' %}</button>
+                            {% endif %}
+                            <button type="submit" name="decision" value="skip" class="finances-button finances-button-secondary">{% translate 'Пропустить' %}</button>
+                        </div>
+                    </form>
+                    {% endwith %}
+                {% empty %}
+                    <p class="finances-empty">{% translate 'Строк, ждущих разметки, нет.' %}</p>
+                {% endfor %}
             </div>
+
             {% if page_obj.has_other_pages %}
-                <nav class="mt-4 flex gap-4 text-sm">
-                    {% if page_obj.has_previous %}<a class="text-blue-600 dark:text-blue-400 underline" href="?page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
-                    {% if page_obj.has_next %}<a class="text-blue-600 dark:text-blue-400 underline" href="?page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                <nav class="finances-pagination" aria-label="{% translate 'Пагинация' %}">
+                    {% if page_obj.has_previous %}<a class="finances-page-link" href="?page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                    <span class="finances-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                    {% if page_obj.has_next %}<a class="finances-page-link" href="?page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
                 </nav>
             {% endif %}
-            <div id="category-modal"></div>
-            <script nonce="{{ request.csp_nonce }}">
-                document.getElementById('select-all-rows').addEventListener('change', function (event) {
-                    document.querySelectorAll('.bulk-row').forEach(function (box) { box.checked = event.target.checked; });
-                });
-            </script>
-            <a class="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 underline" href="{% url 'users:bank_statement_upload' %}">{% translate 'К загрузкам выписок' %}</a>
-        </div>
+        </section>
     </div>
+    <div id="category-modal"></div>
+    <script nonce="{{ request.csp_nonce }}">
+        document.getElementById('select-all-rows').addEventListener('change', function (event) {
+            document.querySelectorAll('.bulk-row').forEach(function (box) { box.checked = event.target.checked; });
+        });
+    </script>
+</div>
 {% endblock %}
