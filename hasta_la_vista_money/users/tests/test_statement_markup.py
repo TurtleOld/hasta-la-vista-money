@@ -465,13 +465,13 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         )
 
     def test_card_row_has_no_transfer_button(self) -> None:
-        self._row(1)
+        row = self._row(1)
 
         response = self.client.get(
             reverse('users:bank_statement_markup', args=[self.upload.pk]),
         )
 
-        self.assertNotContains(response, 'value="transfer"')
+        self.assertNotContains(response, f'name="account-{row.pk}"')
 
     def test_decide_transfer_closes_row(self) -> None:
         row = self._own_row()
@@ -479,9 +479,9 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         response = self.client.post(
             reverse(
                 'users:bank_statement_markup_decide',
-                args=[self.upload.pk, row.pk],
+                args=[self.upload.pk],
             ),
-            {'decision': 'transfer', 'account': self.other.pk},
+            {'row': row.pk, f'account-{row.pk}': self.other.pk},
         )
 
         self.assertEqual(response.status_code, 302)
@@ -522,9 +522,9 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         response = self.client.post(
             reverse(
                 'users:bank_statement_markup_decide',
-                args=[self.upload.pk, row.pk],
+                args=[self.upload.pk],
             ),
-            {'decision': 'post', 'category': category.pk},
+            {'row': row.pk, f'category-{row.pk}': category.pk},
         )
 
         self.assertEqual(response.status_code, 302)
@@ -537,13 +537,104 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         self.client.post(
             reverse(
                 'users:bank_statement_markup_decide',
-                args=[self.upload.pk, row.pk],
+                args=[self.upload.pk],
             ),
-            {'decision': 'skip'},
+            {'row': row.pk, f'skip-{row.pk}': 'on'},
         )
 
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.SKIPPED)
+
+    def test_decide_applies_every_row_of_the_page_at_once(self) -> None:
+        posted, skipped, untouched = self._row(1), self._row(2), self._row(3)
+        category = self._category('Продукты')
+        AuditLog.objects.all().delete()
+
+        self.client.post(
+            reverse(
+                'users:bank_statement_markup_decide',
+                args=[self.upload.pk],
+            ),
+            {
+                'row': [posted.pk, skipped.pk, untouched.pk],
+                f'category-{posted.pk}': category.pk,
+                f'skip-{skipped.pk}': 'on',
+                f'category-{skipped.pk}': category.pk,
+                f'category-{untouched.pk}': '',
+            },
+        )
+
+        decisions = dict(
+            BankStatementRow.objects.values_list('pk', 'decision'),
+        )
+        self.assertEqual(
+            decisions,
+            {
+                posted.pk: BankStatementRow.Decision.NEW,
+                skipped.pk: BankStatementRow.Decision.SKIPPED,
+                untouched.pk: BankStatementRow.Decision.AWAITING_MARKUP,
+            },
+        )
+        logs = AuditLog.objects.all()
+        self.assertEqual(logs.values('operation_id').distinct().count(), 1)
+
+    def test_decide_refund_option_posts_cancel_row_to_returns(self) -> None:
+        row = self._row(1, transaction_type='income', kind='cancel')
+
+        self.client.post(
+            reverse(
+                'users:bank_statement_markup_decide',
+                args=[self.upload.pk],
+            ),
+            {'row': row.pk, f'category-{row.pk}': 'refund'},
+        )
+
+        row.refresh_from_db()
+        if row.transaction is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(row.transaction.category.name, 'Возвраты')
+
+    def test_decide_many_counts_conflicting_rows(self) -> None:
+        good, bad = self._row(1), self._row(2)
+        category = self._category('Продукты')
+
+        result = self.service.decide_many(
+            self.upload.pk,
+            self.user.pk,
+            {good.pk: ('post', category.pk), bad.pk: ('post', None)},
+        )
+
+        self.assertEqual(result, (1, 1))
+        bad.refresh_from_db()
+        self.assertEqual(
+            bad.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def test_decide_ignores_rows_of_other_uploads(self) -> None:
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='other.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        row = self._row(1)
+        row.upload = other_upload
+        row.save(update_fields=['upload'])
+
+        self.client.post(
+            reverse(
+                'users:bank_statement_markup_decide',
+                args=[self.upload.pk],
+            ),
+            {'row': row.pk, f'skip-{row.pk}': 'on'},
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
 
     def test_status_links_to_markup_screen(self) -> None:
         self._row(1)

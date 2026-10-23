@@ -124,6 +124,13 @@ class StatementMarkupServiceProtocol(Protocol):
         user_id: int,
     ) -> tuple[int, int]: ...
 
+    def decide_many(
+        self,
+        upload_id: int,
+        user_id: int,
+        decisions: dict[int, tuple[str, int | None]],
+    ) -> tuple[int, int]: ...
+
     def post_transfer(
         self,
         row_id: int,
