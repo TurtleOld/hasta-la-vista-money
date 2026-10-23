@@ -1,5 +1,14 @@
 # История изменений
 
+## [2.22.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.1...v2.22.2) (2026-10-23)
+
+
+### 🐛 Исправления
+
+* **core:** hash static file names so browsers fetch new assets ([#1143](https://github.com/TurtleOld/hasta-la-vista-money/issues/1143)) ([41aba2a](https://github.com/TurtleOld/hasta-la-vista-money/commit/41aba2a5e76a6706f7ff7b30e13f136e60ca0c03))
+* **users:** flag probable duplicates and restyle statement markup ([#1141](https://github.com/TurtleOld/hasta-la-vista-money/issues/1141)) ([747c332](https://github.com/TurtleOld/hasta-la-vista-money/commit/747c3325028bd1b6a1b080516aacc2ea03f606ac))
+* **users:** post all statement markup rows with one submit ([#1144](https://github.com/TurtleOld/hasta-la-vista-money/issues/1144)) ([df13ce4](https://github.com/TurtleOld/hasta-la-vista-money/commit/df13ce45fb5185f98666b8f973d8e72de17519e1))
+
 ## [2.22.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.0...v2.22.1) (2026-10-21)
 
 
