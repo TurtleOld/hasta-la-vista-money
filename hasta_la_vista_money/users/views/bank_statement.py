@@ -466,45 +466,52 @@ def _markup_message(reason: str) -> str:
 
 
 class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
-    """Post or skip one row awaiting markup."""
+    """Apply the decisions chosen for every row of the markup page."""
 
-    def post(
-        self,
-        request: HttpRequest,
-        upload_id: int,
-        row_id: int,
-    ) -> HttpResponse:
+    def post(self, request: HttpRequest, upload_id: int) -> HttpResponse:
         user = cast('User', request.user)
-        row = get_object_or_404(
-            BankStatementRow,
-            pk=row_id,
-            upload_id=upload_id,
-            upload__user=user,
-            upload__account__user=user,
+        get_object_or_404(
+            BankStatementUpload,
+            pk=upload_id,
+            user=user,
+            account__user=user,
         )
-        service = _markup_service(request)
-        category = request.POST.get('category', '')
-        try:
-            decision = request.POST.get('decision')
-            if decision == 'skip':
-                service.skip(row.pk, user.pk)
-            elif decision == 'transfer':
-                account = request.POST.get('account', '')
-                service.post_transfer(
-                    row.pk,
-                    user.pk,
-                    int(account) if account.isdigit() else None,
+        decisions: dict[int, tuple[str, int | None]] = {}
+        for value in request.POST.getlist('row'):
+            if not value.isdigit():
+                continue
+            account = request.POST.get(f'account-{value}', '')
+            category = request.POST.get(f'category-{value}', '')
+            if request.POST.get(f'skip-{value}'):
+                decisions[int(value)] = ('skip', None)
+            elif account.isdigit():
+                decisions[int(value)] = ('transfer', int(account))
+            elif category == 'refund':
+                decisions[int(value)] = ('post', None)
+            elif category.isdigit():
+                decisions[int(value)] = ('post', int(category))
+        if not decisions:
+            messages.error(
+                request,
+                _('Выберите категорию хотя бы для одной строки.'),
+            )
+        else:
+            decided, failed = _markup_service(request).decide_many(
+                upload_id,
+                user.pk,
+                decisions,
+            )
+            if decided:
+                messages.success(
+                    request,
+                    _('Размечено строк: %(count)s') % {'count': decided},
                 )
-            else:
-                service.post(
-                    row.pk,
-                    user.pk,
-                    int(category) if category.isdigit() else None,
+            if failed:
+                messages.error(
+                    request,
+                    _('Не удалось разметить строк: %(count)s')
+                    % {'count': failed},
                 )
-        except StatementMarkupConflictError as error:
-            messages.error(request, _markup_message(str(error)))
-        except ValidationError:
-            messages.error(request, _('Не удалось провести строку.'))
         return redirect(
             reverse('users:bank_statement_markup', args=[upload_id]),
         )

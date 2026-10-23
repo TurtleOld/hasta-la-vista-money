@@ -111,7 +111,7 @@ urlpatterns = [
         name='bank_statement_markup_bulk',
     ),
     path(
-        'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/',
+        'bank-statement-upload/<int:upload_id>/markup/decide/',
         BankStatementMarkupDecisionView.as_view(),
         name='bank_statement_markup_decide',
     ),

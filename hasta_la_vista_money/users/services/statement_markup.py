@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
@@ -281,6 +282,45 @@ class StatementMarkupService:
             if posted:
                 self._finalize(upload)
         return posted, len(remembered) - posted
+
+    def decide_many(
+        self,
+        upload_id: int,
+        user_id: int,
+        decisions: dict[int, tuple[str, int | None]],
+    ) -> tuple[int, int]:
+        """Apply per-row decisions of the markup page as one operation.
+
+        A decision is ``('post', category_id)``, ``('transfer', account_id)``
+        or ``('skip', None)``. Returns the decided and the failed row counts.
+        """
+        upload = BankStatementUpload.objects.get(pk=upload_id, user_id=user_id)
+        pending = set(
+            self.pending_rows(upload)
+            .filter(pk__in=decisions)
+            .values_list('pk', flat=True),
+        )
+        decided = 0
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            for row_id, (decision, value) in decisions.items():
+                if row_id not in pending:
+                    continue
+                try:
+                    self._decide(
+                        row_id,
+                        user_id,
+                        value if decision == 'post' else None,
+                        skip=decision == 'skip',
+                        transfer_account_id=value,
+                        as_transfer=decision == 'transfer',
+                        finalize=False,
+                    )
+                except (StatementMarkupConflictError, ValidationError):
+                    continue
+                decided += 1
+            if decided:
+                self._finalize(upload)
+        return decided, len(decisions) - decided
 
     def post_transfer(
         self,

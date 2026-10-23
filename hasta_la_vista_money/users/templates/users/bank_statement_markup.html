@@ -27,7 +27,7 @@
                 <h1>{% translate 'Разметка выписки' %}</h1>
                 <span class="meta">{{ upload.account.name_account }} · {% translate 'строк' %}: {{ page_obj.paginator.count }}</span>
             </div>
-            <p class="markup-hint">{% translate 'Выберите категорию и проведите строку либо пропустите её. Остаток счёта меняется сразу при проводке.' %}</p>
+            <p class="markup-hint">{% translate 'Выберите категории или отметьте строки для пропуска, затем нажмите «Провести». Остаток счёта меняется сразу при проводке.' %}</p>
 
             {% if messages %}
                 <div class="markup-messages">
@@ -64,10 +64,11 @@
                 {% endif %}
             </div>
 
-            <div>
+            <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk %}">
+                {% csrf_token %}
                 {% for item in rows %}{% with row=item.row %}
-                    <form method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk row.pk %}" class="markup-row{% if item.can_transfer %} markup-row-stacked{% endif %}">
-                        {% csrf_token %}
+                    <div class="markup-row{% if item.can_transfer %} markup-row-stacked{% endif %}">
+                        <input type="hidden" name="row" value="{{ row.pk }}">
                         <span class="markup-row-check">
                             {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" form="bulk-form" class="bulk-row" aria-label="{% translate 'Выбрать строку' %}">{% endif %}
                         </span>
@@ -89,35 +90,40 @@
                             {% if row.transaction_type == 'income' %}+{% else %}-{% endif %}{{ row.amount|floatformat:2 }} ₽
                         </div>
                         <div class="markup-actions">
-                            <select name="category" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}" aria-label="{% translate 'Категория…' %}">
+                            <select name="category-{{ row.pk }}" id="category-{{ row.pk }}" class="markup-select category-select-{{ row.transaction_type }}" aria-label="{% translate 'Категория…' %}">
+                                <option value="">{% translate 'Категория…' %}</option>
                                 {% if item.refund_default %}
-                                    <option value="">{% translate 'Возвраты' %}</option>
-                                {% else %}
-                                    <option value="">{% translate 'Категория…' %}</option>
+                                    <option value="refund">{% translate 'Возвраты' %}</option>
                                 {% endif %}
                                 {% for category in item.categories %}
                                     <option value="{{ category.pk }}"{% if category.pk == item.remembered_id %} selected{% endif %}>{{ category.name }}</option>
                                 {% endfor %}
                             </select>
                             <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Новая категория' %}</button>
-                            <button type="submit" name="decision" value="post" class="finances-button finances-button-primary">{% translate 'Провести' %}</button>
                             {% if item.can_transfer %}
-                                <select name="account" class="markup-select" aria-label="{% translate 'Счёт для перевода…' %}">
+                                <select name="account-{{ row.pk }}" class="markup-select" aria-label="{% translate 'Счёт для перевода…' %}">
                                     <option value="">{% translate 'Счёт для перевода…' %}</option>
                                     {% for account in accounts %}
                                         <option value="{{ account.pk }}"{% if account.pk == item.transfer_account.pk %} selected{% endif %}>{{ account.name_account }}</option>
                                     {% endfor %}
                                 </select>
-                                <button type="submit" name="decision" value="transfer" class="finances-button finances-button-primary">{% translate 'Перевести' %}</button>
                             {% endif %}
-                            <button type="submit" name="decision" value="skip" class="finances-button finances-button-secondary">{% translate 'Пропустить' %}</button>
+                            <label class="markup-check-all">
+                                <input type="checkbox" name="skip-{{ row.pk }}">
+                                {% translate 'Пропустить' %}
+                            </label>
                         </div>
-                    </form>
+                    </div>
                     {% endwith %}
                 {% empty %}
                     <p class="finances-empty">{% translate 'Строк, ждущих разметки, нет.' %}</p>
                 {% endfor %}
-            </div>
+                {% if rows %}
+                    <div class="markup-toolbar">
+                        <button type="submit" class="finances-button finances-button-primary">{% translate 'Провести' %}</button>
+                    </div>
+                {% endif %}
+            </form>
 
             {% if page_obj.has_other_pages %}
                 <nav class="finances-pagination" aria-label="{% translate 'Пагинация' %}">
