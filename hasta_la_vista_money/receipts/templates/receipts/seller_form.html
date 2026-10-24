@@ -16,7 +16,7 @@
             </div>
             <div class="receipts-actions">
                 <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-arrow-left"></i>
+                    {% include 'partials/_icon.html' with icon='arrow-left' %}
                     {% translate 'К списку' %}
                 </a>
             </div>
@@ -27,7 +27,7 @@
 
             <section class="receipts-card">
                 <header class="receipts-card-hd">
-                    <h2><i class="bi bi-shop"></i> {% translate 'Данные продавца' %}</h2>
+                    <h2>{% include 'partials/_icon.html' with icon='store' %} {% translate 'Данные продавца' %}</h2>
                 </header>
 
                 {% if form.non_field_errors %}
@@ -48,16 +48,16 @@
 
                 <div class="receipts-card-ft">
                     <p class="hint">
-                        <i class="bi bi-info-circle"></i>
+                        {% include 'partials/_icon.html' with icon='information-circle' %}
                         {% translate 'Продавец будет доступен при создании и редактировании чеков.' %}
                     </p>
                     <div class="ft-actions">
                         <a href="{% url 'receipts:list' %}" class="receipts-btn receipts-btn-ghost">
-                            <i class="bi bi-x-lg"></i>
+                            {% include 'partials/_icon.html' with icon='x' %}
                             {% translate 'Отмена' %}
                         </a>
                         <button type="submit" class="receipts-btn receipts-btn-primary">
-                            <i class="bi bi-check2"></i>
+                            {% include 'partials/_icon.html' with icon='check' %}
                             {% translate 'Добавить' %}
                         </button>
                     </div>

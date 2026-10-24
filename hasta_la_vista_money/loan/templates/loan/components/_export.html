@@ -3,7 +3,7 @@
 <div class="loan-panel loan-form-container mb-4">
     <div class="loan-card-head">
         <h6 class="m-0 font-bold">
-            <i class="bi bi-download mr-2"></i>{% translate 'Экспорт данных' %}
+            {% include 'partials/_icon.html' with icon='download' class='mr-2' %}{% translate 'Экспорт данных' %}
         </h6>
     </div>
     <div class="loan-card-body">
@@ -12,7 +12,7 @@
                 <h6 class="font-bold">{% translate 'Экспорт кредитов' %}</h6>
                 <p class="loan-muted text-sm">{% translate 'Скачайте список всех ваших кредитов в формате CSV' %}</p>
                 <button class="loan-button loan-button-info" id="export-loans">
-                    <i class="bi bi-file-earmark-text mr-2"></i>{% translate 'Экспорт кредитов' %}
+                    {% include 'partials/_icon.html' with icon='document-text' class='mr-2' %}{% translate 'Экспорт кредитов' %}
                 </button>
             </div>
             <div>
@@ -25,7 +25,7 @@
                     {% endfor %}
                 </select>
                 <button class="loan-button loan-button-secondary" id="export-schedule" disabled>
-                    <i class="bi bi-calendar3 mr-2"></i>{% translate 'Экспорт графика' %}
+                    {% include 'partials/_icon.html' with icon='calendar' class='mr-2' %}{% translate 'Экспорт графика' %}
                 </button>
             </div>
         </div>

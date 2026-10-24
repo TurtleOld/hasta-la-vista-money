@@ -20,15 +20,15 @@
             </div>
             <div class="receipts-actions">
                 <a href="{% url 'receipts:category_twins' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-diagram-3"></i>
+                    {% include 'partials/_icon.html' with icon='network' %}
                     {% translate 'Категории' %}
                 </a>
                 <a href="{% url 'users:statistics' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-bar-chart"></i>
+                    {% include 'partials/_icon.html' with icon='chart-bar' %}
                     {% translate 'Детальная статистика' %}
                 </a>
                 <a href="{% url 'receipts:create' %}" class="receipts-button receipts-button-primary">
-                    <i class="bi bi-plus-lg"></i>
+                    {% include 'partials/_icon.html' with icon='plus' %}
                     {% translate 'Добавить чек' %}
                 </a>
             </div>

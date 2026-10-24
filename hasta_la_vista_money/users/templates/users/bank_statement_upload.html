@@ -10,7 +10,7 @@
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                     <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
-                        <i class="bi bi-file-earmark-pdf mr-2"></i>
+                        {% include 'partials/_icon.html' with icon='document-download' class='mr-2' %}
                         {% translate 'Загрузка банковской выписки' %}
                     </h2>
                     <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -25,7 +25,7 @@
                         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <div class="flex">
                                 <div class="shrink-0">
-                                    <i class="bi bi-info-circle text-blue-500 dark:text-blue-400 text-xl"></i>
+                                    {% include 'partials/_icon.html' with icon='information-circle' class='text-blue-500 dark:text-blue-400 text-xl' %}
                                 </div>
                                 <div class="ml-3">
                                     <h3 class="text-sm font-medium text-blue-800 dark:text-blue-300">
@@ -57,7 +57,7 @@
                                 <label id="upload-zone" for="pdf-file-input"
                                     class="group block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/40 p-8 text-center transition hover:border-blue-400 dark:hover:border-blue-500">
                                     <div class="flex flex-col items-center gap-3">
-                                        <i class="bi bi-file-earmark-pdf text-4xl text-gray-500 dark:text-gray-300"></i>
+                                        {% include 'partials/_icon.html' with icon='document-download' class='text-4xl text-gray-500 dark:text-gray-300' %}
                                         <div class="space-y-1">
                                             <p class="font-medium text-gray-900 dark:text-gray-100">
                                                 {% translate 'Перетащите PDF файл сюда или нажмите для выбора' %}
@@ -81,14 +81,14 @@
 
                                 <div id="pdf-preview" class="hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                                     <div class="flex items-center gap-4">
-                                        <i class="bi bi-file-earmark-pdf text-3xl text-red-500"></i>
+                                        {% include 'partials/_icon.html' with icon='document-download' class='text-3xl text-red-500' %}
                                         <div class="flex-1 min-w-0">
                                             <p id="pdf-filename" class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"></p>
                                             <p id="pdf-filesize" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></p>
                                         </div>
                                         <button type="button" id="remove-pdf"
                                             class="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                            <i class="bi bi-trash"></i>
+                                            {% include 'partials/_icon.html' with icon='trash' %}
                                             {% translate 'Удалить' %}
                                         </button>
                                     </div>
@@ -107,12 +107,12 @@
                         <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                             <a href="{% url 'users:profile' user.id %}"
                                class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                                <i class="bi bi-arrow-left"></i>
+                                {% include 'partials/_icon.html' with icon='arrow-left' %}
                                 <span>{% translate 'Отмена' %}</span>
                             </a>
                             <button type="submit" id="submitBtn"
                                     class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                                <i class="bi bi-upload" id="uploadIcon"></i>
+                                <span id="uploadIcon">{% include 'partials/_icon.html' with icon='upload' %}</span>
                                 <span id="btnText">{% translate 'Загрузить и обработать' %}</span>
                             </button>
                         </div>
@@ -149,23 +149,20 @@
                 </div>
             </section>
 
-            <!-- Progress indicator -->
             <div id="progressIndicator" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                            <i class="bi bi-hourglass-split mr-2"></i>
+                            {% include 'partials/_icon.html' with icon='hourglass' class='mr-2' %}
                             <span id="progressTitle">{% translate 'Обработка выписки...' %}</span>
                         </h3>
                         <span id="progressPercent" class="text-sm font-semibold text-blue-600 dark:text-blue-400">0%</span>
                     </div>
 
-                    <!-- Progress bar -->
                     <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-4">
                         <div id="progressBar" class="bg-blue-600 dark:bg-blue-500 h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
                     </div>
 
-                    <!-- Progress details -->
                     <div id="progressDetails" class="text-sm text-gray-600 dark:text-gray-400">
                         <p id="progressStatus">{% translate 'Инициализация...' %}</p>
                         <p id="progressTransactions" class="mt-1 hidden">
@@ -175,11 +172,10 @@
                 </div>
             </div>
 
-            <!-- Reconciliation block (shown after completion) -->
             <div id="reconciliationBlock" class="hidden mt-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                        <i class="bi bi-calculator mr-2"></i>
+                        {% include 'partials/_icon.html' with icon='calculator' class='mr-2' %}
                         {% translate 'Сверка баланса' %}
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -202,7 +198,7 @@
             <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <div class="flex">
                     <div class="shrink-0">
-                        <i class="bi bi-exclamation-triangle text-yellow-500 dark:text-yellow-400 text-xl"></i>
+                        {% include 'partials/_icon.html' with icon='exclamation' class='text-yellow-500 dark:text-yellow-400 text-xl' %}
                     </div>
                     <div class="ml-3">
                         <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-300">

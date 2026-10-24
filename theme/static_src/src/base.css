@@ -374,3 +374,11 @@
 .theme-fade * {
   transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
 }
+
+@layer components {
+  .icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+  }
+}

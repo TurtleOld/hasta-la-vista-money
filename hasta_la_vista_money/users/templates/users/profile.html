@@ -28,11 +28,11 @@
                         </h2>
                         <div class="profile-user-meta">
                             <p>
-                                <i class="bi bi-envelope"></i>
+                                {% include 'partials/_icon.html' with icon='mail' %}
                                 <span>{{ user.email|default:"Email не указан" }}</span>
                             </p>
                             <p>
-                                <i class="bi bi-calendar"></i>
+                                {% include 'partials/_icon.html' with icon='calendar' %}
                                 <span>{% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}</span>
                             </p>
                         </div>
@@ -43,11 +43,11 @@
             <section class="profile-panel">
                 <div class="profile-tabs" id="profileTabs" role="tablist">
                     <button class="profile-tab-button active" id="personal-tab" data-tab-target="personal" type="button" role="tab" aria-selected="true" aria-controls="personal">
-                        <i class="bi bi-person"></i>
+                        {% include 'partials/_icon.html' with icon='user' %}
                         <span>{% translate 'Персональная информация' %}</span>
                     </button>
                     <button class="profile-tab-button" id="settings-tab" data-tab-target="settings" type="button" role="tab" aria-selected="false" aria-controls="settings">
-                        <i class="bi bi-gear"></i>
+                        {% include 'partials/_icon.html' with icon='cog' %}
                         <span>{% translate 'Настройки' %}</span>
                     </button>
                 </div>
@@ -89,7 +89,7 @@
                                 </div>
 
                                 <button type="submit" class="profile-button profile-button-primary">
-                                    <i class="bi bi-check-circle"></i>
+                                    {% include 'partials/_icon.html' with icon='check-circle' %}
                                     <span>{% translate 'Сохранить изменения' %}</span>
                                 </button>
                             </form>
@@ -101,13 +101,13 @@
                                     <h2 class="profile-section-title">{% translate 'Безопасность' %}</h2>
                                     <div class="profile-action-list">
                                         <a class="profile-action-link" href="{% url 'users:password' %}">
-                                            <i class="bi bi-key"></i>
+                                            {% include 'partials/_icon.html' with icon='key' %}
                                             <span>{% translate 'Изменить пароль' %}</span>
                                         </a>
                                         <form action="{% url 'logout' %}" method="post" class="profile-action-form">
                                             {% csrf_token %}
                                             <button class="profile-action-link profile-action-link-danger profile-action-button" type="submit">
-                                                <i class="bi bi-box-arrow-right"></i>
+                                                {% include 'partials/_icon.html' with icon='logout' %}
                                                 <span>{% translate 'Выйти из аккаунта' %}</span>
                                             </button>
                                         </form>
@@ -136,7 +136,7 @@
                                         {% endif %}
                                         <div class="profile-action-list">
                                             <a class="profile-action-link" href="{% url 'users:groups:delete_user' %}">
-                                                <i class="bi bi-person-dash"></i>
+                                                {% include 'partials/_icon.html' with icon='user-remove' %}
                                                 <span>{% translate "Удалить пользователя из семьи" %}</span>
                                             </a>
                                         </div>
@@ -147,16 +147,16 @@
                                     <h2 class="profile-section-title">{% translate 'Управление данными' %}</h2>
                                     <div class="profile-action-list">
                                         <a class="profile-action-link" href="{% url 'users:bank_statement_upload' %}">
-                                            <i class="bi bi-file-earmark-pdf"></i>
+                                            {% include 'partials/_icon.html' with icon='document-download' %}
                                             <span>{% translate 'Загрузка банковских выписок' %}</span>
                                         </a>
                                         <a class="profile-action-link" href="{% url 'users:export_data' %}">
-                                            <i class="bi bi-download"></i>
+                                            {% include 'partials/_icon.html' with icon='download' %}
                                             <span>{% translate 'Экспорт данных' %}</span>
                                         </a>
                                         {% for group in family_groups %}
                                             <a class="profile-action-link" href="{% url 'users:export_data' %}?group_id={{ group.id }}">
-                                                <i class="bi bi-download"></i>
+                                                {% include 'partials/_icon.html' with icon='download' %}
                                                 <span>{% blocktranslate with name=group.name %}Экспорт данных группы «{{ name }}»{% endblocktranslate %}</span>
                                             </a>
                                         {% endfor %}
@@ -165,7 +165,7 @@
                                     <div class="profile-section profile-section-divider">
                                         <h2 class="profile-section-title">{% translate 'Тур' %}</h2>
                                         <button id="site-tour-on" class="profile-action-link profile-action-button" type="button">
-                                            <i class="bi bi-signpost-2"></i>
+                                            {% include 'partials/_icon.html' with icon='signpost' %}
                                             <span id="site-tour-label-enable" class="hidden">{% translate 'Включить тур по сайту' %}</span>
                                             <span id="site-tour-label-disable" class="hidden">{% translate 'Отключить тур по сайту' %}</span>
                                         </button>

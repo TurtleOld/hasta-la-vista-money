@@ -19,7 +19,7 @@ class NotificationDict(TypedDict):
         type: Notification type ('warning', 'danger', 'success').
         title: Notification title.
         message: Notification message.
-        icon: Bootstrap Icons class name.
+        icon: Icon name from partials/_icon.html.
     """
 
     type: Literal['warning', 'danger', 'success']
@@ -58,7 +58,7 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
                         [acc.name_account for acc in low_balance_accounts],
                     ),
                 ),
-                'icon': 'bi-exclamation-triangle',
+                'icon': 'exclamation',
             },
         )
     current_month_expenses = (
@@ -90,7 +90,7 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
                     f'В текущем месяце расходы превышают доходы на '
                     f'{current_month_expenses - current_month_income:.2f} ₽'
                 ),
-                'icon': 'bi-arrow-down-circle',
+                'icon': 'arrow-circle-down',
             },
         )
     if (
@@ -106,7 +106,7 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
                 'message': (
                     'Вы сэкономили более 20% от доходов в текущем месяце'
                 ),
-                'icon': 'bi-check-circle',
+                'icon': 'check-circle',
             },
         )
     return [cast('NotificationDict', n) for n in notifications]
