@@ -804,6 +804,27 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
+    def test_probable_duplicate_is_marked_skip_by_default(self) -> None:
+        category = self._category('Продукты')
+        duplicate = self._row(1)
+        fresh = self._row(2, amount='250.00')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type='expense',
+            amount=Decimal('100.00'),
+            date=datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertContains(response, f'name="skip-{duplicate.pk}" checked')
+        self.assertContains(response, f'name="skip-{fresh.pk}">')
+
     def test_type_is_part_of_the_key(self) -> None:
         expense = self._category('Продукты')
         income = self._category('Кэшбэк', 'income')

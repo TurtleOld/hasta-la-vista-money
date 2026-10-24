@@ -106,7 +106,7 @@
                                 </select>
                             {% endif %}
                             <label class="markup-check-all">
-                                <input type="checkbox" name="skip-{{ row.pk }}">
+                                <input type="checkbox" name="skip-{{ row.pk }}"{% if item.duplicate %} checked{% endif %}>
                                 {% translate 'Пропустить' %}
                             </label>
                         </div>
