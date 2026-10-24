@@ -97,7 +97,7 @@ def __call__(self, request):
 1. **`UserLoginForm`** - форма входа
    - Поддерживает вход по username или email
    - Поля: `username` (CharField), `password` (CharField)
-   - Bootstrap классы для стилизации
+   - Tailwind/DaisyUI классы для стилизации
 
 2. **`RegisterUserForm`** - форма регистрации
    - Наследует от `UserCreationForm`
@@ -106,7 +106,7 @@ def __call__(self, request):
 
 3. **`UpdateUserForm`** - форма обновления профиля
    - Поля: `username`, `email`, `first_name`, `last_name`
-   - Bootstrap стилизация
+   - Tailwind/DaisyUI стилизация
 
 ### Формы управления группами
 
@@ -443,7 +443,7 @@ urlpatterns = [
 
 Интерфейс полностью адаптивен:
 
-- Использует Bootstrap 5 для responsive-дизайна
+- Использует Tailwind CSS для responsive-дизайна
 - Карточки перестраиваются на мобильных устройствах
 - Вкладочный интерфейс оптимизирован для touch-устройств
 
@@ -451,7 +451,7 @@ urlpatterns = [
 
 - **AJAX-формы** для обновления данных без перезагрузки страницы
 - **Динамическое переключение тем**
-- **Иконки Bootstrap Icons** для визуального улучшения
+- **SVG-иконки** (Heroicons/Lucide) для визуального улучшения
 - **Кастомные стили** с градиентами для аватара и современным дизайном карточек
 
 ## Интерактивный дашборд

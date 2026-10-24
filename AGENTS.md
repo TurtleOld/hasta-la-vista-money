@@ -50,7 +50,8 @@ service/repository/protocol/DI из раздела «Архитектура пр
 - **Аутентификация**: JWT (djangorestframework-simplejwt)
 - **Dependency Injection**: dependency-injector
 - **Чеки**: QR-flow через интеграцию с API ФНС
-- **Frontend**: Bootstrap 5, Chart.js, jQuery, HTMX
+- **Frontend**: Tailwind CSS v4, DaisyUI 5, HTMX, Alpine.js (CSP-сборка), Chart.js, ECharts
+- **Иконки**: inline SVG через `partials/_icon.html` (Heroicons/Lucide); Bootstrap Icons не используются
 
 Для обработки чеков через ФНС должны быть заданы:
 `FNS_INN`, `FNS_PASSWORD`, `FNS_CLIENT_SECRET`.
@@ -289,13 +290,13 @@ class MyForm(forms.ModelForm):
         model = MyModel
         fields = ['field1', 'field2']
         widgets = {
-            'field1': forms.TextInput(attrs={'class': 'form-control'}),
+            'field1': forms.TextInput(attrs={'class': 'input'}),
         }
 ```
 
 **Правила:**
 - Используйте ModelForm для форм, связанных с моделями
-- Используйте crispy-forms для Bootstrap стилизации
+- Стилизуйте виджеты классами Tailwind/DaisyUI через `attrs`
 - Валидация должна быть в форме, не в view
 
 ---
