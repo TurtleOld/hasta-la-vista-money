@@ -94,6 +94,9 @@ OZON_DATE_COL = 0
 OZON_DOCUMENT_COL = 1
 OZON_DESCRIPTION_COL = 2
 OZON_AMOUNT_COL = 3
+# camelot stream cuts Ozon tables after tall cells; a wide edge keeps
+# the whole page in one table.
+OZON_TABLE_EDGE_TOL = 500
 
 OZON_PURCHASE_CATEGORY = 'Покупки Ozon'
 OZON_REFUND_CATEGORY = 'Возвраты Ozon'
@@ -178,7 +181,11 @@ class BaseBankStatementParser(ABC):
     # Shared utilities
     # ------------------------------------------------------------------
 
-    def _read_tables(self, pages: str = 'all') -> list[Any]:
+    def _read_tables(
+        self,
+        pages: str = 'all',
+        **options: Any,
+    ) -> list[Any]:
         """Read all tables from the PDF using camelot stream mode."""
         return cast(
             'list[Any]',
@@ -187,6 +194,7 @@ class BaseBankStatementParser(ABC):
                 flavor='stream',
                 pages=pages,
                 suppress_stdout=True,
+                **options,
             ),
         )
 
@@ -979,12 +987,15 @@ class _OzonBankParser(BaseBankStatementParser):
         """Parse purchases, refunds, and tips from an Ozon statement."""
         try:
             logger.info('bank_statement_parse_started', parser='ozon')
-            tables = self._read_tables()
+            tables = self._read_tables(edge_tol=OZON_TABLE_EDGE_TOL)
             transactions: list[dict[str, Any]] = []
             operation_rows = 0
 
             for table in tables:
-                parsed, table_operation_rows = self._parse_table(table.df)
+                parsed, table_operation_rows = self._parse_table(
+                    table.df,
+                    table.page,
+                )
                 transactions.extend(parsed)
                 operation_rows += table_operation_rows
 
@@ -1015,6 +1026,7 @@ class _OzonBankParser(BaseBankStatementParser):
     def _parse_table(
         self,
         df: pd.DataFrame,
+        page: str,
     ) -> tuple[list[dict[str, Any]], int]:
         transactions: list[dict[str, Any]] = []
         operation_rows = 0
@@ -1022,8 +1034,7 @@ class _OzonBankParser(BaseBankStatementParser):
 
         while index < len(df):
             row = df.iloc[index]
-            date_text = self._cell(row, OZON_DATE_COL)
-            if not self._operation_start_pattern.match(date_text):
+            if not self._is_operation_start(row):
                 index += 1
                 continue
 
@@ -1032,23 +1043,31 @@ class _OzonBankParser(BaseBankStatementParser):
             next_index = index + 1
             while next_index < len(df):
                 next_row = df.iloc[next_index]
-                if self._operation_start_pattern.match(
-                    self._cell(next_row, OZON_DATE_COL),
-                ):
+                if self._is_operation_start(next_row):
                     break
                 parts.append(next_row)
                 next_index += 1
 
-            transaction = self._parse_operation(parts)
+            transaction = self._parse_operation(parts, page)
             if transaction is not None:
                 transactions.append(transaction)
             index = next_index
 
         return transactions, operation_rows
 
+    def _is_operation_start(self, row: pd.Series) -> bool:
+        # The processing-date row also starts with a date, but has no amount.
+        return bool(
+            self._operation_start_pattern.match(
+                self._cell(row, OZON_DATE_COL),
+            )
+            and self._cell(row, OZON_AMOUNT_COL),
+        )
+
     def _parse_operation(
         self,
         rows: list[pd.Series],
+        page: str,
     ) -> dict[str, Any] | None:
         date_text = ' '.join(self._cell(row, OZON_DATE_COL) for row in rows)
         trans_date = self._extract_ozon_date(date_text)
@@ -1059,10 +1078,12 @@ class _OzonBankParser(BaseBankStatementParser):
         )
         description = self._joined_column(rows, OZON_DESCRIPTION_COL)
         amount_text = self._joined_column(rows, OZON_AMOUNT_COL)
-
-        if trans_date is None or not source_ref or not amount_text:
-            error_msg = 'Не удалось разобрать строку операции Ozon'
-            raise BankStatementParseError(error_msg)
+        where = (
+            f'Операция Ozon на стр. {page} '
+            f'(дата: {self._cell(rows[0], OZON_DATE_COL) or "—"}, '
+            f'документ: {source_ref or "—"}, '
+            f'назначение: {description or "—"})'
+        )
 
         category = self._category_for_description(description)
         if category is None:
@@ -1072,9 +1093,21 @@ class _OzonBankParser(BaseBankStatementParser):
             )
             return None
 
+        missing = [
+            field
+            for field, value in (
+                ('дата операции', trans_date),
+                ('номер документа', source_ref),
+            )
+            if not value
+        ]
+        if missing:
+            error_msg = f'{where}: не найдены {", ".join(missing)}'
+            raise BankStatementParseError(error_msg)
+
         amount = self._extract_ozon_amount(amount_text)
         if amount is None or amount == Decimal(0):
-            error_msg = f'Не удалось разобрать сумму операции Ozon {source_ref}'
+            error_msg = f'{where}: не удалось разобрать сумму «{amount_text}»'
             raise BankStatementParseError(error_msg)
 
         return {
@@ -1134,11 +1167,18 @@ class _OzonBankParser(BaseBankStatementParser):
         return amount if match.group(1) == '+' else -amount
 
     def _category_for_description(self, description: str) -> str | None:
-        if description.startswith('Возврат оплаты за товары/услуги'):
+        # Since 2026 Ozon writes short purposes: 'Ozon', 'Возврат средств',
+        # 'Чаевые курьеру Ozon'.
+        if description.startswith(
+            ('Возврат оплаты за товары/услуги', 'Возврат средств'),
+        ):
             return OZON_REFUND_CATEGORY
-        if description.startswith('Оплата товаров/услуг на Платформе Ozon'):
+        if (
+            description.startswith('Оплата товаров/услуг на Платформе Ozon')
+            or description == 'Ozon'
+        ):
             return OZON_PURCHASE_CATEGORY
-        if description.startswith('Чаевые по заказу'):
+        if description.startswith(('Чаевые по заказу', 'Чаевые курьеру')):
             return OZON_TIP_CATEGORY
         return None
 
