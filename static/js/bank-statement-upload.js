@@ -30,19 +30,9 @@
 
         const maxSize = 10 * 1024 * 1024;
 
-        const dragActiveClasses = [
-            'border-blue-400', 'dark:border-blue-500',
-            'bg-blue-50', 'dark:bg-blue-900/20'
-        ];
-        const errorClasses = [
-            'border-red-400', 'dark:border-red-500',
-            'bg-red-50', 'dark:bg-red-900/20'
-        ];
-
         function setZoneClasses(state) {
-            uploadZone.classList.remove(...dragActiveClasses, ...errorClasses);
-            if (state === 'drag') uploadZone.classList.add(...dragActiveClasses);
-            if (state === 'error') uploadZone.classList.add(...errorClasses);
+            if (state === 'drag' || state === 'error') uploadZone.dataset.state = state;
+            else delete uploadZone.dataset.state;
         }
 
         function setError(message) {
@@ -202,16 +192,10 @@
             if (data.status === 'pending') {
                 progressStatus.textContent = window.bankStatementTranslations.pending;
                 // Clear and safely set title using DOM methods
-                while (progressTitle.firstChild) {
-                    progressTitle.removeChild(progressTitle.firstChild);
-                }
                 progressTitle.appendChild(document.createTextNode(window.bankStatementTranslations.fileUploaded));
             } else if (data.status === 'processing') {
                 progressStatus.textContent = window.bankStatementTranslations.processing;
                 // Clear and safely set title using DOM methods
-                while (progressTitle.firstChild) {
-                    progressTitle.removeChild(progressTitle.firstChild);
-                }
                 progressTitle.appendChild(document.createTextNode(window.bankStatementTranslations.processingStatement));
 
                 if (data.total_transactions > 0) {
@@ -227,10 +211,7 @@
                     window.location.assign(data.reconciliation_url);
                 }
             } else if (data.status === 'completed' || data.status === 'completed_with_unresolved') {
-                progressBar.classList.remove('bg-blue-600', 'dark:bg-blue-500');
-                progressBar.classList.add('bg-green-600', 'dark:bg-green-500');
-                progressPercent.classList.remove('text-blue-600', 'dark:text-blue-400');
-                progressPercent.classList.add('text-green-600', 'dark:text-green-400');
+                progressIndicator.dataset.state = 'done';
                 let completedText = `${window.bankStatementTranslations.completed} ${data.income_count} ${window.bankStatementTranslations.incomes}, ${data.expense_count} ${window.bankStatementTranslations.expenses}`;
                 if (data.skipped_count && data.skipped_count > 0) {
                     completedText += `, ${data.skipped_count} ${window.bankStatementTranslations.skipped}`;
@@ -240,15 +221,7 @@
                 }
                 progressStatus.textContent = completedText;
 
-                // Safely create icon and text elements using DOM methods
-                while (progressTitle.firstChild) {
-                    progressTitle.removeChild(progressTitle.firstChild);
-                }
-                const checkIcon = document.createElement('i');
-                checkIcon.className = 'bi bi-check-circle mr-2';
-                progressTitle.appendChild(checkIcon);
-                const doneText = document.createTextNode(window.bankStatementTranslations.done);
-                progressTitle.appendChild(doneText);
+                progressTitle.textContent = window.bankStatementTranslations.done;
 
                 if (data.statement_closing_balance !== null && data.statement_closing_balance !== undefined) {
                     if (reconciliationBlock) reconciliationBlock.classList.remove('hidden');
@@ -259,10 +232,10 @@
                     if (reconDiscrepancy) {
                         if (discrepancy === 0) {
                             reconDiscrepancy.textContent = window.bankStatementTranslations.balanceMatch;
-                            reconDiscrepancy.classList.add('text-green-600', 'dark:text-green-400');
+                            reconDiscrepancy.classList.add('finances-positive');
                         } else {
                             reconDiscrepancy.textContent = data.balance_discrepancy;
-                            reconDiscrepancy.classList.add('text-red-600', 'dark:text-red-400');
+                            reconDiscrepancy.classList.add('finances-negative');
                         }
                     }
                 }
@@ -281,21 +254,10 @@
                     }
                 }, 5000);
             } else if (data.status === 'failed') {
-                progressBar.classList.remove('bg-blue-600', 'dark:bg-blue-500');
-                progressBar.classList.add('bg-red-600', 'dark:bg-red-500');
-                progressPercent.classList.remove('text-blue-600', 'dark:text-blue-400');
-                progressPercent.classList.add('text-red-600', 'dark:text-red-400');
+                progressIndicator.dataset.state = 'failed';
                 progressStatus.textContent = `${window.bankStatementTranslations.error} ${data.error_message || window.bankStatementTranslations.unknownError}`;
 
-                // Safely create icon and text elements using DOM methods
-                while (progressTitle.firstChild) {
-                    progressTitle.removeChild(progressTitle.firstChild);
-                }
-                const warningIcon = document.createElement('i');
-                warningIcon.className = 'bi bi-exclamation-triangle mr-2';
-                progressTitle.appendChild(warningIcon);
-                const errorText = document.createTextNode(window.bankStatementTranslations.processingError);
-                progressTitle.appendChild(errorText);
+                progressTitle.textContent = window.bankStatementTranslations.processingError;
 
                 if (pollInterval) {
                     clearInterval(pollInterval);
@@ -351,7 +313,7 @@
                 submitBtn.disabled = true;
 
                 btnText.textContent = window.bankStatementTranslations.uploading;
-                uploadIcon.className = 'bi bi-hourglass-split animate-spin';
+                uploadIcon.classList.add('animate-spin');
             });
         }
     });

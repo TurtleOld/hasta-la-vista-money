@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+{% load word_hash %}
+
+{% block title %}{% translate 'Загрузка банковской выписки' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'transactions/css/transactions.css' %}">
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finance_account/css/bank-statement.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="finances-app statement-upload">
+    <div class="finances-wrap">
+        <header class="finances-header">
+            <div>
+                <div class="finances-kicker">{% translate 'Финансы' %}</div>
+                <h1 class="finances-title">{% translate 'Загрузка банковской выписки' %}</h1>
+                <p class="finances-muted mt-3">{% translate 'Загрузите PDF файл с банковской выпиской для автоматического создания операций' %}</p>
+            </div>
+            <div class="finances-actions">
+                <a href="{% url 'finances' %}" class="finances-button finances-button-secondary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                    {% translate 'Назад к списку' %}
+                </a>
+            </div>
+        </header>
+
+        <div class="statement-upload-grid">
+            <section class="composer-card">
+                <form method="post" enctype="multipart/form-data" id="uploadForm" class="statement-form">
+                    {% csrf_token %}
+
+                    <div class="statement-field">
+                        <label for="{{ form.account.id_for_label }}">{{ form.account.label }}</label>
+                        {{ form.account }}
+                        <p class="statement-help">{{ form.account.help_text }}</p>
+                        {% for error in form.account.errors %}
+                            <p class="statement-field-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="statement-field">
+                        <label id="upload-zone" for="pdf-file-input" class="statement-dropzone">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <strong>{% translate 'Перетащите PDF файл сюда или нажмите для выбора' %}</strong>
+                            <span>{% translate 'Только PDF, до 10 МБ' %}</span>
+                        </label>
+
+                        <input type="file" name="pdf_file" id="pdf-file-input" class="hidden" accept=".pdf,application/pdf">
+
+                        <div id="upload-error" class="statement-alert hidden" role="alert"></div>
+
+                        {% for error in form.pdf_file.errors %}
+                            <p class="statement-field-error">{{ error }}</p>
+                        {% endfor %}
+
+                        <div id="pdf-preview" class="statement-file hidden">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <div class="statement-file-meta">
+                                <p id="pdf-filename"></p>
+                                <p id="pdf-filesize"></p>
+                            </div>
+                            <button type="button" id="remove-pdf" class="finances-button finances-button-secondary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                {% translate 'Удалить' %}
+                            </button>
+                        </div>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="statement-alert" role="alert">
+                            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="statement-form-ft">
+                        <p class="statement-help">{% translate 'После обработки проверьте созданные операции и категории' %}</p>
+                        <button type="submit" id="submitBtn" class="finances-button finances-button-primary">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="uploadIcon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span id="btnText">{% translate 'Загрузить и обработать' %}</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <aside class="composer-card statement-howto">
+                <div class="composer-hd"><h1>{% translate 'Как это работает?' %}</h1></div>
+                <ul>
+                    <li>{% translate 'Система автоматически извлечет данные из выписки' %}</li>
+                    <li>{% translate 'Положительные суммы будут записаны как доходы' %}</li>
+                    <li>{% translate 'Отрицательные суммы будут записаны как расходы' %}</li>
+                    <li>{% translate 'Детали платежа будут использованы для создания категорий' %}</li>
+                </ul>
+            </aside>
+        </div>
+
+        <section id="progressIndicator" class="composer-card statement-progress hidden" aria-live="polite">
+            <div class="statement-progress-hd">
+                <h2>
+                    <span id="progressTitle">{% translate 'Обработка выписки...' %}</span>
+                </h2>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="statement-progress-track">
+                <div id="progressBar" class="statement-progress-bar"></div>
+            </div>
+            <p id="progressStatus" class="statement-help">{% translate 'Инициализация...' %}</p>
+            <p id="progressTransactions" class="statement-help hidden">
+                {% translate 'Обработано транзакций:' %} <span id="processedCount">0</span> / <span id="totalCount">0</span>
+            </p>
+        </section>
+
+        <section id="reconciliationBlock" class="composer-card statement-recon hidden">
+            <div class="composer-hd"><h1>{% translate 'Сверка баланса' %}</h1></div>
+            <dl>
+                <div>
+                    <dt>{% translate 'Остаток по выписке' %}</dt>
+                    <dd id="reconStatementBalance">—</dd>
+                </div>
+                <div>
+                    <dt>{% translate 'Остаток в приложении' %}</dt>
+                    <dd id="reconAppBalance">—</dd>
+                </div>
+                <div>
+                    <dt>{% translate 'Расхождение' %}</dt>
+                    <dd id="reconDiscrepancy">—</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="composer-card statement-history">
+            <div class="composer-hd"><h1>{% translate 'История загрузок' %}</h1></div>
+            {% for history_upload in upload_history %}
+                <div class="statement-history-row">
+                    <div>
+                        <p class="statement-history-account">{{ history_upload.account.name_account }}</p>
+                        <p class="statement-help">{{ history_upload.created_at|date:'d.m.Y H:i' }} · {{ history_upload.get_status_display }}</p>
+                        {% if history_upload.needs_transfer_count %}
+                            <p class="statement-warning">
+                                {% blocktranslate with count=history_upload.needs_transfer_count %}Пропущено {{ count }} погашений — проведите их переводами{% endblocktranslate %}
+                                <a href="{% url 'finance_account:list' %}#pending-transfers">{% translate 'Провести переводы' %}</a>
+                            </p>
+                        {% endif %}
+                    </div>
+                    {% if history_upload.markup_count %}
+                        <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_markup' history_upload.pk %}">{% blocktranslate with count=history_upload.markup_count %}Разметить ({{ count }}){% endblocktranslate %}</a>
+                    {% elif history_upload.status == 'awaiting_confirmation' %}
+                        <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <p class="statement-history-row statement-help">{% translate 'Загрузок пока нет.' %}</p>
+            {% endfor %}
+        </section>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+    // Pass Django context data to JavaScript
+    window.bankStatementData = {
+        uploadId: '{{ upload_id|default:"" }}',
+        showProgress: {% if show_progress %}true{% else %}false{% endif %},
+        sessionUploadId: '{{ request.session.last_upload_id|default:"" }}'
+    };
+
+    window.bankStatementUrls = {
+        statusUrl: '{% url "finance_account:bank_statement_upload_status" 0 %}',
+        accountList: '{% url "finance_account:list" %}'
+    };
+
+    window.bankStatementTranslations = {
+        pending: '{% translate "В очереди..." %}',
+        fileUploaded: '{% translate "Файл загружен" %}',
+        processing: '{% translate "Обрабатывается..." %}',
+        processingStatement: '{% translate "Обработка выписки" %}',
+        completed: '{% translate "Завершено! Создано:" %}',
+        incomes: '{% translate "доходов" %}',
+        expenses: '{% translate "расходов" %}',
+        skipped: '{% translate "пропущено (уже были загружены)" %}',
+        pendingTransfersPrefix: '{% translate "Пропущено" %}',
+        pendingTransfersSuffix: '{% translate "погашений — проведите их переводами" %}',
+        done: '{% translate "Готово!" %}',
+        error: '{% translate "Ошибка:" %}',
+        unknownError: '{% translate "Неизвестная ошибка" %}',
+        processingError: '{% translate "Ошибка обработки" %}',
+        uploading: '{% translate "Загрузка..." %}',
+        balanceMatch: '{% translate "Совпадает" %}',
+        balanceMismatch: '{% translate "Расхождение" %}'
+    };
+</script>
+<script src="{% static 'js/bank-statement-upload.js' %}" defer></script>
+{% endblock %}

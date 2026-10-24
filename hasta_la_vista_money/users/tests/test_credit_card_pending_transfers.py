@@ -416,7 +416,7 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
             when=datetime(2026, 2, 9, 12, 0, tzinfo=UTC),
         )
         self.url = reverse(
-            'users:bank_statement_pending_transfer_link',
+            'finance_account:bank_statement_pending_transfer_link',
             args=[self.upload.pk, self.row.pk],
         )
 

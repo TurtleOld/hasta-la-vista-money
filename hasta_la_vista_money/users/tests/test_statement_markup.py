@@ -491,7 +491,10 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         self._own_row()
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertContains(
@@ -503,7 +506,10 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         row = self._row(1)
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertNotContains(response, f'name="account-{row.pk}"')
@@ -513,7 +519,7 @@ class StatementOwnTransferTest(StatementMarkupFixture):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {'row': row.pk, f'account-{row.pk}': self.other.pk},
@@ -534,7 +540,10 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         self._row(2, transaction_type='income')
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -545,7 +554,10 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         self.client.force_login(other)
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertEqual(response.status_code, 404)
@@ -556,7 +568,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {'row': row.pk, f'category-{row.pk}': category.pk},
@@ -571,7 +583,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {'row': row.pk, f'skip-{row.pk}': 'on'},
@@ -587,7 +599,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {
@@ -618,7 +630,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {'row': row.pk, f'category-{row.pk}': 'refund'},
@@ -659,7 +671,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.client.post(
             reverse(
-                'users:bank_statement_markup_decide',
+                'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
             {'row': row.pk, f'skip-{row.pk}': 'on'},
@@ -676,24 +688,32 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_upload_status',
+                'finance_account:bank_statement_upload_status',
                 args=[self.upload.pk],
             ),
         )
 
         self.assertEqual(
             response.json()['reconciliation_url'],
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
     def test_history_links_to_markup_screen(self) -> None:
         self._row(1)
 
-        response = self.client.get(reverse('users:bank_statement_upload'))
+        response = self.client.get(
+            reverse('finance_account:bank_statement_upload'),
+        )
 
         self.assertContains(
             response,
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
 
@@ -703,7 +723,7 @@ class StatementMarkupCategoryModalTest(StatementMarkupFixture):
         self.client.force_login(self.user)
         self.row = self._row(1, transaction_type='expense')
         self.url = reverse(
-            'users:bank_statement_markup_category',
+            'finance_account:bank_statement_markup_category',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -819,7 +839,10 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         self.client.force_login(self.user)
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertContains(response, f'name="skip-{duplicate.pk}" checked')
@@ -910,7 +933,10 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         self.client.force_login(self.user)
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertContains(response, f'value="{category.pk}" selected')
@@ -924,7 +950,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_markup_post_remembered',
+                'finance_account:bank_statement_markup_post_remembered',
                 args=[self.upload.pk],
             ),
         )
@@ -941,7 +967,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
 
         self.client.post(
             reverse(
-                'users:bank_statement_markup_post_remembered',
+                'finance_account:bank_statement_markup_post_remembered',
                 args=[self.upload.pk],
             ),
             {'row': [skipped.pk, posted.pk], f'skip-{skipped.pk}': 'on'},
@@ -958,7 +984,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_markup_post_remembered',
+                'finance_account:bank_statement_markup_post_remembered',
                 args=[self.upload.pk],
             ),
         )
@@ -1057,7 +1083,10 @@ class DashboardMarkupReminderTest(StatementMarkupFixture):
         self.assertContains(response, '2 строки ждут разметки')
         self.assertContains(
             response,
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
     def test_banner_uses_russian_plural_forms(self) -> None:
@@ -1170,7 +1199,10 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         category = self._category('Продукты')
 
         response = self.client.post(
-            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup_bulk',
+                args=[self.upload.pk],
+            ),
             {'rows': [row.pk for row in rows], 'category': category.pk},
         )
 
@@ -1188,7 +1220,10 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         category = self._category('Продукты')
 
         self.client.post(
-            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup_bulk',
+                args=[self.upload.pk],
+            ),
             {
                 'row': [skipped.pk, posted.pk],
                 'rows': [skipped.pk, posted.pk],
@@ -1209,11 +1244,14 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         row = self._row(1)
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         bulk_url = reverse(
-            'users:bank_statement_markup_bulk',
+            'finance_account:bank_statement_markup_bulk',
             args=[self.upload.pk],
         )
         self.assertContains(response, 'id="markup-form"')
@@ -1226,7 +1264,10 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         row = self._row(1)
 
         self.client.post(
-            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup_bulk',
+                args=[self.upload.pk],
+            ),
             {'category': self._category('Продукты').pk},
         )
 
@@ -1242,7 +1283,10 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         own = self._row(2, kind='own_c2c')
 
         response = self.client.get(
-            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
         )
 
         self.assertContains(response, f'name="rows" value="{card.pk}"')

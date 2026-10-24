@@ -19,7 +19,7 @@
         <form id="bulk-form"
               class="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700"
               method="post"
-              action="{% url 'users:bank_statement_reconciliation_bulk' upload.pk %}"
+              action="{% url 'finance_account:bank_statement_reconciliation_bulk' upload.pk %}"
               data-linked="{% translate 'Связана с единственным актуальным кандидатом' %}"
               data-new="{% translate 'Импортирована как новая операция' %}"
               data-ambiguous="{% translate 'Не обработана: найдено несколько кандидатов' %}"
@@ -85,14 +85,14 @@
             </div>
             {% if row.decision == 'pending' and reconciliation_active %}
                 <div class="mt-5 flex flex-wrap gap-3">
-                    <form id="linked-{{ row.pk }}" method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
+                    <form id="linked-{{ row.pk }}" method="post" action="{% url 'finance_account:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
                         <input type="hidden" name="decision" value="linked">
                         <button class="rounded bg-blue-600 px-4 py-2 text-white" type="submit">
                             {% translate 'Уже учтена' %}
                         </button>
                     </form>
-                    <form method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
+                    <form method="post" action="{% url 'finance_account:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
                         <input type="hidden" name="decision" value="new">
                         <button class="rounded border border-gray-300 px-4 py-2" type="submit">
@@ -103,7 +103,7 @@
             {% elif row.decision == 'pending' %}
                 <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Срок сверки истёк. Строка будет очищена без создания операции.' %}</p>
             {% elif row.decision == 'linked' and reconciliation_active %}
-                <form class="mt-5" method="post" action="{% url 'users:bank_statement_reconciliation_revise' upload.pk row.pk %}">
+                <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_reconciliation_revise' upload.pk row.pk %}">
                     {% csrf_token %}
                     <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Пересмотреть и импортировать как новую' %}</button>
                 </form>

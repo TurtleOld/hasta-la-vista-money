@@ -10,7 +10,6 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
     owned_group_ids,
@@ -364,64 +363,3 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
             self.cleaned_data['user'],
             self.cleaned_data['group'],
         )
-
-
-class BankStatementUploadForm(forms.Form):
-    """Form for uploading bank statements in PDF format."""
-
-    pdf_file = forms.FileField(
-        label=_('PDF файл выписки'),
-        widget=forms.FileInput(
-            attrs={
-                'class': FORM_CONTROL_CLASS,
-                'accept': '.pdf',
-            },
-        ),
-        help_text=_('Загрузите банковскую выписку в формате PDF'),
-        error_messages={
-            'required': _('Пожалуйста, выберите файл для загрузки.'),
-        },
-    )
-
-    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-
-        self.fields['account'] = forms.ModelChoiceField(
-            queryset=(
-                Account.objects.available_for_operations()
-                .filter(user=user)
-                .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
-            ),
-            label=_('Счёт'),
-            widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
-            help_text=_('Выберите счёт, на который будут записаны операции'),
-            error_messages={
-                'required': _('Пожалуйста, выберите счёт.'),
-            },
-        )
-
-    def clean_pdf_file(self) -> Any:
-        """Validate PDF file."""
-        pdf_file = self.cleaned_data.get('pdf_file')
-        if pdf_file:
-            if not pdf_file.name.endswith('.pdf'):
-                raise forms.ValidationError(
-                    _('Разрешены только PDF файлы.'),
-                )
-            if pdf_file.size > 10 * 1024 * 1024:
-                raise forms.ValidationError(
-                    _('Размер файла не должен превышать 10 МБ.'),
-                )
-            signature = pdf_file.read(len(constants.PDF_SIGNATURE))
-            if signature != constants.PDF_SIGNATURE:
-                raise forms.ValidationError(
-                    _('Файл не является корректным PDF.'),
-                )
-            pdf_file.seek(0)
-        return pdf_file
-
-
-class RepaymentTransferLinkForm(forms.Form):
-    """The transfer an owner picked to close a repayment row."""
-
-    transfer = forms.IntegerField(min_value=1)
