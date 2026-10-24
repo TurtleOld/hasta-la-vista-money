@@ -1,5 +1,13 @@
 # История изменений
 
+## [2.22.4](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.3...v2.22.4) (2026-10-24)
+
+
+### 🐛 Исправления
+
+* **finance_account:** restyle bank statement upload and move pages to finances ([#1149](https://github.com/TurtleOld/hasta-la-vista-money/issues/1149)) ([1cd43a3](https://github.com/TurtleOld/hasta-la-vista-money/commit/1cd43a331394c66e7c00911770b531d26b4a7bc2))
+* **users:** parse new ozon statement format and explain parse errors ([#1147](https://github.com/TurtleOld/hasta-la-vista-money/issues/1147)) ([c02745b](https://github.com/TurtleOld/hasta-la-vista-money/commit/c02745b7c5402c163548ed37055cfd0fbaabcad1))
+
 ## [2.22.3](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.2...v2.22.3) (2026-10-24)
 
 
