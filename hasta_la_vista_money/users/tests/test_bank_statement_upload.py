@@ -5002,6 +5002,78 @@ class TestOzonBankStatement(TestCase):
 
         self.assertEqual(result.transactions, [])
 
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_parses_format_with_processing_date_rows(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        # Mirrors camelot output of the 2026 format: the processing date
+        # sits on its own row right under the operation date.
+        mock_table = MagicMock()
+        mock_table.page = '1'
+        mock_table.df = pd.DataFrame(
+            [
+                ['05.08.2026 10:00:00', 'aaaa1111-', 'Ozon', '- 500.00 ₽'],
+                ['05.08.2026 10:30:00', 'bbbb-2222-', '', ''],
+                ['', 'cccc3333', '', ''],
+                ['05.08.2026 09:59:00', 'T0000001', 'Иван', '+ 500.00 ₽'],
+                ['05.08.2026 09:59:00', 'T0000002', 'Иванович', ''],
+                ['04.08.2026 12:00:00', 'dddd4444-', 'Чаевые', '- 50.00 ₽'],
+                ['04.08.2026 12:40:00', 'eeee-', 'курьеру', ''],
+                ['', '', 'Ozon', ''],
+                ['03.08.2026 08:00:00', 'ffff5555-', 'Возврат', '+ 12.34 ₽'],
+                ['03.08.2026 08:00:00', '6666-', 'средств', ''],
+                ['02.08.2026 20:00:00', '7777aaaa-', 'Комиссия за', '- 9.00 ₽'],
+                ['02.08.2026 20:00:00', 'bbbb-', 'смс-', ''],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(
+            [
+                (item['category_name'], item['amount'], item['source_ref'])
+                for item in result.transactions
+            ],
+            [
+                (
+                    'Покупки Ozon',
+                    Decimal('-500.00'),
+                    'aaaa1111-bbbb-2222-cccc3333',
+                ),
+                ('Чаевые Ozon', Decimal('-50.00'), 'dddd4444-eeee-'),
+                ('Возвраты Ozon', Decimal('12.34'), 'ffff5555-6666-'),
+            ],
+        )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_unparsed_operation_error_names_row_and_missing_fields(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        mock_table = MagicMock()
+        mock_table.page = '2'
+        mock_table.df = pd.DataFrame(
+            [
+                [
+                    '05.08.2026 10:00:00',
+                    '',
+                    'Ozon',
+                    '- 10.00 ₽',
+                ],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with self.assertRaises(BankStatementParseError) as ctx:
+            _OzonBankParser(self.pdf_path).parse()
+
+        message = str(ctx.exception)
+        self.assertIn('стр. 2', message)
+        self.assertIn('05.08.2026 10:00:00', message)
+        self.assertIn('номер документа', message)
+
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
         '_extract_pdf_text_for_detection',
