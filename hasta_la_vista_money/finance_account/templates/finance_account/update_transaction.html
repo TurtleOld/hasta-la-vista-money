@@ -11,7 +11,7 @@
 {% block content %}
 <div class="finances-app">
     <div class="composer-crumb">
-        <a href="{% url 'finances' %}">{% translate 'Финансы' %}</a>
+        <a href="{{ return_url }}">{% translate 'Финансы' %}</a>
         <span class="sep">·</span>
         <b>{% translate 'Редактирование операции' %}</b>
     </div>
@@ -51,7 +51,7 @@
             <div class="composer-ft">
                 <div class="hint">{% translate 'Изменение пересчитает баланс счёта.' %}</div>
                 <div class="ft-actions">
-                    <a href="{% url 'finances' %}" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</a>
+                    <a href="{{ return_url }}" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</a>
                     <button type="submit" class="finances-button finances-button-primary">{% translate 'Сохранить' %}</button>
                 </div>
             </div>

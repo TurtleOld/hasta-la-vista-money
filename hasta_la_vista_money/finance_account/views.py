@@ -35,6 +35,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.html import format_html
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -652,6 +653,18 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         return self._success_redirect(request, type_value, cd)
 
 
+def _finances_return_url(request: HttpRequest) -> str:
+    """Return the finances list URL the user came from, keeping filters."""
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
+    if url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return reverse('finances')
+
+
 class TransactionUpdateView(
     LoginRequiredMixin,
     UpdateView[Transaction, TransactionForm],
@@ -661,7 +674,12 @@ class TransactionUpdateView(
     model = Transaction
     form_class = TransactionForm
     template_name = 'finance_account/update_transaction.html'
-    success_url = reverse_lazy('finances')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the filtered finances URL for cancel and breadcrumb."""
+        context = super().get_context_data(**kwargs)
+        context['return_url'] = _finances_return_url(self.request)
+        return context
 
     def get_object(self, queryset: Any = None) -> Transaction:
         """Return a transaction owned by the current user."""
@@ -710,7 +728,7 @@ class TransactionUpdateView(
                 ),
             )
             messages.success(request, _('Операция успешно обновлена.'))
-            return HttpResponseRedirect(str(self.success_url))
+            return HttpResponseRedirect(_finances_return_url(request))
         except (
             ValueError,
             TypeError,
@@ -772,7 +790,7 @@ class TransactionDeleteView(LoginRequiredMixin, View):
             messages.success(request, _('Операция успешно удалена.'))
         except (ValueError, TypeError, PermissionDenied) as error:
             messages.error(request, str(error))
-        return redirect('finances')
+        return HttpResponseRedirect(_finances_return_url(request))
 
 
 class TransferDeleteView(LoginRequiredMixin, View):
@@ -803,7 +821,7 @@ class TransferDeleteView(LoginRequiredMixin, View):
             PermissionDenied,
         ) as error:
             messages.error(request, str(error))
-        return redirect('finances')
+        return HttpResponseRedirect(_finances_return_url(request))
 
 
 class FinancesCategoryView(LoginRequiredMixin, TemplateView):
