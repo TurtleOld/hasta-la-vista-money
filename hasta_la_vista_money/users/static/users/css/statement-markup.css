@@ -10,7 +10,8 @@
   white-space: nowrap;
 }
 
-.statement-markup .markup-select {
+.statement-markup .markup-select,
+.statement-markup .markup-modal select {
   appearance: none;
   background-color: var(--app-surface);
   background-image:
@@ -32,14 +33,79 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.statement-markup .markup-select:hover {
+.statement-markup .markup-select:hover,
+.statement-markup .markup-modal input:hover,
+.statement-markup .markup-modal select:hover {
   border-color: var(--app-accent);
 }
 
-.statement-markup .markup-select:focus {
+.statement-markup .markup-select:focus,
+.statement-markup .markup-modal input:focus,
+.statement-markup .markup-modal select:focus {
   border-color: var(--app-accent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--app-accent) 25%, transparent);
   outline: none;
+}
+
+.statement-markup .markup-modal {
+  background: var(--finances-surface);
+  border: 1px solid var(--finances-border);
+  border-radius: 1rem;
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 28rem;
+  padding: 1.5rem;
+  width: 100%;
+}
+
+.statement-markup .markup-modal-title {
+  color: var(--finances-text);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.statement-markup .markup-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.statement-markup .markup-modal-field label {
+  color: var(--finances-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.statement-markup .markup-modal input {
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--app-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding: 0.5rem 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.statement-markup .markup-modal input,
+.statement-markup .markup-modal select {
+  min-width: 0;
+  width: 100%;
+}
+
+.statement-markup .markup-modal-error {
+  color: var(--bs-danger, #dc2626);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.statement-markup .markup-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .statement-markup .markup-hint {
