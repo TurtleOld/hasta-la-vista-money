@@ -912,6 +912,25 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
 
+    def test_post_remembered_view_honours_skip_marks(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        skipped, posted = self._keyed(2), self._keyed(3)
+        self.client.force_login(self.user)
+
+        self.client.post(
+            reverse(
+                'users:bank_statement_markup_post_remembered',
+                args=[self.upload.pk],
+            ),
+            {'row': [skipped.pk, posted.pk], f'skip-{skipped.pk}': 'on'},
+        )
+
+        skipped.refresh_from_db()
+        posted.refresh_from_db()
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
+
     def test_other_user_cannot_post_remembered(self) -> None:
         other = User.objects.create_user(username='other', password='x')
         self.client.force_login(other)
@@ -1141,6 +1160,45 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
             ).count(),
             2,
         )
+
+    def test_bulk_view_honours_skip_marks(self) -> None:
+        self.client.force_login(self.user)
+        skipped, posted = self._row(1), self._row(2)
+        category = self._category('Продукты')
+
+        self.client.post(
+            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            {
+                'row': [skipped.pk, posted.pk],
+                'rows': [skipped.pk, posted.pk],
+                'category': category.pk,
+                f'skip-{skipped.pk}': 'on',
+            },
+        )
+
+        skipped.refresh_from_db()
+        posted.refresh_from_db()
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_every_page_action_submits_the_skip_marks(self) -> None:
+        self.client.force_login(self.user)
+        row = self._row(1)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        bulk_url = reverse(
+            'users:bank_statement_markup_bulk',
+            args=[self.upload.pk],
+        )
+        self.assertContains(response, 'id="markup-form"')
+        self.assertContains(response, f'formaction="{bulk_url}"')
+        self.assertNotContains(response, 'form="bulk-form"')
+        self.assertContains(response, f'name="skip-{row.pk}"')
 
     def test_bulk_view_without_selection_changes_nothing(self) -> None:
         self.client.force_login(self.user)
