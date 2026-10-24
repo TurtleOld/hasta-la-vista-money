@@ -1,21 +1,9 @@
 """User app URL configuration."""
 
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from hasta_la_vista_money.users.views import (
-    BankStatementMarkupBulkView,
-    BankStatementMarkupCategoryView,
-    BankStatementMarkupDecisionView,
-    BankStatementMarkupRememberedView,
-    BankStatementMarkupView,
-    BankStatementPendingTransferDismissView,
-    BankStatementPendingTransferLinkView,
-    BankStatementReconciliationBulkView,
-    BankStatementReconciliationDecisionView,
-    BankStatementReconciliationRevisionView,
-    BankStatementReconciliationView,
-    BankStatementUploadStatusView,
-    BankStatementUploadView,
     CreateUser,
     DashboardComparisonView,
     DashboardDataView,
@@ -90,73 +78,12 @@ urlpatterns = [
         DashboardComparisonView.as_view(),
         name='dashboard_comparison',
     ),
+    # Страница переехала в finance_account; старые закладки ведут туда.
     path(
         'bank-statement-upload/',
-        BankStatementUploadView.as_view(),
-        name='bank_statement_upload',
-    ),
-    path(
-        'bank-statement-upload/status/<int:upload_id>/',
-        BankStatementUploadStatusView.as_view(),
-        name='bank_statement_upload_status',
-    ),
-    path(
-        'bank-statement-upload/<int:pk>/markup/',
-        BankStatementMarkupView.as_view(),
-        name='bank_statement_markup',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/markup/bulk/',
-        BankStatementMarkupBulkView.as_view(),
-        name='bank_statement_markup_bulk',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/markup/decide/',
-        BankStatementMarkupDecisionView.as_view(),
-        name='bank_statement_markup_decide',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/markup/remembered/',
-        BankStatementMarkupRememberedView.as_view(),
-        name='bank_statement_markup_post_remembered',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/category/',
-        BankStatementMarkupCategoryView.as_view(),
-        name='bank_statement_markup_category',
-    ),
-    path(
-        'bank-statement-upload/<int:pk>/reconciliation/',
-        BankStatementReconciliationView.as_view(),
-        name='bank_statement_reconciliation',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/reconciliation/'
-        '<int:row_id>/decide/',
-        BankStatementReconciliationDecisionView.as_view(),
-        name='bank_statement_reconciliation_decide',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/reconciliation/bulk/',
-        BankStatementReconciliationBulkView.as_view(),
-        name='bank_statement_reconciliation_bulk',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/reconciliation/'
-        '<int:row_id>/revise/',
-        BankStatementReconciliationRevisionView.as_view(),
-        name='bank_statement_reconciliation_revise',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/pending-transfer/'
-        '<int:row_id>/dismiss/',
-        BankStatementPendingTransferDismissView.as_view(),
-        name='bank_statement_pending_transfer_dismiss',
-    ),
-    path(
-        'bank-statement-upload/<int:upload_id>/pending-transfer/'
-        '<int:row_id>/link/',
-        BankStatementPendingTransferLinkView.as_view(),
-        name='bank_statement_pending_transfer_link',
+        RedirectView.as_view(
+            pattern_name='finance_account:bank_statement_upload',
+            permanent=True,
+        ),
     ),
 ]

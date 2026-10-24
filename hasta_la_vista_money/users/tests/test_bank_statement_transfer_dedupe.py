@@ -832,7 +832,7 @@ class TransferCandidateDecisionTest(TransferDedupeBaseTest):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[upload.pk],
             ),
         )

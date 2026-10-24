@@ -18,10 +18,13 @@ from django.forms import (
     ChoiceField,
     DateField,
     DecimalField,
+    FileField,
+    FileInput,
     Form,
     HiddenInput,
     IntegerField,
     ModelChoiceField,
+    Select,
 )
 from django.utils.translation import gettext_lazy as _
 
@@ -500,3 +503,59 @@ class BalanceAdjustmentForm(Form):
         decimal_places=2,
         min_value=0,
     )
+
+
+class BankStatementUploadForm(Form):
+    """Form for uploading bank statements in PDF format."""
+
+    pdf_file = FileField(
+        label=_('PDF файл выписки'),
+        widget=FileInput(attrs={'accept': '.pdf'}),
+        help_text=_('Загрузите банковскую выписку в формате PDF'),
+        error_messages={
+            'required': _('Пожалуйста, выберите файл для загрузки.'),
+        },
+    )
+
+    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.fields['account'] = ModelChoiceField(
+            queryset=(
+                Account.objects.available_for_operations()
+                .filter(user=user)
+                .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            ),
+            label=_('Счёт'),
+            widget=Select(attrs={'class': 'statement-select'}),
+            help_text=_('Выберите счёт, на который будут записаны операции'),
+            error_messages={
+                'required': _('Пожалуйста, выберите счёт.'),
+            },
+        )
+
+    def clean_pdf_file(self) -> Any:
+        """Validate PDF file."""
+        pdf_file = self.cleaned_data.get('pdf_file')
+        if pdf_file:
+            if not pdf_file.name.endswith('.pdf'):
+                raise ValidationError(
+                    _('Разрешены только PDF файлы.'),
+                )
+            if pdf_file.size > 10 * 1024 * 1024:
+                raise ValidationError(
+                    _('Размер файла не должен превышать 10 МБ.'),
+                )
+            signature = pdf_file.read(len(constants.PDF_SIGNATURE))
+            if signature != constants.PDF_SIGNATURE:
+                raise ValidationError(
+                    _('Файл не является корректным PDF.'),
+                )
+            pdf_file.seek(0)
+        return pdf_file
+
+
+class RepaymentTransferLinkForm(Form):
+    """The transfer an owner picked to close a repayment row."""
+
+    transfer = IntegerField(min_value=1)

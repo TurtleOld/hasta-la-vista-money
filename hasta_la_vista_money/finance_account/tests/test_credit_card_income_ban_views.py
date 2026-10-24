@@ -137,7 +137,7 @@ class PendingTransferViewTest(TestCase):
         self.assertContains(
             response,
             reverse(
-                'users:bank_statement_pending_transfer_link',
+                'finance_account:bank_statement_pending_transfer_link',
                 args=[self.upload.pk, self.row.pk],
             ),
         )
@@ -182,7 +182,7 @@ class PendingTransferViewTest(TestCase):
     def test_dismiss_reminder_creates_no_movement(self) -> None:
         self.client.post(
             reverse(
-                'users:bank_statement_pending_transfer_dismiss',
+                'finance_account:bank_statement_pending_transfer_dismiss',
                 args=[self.upload.pk, self.row.pk],
             ),
         )
@@ -214,7 +214,7 @@ class PendingTransferViewTest(TestCase):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_pending_transfer_link',
+                'finance_account:bank_statement_pending_transfer_link',
                 args=[other_upload.pk, self.row.pk],
             ),
             {'transfer': transfer.pk},

@@ -146,7 +146,7 @@
                                 <section class="profile-section-card">
                                     <h2 class="profile-section-title">{% translate 'Управление данными' %}</h2>
                                     <div class="profile-action-list">
-                                        <a class="profile-action-link" href="{% url 'users:bank_statement_upload' %}">
+                                        <a class="profile-action-link" href="{% url 'finance_account:bank_statement_upload' %}">
                                             {% include 'partials/_icon.html' with icon='document-download' %}
                                             <span>{% translate 'Загрузка банковских выписок' %}</span>
                                         </a>

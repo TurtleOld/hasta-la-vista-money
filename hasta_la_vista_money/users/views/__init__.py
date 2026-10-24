@@ -8,28 +8,12 @@ from hasta_la_vista_money.users.services.dashboard_analytics import (
 from hasta_la_vista_money.users.services.detailed_statistics import (
     get_dashboard_summary_statistics,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
 from hasta_la_vista_money.users.views.auth import (
     CreateUser,
     LoginUser,
     LogoutUser,
     RegisterByInviteView,
     SetPasswordUserView,
-)
-from hasta_la_vista_money.users.views.bank_statement import (
-    BankStatementMarkupBulkView,
-    BankStatementMarkupCategoryView,
-    BankStatementMarkupDecisionView,
-    BankStatementMarkupRememberedView,
-    BankStatementMarkupView,
-    BankStatementPendingTransferDismissView,
-    BankStatementPendingTransferLinkView,
-    BankStatementReconciliationBulkView,
-    BankStatementReconciliationDecisionView,
-    BankStatementReconciliationRevisionView,
-    BankStatementReconciliationView,
-    BankStatementUploadStatusView,
-    BankStatementUploadView,
 )
 from hasta_la_vista_money.users.views.base import IndexView
 from hasta_la_vista_money.users.views.dashboard import (
@@ -59,19 +43,6 @@ from hasta_la_vista_money.users.views.profile import (
 
 __all__ = [
     'AuthRequest',
-    'BankStatementMarkupBulkView',
-    'BankStatementMarkupCategoryView',
-    'BankStatementMarkupDecisionView',
-    'BankStatementMarkupRememberedView',
-    'BankStatementMarkupView',
-    'BankStatementPendingTransferDismissView',
-    'BankStatementPendingTransferLinkView',
-    'BankStatementReconciliationBulkView',
-    'BankStatementReconciliationDecisionView',
-    'BankStatementReconciliationRevisionView',
-    'BankStatementReconciliationView',
-    'BankStatementUploadStatusView',
-    'BankStatementUploadView',
     'CreateUser',
     'DashboardComparisonView',
     'DashboardDataView',
@@ -100,5 +71,4 @@ __all__ = [
     'get_dashboard_summary_statistics',
     'get_drill_down_data',
     'get_period_comparison',
-    'process_bank_statement_task',
 ]
