@@ -114,3 +114,34 @@ class FinancesReturnStateTest(TestCase):
             self.finances_url,
             fetch_redirect_response=False,
         )
+
+    def test_edit_page_deletes_and_returns_to_filtered_list(self) -> None:
+        next_query = f'?next={quote(self.finances_url, safe="")}'
+        delete_url = (
+            reverse(
+                'finance_account:transaction_delete',
+                args=[self.transaction.pk],
+            )
+            + next_query
+        )
+        page = self.client.get(
+            reverse(
+                'finance_account:transaction_change',
+                args=[self.transaction.pk],
+            )
+            + next_query,
+        )
+        self.assertContains(page, f'formaction="{delete_url}"')
+
+        response = self.client.post(delete_url)
+
+        self.assertRedirects(
+            response,
+            self.finances_url,
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(
+            Transaction.objects.filter(pk=self.transaction.pk).exists(),
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1100.00'))

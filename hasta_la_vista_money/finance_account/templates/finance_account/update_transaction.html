@@ -53,6 +53,11 @@
                 <div class="ft-actions">
                     <a href="{{ return_url }}" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</a>
                     <button type="submit" class="finances-button finances-button-primary">{% translate 'Сохранить' %}</button>
+                    {# after Save: Enter submits the first submit button #}
+                    <button type="submit"
+                            class="finances-button finances-button-danger"
+                            formaction="{% url 'finance_account:transaction_delete' object.pk %}?next={{ return_url|urlencode:'' }}"
+                            formnovalidate>{% translate 'Удалить' %}</button>
                 </div>
             </div>
         </form>

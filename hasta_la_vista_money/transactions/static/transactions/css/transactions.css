@@ -216,6 +216,11 @@
   color: var(--finances-text);
 }
 
+.finances-button-danger {
+  background: var(--finances-surface);
+  color: var(--finances-negative);
+}
+
 .finances-summary {
   background: var(--finances-surface);
   border: 1px solid var(--finances-border);
