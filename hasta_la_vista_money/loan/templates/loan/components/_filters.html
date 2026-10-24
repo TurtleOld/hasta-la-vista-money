@@ -3,7 +3,7 @@
 <div class="loan-panel loan-form-container mb-4">
     <div class="loan-card-head">
         <h6 class="m-0 font-bold">
-            <i class="bi bi-funnel mr-2"></i>{% translate 'Фильтры и поиск' %}
+            {% include 'partials/_icon.html' with icon='filter' class='mr-2' %}{% translate 'Фильтры и поиск' %}
         </h6>
     </div>
     <div class="loan-card-body">
@@ -11,7 +11,7 @@
             <div class="md:col-span-4">
                 <label for="loan-search" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{% translate 'Поиск по номеру' %}</label>
                 <div class="mt-1 flex rounded-xl border border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-700">
-                    <span class="inline-flex items-center px-3 text-gray-400"><i class="bi bi-search"></i></span>
+                    <span class="inline-flex items-center px-3 text-gray-400">{% include 'partials/_icon.html' with icon='search' %}</span>
                     <input type="text"
                            class="w-full rounded-r-xl border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:text-white"
                            id="loan-search"
@@ -63,7 +63,7 @@
                    hx-get="{% url 'loan:list' %}"
                    hx-target="#loan-results"
                    hx-push-url="true">
-                    <i class="bi bi-x-circle mr-1"></i>{% translate 'Сбросить' %}
+                    {% include 'partials/_icon.html' with icon='x-circle' class='mr-1' %}{% translate 'Сбросить' %}
                 </a>
             </div>
         </form>
