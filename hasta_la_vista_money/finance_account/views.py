@@ -89,6 +89,8 @@ from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
+    from django.forms import ModelChoiceField
+
     from hasta_la_vista_money.core.types import (
         RequestWithContainer,
         WSGIRequestWithContainer,
@@ -692,15 +694,24 @@ class TransactionUpdateView(
         )
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Limit category and account choices to the current transaction."""
+        """Offer categories of both types; the chosen one sets the type."""
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
         kwargs = super().get_form_kwargs()
         transaction_obj = self.get_object()
-        kwargs['category_queryset'] = Category.objects.filter(
-            user=self.request.user,
-            type=transaction_obj.type,
-        )
+        categories = Category.objects.filter(user=self.request.user)
+        kwargs['category_queryset'] = categories
+        if 'data' in kwargs:
+            data = kwargs['data'].copy()
+            category_id = str(data.get('category', ''))
+            category = (
+                categories.filter(pk=category_id).first()
+                if category_id.isdigit()
+                else None
+            )
+            if category is not None:
+                data['type'] = category.type
+            kwargs['data'] = data
         kwargs['account_queryset'] = (
             Account.objects.available_for_operations()
             .filter(user=self.request.user)
@@ -708,6 +719,27 @@ class TransactionUpdateView(
         )
         kwargs.setdefault('initial', {})['type'] = transaction_obj.type
         return kwargs
+
+    def get_form(self, form_class: Any = None) -> TransactionForm:
+        """Group category choices by type."""
+        form = super().get_form(form_class)
+        field = cast('ModelChoiceField[Category]', form.fields['category'])
+        categories = (
+            Category.objects.none()
+            if field.queryset is None
+            else field.queryset.order_by('name')
+        )
+        field.choices = [
+            ('', '---------'),
+            *(
+                (label, [(c.pk, c.name) for c in categories if c.type == kind])
+                for kind, label in (
+                    (TransactionType.EXPENSE, _('Расходы')),
+                    (TransactionType.INCOME, _('Доходы')),
+                )
+            ),
+        ]
+        return form
 
     def form_valid(self, form: TransactionForm) -> HttpResponse:
         """Persist changes through TransactionService for balance safety."""
