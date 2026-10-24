@@ -21,6 +21,7 @@ from faker import Faker
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
@@ -30,7 +31,6 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.forms import BankStatementUploadForm
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementRow,
@@ -82,7 +82,7 @@ class TestBankStatementUploadView(TestCase):
             currency='RUB',
         )
 
-        self.upload_url = reverse('users:bank_statement_upload')
+        self.upload_url = reverse('finance_account:bank_statement_upload')
 
     def test_get_upload_page(self) -> None:
         """Test GET request to upload page."""
@@ -90,9 +90,22 @@ class TestBankStatementUploadView(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(
             response,
-            'users/bank_statement_upload.html',
+            'finance_account/bank_statement_upload.html',
         )
         self.assertIn('form', response.context)
+
+    def test_upload_page_lives_in_finances(self) -> None:
+        self.assertTrue(self.upload_url.startswith('/finance_account/'))
+        response = self.client.get(reverse('finances'))
+        self.assertContains(response, f'href="{self.upload_url}"')
+
+    def test_old_upload_url_redirects_to_finances(self) -> None:
+        response = self.client.get('/users/bank-statement-upload/')
+        self.assertRedirects(
+            response,
+            self.upload_url,
+            status_code=301,
+        )
 
     def test_upload_page_requires_authentication(self) -> None:
         """Test that upload page requires login."""
@@ -104,7 +117,9 @@ class TestBankStatementUploadView(TestCase):
         redirect_response = cast('HttpResponseRedirect', response)
         self.assertIn('login', redirect_response.url.lower())
 
-    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    @patch(
+        'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+    )
     def test_upload_pdf_success(self, mock_task: MagicMock) -> None:
         """Test successful PDF upload."""
         mock_task.delay.return_value = MagicMock(id='test-task-id')
@@ -142,7 +157,9 @@ class TestBankStatementUploadView(TestCase):
         # Check that there's a success message
         self.assertTrue(len(messages) > 0)
 
-    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    @patch(
+        'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+    )
     def test_repeated_file_does_not_start_second_import(
         self,
         mock_task: MagicMock,
@@ -288,7 +305,10 @@ class TestBankStatementUploadStatusView(TestCase):
             progress=0,
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -307,7 +327,10 @@ class TestBankStatementUploadStatusView(TestCase):
             processed_transactions=45,
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -328,7 +351,10 @@ class TestBankStatementUploadStatusView(TestCase):
             expense_count=20,
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -351,7 +377,10 @@ class TestBankStatementUploadStatusView(TestCase):
         )
 
         response = self.client.get(
-            reverse('users:bank_statement_upload_status', args=[upload.pk]),
+            reverse(
+                'finance_account:bank_statement_upload_status',
+                args=[upload.pk],
+            ),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -361,7 +390,10 @@ class TestBankStatementUploadStatusView(TestCase):
         )
         self.assertEqual(
             response.json()['reconciliation_url'],
-            reverse('users:bank_statement_reconciliation', args=[upload.pk]),
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
         )
         self.assertEqual(
             response.json()['outcomes'],
@@ -385,7 +417,10 @@ class TestBankStatementUploadStatusView(TestCase):
         )
 
         response = self.client.get(
-            reverse('users:bank_statement_upload_status', args=[upload.pk]),
+            reverse(
+                'finance_account:bank_statement_upload_status',
+                args=[upload.pk],
+            ),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -406,7 +441,10 @@ class TestBankStatementUploadStatusView(TestCase):
             error_message='Тестовая ошибка',
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -430,7 +468,10 @@ class TestBankStatementUploadStatusView(TestCase):
             status='processing',
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 404)
@@ -449,7 +490,10 @@ class TestBankStatementUploadStatusView(TestCase):
             balance_discrepancy=Decimal('50.00'),
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -467,7 +511,10 @@ class TestBankStatementUploadStatusView(TestCase):
             progress=100,
         )
 
-        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        url = reverse(
+            'finance_account:bank_statement_upload_status',
+            args=[upload.id],
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -547,7 +594,7 @@ class TestBankStatementReconciliationView(TestCase):
     def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -565,7 +612,7 @@ class TestBankStatementReconciliationView(TestCase):
 
     def test_linked_decision_is_idempotent_and_keeps_balance(self) -> None:
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -608,7 +655,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -618,7 +665,7 @@ class TestBankStatementReconciliationView(TestCase):
 
     def test_new_decision_is_idempotent_and_changes_balance_once(self) -> None:
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -645,7 +692,7 @@ class TestBankStatementReconciliationView(TestCase):
     def test_decision_is_its_own_resolution_operation(self) -> None:
         """Resolving a row tags its audit entries as their own operation."""
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -671,7 +718,7 @@ class TestBankStatementReconciliationView(TestCase):
             source_row_position=1,
         )
         url = reverse(
-            'users:bank_statement_reconciliation_bulk',
+            'finance_account:bank_statement_reconciliation_bulk',
             args=[self.upload.pk],
         )
 
@@ -754,7 +801,7 @@ class TestBankStatementReconciliationView(TestCase):
         )
         stale_transaction.delete()
         url = reverse(
-            'users:bank_statement_reconciliation_bulk',
+            'finance_account:bank_statement_reconciliation_bulk',
             args=[self.upload.pk],
         )
         payload = {
@@ -797,7 +844,7 @@ class TestBankStatementReconciliationView(TestCase):
 
     def test_bulk_new_requires_risk_confirmation(self) -> None:
         url = reverse(
-            'users:bank_statement_reconciliation_bulk',
+            'finance_account:bank_statement_reconciliation_bulk',
             args=[self.upload.pk],
         )
         payload = {'decision': 'new', 'rows': [self.row.pk]}
@@ -838,7 +885,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_bulk',
+                'finance_account:bank_statement_reconciliation_bulk',
                 args=[self.upload.pk],
             ),
             {
@@ -870,7 +917,7 @@ class TestBankStatementReconciliationView(TestCase):
     def test_linked_row_can_be_revised_to_new_once_with_audit(self) -> None:
         candidate_link = BankStatementCandidate.objects.get(row=self.row)
         decision_url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
         self.client.post(
@@ -878,7 +925,7 @@ class TestBankStatementReconciliationView(TestCase):
             {'decision': 'linked', 'candidate': candidate_link.pk},
         )
         revision_url = reverse(
-            'users:bank_statement_reconciliation_revise',
+            'finance_account:bank_statement_reconciliation_revise',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -908,7 +955,7 @@ class TestBankStatementReconciliationView(TestCase):
         candidate_link = BankStatementCandidate.objects.get(row=self.row)
         self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_decide',
+                'finance_account:bank_statement_reconciliation_decide',
                 args=[self.upload.pk, self.row.pk],
             ),
             {'decision': 'linked', 'candidate': candidate_link.pk},
@@ -918,7 +965,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_revise',
+                'finance_account:bank_statement_reconciliation_revise',
                 args=[self.upload.pk, self.row.pk],
             ),
         )
@@ -937,7 +984,7 @@ class TestBankStatementReconciliationView(TestCase):
         candidate_link = BankStatementCandidate.objects.get(row=self.row)
         self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_decide',
+                'finance_account:bank_statement_reconciliation_decide',
                 args=[self.upload.pk, self.row.pk],
             ),
             {'decision': 'linked', 'candidate': candidate_link.pk},
@@ -1013,10 +1060,10 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(Transaction.objects.count(), 1)
 
         with patch(
-            'hasta_la_vista_money.users.views.process_bank_statement_task',
+            'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
         ) as task:
             response = self.client.post(
-                reverse('users:bank_statement_upload'),
+                reverse('finance_account:bank_statement_upload'),
                 {
                     'account': self.account.pk,
                     'pdf_file': SimpleUploadedFile(
@@ -1081,7 +1128,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_decide',
+                'finance_account:bank_statement_reconciliation_decide',
                 args=[self.upload.pk, self.row.pk],
             ),
             {'decision': 'new'},
@@ -1099,34 +1146,34 @@ class TestBankStatementReconciliationView(TestCase):
     ) -> None:
         pending_response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
         candidate_link = BankStatementCandidate.objects.get(row=self.row)
         self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_decide',
+                'finance_account:bank_statement_reconciliation_decide',
                 args=[self.upload.pk, self.row.pk],
             ),
             {'decision': 'linked', 'candidate': candidate_link.pk},
         )
         linked_response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
             {'outcome': 'linked'},
         )
         self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_revise',
+                'finance_account:bank_statement_reconciliation_revise',
                 args=[self.upload.pk, self.row.pk],
             ),
         )
         new_response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
             {'outcome': 'new'},
@@ -1149,15 +1196,15 @@ class TestBankStatementReconciliationView(TestCase):
     def test_other_user_cannot_view_or_decide(self) -> None:
         self.client.force_login(self.other_user)
         page_url = reverse(
-            'users:bank_statement_reconciliation',
+            'finance_account:bank_statement_reconciliation',
             args=[self.upload.pk],
         )
         decision_url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
         revision_url = reverse(
-            'users:bank_statement_reconciliation_revise',
+            'finance_account:bank_statement_reconciliation_revise',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -1175,7 +1222,7 @@ class TestBankStatementReconciliationView(TestCase):
 
     def test_conflicting_repeated_decision_is_rejected(self) -> None:
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -1196,7 +1243,7 @@ class TestBankStatementReconciliationView(TestCase):
         self,
     ) -> None:
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -1209,7 +1256,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertRedirects(
             response,
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -1242,7 +1289,7 @@ class TestBankStatementReconciliationView(TestCase):
             rank=0,
         )
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -1277,7 +1324,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -1293,7 +1340,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         second_page = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
             {'page': 2},
@@ -1329,7 +1376,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -1357,14 +1404,14 @@ class TestBankStatementReconciliationView(TestCase):
 
         linked_response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
             {'outcome': 'linked'},
         )
         new_response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
             {'outcome': 'new'},
@@ -1386,7 +1433,7 @@ class TestBankStatementReconciliationView(TestCase):
 
         response = self.client.get(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[self.upload.pk],
             ),
         )
@@ -1394,7 +1441,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(response.status_code, 404)
         decision_response = self.client.post(
             reverse(
-                'users:bank_statement_reconciliation_decide',
+                'finance_account:bank_statement_reconciliation_decide',
                 args=[self.upload.pk, self.row.pk],
             ),
             {'decision': 'new'},
@@ -1440,7 +1487,7 @@ class TestBankStatementReconciliationView(TestCase):
             date=self.row.transaction_date,
         )
         url = reverse(
-            'users:bank_statement_reconciliation_decide',
+            'finance_account:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -1499,7 +1546,9 @@ class TestBankStatementUploadHistory(TestCase):
             status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
 
-        response = self.client.get(reverse('users:bank_statement_upload'))
+        response = self.client.get(
+            reverse('finance_account:bank_statement_upload'),
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'История загрузок')
@@ -1510,14 +1559,14 @@ class TestBankStatementUploadHistory(TestCase):
         self.assertContains(
             response,
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[pending.pk],
             ),
         )
         self.assertNotContains(
             response,
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[completed.pk],
             ),
         )
@@ -5342,7 +5391,9 @@ class TestBankStatementImportReliability(TestCase):
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
 
-    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    @patch(
+        'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+    )
     def test_reupload_of_failed_statement_restarts_task(
         self,
         mock_task: MagicMock,
@@ -5359,7 +5410,7 @@ class TestBankStatementImportReliability(TestCase):
         )
 
         self.client.post(
-            reverse('users:bank_statement_upload'),
+            reverse('finance_account:bank_statement_upload'),
             {
                 'account': self.account.pk,
                 'pdf_file': SimpleUploadedFile(
@@ -5374,7 +5425,9 @@ class TestBankStatementImportReliability(TestCase):
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
 
-    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    @patch(
+        'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+    )
     def test_reupload_of_stale_processing_restarts_but_fresh_does_not(
         self,
         mock_task: MagicMock,
@@ -5392,7 +5445,7 @@ class TestBankStatementImportReliability(TestCase):
 
         def post() -> None:
             self.client.post(
-                reverse('users:bank_statement_upload'),
+                reverse('finance_account:bank_statement_upload'),
                 {
                     'account': self.account.pk,
                     'pdf_file': SimpleUploadedFile(

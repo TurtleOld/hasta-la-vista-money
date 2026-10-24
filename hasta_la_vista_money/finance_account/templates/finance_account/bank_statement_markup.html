@@ -7,13 +7,13 @@
 
 {% block extra_head %}
     <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'transactions/css/transactions.css' %}">
-    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'users/css/statement-markup.css' %}?v={% word_hash %}">
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finance_account/css/bank-statement.css' %}?v={% word_hash %}">
 {% endblock %}
 
 {% block content %}
 <div class="finances-app statement-markup">
     <div class="composer-crumb">
-        <a href="{% url 'users:bank_statement_upload' %}">
+        <a href="{% url 'finance_account:bank_statement_upload' %}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
             {% translate 'Загрузки выписок' %}
         </a>
@@ -53,15 +53,15 @@
                             </optgroup>
                         {% endfor %}
                     </select>
-                    <button type="submit" form="markup-form" formaction="{% url 'users:bank_statement_markup_bulk' upload.pk %}" class="finances-button finances-button-primary">{% translate 'Назначить и провести' %}</button>
+                    <button type="submit" form="markup-form" formaction="{% url 'finance_account:bank_statement_markup_bulk' upload.pk %}" class="finances-button finances-button-primary">{% translate 'Назначить и провести' %}</button>
                 </div>
                 {% if remembered_count %}
-                    <button type="submit" form="markup-form" formaction="{% url 'users:bank_statement_markup_post_remembered' upload.pk %}" class="finances-button finances-button-secondary">{% translate 'Провести все с подставленной категорией' %} ({{ remembered_count }})</button>
+                    <button type="submit" form="markup-form" formaction="{% url 'finance_account:bank_statement_markup_post_remembered' upload.pk %}" class="finances-button finances-button-secondary">{% translate 'Провести все с подставленной категорией' %} ({{ remembered_count }})</button>
                 {% endif %}
             </div>
 
             {# one form: every action button submits the «Пропустить» marks #}
-            <form id="markup-form" method="post" action="{% url 'users:bank_statement_markup_decide' upload.pk %}">
+            <form id="markup-form" method="post" action="{% url 'finance_account:bank_statement_markup_decide' upload.pk %}">
                 {% csrf_token %}
                 {% for item in rows %}{% with row=item.row %}
                     <div class="markup-row{% if item.can_transfer %} markup-row-stacked{% endif %}">
@@ -96,7 +96,7 @@
                                     <option value="{{ category.pk }}"{% if category.pk == item.remembered_id %} selected{% endif %}>{{ category.name }}</option>
                                 {% endfor %}
                             </select>
-                            <button type="button" hx-get="{% url 'users:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Новая категория' %}</button>
+                            <button type="button" hx-get="{% url 'finance_account:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Новая категория' %}</button>
                             {% if item.can_transfer %}
                                 <select name="account-{{ row.pk }}" class="markup-select" aria-label="{% translate 'Счёт для перевода…' %}">
                                     <option value="">{% translate 'Счёт для перевода…' %}</option>

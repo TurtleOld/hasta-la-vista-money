@@ -1,4 +1,3 @@
-import sys
 from decimal import Decimal
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Final, cast
@@ -29,13 +28,13 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     STATEMENT_RECONCILIATION_PAGE_SIZE,
 )
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.forms import CategoryForm
-from hasta_la_vista_money.transactions.models import Category
-from hasta_la_vista_money.users.forms import (
+from hasta_la_vista_money.finance_account.forms import (
     BankStatementUploadForm,
     RepaymentTransferLinkForm,
 )
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.forms import CategoryForm
+from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -60,6 +59,7 @@ from hasta_la_vista_money.users.services.statement_markup import (
     REFUND_CATEGORY_NAME,
     StatementMarkupConflictError,
 )
+from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -79,10 +79,6 @@ ROW_KIND_LABELS: Final[dict[str, Any]] = {
     RosDorBankRowKind.C2B: _('Оплата по СБП'),
     RosDorBankRowKind.UNKNOWN: _('Прочее'),
 }
-
-
-def _views_module() -> Any:
-    return sys.modules['hasta_la_vista_money.users.views']
 
 
 def _import_service(
@@ -132,7 +128,7 @@ class BankStatementUploadView(
 ):
     """View for uploading bank statements in PDF format."""
 
-    template_name = 'users/bank_statement_upload.html'
+    template_name = 'finance_account/bank_statement_upload.html'
     form_class = BankStatementUploadForm
     success_message = _(
         'Банковская выписка загружена и будет обработана в фоновом режиме. '
@@ -187,7 +183,7 @@ class BankStatementUploadView(
             if created or restart:
                 task_runner = cast(
                     'Any',
-                    _views_module().process_bank_statement_task,
+                    process_bank_statement_task,
                 )
                 task = task_runner.delay(upload.pk)
                 logger.info(
@@ -257,7 +253,7 @@ class BankStatementUploadView(
     def get_success_url(self) -> str:
         """Return URL to redirect after successful upload."""
         # Redirect back to the same page to show progress
-        return str(reverse_lazy('users:bank_statement_upload'))
+        return str(reverse_lazy('finance_account:bank_statement_upload'))
 
 
 class BankStatementUploadStatusView(LoginRequiredMixin, View):
@@ -309,11 +305,13 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     ),
                     'reconciliation_url': (
                         reverse(
-                            'users:bank_statement_markup'
+                            'finance_account:bank_statement_markup'
                             if _markup_service(request)
                             .pending_rows(upload)
                             .exists()
-                            else 'users:bank_statement_reconciliation',
+                            else (
+                                'finance_account:bank_statement_reconciliation'
+                            ),
                             args=[upload.pk],
                         )
                         if upload.status
@@ -342,7 +340,7 @@ class BankStatementReconciliationView(
     LoginRequiredMixin,
     DetailView[BankStatementUpload],
 ):
-    template_name = 'users/bank_statement_reconciliation.html'
+    template_name = 'finance_account/bank_statement_reconciliation.html'
     context_object_name = 'upload'
 
     def get_queryset(self) -> QuerySet[BankStatementUpload]:
@@ -383,7 +381,7 @@ class BankStatementMarkupView(
 ):
     """Rows of an upload awaiting the user's markup."""
 
-    template_name = 'users/bank_statement_markup.html'
+    template_name = 'finance_account/bank_statement_markup.html'
     context_object_name = 'upload'
 
     def get_queryset(self) -> QuerySet[BankStatementUpload]:
@@ -529,7 +527,7 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
                     % {'count': failed},
                 )
         return redirect(
-            reverse('users:bank_statement_markup', args=[upload_id]),
+            reverse('finance_account:bank_statement_markup', args=[upload_id]),
         )
 
 
@@ -552,7 +550,10 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
         ]
         if skipped and not row_ids:
             return redirect(
-                reverse('users:bank_statement_markup', args=[upload_id]),
+                reverse(
+                    'finance_account:bank_statement_markup',
+                    args=[upload_id],
+                ),
             )
         category = request.POST.get('category', '')
         try:
@@ -574,7 +575,7 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
         except ValidationError:
             messages.error(request, _('Не удалось провести строки.'))
         return redirect(
-            reverse('users:bank_statement_markup', args=[upload_id]),
+            reverse('finance_account:bank_statement_markup', args=[upload_id]),
         )
 
 
@@ -604,15 +605,17 @@ class BankStatementMarkupRememberedView(LoginRequiredMixin, View):
                 _('Не удалось провести строк: %(count)s') % {'count': skipped},
             )
         return redirect(
-            reverse('users:bank_statement_markup', args=[upload_id]),
+            reverse('finance_account:bank_statement_markup', args=[upload_id]),
         )
 
 
 class BankStatementMarkupCategoryView(LoginRequiredMixin, View):
     """HTMX modal creating a category of the row type."""
 
-    modal_template = 'users/partials/statement_category_modal.html'
-    created_template = 'users/partials/statement_category_created.html'
+    modal_template = 'finance_account/partials/statement_category_modal.html'
+    created_template = (
+        'finance_account/partials/statement_category_created.html'
+    )
 
     def get(
         self,
@@ -728,7 +731,7 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
             )
             return redirect(
                 reverse(
-                    'users:bank_statement_reconciliation',
+                    'finance_account:bank_statement_reconciliation',
                     args=[upload_id],
                 ),
             )
@@ -740,7 +743,7 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
             return self._stale_response(request, row)
         return redirect(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[upload_id],
             ),
         )
@@ -849,7 +852,7 @@ class BankStatementReconciliationRevisionView(LoginRequiredMixin, View):
             return HttpResponse(status=409)
         return redirect(
             reverse(
-                'users:bank_statement_reconciliation',
+                'finance_account:bank_statement_reconciliation',
                 args=[upload_id],
             ),
         )

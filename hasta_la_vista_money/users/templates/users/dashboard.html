@@ -12,7 +12,7 @@
     <div class="dashboard-wrap">
         {% if markup_pending_count %}
         <div class="alert alert-warning">
-            <a href="{% url 'users:bank_statement_markup' markup_upload_id %}">
+            <a href="{% url 'finance_account:bank_statement_markup' markup_upload_id %}">
                 {% blocktranslate count n=markup_pending_count %}{{ n }} строка ждёт разметки{% plural %}{{ n }} строк ждут разметки{% endblocktranslate %}
             </a>
         </div>

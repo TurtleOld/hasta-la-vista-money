@@ -1,6 +1,6 @@
 {% load i18n %}
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <form method="post" hx-post="{% url 'users:bank_statement_markup_category' row.upload_id row.pk %}" hx-target="#category-modal" class="markup-modal">
+    <form method="post" hx-post="{% url 'finance_account:bank_statement_markup_category' row.upload_id row.pk %}" hx-target="#category-modal" class="markup-modal">
         {% csrf_token %}
         <h3 class="markup-modal-title">{% translate 'Новая категория' %}</h3>
         {{ form.non_field_errors }}
@@ -12,7 +12,7 @@
             </div>
         {% endfor %}
         <div class="markup-modal-actions">
-            <button type="button" hx-get="{% url 'users:bank_statement_markup_category' row.upload_id row.pk %}?close=1" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</button>
+            <button type="button" hx-get="{% url 'finance_account:bank_statement_markup_category' row.upload_id row.pk %}?close=1" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</button>
             <button type="submit" class="finances-button finances-button-primary">{% translate 'Создать' %}</button>
         </div>
     </form>

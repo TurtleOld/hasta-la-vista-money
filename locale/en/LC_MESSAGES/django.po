@@ -3803,3 +3803,7 @@ msgstr "Bank statement uploaded and will be processed in the background. Data wi
 
 #~ msgid "Поддерживаются форматы: JPG, JPEG, PNG"
 #~ msgstr "Supported formats: JPG, JPEG, PNG"
+
+#: hasta_la_vista_money/finance_account/templates/finance_account/finances.html
+msgid "Загрузить выписку"
+msgstr "Upload statement"

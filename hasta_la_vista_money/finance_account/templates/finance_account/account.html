@@ -155,7 +155,7 @@
                                         {% translate 'Провести переводом' %}
                                     </a>
                                     {% if item.candidates %}
-                                    <form method="post" action="{% url 'users:bank_statement_pending_transfer_link' item.row.upload_id item.row.pk %}">
+                                    <form method="post" action="{% url 'finance_account:bank_statement_pending_transfer_link' item.row.upload_id item.row.pk %}">
                                         {% csrf_token %}
                                         <select name="transfer" aria-label="{% translate 'Перевод' %}">
                                             {% for transfer in item.candidates %}
@@ -165,7 +165,7 @@
                                         <button type="submit">{% translate 'Уже проведено' %}</button>
                                     </form>
                                     {% endif %}
-                                    <form method="post" action="{% url 'users:bank_statement_pending_transfer_dismiss' item.row.upload_id item.row.pk %}">
+                                    <form method="post" action="{% url 'finance_account:bank_statement_pending_transfer_dismiss' item.row.upload_id item.row.pk %}">
                                         {% csrf_token %}
                                         <button type="submit">{% translate 'Не погашение' %}</button>
                                     </form>
