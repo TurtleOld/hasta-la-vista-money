@@ -767,7 +767,11 @@ class TransactionUpdateView(
             PermissionDenied,
             ValidationError,
         ) as error:
-            form.add_error(None, str(error))
+            # str(ValidationError) renders as a Python list.
+            form.add_error(
+                None,
+                error if isinstance(error, ValidationError) else str(error),
+            )
             return self.form_invalid(form)
 
 
