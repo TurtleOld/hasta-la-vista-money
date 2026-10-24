@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.22.3](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.2...v2.22.3) (2026-10-24)
+
+
+### 🐛 Исправления
+
+* **users:** stop statement markup from posting skipped and duplicate rows ([#1145](https://github.com/TurtleOld/hasta-la-vista-money/issues/1145)) ([79486a1](https://github.com/TurtleOld/hasta-la-vista-money/commit/79486a1d8358bdc46bb04680366241f0fe361a1b))
+
 ## [2.22.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.1...v2.22.2) (2026-10-23)
 
 
