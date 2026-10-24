@@ -764,7 +764,7 @@ class ReceiptProcessingLog(models.Model):
         Receipt,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         related_name='processing_log',
     )
     processing_started_at = models.DateTimeField(null=True, blank=True)

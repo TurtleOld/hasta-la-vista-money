@@ -11,6 +11,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
@@ -292,6 +293,40 @@ class StatementMarkupTest(StatementMarkupFixture):
         duplicates = self.service.probable_duplicates(self.upload)
 
         self.assertEqual(duplicates, {row.pk: 'Перевод: РосДорБанк → Ozon'})
+
+    def test_receipt_flags_row_as_duplicate(self) -> None:
+        purchase = self._row(1, amount='312.50')
+        refund = self._row(2, transaction_type='income', amount='99.90')
+        self._row(3, amount='99.90')
+        seller = Seller.objects.create(user=self.user, name_seller='Пятёрочка')
+        for operation_type, total_sum in (
+            (constants.RECEIPT_OPERATION_PURCHASE, '312.50'),
+            (constants.RECEIPT_OPERATION_RETURN, '99.90'),
+        ):
+            Receipt.objects.create(
+                user=self.user,
+                account=self.account,
+                seller=seller,
+                operation_type=operation_type,
+                total_sum=Decimal(total_sum),
+                receipt_date=datetime(
+                    2026,
+                    3,
+                    1,
+                    15,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
+            )
+
+        duplicates = self.service.probable_duplicates(self.upload)
+
+        self.assertEqual(
+            duplicates,
+            {
+                purchase.pk: 'Чек: Пятёрочка',
+                refund.pk: 'Чек: Пятёрочка',
+            },
+        )
 
 
 OWN_NUMBER = '40817810000000000001'
@@ -769,6 +804,27 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
+    def test_probable_duplicate_is_marked_skip_by_default(self) -> None:
+        category = self._category('Продукты')
+        duplicate = self._row(1)
+        fresh = self._row(2, amount='250.00')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type='expense',
+            amount=Decimal('100.00'),
+            date=datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        self.assertContains(response, f'name="skip-{duplicate.pk}" checked')
+        self.assertContains(response, f'name="skip-{fresh.pk}">')
+
     def test_type_is_part_of_the_key(self) -> None:
         expense = self._category('Продукты')
         income = self._category('Кэшбэк', 'income')
@@ -876,6 +932,25 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         self.assertEqual(response.status_code, 302)
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+
+    def test_post_remembered_view_honours_skip_marks(self) -> None:
+        category = self._category('Продукты')
+        self.service.post(self._keyed(1).pk, self.user.pk, category.pk)
+        skipped, posted = self._keyed(2), self._keyed(3)
+        self.client.force_login(self.user)
+
+        self.client.post(
+            reverse(
+                'users:bank_statement_markup_post_remembered',
+                args=[self.upload.pk],
+            ),
+            {'row': [skipped.pk, posted.pk], f'skip-{skipped.pk}': 'on'},
+        )
+
+        skipped.refresh_from_db()
+        posted.refresh_from_db()
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
 
     def test_other_user_cannot_post_remembered(self) -> None:
         other = User.objects.create_user(username='other', password='x')
@@ -1106,6 +1181,45 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
             ).count(),
             2,
         )
+
+    def test_bulk_view_honours_skip_marks(self) -> None:
+        self.client.force_login(self.user)
+        skipped, posted = self._row(1), self._row(2)
+        category = self._category('Продукты')
+
+        self.client.post(
+            reverse('users:bank_statement_markup_bulk', args=[self.upload.pk]),
+            {
+                'row': [skipped.pk, posted.pk],
+                'rows': [skipped.pk, posted.pk],
+                'category': category.pk,
+                f'skip-{skipped.pk}': 'on',
+            },
+        )
+
+        skipped.refresh_from_db()
+        posted.refresh_from_db()
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_every_page_action_submits_the_skip_marks(self) -> None:
+        self.client.force_login(self.user)
+        row = self._row(1)
+
+        response = self.client.get(
+            reverse('users:bank_statement_markup', args=[self.upload.pk]),
+        )
+
+        bulk_url = reverse(
+            'users:bank_statement_markup_bulk',
+            args=[self.upload.pk],
+        )
+        self.assertContains(response, 'id="markup-form"')
+        self.assertContains(response, f'formaction="{bulk_url}"')
+        self.assertNotContains(response, 'form="bulk-form"')
+        self.assertContains(response, f'name="skip-{row.pk}"')
 
     def test_bulk_view_without_selection_changes_nothing(self) -> None:
         self.client.force_login(self.user)

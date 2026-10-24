@@ -35,6 +35,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.html import format_html
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -88,6 +89,8 @@ from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
+    from django.forms import ModelChoiceField
+
     from hasta_la_vista_money.core.types import (
         RequestWithContainer,
         WSGIRequestWithContainer,
@@ -652,6 +655,18 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         return self._success_redirect(request, type_value, cd)
 
 
+def _finances_return_url(request: HttpRequest) -> str:
+    """Return the finances list URL the user came from, keeping filters."""
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
+    if url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return reverse('finances')
+
+
 class TransactionUpdateView(
     LoginRequiredMixin,
     UpdateView[Transaction, TransactionForm],
@@ -661,7 +676,12 @@ class TransactionUpdateView(
     model = Transaction
     form_class = TransactionForm
     template_name = 'finance_account/update_transaction.html'
-    success_url = reverse_lazy('finances')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the filtered finances URL for cancel and breadcrumb."""
+        context = super().get_context_data(**kwargs)
+        context['return_url'] = _finances_return_url(self.request)
+        return context
 
     def get_object(self, queryset: Any = None) -> Transaction:
         """Return a transaction owned by the current user."""
@@ -674,15 +694,24 @@ class TransactionUpdateView(
         )
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Limit category and account choices to the current transaction."""
+        """Offer categories of both types; the chosen one sets the type."""
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
         kwargs = super().get_form_kwargs()
         transaction_obj = self.get_object()
-        kwargs['category_queryset'] = Category.objects.filter(
-            user=self.request.user,
-            type=transaction_obj.type,
-        )
+        categories = Category.objects.filter(user=self.request.user)
+        kwargs['category_queryset'] = categories
+        if 'data' in kwargs:
+            data = kwargs['data'].copy()
+            category_id = str(data.get('category', ''))
+            category = (
+                categories.filter(pk=category_id).first()
+                if category_id.isdigit()
+                else None
+            )
+            if category is not None:
+                data['type'] = category.type
+            kwargs['data'] = data
         kwargs['account_queryset'] = (
             Account.objects.available_for_operations()
             .filter(user=self.request.user)
@@ -690,6 +719,27 @@ class TransactionUpdateView(
         )
         kwargs.setdefault('initial', {})['type'] = transaction_obj.type
         return kwargs
+
+    def get_form(self, form_class: Any = None) -> TransactionForm:
+        """Group category choices by type."""
+        form = super().get_form(form_class)
+        field = cast('ModelChoiceField[Category]', form.fields['category'])
+        categories = (
+            Category.objects.none()
+            if field.queryset is None
+            else field.queryset.order_by('name')
+        )
+        field.choices = [
+            ('', '---------'),
+            *(
+                (label, [(c.pk, c.name) for c in categories if c.type == kind])
+                for kind, label in (
+                    (TransactionType.EXPENSE, _('Расходы')),
+                    (TransactionType.INCOME, _('Доходы')),
+                )
+            ),
+        ]
+        return form
 
     def form_valid(self, form: TransactionForm) -> HttpResponse:
         """Persist changes through TransactionService for balance safety."""
@@ -710,14 +760,18 @@ class TransactionUpdateView(
                 ),
             )
             messages.success(request, _('Операция успешно обновлена.'))
-            return HttpResponseRedirect(str(self.success_url))
+            return HttpResponseRedirect(_finances_return_url(request))
         except (
             ValueError,
             TypeError,
             PermissionDenied,
             ValidationError,
         ) as error:
-            form.add_error(None, str(error))
+            # str(ValidationError) renders as a Python list.
+            form.add_error(
+                None,
+                error if isinstance(error, ValidationError) else str(error),
+            )
             return self.form_invalid(form)
 
 
@@ -772,7 +826,7 @@ class TransactionDeleteView(LoginRequiredMixin, View):
             messages.success(request, _('Операция успешно удалена.'))
         except (ValueError, TypeError, PermissionDenied) as error:
             messages.error(request, str(error))
-        return redirect('finances')
+        return HttpResponseRedirect(_finances_return_url(request))
 
 
 class TransferDeleteView(LoginRequiredMixin, View):
@@ -803,7 +857,7 @@ class TransferDeleteView(LoginRequiredMixin, View):
             PermissionDenied,
         ) as error:
             messages.error(request, str(error))
-        return redirect('finances')
+        return HttpResponseRedirect(_finances_return_url(request))
 
 
 class FinancesCategoryView(LoginRequiredMixin, TemplateView):

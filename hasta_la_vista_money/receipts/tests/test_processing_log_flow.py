@@ -234,6 +234,42 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         self.assertTrue(duplicate_log.is_duplicate)
         self.assertEqual(duplicate_log.fiscal_key, '1:2:3:1')
 
+    def test_rescan_after_deleting_receipt_is_not_duplicate(self) -> None:
+        raw_qr = 't=20260525T1200&s=120.00&fn=1&i=2&fp=3&n=1'
+        log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            qr_raw=raw_qr,
+            image_hash='a' * 64,
+            fiscal_key='1:2:3:1',
+        )
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks._run_processing_log_pipeline',
+            return_value=_payload(),
+        ):
+            process_receipt_processing_log(log.pk)
+        receipt = Receipt.objects.get(user=self.user)
+        self.client.post(reverse('receipts:delete', args=[receipt.pk]))
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Card',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
+        ):
+            self.client.post(
+                reverse('receipts:scan_qr'),
+                {'qr_raw': raw_qr, 'account': other.pk},
+            )
+
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+        log = ReceiptProcessingLog.objects.get(user=self.user)
+        self.assertEqual(log.status, ReceiptProcessingStatus.PROCESSING)
+        self.assertEqual(log.account_id, other.pk)
+
     def test_retry_requeues_failed_log(self) -> None:
         log = ReceiptProcessingLog.objects.create(
             user=self.user,

@@ -465,6 +465,22 @@ def _markup_message(reason: str) -> str:
     return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
+def _skip_marked_rows(request: HttpRequest, upload_id: int) -> set[int]:
+    """Skip rows ticked «Пропустить»; every page action submits the marks."""
+    marked = {
+        int(value)
+        for value in request.POST.getlist('row')
+        if value.isdigit() and request.POST.get(f'skip-{value}')
+    }
+    if marked:
+        _markup_service(request).decide_many(
+            upload_id,
+            cast('User', request.user).pk,
+            dict.fromkeys(marked, ('skip', None)),
+        )
+    return marked
+
+
 class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
     """Apply the decisions chosen for every row of the markup page."""
 
@@ -528,11 +544,16 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
             user=user,
             account__user=user,
         )
+        skipped = _skip_marked_rows(request, upload_id)
         row_ids = [
             int(value)
             for value in request.POST.getlist('rows')
-            if value.isdigit()
+            if value.isdigit() and int(value) not in skipped
         ]
+        if skipped and not row_ids:
+            return redirect(
+                reverse('users:bank_statement_markup', args=[upload_id]),
+            )
         category = request.POST.get('category', '')
         try:
             _markup_service(request).post_many(
@@ -568,6 +589,7 @@ class BankStatementMarkupRememberedView(LoginRequiredMixin, View):
             user=user,
             account__user=user,
         )
+        _skip_marked_rows(request, upload_id)
         posted, skipped = _markup_service(request).post_remembered(
             upload_id,
             user.pk,

@@ -224,6 +224,7 @@ class StatementRowLinkedMovementTest(TestCase):
         )
 
         self.assertContains(response, 'связанной со строкой банковской выписки')
+        self.assertNotContains(response, '[&#x27;Нельзя')
         self._assert_unchanged()
 
     def test_web_delete_of_linked_transaction_releases_row(self) -> None:
