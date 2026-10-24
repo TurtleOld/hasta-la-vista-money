@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Final
+from decimal import Decimal
+from typing import Final
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -21,6 +22,10 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
 )
 from hasta_la_vista_money.finance_account.validators import (
     validate_same_currency,
+)
+from hasta_la_vista_money.receipts.models import OPERATION_TYPES, Receipt
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    receipt_balance_delta,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -46,9 +51,6 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
-
-if TYPE_CHECKING:
-    from decimal import Decimal
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
@@ -115,9 +117,9 @@ class StatementMarkupService:
     ) -> dict[int, str]:
         """Map pending rows to a movement already recorded by hand.
 
-        A movement is a transaction without ``source_ref`` of the same day,
-        type and amount, or a free mirroring transfer; each one matches at
-        most one row.
+        A movement is a transaction without ``source_ref`` or a receipt of
+        the same day, type and amount, or a free mirroring transfer; each
+        one matches at most one row.
         """
         rows = [
             (row, local_row_date(row.transaction_date))
@@ -173,6 +175,27 @@ class StatementMarkupService:
             .exclude(pk__in=occupied)
             .select_related('from_account', 'to_account')
             .order_by('exchange_date', 'pk')
+        )
+        movements.extend(
+            (
+                TransactionType.INCOME
+                if receipt_balance_delta(receipt.operation_type, Decimal(1)) > 0
+                else TransactionType.EXPENSE,
+                receipt.total_sum,
+                local_row_date(receipt.receipt_date),
+                timedelta(0),
+                _('Чек: {seller}')
+                .format(seller=getattr(receipt.seller, 'name_seller', ''))
+                .strip(' :'),
+            )
+            for receipt in Receipt.objects.filter(
+                account_id=account_id,
+                user_id=upload.user_id,
+                operation_type__in=[value for value, _label in OPERATION_TYPES],
+                receipt_date__date__range=(start, end),
+            )
+            .select_related('seller')
+            .order_by('receipt_date', 'pk')
         )
         duplicates: dict[int, str] = {}
         for row, day in rows:

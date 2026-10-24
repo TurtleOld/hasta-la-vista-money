@@ -11,6 +11,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
@@ -292,6 +293,40 @@ class StatementMarkupTest(StatementMarkupFixture):
         duplicates = self.service.probable_duplicates(self.upload)
 
         self.assertEqual(duplicates, {row.pk: 'Перевод: РосДорБанк → Ozon'})
+
+    def test_receipt_flags_row_as_duplicate(self) -> None:
+        purchase = self._row(1, amount='312.50')
+        refund = self._row(2, transaction_type='income', amount='99.90')
+        self._row(3, amount='99.90')
+        seller = Seller.objects.create(user=self.user, name_seller='Пятёрочка')
+        for operation_type, total_sum in (
+            (constants.RECEIPT_OPERATION_PURCHASE, '312.50'),
+            (constants.RECEIPT_OPERATION_RETURN, '99.90'),
+        ):
+            Receipt.objects.create(
+                user=self.user,
+                account=self.account,
+                seller=seller,
+                operation_type=operation_type,
+                total_sum=Decimal(total_sum),
+                receipt_date=datetime(
+                    2026,
+                    3,
+                    1,
+                    15,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
+            )
+
+        duplicates = self.service.probable_duplicates(self.upload)
+
+        self.assertEqual(
+            duplicates,
+            {
+                purchase.pk: 'Чек: Пятёрочка',
+                refund.pk: 'Чек: Пятёрочка',
+            },
+        )
 
 
 OWN_NUMBER = '40817810000000000001'
