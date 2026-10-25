@@ -1,5 +1,30 @@
 # История изменений
 
+## [2.23.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.3...v2.23.0) (2026-10-25)
+
+
+### ✨ Новые возможности
+
+* **receipts:** add scanner to mobile bottom nav and pwa shortcut ([#1155](https://github.com/TurtleOld/hasta-la-vista-money/issues/1155)) ([988f8ce](https://github.com/TurtleOld/hasta-la-vista-money/commit/988f8cef4445037eacbc51da2ab67f2d0ce69a68))
+* **receipts:** keep qr scanner open between scans ([#1157](https://github.com/TurtleOld/hasta-la-vista-money/issues/1157)) ([7402020](https://github.com/TurtleOld/hasta-la-vista-money/commit/7402020e1dfb5cd3cdde69533c47a567581b23b0))
+* **receipts:** open qr scanner directly with mode=scan ([#1154](https://github.com/TurtleOld/hasta-la-vista-money/issues/1154)) ([04b4455](https://github.com/TurtleOld/hasta-la-vista-money/commit/04b445502d354df30f48581c9613f52bc6484fd6))
+* **receipts:** preselect account of last added receipt ([#1153](https://github.com/TurtleOld/hasta-la-vista-money/issues/1153)) ([71ec0e4](https://github.com/TurtleOld/hasta-la-vista-money/commit/71ec0e4c9ebc29f011804231717d5010b9382731))
+* **receipts:** rework mobile receipt list actions ([#1158](https://github.com/TurtleOld/hasta-la-vista-money/issues/1158)) ([a53f1b8](https://github.com/TurtleOld/hasta-la-vista-money/commit/a53f1b86919b289ff8132632d0e021a359a1626e))
+
+
+### 🐛 Исправления
+
+* **finance_account:** restyle bank statement upload and move pages to finances ([#1149](https://github.com/TurtleOld/hasta-la-vista-money/issues/1149)) ([1cd43a3](https://github.com/TurtleOld/hasta-la-vista-money/commit/1cd43a331394c66e7c00911770b531d26b4a7bc2))
+* **users:** parse new ozon statement format and explain parse errors ([#1147](https://github.com/TurtleOld/hasta-la-vista-money/issues/1147)) ([c02745b](https://github.com/TurtleOld/hasta-la-vista-money/commit/c02745b7c5402c163548ed37055cfd0fbaabcad1))
+* **users:** remove bank statement upload link from profile ([#1151](https://github.com/TurtleOld/hasta-la-vista-money/issues/1151)) ([9414914](https://github.com/TurtleOld/hasta-la-vista-money/commit/941491499e042ed7f5d1870ea17ca9b942680af9))
+
+
+### ♻️ Рефакторинг
+
+* **core:** render js icons as inline svg ([#1152](https://github.com/TurtleOld/hasta-la-vista-money/issues/1152)) ([329f7b6](https://github.com/TurtleOld/hasta-la-vista-money/commit/329f7b6234adb46d7d1fde498a0059f82d9fc024))
+* **core:** replace bootstrap icons with inline svg ([#1150](https://github.com/TurtleOld/hasta-la-vista-money/issues/1150)) ([8c9a8d0](https://github.com/TurtleOld/hasta-la-vista-money/commit/8c9a8d04c6256ee74208b086b2a8c55d64cd2c65))
+* **receipts:** move scanned qr enqueue logic to processing service ([#1156](https://github.com/TurtleOld/hasta-la-vista-money/issues/1156)) ([1a6e848](https://github.com/TurtleOld/hasta-la-vista-money/commit/1a6e848c7f43e9bd26a8e814ffffc0a379978033))
+
 ## [2.22.3](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.2...v2.22.3) (2026-10-24)
 
 
