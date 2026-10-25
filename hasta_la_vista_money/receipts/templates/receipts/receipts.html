@@ -18,7 +18,7 @@
                 <div class="receipts-kicker">{% translate 'Чеки' %}</div>
                 <h1 class="receipts-title">{% translate 'Мои чеки' %}</h1>
             </div>
-            <div class="receipts-actions">
+            <div class="receipts-actions receipts-actions-desktop">
                 <a href="{% url 'receipts:category_twins' %}" class="receipts-button receipts-button-secondary">
                     {% include 'partials/_icon.html' with icon='network' %}
                     {% translate 'Категории' %}
@@ -31,6 +31,50 @@
                     {% include 'partials/_icon.html' with icon='plus' %}
                     {% translate 'Добавить чек' %}
                 </a>
+            </div>
+            <div class="receipts-actions receipts-actions-mobile">
+                <a href="{% url 'receipts:upload' %}?mode=scan"
+                   class="receipts-button receipts-button-primary receipts-scan-action"
+                   data-scan-action>
+                    {% include 'partials/_icon.html' with icon='camera' %}
+                    {% translate 'Сканировать QR' %}
+                </a>
+                <a href="{% url 'receipts:create' %}" class="receipts-button receipts-button-secondary">
+                    {% include 'partials/_icon.html' with icon='plus' %}
+                    {% translate 'Добавить чек' %}
+                </a>
+                <details class="receipts-menu">
+                    <summary class="receipts-button receipts-button-secondary receipts-menu-toggle"
+                             aria-label="{% translate 'Дополнительные действия' %}">
+                        {% include 'partials/_icon.html' with icon='ellipsis' %}
+                    </summary>
+                    <div class="receipts-menu-panel">
+                        <a href="{% url 'receipts:category_twins' %}"
+                           class="receipts-menu-link"
+                           data-receipts-more-link>
+                            {% include 'partials/_icon.html' with icon='network' %}
+                            {% translate 'Категории' %}
+                        </a>
+                        <a href="{% url 'users:statistics' %}"
+                           class="receipts-menu-link"
+                           data-receipts-more-link>
+                            {% include 'partials/_icon.html' with icon='chart-bar' %}
+                            {% translate 'Детальная статистика' %}
+                        </a>
+                        <a href="{% url 'receipts:products' %}"
+                           class="receipts-menu-link"
+                           data-receipts-more-link>
+                            {% include 'partials/_icon.html' with icon='star' %}
+                            {% translate 'Часто покупаемые товары' %}
+                        </a>
+                        <a href="{% url 'receipts:create_seller' %}"
+                           class="receipts-menu-link"
+                           data-receipts-more-link>
+                            {% include 'partials/_icon.html' with icon='store' %}
+                            {% translate 'Добавить продавца' %}
+                        </a>
+                    </div>
+                </details>
             </div>
         </header>
 

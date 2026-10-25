@@ -2499,6 +2499,10 @@ msgstr "Back to receipts list"
 msgid "Добавить чек"
 msgstr "Add receipt"
 
+#: hasta_la_vista_money/receipts/templates/receipts/receipts.html:45
+msgid "Дополнительные действия"
+msgstr "More actions"
+
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:48
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:48
 msgid "Информация о чеке"
