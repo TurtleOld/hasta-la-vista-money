@@ -160,7 +160,6 @@
 
 {% block extra_js %}
 <script nonce="{{ request.csp_nonce }}">
-    // Pass Django context data to JavaScript
     window.bankStatementData = {
         uploadId: '{{ upload_id|default:"" }}',
         showProgress: {% if show_progress %}true{% else %}false{% endif %},
@@ -192,5 +191,5 @@
         balanceMismatch: '{% translate "Расхождение" %}'
     };
 </script>
-<script src="{% static 'js/bank-statement-upload.js' %}" defer></script>
+<script nonce="{{ request.csp_nonce }}" src="{% static 'js/dist/pages/bank-statement-upload.js' %}?v={% word_hash %}" defer></script>
 {% endblock %}

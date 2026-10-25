@@ -404,7 +404,7 @@ make build-js
 make watch-js
 ```
 
-Esbuild (`esbuild.config.mjs`) собирает 11 entry points в `static/js/dist/`:
+Esbuild (`esbuild.config.mjs`) собирает 12 entry points в `static/js/dist/`:
 
 | Entry point | Выходной файл | Загружается на |
 |---|---|---|
@@ -419,6 +419,7 @@ Esbuild (`esbuild.config.mjs`) собирает 11 entry points в `static/js/di
 | `static/js/pages/profile.js` | `dist/pages/profile.js` | Профиль |
 | `static/js/pages/bank-statement-reconciliation.js` | `dist/pages/bank-statement-reconciliation.js` | Сверка банковской выписки |
 | `static/js/pages/auditlog.js` | `dist/pages/auditlog.js` | Журнал аудита |
+| `static/js/pages/bank-statement-upload.js` | `dist/pages/bank-statement-upload.js` | Загрузка банковской выписки |
 
 **Важно:**
 - `static/js/dist/` указан в `.gitignore` и `.dockerignore` — собранные файлы не хранятся в репозитории

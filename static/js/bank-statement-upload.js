@@ -1,6 +1,5 @@
-/**
- * Bank Statement Upload - Drag-and-drop, progress tracking and form handling
- */
+import { icon } from './icons.js';
+
 (function() {
     'use strict';
 
@@ -138,31 +137,23 @@
         }
     }
 
-    /**
-     * Validates if a URL is safe for redirect
-     * @param {string} url - The URL to validate
-     * @returns {boolean} - True if URL is safe, false otherwise
-     */
     function isValidRedirectUrl(url) {
         if (!url || typeof url !== 'string') {
             return false;
         }
 
-        // Allow relative URLs starting with /
         if (url.startsWith('/')) {
             return true;
         }
 
-        // Allow absolute URLs only if they match the current origin
         try {
             const urlObj = new URL(url, window.location.origin);
             return urlObj.origin === window.location.origin;
-        } catch (e) {
+        } catch {
             return false;
         }
     }
 
-    // Wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('uploadForm');
         const submitBtn = document.getElementById('submitBtn');
@@ -191,12 +182,10 @@
 
             if (data.status === 'pending') {
                 progressStatus.textContent = window.bankStatementTranslations.pending;
-                // Clear and safely set title using DOM methods
-                progressTitle.appendChild(document.createTextNode(window.bankStatementTranslations.fileUploaded));
+                progressTitle.textContent = window.bankStatementTranslations.fileUploaded;
             } else if (data.status === 'processing') {
                 progressStatus.textContent = window.bankStatementTranslations.processing;
-                // Clear and safely set title using DOM methods
-                progressTitle.appendChild(document.createTextNode(window.bankStatementTranslations.processingStatement));
+                progressTitle.textContent = window.bankStatementTranslations.processingStatement;
 
                 if (data.total_transactions > 0) {
                     progressTransactions.classList.remove('hidden');
@@ -247,7 +236,6 @@
                 setTimeout(function() {
                     const redirectUrl = window.bankStatementUrls.accountList;
                     if (redirectUrl) {
-                        // Validate URL is safe before navigation
                         if (isValidRedirectUrl(redirectUrl)) {
                             window.location.assign(redirectUrl);
                         }
@@ -265,13 +253,9 @@
             }
         }
 
-        /**
-         * Poll upload status from server
-         */
         function pollUploadStatus() {
             if (!uploadId) return;
 
-            // Validate uploadId is numeric to prevent injection
             if (!/^\d+$/.test(uploadId)) {
                 console.error('Invalid upload ID format');
                 return;
@@ -288,24 +272,16 @@
                 });
         }
 
-        // Check for ongoing upload from context or session
         const contextUploadId = window.bankStatementData?.uploadId || '';
         const showProgress = window.bankStatementData?.showProgress || false;
         const lastUploadId = contextUploadId || window.bankStatementData?.sessionUploadId || '';
 
-        console.log('Debug: contextUploadId=', contextUploadId);
-        console.log('Debug: showProgress=', showProgress);
-        console.log('Debug: lastUploadId=', lastUploadId);
-
         if (showProgress && lastUploadId) {
             uploadId = lastUploadId;
-            console.log('Showing progress bar for upload:', uploadId);
             progressIndicator.classList.remove('hidden');
             progressIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
             pollInterval = setInterval(pollUploadStatus, 2000);
-            pollUploadStatus(); // Initial call
-        } else {
-            console.log('Not showing progress bar. showProgress=', showProgress, 'lastUploadId=', lastUploadId);
+            pollUploadStatus();
         }
 
         if (form) {
@@ -313,7 +289,7 @@
                 submitBtn.disabled = true;
 
                 btnText.textContent = window.bankStatementTranslations.uploading;
-                uploadIcon.classList.add('animate-spin');
+                uploadIcon.replaceWith(icon('refresh', 'animate-spin'));
             });
         }
     });

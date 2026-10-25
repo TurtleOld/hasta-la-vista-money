@@ -1,8 +1,5 @@
-/* global bootstrap, Chart */
-/**
- * Loan Module JavaScript
- * Обеспечивает интерактивность для кредитного модуля
- */
+/* global bootstrap */
+import { icon } from './icons.js';
 
 class LoanManager {
     constructor() {
@@ -11,9 +8,6 @@ class LoanManager {
         this.initializeCharts();
     }
 
-    /**
-     * Инициализация обработчиков событий
-     */
     initializeEventListeners() {
         this.setupLoanForm();
         this.setupModals();
@@ -21,9 +15,6 @@ class LoanManager {
         this.setupExport();
     }
 
-    /**
-     * Настройка формы кредита
-     */
     setupLoanForm() {
         const form = document.querySelector('.needs-validation');
         if (form) {
@@ -39,9 +30,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Настройка предварительного расчета
-     */
     setupCalculationPreview() {
         const loanAmount = document.getElementById('id_loan_amount');
         const interestRate = document.getElementById('id_annual_interest_rate');
@@ -72,9 +60,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Расчет кредита
-     */
     calculateLoan(amount, monthlyRate, months, type) {
         if (type === 'Annuity') {
             const monthlyPaymentRaw = amount * (monthlyRate * Math.pow(1 + monthlyRate, months)) /
@@ -113,9 +98,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Показать предварительный расчет
-     */
     showCalculationPreview(result) {
         let previewElement = document.getElementById('calculation-preview');
 
@@ -134,9 +116,7 @@ class LoanManager {
         alertDiv.className = 'mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100';
 
         const header = document.createElement('h6');
-        const icon = document.createElement('i');
-        icon.className = 'bi bi-calculator mr-2';
-        header.appendChild(icon);
+        header.appendChild(icon('calculator', 'mr-2'));
         header.appendChild(document.createTextNode('Предварительный расчет'));
         alertDiv.appendChild(header);
 
@@ -212,9 +192,6 @@ class LoanManager {
         });
     }
 
-    /**
-     * Настройка фильтров
-     */
     setupFilters() {
         const serverFilters = document.querySelector(
             '#loan-filters-form[data-server-side-filters="true"]',
@@ -244,9 +221,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Фильтрация кредитов
-     */
     filterLoans(type, value) {
         const loanCards = document.querySelectorAll('.loan-card');
 
@@ -265,9 +239,6 @@ class LoanManager {
         });
     }
 
-    /**
-     * Сортировка кредитов
-     */
     sortLoans(criteria) {
         const container = document.querySelector('.row');
         const cards = Array.from(container.querySelectorAll('.col-lg-6, .col-xl-4'));
@@ -282,7 +253,7 @@ class LoanManager {
                 case 'amount':
                     valueA = parseFloat(cardA.querySelector('.amount .info-value').textContent);
                     valueB = parseFloat(cardB.querySelector('.amount .info-value').textContent);
-                    return valueB - valueA; // По убыванию
+                    return valueB - valueA;
                 case 'rate':
                     valueA = parseFloat(cardA.querySelector('.rate .info-value').textContent);
                     valueB = parseFloat(cardB.querySelector('.rate .info-value').textContent);
@@ -290,7 +261,7 @@ class LoanManager {
                 case 'period':
                     valueA = parseInt(cardA.querySelector('.period .info-value').textContent);
                     valueB = parseInt(cardB.querySelector('.period .info-value').textContent);
-                    return valueA - valueB; // По возрастанию
+                    return valueA - valueB;
                 default:
                     return 0;
             }
@@ -299,9 +270,6 @@ class LoanManager {
         cards.forEach(card => container.appendChild(card));
     }
 
-    /**
-     * Настройка экспорта
-     */
     setupExport() {
         const exportBtn = document.getElementById('export-loans');
         if (exportBtn) {
@@ -311,9 +279,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Экспорт данных кредитов
-     */
     exportLoansData() {
         const loans = [];
         document.querySelectorAll('.loan-card').forEach(card => {
@@ -332,9 +297,6 @@ class LoanManager {
         this.downloadCSV(csv, 'loans_export.csv');
     }
 
-    /**
-     * Конвертация в CSV
-     */
     convertToCSV(data) {
         const headers = ['Номер кредита', 'Сумма', 'Ставка', 'Срок', 'Общая сумма', 'Переплата'];
         const rows = data.map(loan => [
@@ -351,9 +313,6 @@ class LoanManager {
         ).join('\n');
     }
 
-    /**
-     * Скачивание CSV файла
-     */
     downloadCSV(csv, filename) {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -366,9 +325,6 @@ class LoanManager {
         document.body.removeChild(link);
     }
 
-    /**
-     * Инициализация тултипов
-     */
     initializeTooltips() {
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -376,17 +332,11 @@ class LoanManager {
         });
     }
 
-    /**
-     * Инициализация графиков
-     */
     initializeCharts() {
         this.setupPaymentChart();
         this.setupProgressChart();
     }
 
-    /**
-     * Настройка графика платежей
-     */
     setupPaymentChart() {
         const chartCanvas = document.getElementById('payment-chart');
         if (chartCanvas && typeof Chart !== 'undefined') {
@@ -458,9 +408,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Настройка графика прогресса
-     */
     setupProgressChart() {
         const progressCanvas = document.getElementById('progress-chart');
         if (progressCanvas && typeof Chart !== 'undefined') {
@@ -496,9 +443,6 @@ class LoanManager {
         }
     }
 
-    /**
-     * Показать уведомление
-     */
     showNotification(message, type = 'success') {
         const notification = document.createElement('div');
         const tone = type === 'success'
