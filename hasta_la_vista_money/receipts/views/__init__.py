@@ -24,7 +24,6 @@ from hasta_la_vista_money.receipts.views.seller import (
     SellerUpdateView,
 )
 from hasta_la_vista_money.receipts.views.upload import (
-    ScanQRReceiptView,
     UploadImageView,
 )
 
@@ -41,7 +40,6 @@ __all__ = [
     'ReceiptProcessingNotificationView',
     'ReceiptUpdateView',
     'ReceiptView',
-    'ScanQRReceiptView',
     'SellerCreateView',
     'SellerUpdateView',
     'UploadImageView',

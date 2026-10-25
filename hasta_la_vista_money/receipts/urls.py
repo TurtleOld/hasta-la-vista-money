@@ -7,6 +7,7 @@ from hasta_la_vista_money.receipts.apis import (
     ReceiptDeleteAPIView,
     ReceiptListAPIView,
     ReceiptsByGroupAPIView,
+    ScanQRAPIView,
     SellerAutocompleteAPIView,
     SellerCreateAPIView,
     SellerDetailAPIView,
@@ -24,7 +25,6 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptProcessingNotificationView,
     ReceiptUpdateView,
     ReceiptView,
-    ScanQRReceiptView,
     SellerCreateView,
     SellerUpdateView,
     UploadImageView,
@@ -89,8 +89,8 @@ urlpatterns = [
     ),
     path(
         'scan-qr/',
-        ScanQRReceiptView.as_view(),
-        name='scan_qr',
+        ScanQRAPIView.as_view(),
+        name='scan_qr_api',
     ),
     path(
         'processing/<int:pk>/retry/',

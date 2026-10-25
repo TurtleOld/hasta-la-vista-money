@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from django.shortcuts import redirect
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import (
     FormView,
@@ -149,66 +149,3 @@ class UploadImageView(
     def _get_uploaded_files(self) -> list[Any]:
         """Extract all uploaded files from request."""
         return list(self.request.FILES.getlist('file'))
-
-
-class ScanQRReceiptView(
-    LoginRequiredMixin,
-    FormView[ScanQRForm],
-    FormErrorHandlingMixin,
-):
-    """Accept a QR string decoded in-browser and enqueue an FNS lookup.
-
-    Mirrors UploadImageView but skips the image upload + QRCodeExtractor
-    decode step entirely: the QR is already decoded client-side (camera
-    scan), so only the raw QR string and target account are submitted.
-    """
-
-    template_name = 'receipts/upload_image.html'
-    form_class: type[ScanQRForm] = ScanQRForm
-    success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context['scan_form'] = context.pop('form')
-        context.setdefault(
-            'upload_form',
-            UploadImageForm(user=cast('User', self.request.user)),
-        )
-        context['scan_mode'] = self.request.GET.get('mode') == 'scan'
-        return context
-
-    def _scanner_url(self) -> str:
-        url = reverse('receipts:upload')
-        if self.request.GET.get('mode') == 'scan':
-            return f'{url}?mode=scan'
-        return url
-
-    def form_valid(self, form: ScanQRForm) -> HttpResponse:
-        request = cast('RequestWithContainer', self.request)
-        processing_service = (
-            request.container.receipts.receipt_processing_service()
-        )
-        result = processing_service.enqueue_scanned_qr(
-            user=cast('User', request.user),
-            account=form.cleaned_data['account'],
-            qr_raw=form.cleaned_data['qr_raw'],
-        )
-        if result.status == 'error':
-            messages.error(request, constants.ERROR_PROCESSING_RECEIPT)
-            return self.form_invalid(form)
-        if result.status == 'duplicate':
-            messages.warning(request, _('Этот чек уже загружен.'))
-        else:
-            messages.success(
-                request,
-                _(
-                    'Чек поставлен в обработку. Сканер сообщит, когда '
-                    'проведение завершится.',
-                ),
-            )
-        return redirect(self._scanner_url())
