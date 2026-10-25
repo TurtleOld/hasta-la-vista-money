@@ -9,8 +9,6 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from config.containers import ApplicationContainer
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -182,7 +180,7 @@ class ReceiptProcessingLogCleanupTaskTests(TestCase):
 
 
 class ReceiptProcessingLogScanViewTests(TestCase):
-    """Scanning keeps the user on the scanner and queues a journal entry."""
+    """Scanning queues a journal entry through the scan API."""
 
     def setUp(self) -> None:
         self.user = User.objects.create_user(
@@ -198,42 +196,6 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def test_scan_queues_log_and_returns_to_scanner(self) -> None:
-        raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
-        with mock.patch(
-            _SEND_TASK,
-        ) as task_mock:
-            response = self.client.post(
-                reverse('receipts:scan_qr'),
-                {'qr_raw': raw_qr, 'account': self.account.pk},
-            )
-
-        self.assertRedirects(response, reverse('receipts:upload'))
-        log = ReceiptProcessingLog.objects.get(user=self.user)
-        self.assertEqual(log.status, ReceiptProcessingStatus.PROCESSING)
-        self.assertEqual(log.account_id, self.account.pk)
-        self.assertEqual(log.qr_raw, raw_qr)
-        task_mock.assert_called_once_with(
-            constants.RECEIPT_PROCESSING_LOG_TASK_NAME,
-            args=[log.pk],
-            task_id=log.task_id,
-        )
-
-    def test_scan_keeps_scan_mode_on_return(self) -> None:
-        raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
-        with mock.patch(
-            _SEND_TASK,
-        ):
-            response = self.client.post(
-                f'{reverse("receipts:scan_qr")}?mode=scan',
-                {'qr_raw': raw_qr, 'account': self.account.pk},
-            )
-
-        self.assertRedirects(
-            response,
-            f'{reverse("receipts:upload")}?mode=scan',
-        )
-
     def test_repeat_scan_is_saved_as_duplicate_processing_log(self) -> None:
         raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
         ReceiptProcessingLog.objects.create(
@@ -245,11 +207,11 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         )
 
         response = self.client.post(
-            reverse('receipts:scan_qr'),
+            reverse('receipts:scan_qr_api'),
             {'qr_raw': raw_qr, 'account': self.account.pk},
         )
 
-        self.assertRedirects(response, reverse('receipts:upload'))
+        self.assertEqual(response.json()['status'], 'duplicate')
         duplicate_log = ReceiptProcessingLog.objects.filter(
             user=self.user,
             status=ReceiptProcessingStatus.DUPLICATE,
@@ -280,11 +242,9 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             currency='RUB',
         )
 
-        with mock.patch(
-            _SEND_TASK,
-        ):
+        with mock.patch(_SEND_TASK):
             self.client.post(
-                reverse('receipts:scan_qr'),
+                reverse('receipts:scan_qr_api'),
                 {'qr_raw': raw_qr, 'account': other.pk},
             )
 
@@ -530,86 +490,3 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             'проверка не увидела последующее движение вклада и посчитала '
             'средства достаточными.',
         )
-
-
-class EnqueueScannedQrServiceTests(TestCase):
-    """The service decides between a duplicate and a queued QR scan."""
-
-    raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
-
-    def setUp(self) -> None:
-        self.user = User.objects.create_user(
-            username='qr-enqueue-user',
-            password='pass',  # nosec B106: test-only password
-        )
-        self.account = Account.objects.create(
-            user=self.user,
-            name_account='Wallet',
-            balance=Decimal('1000.00'),
-            currency='RUB',
-        )
-        self.service = (
-            ApplicationContainer().receipts.receipt_processing_service()
-        )
-
-    def test_new_qr_is_queued(self) -> None:
-        with mock.patch(_SEND_TASK) as send_task:
-            result = self.service.enqueue_scanned_qr(
-                user=self.user,
-                account=self.account,
-                qr_raw=self.raw_qr,
-            )
-
-        self.assertEqual(result.status, 'queued')
-        log = ReceiptProcessingLog.objects.get(user=self.user)
-        self.assertEqual(log.status, ReceiptProcessingStatus.PROCESSING)
-        self.assertEqual(log.fiscal_key, '1:2:3:1')
-        send_task.assert_called_once_with(
-            constants.RECEIPT_PROCESSING_LOG_TASK_NAME,
-            args=[log.pk],
-            task_id=log.task_id,
-        )
-
-    def test_saved_receipt_is_duplicate(self) -> None:
-        receipt = Receipt.objects.create(
-            user=self.user,
-            account=self.account,
-            receipt_date=timezone.now(),
-            total_sum=Decimal('123.45'),
-            fiscal_key='1:2:3:1',
-        )
-
-        with mock.patch(_SEND_TASK) as send_task:
-            result = self.service.enqueue_scanned_qr(
-                user=self.user,
-                account=self.account,
-                qr_raw=self.raw_qr,
-            )
-
-        self.assertEqual(result.status, 'duplicate')
-        self.assertEqual(result.duplicate, receipt)
-        self.assertTrue(
-            ReceiptProcessingLog.objects.filter(
-                user=self.user,
-                status=ReceiptProcessingStatus.DUPLICATE,
-            ).exists(),
-        )
-        send_task.assert_not_called()
-
-    def test_storage_failure_is_error(self) -> None:
-        with (
-            mock.patch.object(
-                self.service.processing_log_repository,
-                'create_qr_job',
-                side_effect=RuntimeError('db down'),
-            ),
-            mock.patch(_SEND_TASK) as send_task,
-        ):
-            result = self.service.enqueue_scanned_qr(
-                user=self.user,
-                account=self.account,
-                qr_raw=self.raw_qr,
-            )
-
-        self.assertEqual(result.status, 'error')
-        send_task.assert_not_called()

@@ -25,6 +25,8 @@ const PHOTO_WORKER_TIMEOUT_MS = 8000;
 const PHOTO_OUTCOME_HINT_MS = 3000;
 const PHOTO_PICKER_FOCUS_GRACE_MS = 1000;
 const PHOTO_FILE_NAME = 'receipt.jpg';
+const RESULT_PAUSE_MS = 1500;
+const RESULT_VIBRATE_MS = 100;
 const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
 const IDEAL_WIDTH = 1920;
 const IDEAL_HEIGHT = 1080;
@@ -163,6 +165,8 @@ function messagesFrom(element) {
     photoRecognizing: element.dataset.messagePhotoRecognizing,
     photoNotFound: element.dataset.messagePhotoNotFound,
     photoUploadFailed: element.dataset.messagePhotoUploadFailed,
+    alreadySent: element.dataset.messageAlreadySent,
+    submitFailed: element.dataset.messageSubmitFailed,
     preparing: element.dataset.messagePreparing,
     scanning: element.dataset.messageScanning,
   };
@@ -302,6 +306,11 @@ function registerReceiptQRScanPage(Alpine) {
       photoVisible: false,
       photoBusy: false,
       photoPending: null,
+      sentQRs: new Set(),
+      sentCount: 0,
+      resultMessage: '',
+      resultLink: '',
+      resultError: false,
 
       init() {
         this.messages = messagesFrom(this.$el);
@@ -885,14 +894,51 @@ function registerReceiptQRScanPage(Alpine) {
         return response;
       },
 
-      submitDecoded(rawValue) {
-        this.stop();
-        const form = this.$refs.scanForm;
-        const qrInput = form?.querySelector('[name="qr_raw"]');
-        if (qrInput) {
-          qrInput.value = rawValue;
+      async submitDecoded(rawValue) {
+        const result = this.sentQRs.has(rawValue)
+          ? { message: this.messages.alreadySent }
+          : await this.sendQR(rawValue);
+        this.resultMessage = result.message;
+        this.resultLink = result.url || '';
+        this.resultError = result.status === 'error';
+        navigator.vibrate?.(RESULT_VIBRATE_MS);
+        await sleep(RESULT_PAUSE_MS);
+        if (!this.stream) {
+          return;
         }
-        form?.submit();
+        if (this.photoBusy) {
+          await this.resumeLive();
+        } else {
+          this.scheduleScan(0);
+        }
+      },
+
+      async sendQR(rawValue) {
+        const form = this.$refs.scanForm;
+        const token = form.querySelector('[name="csrfmiddlewaretoken"]').value;
+        const body = new FormData();
+        body.append('qr_raw', rawValue);
+        body.append('account', form.querySelector('[name="account"]').value);
+        this.sentQRs.add(rawValue);
+        let message = this.messages.submitFailed;
+        try {
+          const response = await fetch(this.$el.dataset.scanUrl, {
+            method: 'POST',
+            body,
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': token, Accept: 'application/json' },
+          });
+          const payload = await response.json().catch(() => null);
+          if (response.ok && payload && payload.status !== 'error') {
+            this.sentCount += 1;
+            return payload;
+          }
+          message = payload?.message || message;
+        } catch (error) {
+          console.warn('receipt QR scan: QR submit failed', error);
+        }
+        this.sentQRs.delete(rawValue);
+        return { status: 'error', message };
       },
 
       stop({ preserveError = false } = {}) {
@@ -919,6 +965,8 @@ function registerReceiptQRScanPage(Alpine) {
         this.hintText = '';
         this.hintState = null;
         this.zoomStepped = false;
+        this.resultMessage = '';
+        this.resultLink = '';
         if (!preserveError) {
           this.errorMessage = '';
         }

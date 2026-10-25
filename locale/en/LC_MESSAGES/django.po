@@ -3815,3 +3815,23 @@ msgstr "Bank statement uploaded and will be processed in the background. Data wi
 #: hasta_la_vista_money/finance_account/templates/finance_account/finances.html
 msgid "Загрузить выписку"
 msgstr "Upload statement"
+
+#: hasta_la_vista_money/receipts/apis.py
+msgid "Уже загружен"
+msgstr "Already uploaded"
+
+#: hasta_la_vista_money/receipts/apis.py
+msgid "Поставлен в обработку"
+msgstr "Queued for processing"
+
+#: hasta_la_vista_money/receipts/templates/receipts/upload_image.html
+msgid "Этот чек уже отправлен"
+msgstr "This receipt has already been sent"
+
+#: hasta_la_vista_money/receipts/templates/receipts/upload_image.html
+msgid "Не удалось отправить чек. Наведите камеру ещё раз."
+msgstr "Could not send the receipt. Point the camera at it again."
+
+#: hasta_la_vista_money/receipts/templates/receipts/upload_image.html
+msgid "открыть"
+msgstr "open"

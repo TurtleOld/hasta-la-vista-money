@@ -1294,6 +1294,30 @@
   width: max-content;
 }
 
+.receipts-scan-result {
+  background: rgb(15 23 42 / 85%);
+  border-radius: 0.75rem;
+  bottom: 4.25rem;
+  color: #fff;
+  font-weight: 600;
+  left: 50%;
+  max-width: 90%;
+  padding: 0.6rem 1rem;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  width: max-content;
+}
+
+.receipts-scan-result.is-error {
+  background: rgb(185 28 28 / 90%);
+}
+
+.receipts-scan-result a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .receipts-scan-frame {
   aspect-ratio: 1;
   border: 3px solid rgb(255 255 255 / 90%);

@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import QuerySet
+from django.urls import reverse
+from django.utils.translation import gettext as _
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -18,6 +20,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import NotFound
 from rest_framework.generics import (
     ListAPIView,
@@ -41,6 +44,7 @@ if TYPE_CHECKING:
 
 from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
 from hasta_la_vista_money.api.serializers import GroupQuerySerializer
+from hasta_la_vista_money.receipts.forms import ScanQRForm
 from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
     ReceiptAPIDataMapper,
 )
@@ -210,6 +214,75 @@ class DataUrlAPIView(APIView):
         return Response(
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+@extend_schema(
+    tags=['receipts'],
+    summary='Отправить отсканированный QR',
+    description='Поставить QR кассового чека в обработку',
+    responses={
+        200: OpenApiResponse(description='queued или duplicate'),
+        400: OpenApiResponse(description='Неверный счёт или QR'),
+        500: OpenApiResponse(description='Не удалось поставить в обработку'),
+    },
+)
+class ScanQRAPIView(APIView):
+    """Queue a QR decoded by the browser camera; the scanner stays open."""
+
+    schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        user = cast('User', request.user)
+        form = ScanQRForm(user=user, data=request.data)
+        if not form.is_valid():
+            return Response(
+                {
+                    'status': 'error',
+                    'message': next(iter(form.errors.values()))[0],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        container = cast('RequestWithContainer', request).container
+        processing_service = container.receipts.receipt_processing_service()
+        outcome = processing_service.enqueue_scanned_qr(
+            user=user,
+            account=form.cleaned_data['account'],
+            qr_raw=form.cleaned_data['qr_raw'],
+        )
+        if outcome.status == 'error':
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(constants.ERROR_PROCESSING_RECEIPT),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        if outcome.status == 'duplicate':
+            duplicate = outcome.duplicate
+            receipt = (
+                duplicate
+                if isinstance(duplicate, Receipt)
+                else (duplicate.receipt if duplicate is not None else None)
+            )
+            url = (
+                reverse('receipts:view', args=[receipt.pk])
+                if receipt is not None
+                else reverse('receipts:list')
+            )
+            return Response(
+                {
+                    'status': 'duplicate',
+                    'message': _('Уже загружен'),
+                    'url': url,
+                },
+            )
+        return Response(
+            {'status': 'queued', 'message': _('Поставлен в обработку')},
         )
 
 
