@@ -431,7 +431,8 @@ class ProcessingLogDeleteAndReuploadTests(_ProcessingLogCase):
             fiscal_key='1:2:3:1',
         )
         with mock.patch(
-            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
+            'hasta_la_vista_money.receipts.services.receipt_processing_service.'
+            'current_app.send_task',
         ):
             self.client.post(
                 reverse('receipts:scan_qr'),

@@ -5,7 +5,7 @@ enabling dependency injection and type checking.
 """
 
 from collections.abc import Iterable
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from django.db.models import QuerySet
 from django.forms import BaseFormSet
@@ -27,6 +27,11 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.receipts.services.receipt_processing_service import (  # noqa: E501
+        QrEnqueueResult,
+    )
 
 
 @runtime_checkable
@@ -132,6 +137,14 @@ class ReceiptProcessingServiceProtocol(Protocol):
         image_hash: str,
         fiscal_key: str,
     ) -> ReceiptProcessingLog: ...
+
+    def enqueue_scanned_qr(
+        self,
+        *,
+        user: User,
+        account: Account,
+        qr_raw: str,
+    ) -> 'QrEnqueueResult': ...
 
     def attach_task_id(
         self,

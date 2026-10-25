@@ -1,4 +1,3 @@
-import hashlib
 import sys
 import uuid
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -20,7 +19,6 @@ from hasta_la_vista_money.receipts.forms import (
     ScanQRForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.services.fns_qr import parse_fns_qr
 from hasta_la_vista_money.receipts.services.receipt_processing_service import (
     compute_image_hash,
 )
@@ -192,65 +190,25 @@ class ScanQRReceiptView(
 
     def form_valid(self, form: ScanQRForm) -> HttpResponse:
         request = cast('RequestWithContainer', self.request)
-        user = cast('User', request.user)
-        account = form.cleaned_data['account']
-        qr_raw = form.cleaned_data['qr_raw']
-        fiscal_key = parse_fns_qr(qr_raw).fiscal_key
-        image_hash = hashlib.sha256(qr_raw.encode()).hexdigest()
-
         processing_service = (
             request.container.receipts.receipt_processing_service()
         )
-
-        duplicate = processing_service.find_duplicate(
-            user=user,
-            image_hash=image_hash,
-            fiscal_key=fiscal_key,
+        result = processing_service.enqueue_scanned_qr(
+            user=cast('User', request.user),
+            account=form.cleaned_data['account'],
+            qr_raw=form.cleaned_data['qr_raw'],
         )
-        if duplicate is not None:
-            processing_service.create_duplicate_qr_job(
-                user=user,
-                account=account,
-                qr_raw=qr_raw,
-                image_hash=image_hash,
-                fiscal_key=fiscal_key,
-            )
+        if result.status == 'error':
+            messages.error(request, constants.ERROR_PROCESSING_RECEIPT)
+            return self.form_invalid(form)
+        if result.status == 'duplicate':
             messages.warning(request, _('Этот чек уже загружен.'))
-            return redirect(self._scanner_url())
-
-        try:
-            processing_log = processing_service.create_qr_job(
-                user=user,
-                account=account,
-                qr_raw=qr_raw,
-                image_hash=image_hash,
-                fiscal_key=fiscal_key,
+        else:
+            messages.success(
+                request,
+                _(
+                    'Чек поставлен в обработку. Сканер сообщит, когда '
+                    'проведение завершится.',
+                ),
             )
-        except Exception as exc:
-            logger.exception(
-                'Error queuing scanned receipt for processing',
-                error=exc,
-            )
-            return self.handle_form_error_with_message(
-                form,
-                exc,
-                constants.ERROR_PROCESSING_RECEIPT,
-            )
-
-        task_id = str(uuid.uuid4())
-        processing_service.attach_task_id(
-            log=processing_log,
-            task_id=task_id,
-        )
-        _views_module().process_receipt_processing_log.apply_async(
-            args=[processing_log.pk],
-            task_id=task_id,
-        )
-        messages.success(
-            request,
-            _(
-                'Чек поставлен в обработку. Сканер сообщит, когда '
-                'проведение завершится.',
-            ),
-        )
         return redirect(self._scanner_url())

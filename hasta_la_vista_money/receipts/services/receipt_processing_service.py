@@ -1,9 +1,13 @@
 """Automatic receipt processing backed by an audit log."""
 
 import hashlib
+import uuid
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
+import structlog
+from celery import current_app
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
@@ -26,6 +30,7 @@ from hasta_la_vista_money.receipts.protocols.services import (
 from hasta_la_vista_money.receipts.repositories.receipt_processing_log_repository import (  # noqa: E501
     ReceiptProcessingLogRepository,
 )
+from hasta_la_vista_money.receipts.services.fns_qr import parse_fns_qr
 from hasta_la_vista_money.receipts.services.receipt_adjustment import (
     calculate_receipt_adjustment,
 )
@@ -35,7 +40,14 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 )
 from hasta_la_vista_money.users.models import User
 
+logger = structlog.get_logger(__name__)
 _HASH_CHUNK_SIZE = 64 * 1024
+
+
+@dataclass(frozen=True)
+class QrEnqueueResult:
+    status: Literal['queued', 'duplicate', 'error']
+    duplicate: Receipt | ReceiptProcessingLog | None = None
 
 
 def compute_image_hash(file_obj: Any) -> str:
@@ -137,6 +149,54 @@ class ReceiptProcessingService:
             image_hash=image_hash,
             fiscal_key=fiscal_key,
         )
+
+    def enqueue_scanned_qr(
+        self,
+        *,
+        user: User,
+        account: Account,
+        qr_raw: str,
+    ) -> QrEnqueueResult:
+        fiscal_key = parse_fns_qr(qr_raw).fiscal_key
+        image_hash = hashlib.sha256(qr_raw.encode()).hexdigest()
+        duplicate = self.find_duplicate(
+            user=user,
+            image_hash=image_hash,
+            fiscal_key=fiscal_key,
+        )
+        if duplicate is not None:
+            self.create_duplicate_qr_job(
+                user=user,
+                account=account,
+                qr_raw=qr_raw,
+                image_hash=image_hash,
+                fiscal_key=fiscal_key,
+            )
+            return QrEnqueueResult(status='duplicate', duplicate=duplicate)
+
+        try:
+            log = self.create_qr_job(
+                user=user,
+                account=account,
+                qr_raw=qr_raw,
+                image_hash=image_hash,
+                fiscal_key=fiscal_key,
+            )
+        except Exception as exc:
+            logger.exception(
+                'Error queuing scanned receipt for processing',
+                error=exc,
+            )
+            return QrEnqueueResult(status='error')
+
+        task_id = str(uuid.uuid4())
+        self.attach_task_id(log=log, task_id=task_id)
+        current_app.send_task(
+            constants.RECEIPT_PROCESSING_LOG_TASK_NAME,
+            args=[log.pk],
+            task_id=task_id,
+        )
+        return QrEnqueueResult(status='queued')
 
     def attach_task_id(
         self,

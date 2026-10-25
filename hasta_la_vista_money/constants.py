@@ -119,6 +119,9 @@ FNS_DIAGNOSTIC_RESPONSE_HEADERS: Final = (
 FNS_REDACTED_VALUE: Final = '[REDACTED]'
 DEFAULT_PRODUCT_CATEGORY: Final = 'Прочее'
 PRODUCT_NAME_EMBEDDING_DIMENSIONS: Final = 384
+RECEIPT_PROCESSING_LOG_TASK_NAME: Final = (
+    'receipts.process_receipt_processing_log'
+)
 RECEIPT_EXTERNAL_CATEGORY_TASK_NAME: Final = (
     'receipts.categorize_receipt_product'
 )
