@@ -17,6 +17,7 @@ const options = {
     'pages/bank-statement-reconciliation':
       'static/js/pages/bank-statement-reconciliation.js',
     'pages/auditlog': 'static/js/pages/auditlog.js',
+    'pages/bank-statement-upload': 'static/js/pages/bank-statement-upload.js',
   },
   bundle: true,
   format: 'iife',

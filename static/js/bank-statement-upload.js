@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 (function() {
     'use strict';
 
@@ -274,19 +276,12 @@
         const showProgress = window.bankStatementData?.showProgress || false;
         const lastUploadId = contextUploadId || window.bankStatementData?.sessionUploadId || '';
 
-        console.log('Debug: contextUploadId=', contextUploadId);
-        console.log('Debug: showProgress=', showProgress);
-        console.log('Debug: lastUploadId=', lastUploadId);
-
         if (showProgress && lastUploadId) {
             uploadId = lastUploadId;
-            console.log('Showing progress bar for upload:', uploadId);
             progressIndicator.classList.remove('hidden');
             progressIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
             pollInterval = setInterval(pollUploadStatus, 2000);
             pollUploadStatus();
-        } else {
-            console.log('Not showing progress bar. showProgress=', showProgress, 'lastUploadId=', lastUploadId);
         }
 
         if (form) {
@@ -294,7 +289,7 @@
                 submitBtn.disabled = true;
 
                 btnText.textContent = window.bankStatementTranslations.uploading;
-                uploadIcon.classList.add('animate-spin');
+                uploadIcon.replaceWith(icon('refresh', 'animate-spin'));
             });
         }
     });
