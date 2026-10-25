@@ -8,7 +8,7 @@ from django.contrib.postgres.search import SearchQuery, SearchVector
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.db import connection
-from django.db.models import Min, Q, QuerySet
+from django.db.models import F, Min, Q, QuerySet
 from django.forms import (
     CharField,
     ChoiceField,
@@ -570,6 +570,23 @@ class MultipleImageField(FileField):
         return single_file_clean(data, initial)
 
 
+def _set_receipt_account_choices(field: Any, user: User) -> None:
+    accounts = Account.objects.available_for_regular_operations().filter(
+        user=user,
+    )
+    last_account_id = (
+        Receipt.objects.filter(user=user)
+        .order_by(F('created_at').desc(nulls_last=True), '-pk')
+        .values_list('account_id', flat=True)
+        .first()
+    )
+    last_account = None
+    if last_account_id is not None:
+        last_account = accounts.filter(pk=last_account_id).first()
+    field.queryset = accounts
+    field.initial = last_account or accounts.first()
+
+
 class UploadImageForm(Form):
     account = ModelChoiceField(
         label=_('Счёт'),
@@ -592,15 +609,7 @@ class UploadImageForm(Form):
     def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
         kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = (  # type: ignore[attr-defined]
-            Account.objects.available_for_regular_operations().filter(
-                user=user,
-            )
-        )
-        if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
-            self.fields['account'].initial = self.fields[
-                'account'
-            ].queryset.first()  # type: ignore[attr-defined]
+        _set_receipt_account_choices(self.fields['account'], user)
 
     def clean_file(self) -> Any:
         files = self.cleaned_data.get('file')
@@ -633,15 +642,7 @@ class ScanQRForm(Form):
     def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
         kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = (  # type: ignore[attr-defined]
-            Account.objects.available_for_regular_operations().filter(
-                user=user,
-            )
-        )
-        if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
-            self.fields['account'].initial = self.fields[
-                'account'
-            ].queryset.first()  # type: ignore[attr-defined]
+        _set_receipt_account_choices(self.fields['account'], user)
 
     def clean_qr_raw(self) -> str:
         qr_raw = (self.cleaned_data.get('qr_raw') or '').strip()
