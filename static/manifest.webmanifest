@@ -36,5 +36,19 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Сканировать чек",
+      "short_name": "Сканер",
+      "url": "/receipts/upload/?mode=scan",
+      "icons": [
+        {
+          "src": "/static/img/pwa/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
