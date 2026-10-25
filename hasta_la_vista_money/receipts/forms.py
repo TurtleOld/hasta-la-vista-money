@@ -575,7 +575,7 @@ def _set_receipt_account_choices(field: Any, user: User) -> None:
         user=user,
     )
     last_account_id = (
-        Receipt.objects.filter(user=user)
+        Receipt.objects.for_user(user)
         .order_by(F('created_at').desc(nulls_last=True), '-pk')
         .values_list('account_id', flat=True)
         .first()

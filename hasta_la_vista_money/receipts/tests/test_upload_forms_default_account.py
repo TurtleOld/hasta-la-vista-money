@@ -67,6 +67,18 @@ class UploadFormsDefaultAccountTests(TestCase):
 
         self._assert_initial(self.user, self.card)
 
+    def test_skips_deposit_account_of_last_receipt(self) -> None:
+        deposit = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        self._receipt(self.main)
+        self._receipt(deposit)
+
+        self._assert_initial(self.user, self.card)
+
     def test_falls_back_to_first_account_without_receipts(self) -> None:
         self._assert_initial(self.user, self.card)
 
