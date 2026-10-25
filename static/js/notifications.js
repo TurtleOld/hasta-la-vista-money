@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 class ToastNotification {
     constructor() {
         this.container = this.createContainer();
@@ -37,22 +39,21 @@ class ToastNotification {
         const toast = document.createElement('div');
 
         const iconMap = new Map([
-            ['success', 'bi-check-circle-fill'],
-            ['danger', 'bi-exclamation-circle-fill'],
-            ['info', 'bi-info-circle-fill'],
-            ['warning', 'bi-exclamation-triangle-fill']
+            ['success', 'check-circle'],
+            ['danger', 'exclamation-circle'],
+            ['info', 'information-circle'],
+            ['warning', 'exclamation']
         ]);
 
         const safeType = iconMap.has(type) ? type : 'info';
-        const icon = iconMap.get(safeType);
+        const iconName = iconMap.get(safeType);
 
         toast.className = `toast-notification toast-${safeType}`;
 
         const content = document.createElement('div');
         content.className = 'toast-content';
 
-        const iconElement = document.createElement('i');
-        iconElement.className = `bi ${icon} toast-icon`;
+        const iconElement = icon(iconName, 'toast-icon');
 
         const messageElement = document.createElement('span');
         messageElement.className = 'toast-message';
@@ -62,9 +63,7 @@ class ToastNotification {
         closeBtn.className = 'toast-close';
         closeBtn.setAttribute('aria-label', 'Закрыть');
 
-        const closeIcon = document.createElement('i');
-        closeIcon.className = 'bi bi-x';
-        closeBtn.appendChild(closeIcon);
+        closeBtn.appendChild(icon('x'));
 
         content.appendChild(iconElement);
         content.appendChild(messageElement);
