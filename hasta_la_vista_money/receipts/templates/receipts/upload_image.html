@@ -7,7 +7,7 @@
 
 
 {% block content %}
-<div class="receipts-app" x-data="instructionModal">
+<div class="receipts-app{% if scan_mode %} is-scan-mode{% endif %}" x-data="instructionModal">
     <div class="receipts-wrap">
         <header class="receipts-header">
             <div>
@@ -29,7 +29,7 @@
             </div>
         </header>
 
-        <div class="receipts-card receipts-upload-card" x-data="receiptUploadTabs">
+        <div class="receipts-card receipts-upload-card" x-data="receiptUploadTabs"{% if scan_mode %} data-initial-tab="scan"{% endif %}>
             <div class="receipts-mode-tabs" role="tablist">
                 <button type="button"
                         class="receipts-mode-tab"
@@ -146,7 +146,7 @@
                  data-message-photo-upload-failed="{% translate 'Не удалось отправить фото на сервер. Попробуйте ещё раз или используйте вкладку «Файл».' %}"
                  data-message-preparing="{% translate 'Подготовка сканера…' %}"
                  data-message-scanning="{% translate 'Сканер готов. Поместите QR-код внутрь рамки.' %}">
-                <form method="post" action="{% url 'receipts:scan_qr' %}" id="scanQrForm" x-ref="scanForm">
+                <form method="post" action="{% url 'receipts:scan_qr' %}{% if scan_mode %}?mode=scan{% endif %}" id="scanQrForm" x-ref="scanForm">
                     {% csrf_token %}
                     {{ scan_form.qr_raw }}
 
@@ -208,9 +208,12 @@
                         <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
                         <span x-text="statusMessage"></span>
                     </p>
-                    <p class="hint" x-show="!errorMessage">
+                    <p class="hint receipts-scan-tip" x-show="!errorMessage">
                         {% translate 'Держите QR-код целиком внутри рамки. Если фокус не срабатывает — коснитесь изображения.' %}
                     </p>
+                    {% if scan_mode %}
+                    <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-primary receipts-scan-done">{% translate 'Готово' %}</a>
+                    {% endif %}
                 </form>
             </div>
         </div>

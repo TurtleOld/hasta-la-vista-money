@@ -1347,6 +1347,61 @@
   opacity: 0.6;
 }
 
+@media (max-width: 768px) {
+  .receipts-app.is-scan-mode {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .is-scan-mode .receipts-header,
+  .is-scan-mode .receipts-scan-panel .receipts-section h3,
+  .is-scan-mode .receipts-scan-tip {
+    display: none;
+  }
+
+  .is-scan-mode .receipts-mode-tabs {
+    margin-bottom: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* 13.25rem = site header + tabs above the form, bottom nav below it. */
+  .is-scan-mode #scanQrForm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: calc(100svh - 13.25rem);
+    min-height: 20rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .is-scan-mode .receipts-scan-panel .receipts-section {
+    border-bottom: 0;
+    padding: 0 0.5rem;
+  }
+
+  .is-scan-mode .receipts-scan-video-wrap {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .is-scan-mode .receipts-scan-video {
+    height: 100%;
+    inset: 0;
+    max-height: none;
+    position: absolute;
+  }
+
+  .is-scan-mode .receipts-scan-photo,
+  .is-scan-mode .receipts-upload-error {
+    margin: 0 0.5rem;
+  }
+
+  .is-scan-mode .receipts-scan-done {
+    justify-content: center;
+    margin: 0 0.5rem;
+  }
+}
+
 /* Review */
 .receipt-review-form {
   display: grid;

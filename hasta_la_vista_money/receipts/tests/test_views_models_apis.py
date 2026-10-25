@@ -1110,6 +1110,22 @@ class TestUploadImageView(TestCase):
         url = reverse_lazy('receipts:upload')
         response = self.client.get(url)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertNotContains(response, 'is-scan-mode')
+        self.assertNotContains(response, 'data-initial-tab')
+
+    def test_upload_image_view_scan_mode(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse_lazy('receipts:upload')
+        response = self.client.get(url, {'mode': 'scan'})
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'is-scan-mode')
+        self.assertContains(response, 'data-initial-tab="scan"')
+        self.assertContains(
+            response,
+            f'href="{reverse_lazy("receipts:list")}" '
+            'class="receipts-button receipts-button-primary '
+            'receipts-scan-done"',
+        )
 
     def test_upload_image_view_unauthorized(self) -> None:
         url = reverse_lazy('receipts:upload')
