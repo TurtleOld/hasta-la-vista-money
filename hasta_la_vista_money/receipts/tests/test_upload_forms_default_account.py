@@ -82,6 +82,27 @@ class UploadFormsDefaultAccountTests(TestCase):
     def test_falls_back_to_first_account_without_receipts(self) -> None:
         self._assert_initial(self.user, self.card)
 
+    def test_resolves_initial_in_one_query(self) -> None:
+        self._receipt(self.main)
+
+        for form_class in FORMS:
+            with (
+                self.subTest(form=form_class.__name__),
+                self.assertNumQueries(1),
+            ):
+                form_class(user=self.user)
+
+    def test_bound_form_skips_initial_lookup(self) -> None:
+        self._receipt(self.main)
+
+        for form_class in FORMS:
+            with (
+                self.subTest(form=form_class.__name__),
+                self.assertNumQueries(0),
+            ):
+                form = form_class(user=self.user, data={})
+            self.assertIsNone(form.fields['account'].initial)
+
     def test_ignores_other_users_receipts(self) -> None:
         self._receipt(self.main)
         other_user = UserType.objects.get(pk=2)
