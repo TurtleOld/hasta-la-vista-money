@@ -123,6 +123,7 @@
                  data-worker-url="{% static 'js/dist/pages/receipt-qr-worker.js' %}"
                  data-wasm-url="{% static 'js/dist/vendor/zxing_reader.wasm' %}"
                  data-upload-url="{% url 'receipts:upload' %}"
+                 data-scan-url="{% url 'receipts:scan_qr_api' %}"
                  data-notifications-url="{% url 'receipts:processing_notifications' %}"
                  data-message-camera-unavailable="{% translate 'Камера или распознавание QR недоступны в этом браузере. Используйте вкладку «Файл».' %}"
                  data-message-camera-policy-blocked="{% translate 'Доступ к камере заблокирован настройками сайта. Используйте вкладку «Файл».' %}"
@@ -144,11 +145,12 @@
                  data-message-photo-recognizing="{% translate 'Распознаю фото…' %}"
                  data-message-photo-not-found="{% translate 'Не удалось прочитать фото — поднесите ближе или добавьте света' %}"
                  data-message-photo-upload-failed="{% translate 'Не удалось отправить фото на сервер. Попробуйте ещё раз или используйте вкладку «Файл».' %}"
+                 data-message-already-sent="{% translate 'Этот чек уже отправлен' %}"
+                 data-message-submit-failed="{% translate 'Не удалось отправить чек. Наведите камеру ещё раз.' %}"
                  data-message-preparing="{% translate 'Подготовка сканера…' %}"
                  data-message-scanning="{% translate 'Сканер готов. Поместите QR-код внутрь рамки.' %}">
-                <form method="post" action="{% url 'receipts:scan_qr' %}{% if scan_mode %}?mode=scan{% endif %}" id="scanQrForm" x-ref="scanForm">
+                <form id="scanQrForm" x-ref="scanForm">
                     {% csrf_token %}
-                    {{ scan_form.qr_raw }}
 
                     <div class="receipts-section">
                         <h3>
@@ -168,6 +170,15 @@
                              x-show="hintText && !errorMessage"
                              x-text="hintText"
                              x-cloak></div>
+                        <div class="receipts-scan-result"
+                             role="status"
+                             aria-live="polite"
+                             x-show="resultMessage"
+                             x-bind:class="{ 'is-error': resultError }"
+                             x-cloak>
+                            <span x-text="resultMessage"></span>
+                            <a x-show="resultLink" x-bind:href="resultLink" x-cloak>· {% translate 'открыть' %}</a>
+                        </div>
                         <div class="receipts-scan-controls">
                             <button type="button"
                                     class="receipts-scan-control"
@@ -212,7 +223,7 @@
                         {% translate 'Держите QR-код целиком внутри рамки. Если фокус не срабатывает — коснитесь изображения.' %}
                     </p>
                     {% if scan_mode %}
-                    <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-primary receipts-scan-done">{% translate 'Готово' %}</a>
+                    <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-primary receipts-scan-done">{% translate 'Готово' %} (<span x-text="sentCount"></span>)</a>
                     {% endif %}
                 </form>
             </div>

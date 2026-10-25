@@ -131,7 +131,7 @@ OWN_ONLY_SURFACES = frozenset(
         'receipts:products',
         'receipts:receipt_api_create',
         'receipts:receipt_image',
-        'receipts:scan_qr',
+        'receipts:scan_qr_api',
         'receipts:seller',
         'receipts:seller_autocomplete_api',
         'receipts:seller_create_api',

@@ -435,7 +435,7 @@ class ProcessingLogDeleteAndReuploadTests(_ProcessingLogCase):
             'current_app.send_task',
         ):
             self.client.post(
-                reverse('receipts:scan_qr'),
+                reverse('receipts:scan_qr_api'),
                 {'qr_raw': _RAW_QR, 'account': self.account.pk},
             )
 
