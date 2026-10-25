@@ -247,7 +247,7 @@ def _log_context(
 
 @shared_task(  # type: ignore[untyped-decorator]
     bind=True,
-    name='receipts.process_receipt_processing_log',
+    name=constants.RECEIPT_PROCESSING_LOG_TASK_NAME,
     max_retries=constants.RECEIPT_PROCESSING_MAX_RETRIES,
     acks_late=True,
 )
