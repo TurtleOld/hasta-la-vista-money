@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from django.shortcuts import redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import (
     FormView,
@@ -65,6 +65,7 @@ class UploadImageView(
             'scan_form',
             ScanQRForm(user=cast('User', self.request.user)),
         )
+        context['scan_mode'] = self.request.GET.get('mode') == 'scan'
         return context
 
     def form_valid(self, form: UploadImageForm) -> HttpResponse:
@@ -180,7 +181,14 @@ class ScanQRReceiptView(
             'upload_form',
             UploadImageForm(user=cast('User', self.request.user)),
         )
+        context['scan_mode'] = self.request.GET.get('mode') == 'scan'
         return context
+
+    def _scanner_url(self) -> str:
+        url = reverse('receipts:upload')
+        if self.request.GET.get('mode') == 'scan':
+            return f'{url}?mode=scan'
+        return url
 
     def form_valid(self, form: ScanQRForm) -> HttpResponse:
         request = cast('RequestWithContainer', self.request)
@@ -208,7 +216,7 @@ class ScanQRReceiptView(
                 fiscal_key=fiscal_key,
             )
             messages.warning(request, _('Этот чек уже загружен.'))
-            return redirect('receipts:upload')
+            return redirect(self._scanner_url())
 
         try:
             processing_log = processing_service.create_qr_job(
@@ -245,4 +253,4 @@ class ScanQRReceiptView(
                 'проведение завершится.',
             ),
         )
-        return redirect('receipts:upload')
+        return redirect(self._scanner_url())

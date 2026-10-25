@@ -29,6 +29,7 @@ const CAMERA_STORAGE_KEY = 'receiptQRScanCameraId';
 const IDEAL_WIDTH = 1920;
 const IDEAL_HEIGHT = 1080;
 const CAMERA_MISSING_ERRORS = ['NotFoundError', 'OverconstrainedError'];
+const SCAN_TABS_QUERY = '(max-width: 768px)';
 
 function readSavedCameraId() {
   try {
@@ -251,6 +252,13 @@ function registerReceiptUploadTabs(Alpine) {
             this.selectFile();
           }
         });
+        if (
+          this.$el.dataset.initialTab === 'scan' &&
+          window.matchMedia(SCAN_TABS_QUERY).matches
+        ) {
+          // The scan panel registers its activate listener after this init.
+          this.$nextTick(() => this.selectScan());
+        }
       },
 
       selectFile() {

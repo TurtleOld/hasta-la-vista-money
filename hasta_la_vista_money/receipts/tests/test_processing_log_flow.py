@@ -211,6 +211,21 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             task_id=log.task_id,
         )
 
+    def test_scan_keeps_scan_mode_on_return(self) -> None:
+        raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_receipt_processing_log',
+        ):
+            response = self.client.post(
+                f'{reverse("receipts:scan_qr")}?mode=scan',
+                {'qr_raw': raw_qr, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(
+            response,
+            f'{reverse("receipts:upload")}?mode=scan',
+        )
+
     def test_repeat_scan_is_saved_as_duplicate_processing_log(self) -> None:
         raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
         ReceiptProcessingLog.objects.create(
