@@ -2972,6 +2972,10 @@ msgstr "Refresh page"
 msgid "Чеки"
 msgstr "Receipts"
 
+#: hasta_la_vista_money/templates/_bottom_nav.html:29
+msgid "Сканер"
+msgstr "Scanner"
+
 #: hasta_la_vista_money/templates/_mobile_menu.html:9
 msgid "Закрыть меню"
 msgstr "Close menu"

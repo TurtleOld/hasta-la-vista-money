@@ -1,3 +1,4 @@
+import json
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -33,6 +34,23 @@ class PwaManifestTests(TestCase):
         )
         self.assertIn(b'"name": "Hasta La Vista, Money!"', content)
         self.assertIn(b'"display": "standalone"', content)
+
+    def test_manifest_has_scan_receipt_shortcut(self) -> None:
+        manifest_path = (
+            Path(settings.BASE_DIR) / 'static' / 'manifest.webmanifest'
+        )
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+
+        self.assertIn(
+            {
+                'name': 'Сканировать чек',
+                'url': '/receipts/upload/?mode=scan',
+            },
+            [
+                {'name': item['name'], 'url': item['url']}
+                for item in manifest['shortcuts']
+            ],
+        )
 
     def test_base_template_includes_manifest_link(self) -> None:
         user_model = get_user_model()
