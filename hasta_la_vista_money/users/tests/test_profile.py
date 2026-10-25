@@ -94,6 +94,18 @@ class ProfileTimezoneUiTest(TestCase):
         self.assertContains(response, 'Asia/Tokyo')
         self.assertContains(response, 'Europe/Moscow')
 
+    def test_profile_page_has_no_bank_statement_upload_link(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('users:profile', kwargs={'pk': self.user.pk}),
+        )
+
+        self.assertNotContains(
+            response,
+            reverse('finance_account:bank_statement_upload'),
+        )
+
     def test_ajax_save_accepts_valid_timezone(self) -> None:
         self.client.force_login(self.user)
 
