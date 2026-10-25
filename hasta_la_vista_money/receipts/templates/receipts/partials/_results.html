@@ -65,15 +65,15 @@
     <div class="receipts-toolbar">
         <div class="receipts-pills">
             <a class="receipts-chip" href="{% url 'receipts:products' %}">
-                <i class="bi bi-star"></i>
+                {% include 'partials/_icon.html' with icon='star' %}
                 {% translate 'Часто покупаемые товары' %}
             </a>
             <a class="receipts-chip" href="{% url 'receipts:create_seller' %}">
-                <i class="bi bi-shop"></i>
+                {% include 'partials/_icon.html' with icon='store' %}
                 {% translate 'Добавить продавца' %}
             </a>
             <a class="receipts-chip is-active" href="{% url 'receipts:upload' %}">
-                <i class="bi bi-camera"></i>
+                {% include 'partials/_icon.html' with icon='camera' %}
                 {% translate 'Добавить чек из изображения' %}
             </a>
         </div>

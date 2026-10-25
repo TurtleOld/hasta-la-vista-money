@@ -16,7 +16,7 @@
             </div>
             <div class="receipts-actions">
                 <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-arrow-left"></i>
+                    {% include 'partials/_icon.html' with icon='arrow-left' %}
                     {% translate 'К списку' %}
                 </a>
             </div>
@@ -28,7 +28,7 @@
 
             <section class="receipts-card">
                 <header class="receipts-card-hd">
-                    <h2><i class="bi bi-file-text"></i> {% translate 'Информация о чеке' %}</h2>
+                    <h2>{% include 'partials/_icon.html' with icon='document-text' %} {% translate 'Информация о чеке' %}</h2>
                 </header>
                 <div class="receipts-section">
                     <div class="receipt-update-fields">
@@ -44,7 +44,7 @@
             {% if product_formset %}
                 <section class="receipts-card">
                     <header class="receipts-card-hd">
-                        <h2><i class="bi bi-list-ul"></i> {% translate 'Товары' %}</h2>
+                        <h2>{% include 'partials/_icon.html' with icon='view-list' %} {% translate 'Товары' %}</h2>
                     </header>
                     <div class="receipts-section">
                         {{ product_formset.management_form }}
@@ -63,11 +63,11 @@
 
                         <div class="receipt-update-formset-actions">
                             <button type="button" id="add-form" class="receipts-chip">
-                                <i class="bi bi-plus-lg"></i>
+                                {% include 'partials/_icon.html' with icon='plus' %}
                                 {% translate 'Добавить товар' %}
                             </button>
                             <button type="button" id="remove-form" class="receipts-chip pending-card-delete">
-                                <i class="bi bi-dash-lg"></i>
+                                {% include 'partials/_icon.html' with icon='minus' %}
                                 {% translate 'Удалить товар' %}
                             </button>
                         </div>
@@ -77,16 +77,16 @@
 
             <div class="receipts-card-ft">
                 <p class="hint">
-                    <i class="bi bi-info-circle"></i>
+                    {% include 'partials/_icon.html' with icon='information-circle' %}
                     {% translate 'Сумма чека будет списана со выбранного счёта.' %}
                 </p>
                 <div class="ft-actions">
                     <a href="{% url 'receipts:list' %}" class="receipts-btn receipts-btn-ghost">
-                        <i class="bi bi-x-lg"></i>
+                        {% include 'partials/_icon.html' with icon='x' %}
                         {% translate 'Отмена' %}
                     </a>
                     <button type="submit" class="receipts-btn receipts-btn-primary">
-                        <i class="bi bi-check2"></i>
+                        {% include 'partials/_icon.html' with icon='check' %}
                         {% translate 'Добавить чек' %}
                     </button>
                 </div>
