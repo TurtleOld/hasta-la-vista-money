@@ -1850,3 +1850,126 @@
     justify-content: center;
   }
 }
+
+/* Мобильный список чеков: сканер и меню вторичных действий */
+.receipts-actions-mobile {
+  display: none;
+}
+
+.receipts-menu {
+  position: relative;
+}
+
+.receipts-menu-toggle {
+  cursor: pointer;
+  list-style: none;
+}
+
+.receipts-menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.receipts-menu-toggle .icon {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.receipts-menu[open] > .receipts-menu-toggle {
+  border-color: var(--receipts-accent);
+  color: var(--receipts-accent);
+}
+
+.receipts-menu-panel {
+  background: var(--receipts-surface);
+  border: 1px solid var(--receipts-border);
+  border-radius: 1rem;
+  box-shadow: var(--receipts-shadow-panel);
+  display: grid;
+  gap: 0.15rem;
+  min-width: 15rem;
+  padding: 0.4rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 30;
+}
+
+.receipts-menu-link {
+  align-items: center;
+  border-radius: 0.65rem;
+  color: var(--receipts-text);
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  text-decoration: none;
+}
+
+.receipts-menu-link:hover,
+.receipts-menu-link:focus-visible {
+  background: var(--receipts-surface-2);
+  color: var(--receipts-accent);
+}
+
+.receipts-menu-link .icon {
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
+}
+
+@media (max-width: 768px) {
+  .receipts-actions-desktop {
+    display: none;
+  }
+
+  .receipts-actions-mobile {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .receipts-scan-action {
+    grid-column: 1 / -1;
+  }
+
+  .receipts-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 1rem;
+  }
+
+  .receipts-summary-cell {
+    border-bottom: 0;
+    border-right: 1px solid var(--receipts-border);
+    padding: 0.8rem 0.7rem;
+  }
+
+  .receipts-summary-cell:last-child {
+    border-right: 0;
+  }
+
+  .receipts-summary-cell:nth-child(3) {
+    border-right: 0;
+    border-top: 1px solid var(--receipts-border);
+    grid-column: 1 / -1;
+    order: 4;
+  }
+
+  .receipts-summary-cell:nth-child(4) {
+    order: 3;
+  }
+
+  .receipts-summary .receipts-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+  }
+
+  .receipts-summary .receipts-amount {
+    font-size: clamp(1rem, 4.5vw, 1.35rem);
+  }
+
+  .receipts-toolbar {
+    display: none;
+  }
+}
