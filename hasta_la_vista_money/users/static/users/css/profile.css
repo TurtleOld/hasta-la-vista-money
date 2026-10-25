@@ -418,7 +418,7 @@
   width: 100%;
 }
 
-.profile-action-link i {
+.profile-action-link .icon {
   color: var(--profile-accent);
 }
 
@@ -431,7 +431,7 @@
   color: var(--profile-negative);
 }
 
-.profile-action-link-danger i {
+.profile-action-link-danger .icon {
   color: var(--profile-negative);
 }
 

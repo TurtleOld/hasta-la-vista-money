@@ -17,7 +17,7 @@
             </div>
             <div class="receipts-actions">
                 <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-arrow-left"></i>
+                    {% include 'partials/_icon.html' with icon='arrow-left' %}
                     {% translate 'К списку' %}
                 </a>
             </div>
@@ -32,7 +32,7 @@
                                 <div class="receipts-label">{% translate 'Предполагаемые дубликаты' %}</div>
                                 <div class="receipt-card-tags">
                                     <span class="receipts-cat-chip">{{ proposal.category_a.name }}</span>
-                                    <span class="receipts-muted"><i class="bi bi-arrow-left-right"></i></span>
+                                    <span class="receipts-muted">{% include 'partials/_icon.html' with icon='transfer' %}</span>
                                     <span class="receipts-cat-chip">{{ proposal.category_b.name }}</span>
                                 </div>
                             </div>
@@ -40,14 +40,14 @@
                                 <form action="{% url 'receipts:category_twins_merge' proposal.id %}" method="post">
                                     {% csrf_token %}
                                     <button class="receipts-chip" type="submit">
-                                        <i class="bi bi-intersect"></i>
+                                        {% include 'partials/_icon.html' with icon='merge' %}
                                         {% translate 'Объединить' %}
                                     </button>
                                 </form>
                                 <form action="{% url 'receipts:category_twins_keep' proposal.id %}" method="post">
                                     {% csrf_token %}
                                     <button class="receipts-chip" type="submit">
-                                        <i class="bi bi-x-lg"></i>
+                                        {% include 'partials/_icon.html' with icon='x' %}
                                         {% translate 'Оставить' %}
                                     </button>
                                 </form>

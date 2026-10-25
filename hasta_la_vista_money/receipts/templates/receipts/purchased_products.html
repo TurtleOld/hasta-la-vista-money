@@ -20,7 +20,7 @@
             </div>
             <div class="receipts-actions">
                 <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-arrow-left"></i>
+                    {% include 'partials/_icon.html' with icon='arrow-left' %}
                     {% translate 'К списку' %}
                 </a>
             </div>
@@ -29,7 +29,7 @@
         <div class="receipts-grid">
             <div class="receipts-card">
                 <header class="receipts-card-hd">
-                    <h2><i class="bi bi-calendar3"></i> {% translate 'Статистика по месяцам' %}</h2>
+                    <h2>{% include 'partials/_icon.html' with icon='calendar' %} {% translate 'Статистика по месяцам' %}</h2>
                 </header>
                 <div class="receipts-section">
                     <div class="purchased-products-months">
@@ -37,11 +37,11 @@
                             <details class="purchased-products-month">
                                 <summary>
                                     <span class="purchased-products-month-name">
-                                        <i class="bi bi-calendar-event"></i>
+                                        {% include 'partials/_icon.html' with icon='calendar' %}
                                         {{ month|date:"F Y" }}
                                     </span>
                                     <span class="receipts-muted">{{ products|length }} {% translate 'товаров' %}</span>
-                                    <i class="bi bi-chevron-down purchased-products-month-chevron"></i>
+                                    {% include 'partials/_icon.html' with icon='chevron-down' class='purchased-products-month-chevron' %}
                                 </summary>
                                 <div class="purchased-products-month-body">
                                     {% for product, total_quantity in products.items %}
