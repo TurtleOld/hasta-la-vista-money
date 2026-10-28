@@ -14,13 +14,15 @@ class ShowToolbarTest(SimpleTestCase):
                 new=False,
             ),
             patch(
-                'config.settings.debug_toolbar.setup.debug_toolbar', object()
+                'config.settings.debug_toolbar.setup.debug_toolbar',
+                object(),
             ),
         ):
             self.assertFalse(show_toolbar())
 
     def test_show_toolbar_missing_package(self) -> None:
         with (
+            patch('config.settings.debug_toolbar.settings.DEBUG', new=True),
             patch(
                 'config.settings.debug_toolbar.settings.DEBUG_TOOLBAR_ENABLED',
                 new=True,
@@ -30,14 +32,30 @@ class ShowToolbarTest(SimpleTestCase):
         ):
             self.assertFalse(show_toolbar())
 
-    def test_show_toolbar_enabled(self) -> None:
+    def test_show_toolbar_requires_debug(self) -> None:
         with (
+            patch('config.settings.debug_toolbar.settings.DEBUG', new=False),
             patch(
                 'config.settings.debug_toolbar.settings.DEBUG_TOOLBAR_ENABLED',
                 new=True,
             ),
             patch(
-                'config.settings.debug_toolbar.setup.debug_toolbar', object()
+                'config.settings.debug_toolbar.setup.debug_toolbar',
+                object(),
+            ),
+        ):
+            self.assertFalse(show_toolbar())
+
+    def test_show_toolbar_enabled(self) -> None:
+        with (
+            patch('config.settings.debug_toolbar.settings.DEBUG', new=True),
+            patch(
+                'config.settings.debug_toolbar.settings.DEBUG_TOOLBAR_ENABLED',
+                new=True,
+            ),
+            patch(
+                'config.settings.debug_toolbar.setup.debug_toolbar',
+                object(),
             ),
         ):
             self.assertTrue(show_toolbar())
@@ -55,7 +73,8 @@ class DebugToolbarSetupTest(SimpleTestCase):
             )
             self.assertEqual(apps, ['django.contrib.admin'])
             self.assertEqual(
-                middleware, ['django.middleware.security.SecurityMiddleware']
+                middleware,
+                ['django.middleware.security.SecurityMiddleware'],
             )
 
     def test_do_settings_append_middleware(self) -> None:
@@ -76,11 +95,14 @@ class DebugToolbarSetupTest(SimpleTestCase):
             return_value=True,
         ):
             apps, middleware = DebugToolbarSetup.do_settings(
-                ['app'], ['mw1', 'mw2'], middleware_position=1
+                ['app'],
+                ['mw1', 'mw2'],
+                middleware_position=1,
             )
             self.assertEqual(apps[-1], 'debug_toolbar')
             self.assertEqual(
-                middleware[1], 'debug_toolbar.middleware.DebugToolbarMiddleware'
+                middleware[1],
+                'debug_toolbar.middleware.DebugToolbarMiddleware',
             )
 
     def test_do_urls_without_toolbar(self) -> None:
@@ -90,7 +112,8 @@ class DebugToolbarSetupTest(SimpleTestCase):
         ):
             urlpatterns = [1, 2, 3]
             self.assertEqual(
-                DebugToolbarSetup.do_urls(urlpatterns), urlpatterns
+                DebugToolbarSetup.do_urls(urlpatterns),
+                urlpatterns,
             )
 
     def test_do_urls_with_toolbar(self) -> None:
