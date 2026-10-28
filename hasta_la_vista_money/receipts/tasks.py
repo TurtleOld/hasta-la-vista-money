@@ -368,6 +368,13 @@ def categorize_receipt_product(product_id: int) -> None:
             reason=reason,
             error=str(error),
         )
+        if (
+            isinstance(error, httpx.HTTPStatusError)
+            and error.response.is_client_error
+            and error.response.status_code != httpx.codes.TOO_MANY_REQUESTS
+        ):
+            # A rejected request fails the same way on every retry.
+            return
         raise
 
 
