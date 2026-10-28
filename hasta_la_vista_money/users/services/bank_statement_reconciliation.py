@@ -4,7 +4,14 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import DatabaseError, transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import (
+    BooleanField,
+    Count,
+    ExpressionWrapper,
+    Q,
+    QuerySet,
+)
+from django.db.models.functions import Now
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
@@ -52,6 +59,21 @@ class AmbiguousStatementCandidateError(ValueError):
     """Raised when safe automatic linking has multiple current candidates."""
 
 
+# Statement data is kept only until the ADR-0003 retention deadline.
+_AVAILABLE_UPLOAD = Q(expires_at__gt=Now(), retention_cleaned_at__isnull=True)
+_OUTCOMES = frozenset(
+    {
+        constants.STATEMENT_OUTCOME_ALL,
+        BankStatementRow.Decision.PENDING,
+        BankStatementRow.Decision.LINKED,
+        BankStatementRow.Decision.NEW,
+        BankStatementRow.Decision.NEEDS_TRANSFER,
+        BankStatementRow.Decision.TRANSFERRED,
+        BankStatementRow.Decision.NOT_A_PAYMENT,
+    },
+)
+
+
 @dataclass(frozen=True)
 class BulkDecisionResult:
     """Represent the outcome of one independently processed statement row."""
@@ -84,8 +106,39 @@ class BankStatementReconciliationService:
                         ),
                     ),
                 ),
+                available=ExpressionWrapper(
+                    _AVAILABLE_UPLOAD,
+                    output_field=BooleanField(),
+                ),
             )
-            .order_by('-created_at')[:10]
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def available_uploads(user_id: int) -> QuerySet[BankStatementUpload]:
+        return BankStatementUpload.objects.filter(
+            _AVAILABLE_UPLOAD,
+            user_id=user_id,
+            account__user_id=user_id,
+        )
+
+    @staticmethod
+    def resolve_outcome(
+        upload: BankStatementUpload,
+        requested: str | None,
+    ) -> str:
+        if requested in _OUTCOMES:
+            return requested
+        if requested:
+            return BankStatementRow.Decision.PENDING
+        has_pending = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+        ).exists()
+        return (
+            BankStatementRow.Decision.PENDING
+            if has_pending
+            else constants.STATEMENT_OUTCOME_ALL
         )
 
     @staticmethod
@@ -93,32 +146,14 @@ class BankStatementReconciliationService:
         upload: BankStatementUpload,
         outcome: str,
     ) -> QuerySet[BankStatementRow]:
-        valid_outcomes = {
-            BankStatementRow.Decision.PENDING,
-            BankStatementRow.Decision.LINKED,
-            BankStatementRow.Decision.NEW,
-            BankStatementRow.Decision.NEEDS_TRANSFER,
-            BankStatementRow.Decision.TRANSFERRED,
-            BankStatementRow.Decision.NOT_A_PAYMENT,
-            BankStatementRow.Decision.EXPIRED,
-        }
-        decision = (
-            outcome
-            if outcome in valid_outcomes
-            else BankStatementRow.Decision.PENDING
-        )
-        return (
-            BankStatementRow.objects.filter(
-                upload=upload,
-                decision=decision,
-            )
-            .prefetch_related(
-                'candidates__transaction__category',
-                'candidates__transfer__from_account',
-                'candidates__transfer__to_account',
-            )
-            .order_by('transaction_date', 'pk')
-        )
+        rows = BankStatementRow.objects.filter(upload=upload)
+        if outcome != constants.STATEMENT_OUTCOME_ALL:
+            rows = rows.filter(decision=outcome)
+        return rows.prefetch_related(
+            'candidates__transaction__category',
+            'candidates__transfer__from_account',
+            'candidates__transfer__to_account',
+        ).order_by('transaction_date', 'pk')
 
     def decide(
         self,

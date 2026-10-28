@@ -144,15 +144,26 @@
                             </p>
                         {% endif %}
                     </div>
-                    {% if history_upload.markup_count %}
-                        <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_markup' history_upload.pk %}">{% blocktranslate with count=history_upload.markup_count %}Разметить ({{ count }}){% endblocktranslate %}</a>
-                    {% elif history_upload.status == 'awaiting_confirmation' %}
-                        <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
+                    {% if history_upload.available %}
+                        {% if history_upload.markup_count %}
+                            <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_markup' history_upload.pk %}">{% blocktranslate with count=history_upload.markup_count %}Разметить ({{ count }}){% endblocktranslate %}</a>
+                        {% elif history_upload.status == 'awaiting_confirmation' %}
+                            <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
+                        {% elif history_upload.status == 'completed' or history_upload.status == 'completed_with_unresolved' %}
+                            <a class="finances-button finances-button-secondary" href="{% url 'finance_account:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Открыть' %}</a>
+                        {% endif %}
                     {% endif %}
                 </div>
             {% empty %}
                 <p class="statement-history-row statement-help">{% translate 'Загрузок пока нет.' %}</p>
             {% endfor %}
+            {% if upload_history.paginator.num_pages > 1 %}
+                <nav class="statement-history-row" aria-label="{% translate 'Страницы истории загрузок' %}">
+                    {% if upload_history.has_previous %}<a href="?page={{ upload_history.previous_page_number }}">{% translate 'Назад' %}</a>{% else %}<span></span>{% endif %}
+                    <span>{{ upload_history.number }} / {{ upload_history.paginator.num_pages }}</span>
+                    {% if upload_history.has_next %}<a href="?page={{ upload_history.next_page_number }}">{% translate 'Далее' %}</a>{% endif %}
+                </nav>
+            {% endif %}
         </section>
     </div>
 </main>
