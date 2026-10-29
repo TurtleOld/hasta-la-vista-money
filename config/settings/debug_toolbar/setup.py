@@ -29,14 +29,17 @@ def show_toolbar() -> bool:
 
     This means we can have the following options possible:
 
-    - Show on a production environments.
+    - Never show without DEBUG, so production stays toolbar-free.
     - Exclude the entire dependency from production environments.
     - Have the flexibility to control the debug toolbar via a single
       Django setting.
 
     Additionally, we don't want to deal with the INTERNAL_IPS thing.
     """
-    if not debug_toolbar_settings.DEBUG_TOOLBAR_ENABLED:
+    if not (
+        debug_toolbar_settings.DEBUG
+        and debug_toolbar_settings.DEBUG_TOOLBAR_ENABLED
+    ):
         return False
 
     if debug_toolbar is None:
