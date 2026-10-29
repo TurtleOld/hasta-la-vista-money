@@ -502,6 +502,23 @@ class TestBankStatementUploadStatusView(TestCase):
         self.assertEqual(data['account_balance_after'], '1450.00')
         self.assertEqual(data['balance_discrepancy'], '50.00')
 
+    def test_get_status_hides_url_of_expired_reconciliation(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_upload_status',
+                args=[upload.pk],
+            ),
+        )
+
+        self.assertIsNone(response.json()['reconciliation_url'])
+
     def test_get_status_completed_no_reconciliation(self) -> None:
         """Test status response has null reconciliation fields when not set."""
         upload = BankStatementUpload.objects.create(
@@ -1420,6 +1437,60 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(list(linked_response.context['page_obj']), [linked])
         self.assertEqual(list(new_response.context['page_obj']), [new])
 
+    def test_unavailable_upload_is_not_found(self) -> None:
+        url = reverse(
+            'finance_account:bank_statement_reconciliation',
+            args=[self.upload.pk],
+        )
+        past = timezone.now() - timedelta(seconds=1)
+        for field in ('expires_at', 'retention_cleaned_at'):
+            with self.subTest(field=field):
+                upload = BankStatementUpload.objects.get(pk=self.upload.pk)
+                setattr(upload, field, past)
+                upload.save(update_fields=[field])
+
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    expires_at=timezone.now() + timedelta(days=1),
+                    retention_cleaned_at=None,
+                )
+
+    def test_all_outcome_is_default_without_pending_rows(self) -> None:
+        self.row.decision = BankStatementRow.Decision.NEEDS_TRANSFER
+        self.row.save(update_fields=['decision'])
+        self.upload.status = BankStatementUpload.Status.COMPLETED
+        self.upload.save(update_fields=['status'])
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(
+            response.context['outcome'],
+            constants.STATEMENT_OUTCOME_ALL,
+        )
+        self.assertEqual(list(response.context['page_obj']), [self.row])
+        self.assertContains(response, self.row.get_decision_display())
+
+    def test_unknown_outcome_falls_back_to_pending(self) -> None:
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'outcome': BankStatementRow.Decision.EXPIRED},
+        )
+
+        self.assertEqual(
+            response.context['outcome'],
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertEqual(list(response.context['page_obj']), [self.row])
+
     def test_family_viewer_cannot_open_reconciliation(self) -> None:
         group = Group.objects.create(name='Семья')
         self.user.groups.add(group)
@@ -1532,6 +1603,12 @@ class TestBankStatementUploadHistory(TestCase):
             pdf_file='bank_statements/completed.pdf',
             status=BankStatementUpload.Status.COMPLETED,
         )
+        unresolved = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/unresolved.pdf',
+            status=BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
         other_user = User.objects.get(pk=2)
         other_account = Account.objects.create(
             user=other_user,
@@ -1554,7 +1631,7 @@ class TestBankStatementUploadHistory(TestCase):
         self.assertContains(response, 'История загрузок')
         self.assertEqual(
             list(response.context['upload_history']),
-            [completed, pending],
+            [unresolved, completed, pending],
         )
         self.assertContains(
             response,
@@ -1563,14 +1640,84 @@ class TestBankStatementUploadHistory(TestCase):
                 args=[pending.pk],
             ),
         )
-        self.assertNotContains(
-            response,
-            reverse(
-                'finance_account:bank_statement_reconciliation',
-                args=[completed.pk],
-            ),
-        )
+        for upload in (completed, unresolved):
+            with self.subTest(status=upload.status):
+                self.assertContains(
+                    response,
+                    reverse(
+                        'finance_account:bank_statement_reconciliation',
+                        args=[upload.pk],
+                    ),
+                )
         self.assertNotContains(response, 'Чужой счёт')
+
+    def test_history_hides_link_for_unavailable_uploads(self) -> None:
+        past = timezone.now() - timedelta(seconds=1)
+        hidden = [
+            BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file='bank_statements/expired.pdf',
+                status=BankStatementUpload.Status.COMPLETED,
+                expires_at=past,
+            ),
+            BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file='',
+                status=BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+                retention_cleaned_at=past,
+            ),
+            BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file='bank_statements/stale.pdf',
+                status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                expires_at=past,
+            ),
+            BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file='bank_statements/failed.pdf',
+                status=BankStatementUpload.Status.FAILED,
+            ),
+        ]
+
+        response = self.client.get(
+            reverse('finance_account:bank_statement_upload'),
+        )
+
+        for upload in hidden:
+            with self.subTest(status=upload.status):
+                self.assertNotContains(
+                    response,
+                    reverse(
+                        'finance_account:bank_statement_reconciliation',
+                        args=[upload.pk],
+                    ),
+                )
+
+    def test_history_is_paginated(self) -> None:
+        uploads = [
+            BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file=f'bank_statements/{index}.pdf',
+                status=BankStatementUpload.Status.COMPLETED,
+            )
+            for index in range(constants.PAGINATE_BY_DEFAULT + 1)
+        ]
+        url = reverse('finance_account:bank_statement_upload')
+
+        first = self.client.get(url)
+        second = self.client.get(url, {'page': 2})
+
+        self.assertEqual(
+            len(first.context['upload_history']),
+            constants.PAGINATE_BY_DEFAULT,
+        )
+        self.assertEqual(list(second.context['upload_history']), [uploads[0]])
+        self.assertContains(first, '?page=2')
 
 
 class TestBankStatementParser(TestCase):

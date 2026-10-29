@@ -150,6 +150,17 @@ class BankStatementReconciliationServiceProtocol(Protocol):
         user_id: int,
     ) -> QuerySet[BankStatementUpload]: ...
 
+    def available_uploads(
+        self,
+        user_id: int,
+    ) -> QuerySet[BankStatementUpload]: ...
+
+    def resolve_outcome(
+        self,
+        upload: BankStatementUpload,
+        requested: str | None,
+    ) -> str: ...
+
     def reconciliation_rows(
         self,
         upload: BankStatementUpload,

@@ -18,7 +18,6 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
@@ -26,6 +25,7 @@ from django.views.generic.edit import FormView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
+    PAGINATE_BY_DEFAULT,
     STATEMENT_RECONCILIATION_PAGE_SIZE,
 )
 from hasta_la_vista_money.finance_account.forms import (
@@ -220,9 +220,10 @@ class BankStatementUploadView(
         """Add extra context data."""
         context = super().get_context_data(**kwargs)
         user = cast('User', self.request.user)
-        context['upload_history'] = _reconciliation_service(
-            self.request,
-        ).upload_history(user.pk)
+        context['upload_history'] = Paginator(
+            _reconciliation_service(self.request).upload_history(user.pk),
+            PAGINATE_BY_DEFAULT,
+        ).get_page(self.request.GET.get('page'))
         # Check if there's an ongoing upload
         last_upload_id = self.request.session.get('last_upload_id')
         if last_upload_id:
@@ -316,6 +317,10 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                         )
                         if upload.status
                         == BankStatementUpload.Status.AWAITING_CONFIRMATION
+                        and _reconciliation_service(request)
+                        .available_uploads(upload.user_id)
+                        .filter(pk=upload.pk)
+                        .exists()
                         else None
                     ),
                     'outcomes': {
@@ -345,23 +350,16 @@ class BankStatementReconciliationView(
 
     def get_queryset(self) -> QuerySet[BankStatementUpload]:
         user = cast('User', self.request.user)
-        return BankStatementUpload.objects.filter(
-            user=user,
-            account__user=user,
-        )
+        return _reconciliation_service(self.request).available_uploads(user.pk)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        outcome = self.request.GET.get(
-            'outcome',
-            BankStatementRow.Decision.PENDING,
-        )
-        rows = _reconciliation_service(self.request).reconciliation_rows(
+        service = _reconciliation_service(self.request)
+        outcome = service.resolve_outcome(
             self.object,
-            outcome,
+            self.request.GET.get('outcome'),
         )
-        if outcome not in BankStatementRow.Decision.values:
-            outcome = BankStatementRow.Decision.PENDING
+        rows = service.reconciliation_rows(self.object, outcome)
         context['page_obj'] = Paginator(
             rows,
             STATEMENT_RECONCILIATION_PAGE_SIZE,
@@ -369,9 +367,6 @@ class BankStatementReconciliationView(
             self.request.GET.get('page'),
         )
         context['outcome'] = outcome
-        context['reconciliation_active'] = (
-            timezone.now() < self.object.expires_at
-        )
         return context
 
 

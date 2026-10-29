@@ -10,12 +10,12 @@
         {% translate 'Решения доступны до' %} {{ upload.expires_at|date:'d.m.Y H:i' }}.
     </p>
     <nav class="mb-6 flex flex-wrap gap-2" aria-label="{% translate 'Фильтр решений' %}">
+        <a href="?outcome=all" class="rounded px-3 py-2 {% if outcome == 'all' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Все' %}</a>
         <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>
         <a href="?outcome=linked" class="rounded px-3 py-2 {% if outcome == 'linked' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Уже учтённые' %}</a>
         <a href="?outcome=new" class="rounded px-3 py-2 {% if outcome == 'new' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Новые операции' %}</a>
-        <a href="?outcome=expired" class="rounded px-3 py-2 {% if outcome == 'expired' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Срок истёк' %}</a>
     </nav>
-    {% if outcome == 'pending' and reconciliation_active %}
+    {% if outcome == 'pending' %}
         <form id="bulk-form"
               class="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700"
               method="post"
@@ -47,7 +47,7 @@
     {% endif %}
     {% for row in page_obj %}
         <section class="mb-6 rounded-lg border border-gray-200 p-5 dark:border-gray-700">
-            {% if outcome == 'pending' and reconciliation_active %}
+            {% if outcome == 'pending' %}
                 <label class="mb-4 flex items-center gap-2 font-medium">
                     <input form="bulk-form" type="checkbox" name="rows" value="{{ row.pk }}">
                     {% translate 'Выбрать строку для массового решения' %}
@@ -56,6 +56,7 @@
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <h2 class="mb-3 font-semibold">{% translate 'Строка выписки' %}</h2>
+                    {% if outcome == 'all' %}<p class="mb-2 text-sm font-medium">{{ row.get_decision_display }}</p>{% endif %}
                     <p>{{ row.transaction_date|date:'d.m.Y H:i' }}</p>
                     <p>{{ row.amount }} {{ upload.account.currency }}</p>
                     <p>{{ row.get_transaction_type_display }}</p>
@@ -83,7 +84,7 @@
                     {% endfor %}
                 </div>
             </div>
-            {% if row.decision == 'pending' and reconciliation_active %}
+            {% if row.decision == 'pending' %}
                 <div class="mt-5 flex flex-wrap gap-3">
                     <form id="linked-{{ row.pk }}" method="post" action="{% url 'finance_account:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
@@ -100,9 +101,7 @@
                         </button>
                     </form>
                 </div>
-            {% elif row.decision == 'pending' %}
-                <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Срок сверки истёк. Строка будет очищена без создания операции.' %}</p>
-            {% elif row.decision == 'linked' and reconciliation_active %}
+            {% elif row.decision == 'linked' %}
                 <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_reconciliation_revise' upload.pk row.pk %}">
                     {% csrf_token %}
                     <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Пересмотреть и импортировать как новую' %}</button>
