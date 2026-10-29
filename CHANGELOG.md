@@ -1,5 +1,18 @@
 # История изменений
 
+## [2.24.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.23.0...v2.24.0) (2026-10-29)
+
+
+### ✨ Новые возможности
+
+* **finance_account:** open processed statements from upload history ([#1166](https://github.com/TurtleOld/hasta-la-vista-money/issues/1166)) ([4d2b77c](https://github.com/TurtleOld/hasta-la-vista-money/commit/4d2b77ce4fa357bfd9573b096a73da57a2d950f8))
+
+
+### 🐛 Исправления
+
+* **config:** enable debug toolbar only with DEBUG ([#1165](https://github.com/TurtleOld/hasta-la-vista-money/issues/1165)) ([8d1012a](https://github.com/TurtleOld/hasta-la-vista-money/commit/8d1012a9af4f07747d8a0f8bef3c004fa8122f63))
+* **receipts:** support json_object-only and reasoning model providers ([#1164](https://github.com/TurtleOld/hasta-la-vista-money/issues/1164)) ([52dc3a5](https://github.com/TurtleOld/hasta-la-vista-money/commit/52dc3a56085c14a61b3922dd3b05b42ab85a874e))
+
 ## [2.23.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.22.3...v2.23.0) (2026-10-25)
 
 
