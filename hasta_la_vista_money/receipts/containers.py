@@ -68,6 +68,16 @@ def _build_category_model_transport() -> ExternalModelTransport | None:
         base_url=base_url,
         api_key=getattr(settings, 'RECEIPT_CATEGORY_MODEL_API_KEY', ''),
         model=getattr(settings, 'RECEIPT_CATEGORY_MODEL_NAME', ''),
+        json_schema_supported=getattr(
+            settings,
+            'RECEIPT_CATEGORY_MODEL_JSON_SCHEMA',
+            True,
+        ),
+        reasoning_effort=getattr(
+            settings,
+            'RECEIPT_CATEGORY_MODEL_REASONING_EFFORT',
+            '',
+        ),
     )
 
 
