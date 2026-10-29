@@ -543,16 +543,23 @@ RECEIPT_PROCESSING_TIMEOUT=30  # секунды
 RECEIPT_CATEGORY_MODEL_BASE_URL=
 RECEIPT_CATEGORY_MODEL_API_KEY=
 RECEIPT_CATEGORY_MODEL_NAME=
+RECEIPT_CATEGORY_MODEL_JSON_SCHEMA=true
+RECEIPT_CATEGORY_MODEL_REASONING_EFFORT=
 RECEIPT_CATEGORY_NEW_CATEGORY_SIMILARITY_THRESHOLD=0.7
 ```
 
 Пустой `RECEIPT_CATEGORY_MODEL_BASE_URL` полностью отключает эту ступень.
-При включении совместимый endpoint `chat/completions` обязан поддерживать
-`response_format` с типом `json_schema`. Приложение дополнительно валидирует
+По умолчанию endpoint `chat/completions` получает `response_format` с типом
+`json_schema`. Если провайдер его не поддерживает (например, DeepSeek),
+задайте `RECEIPT_CATEGORY_MODEL_JSON_SCHEMA=false`: тогда отправляется
+`json_object`, а схема передаётся в промпте. Для моделей с рассуждениями
+`RECEIPT_CATEGORY_MODEL_REASONING_EFFORT=low` уменьшает расход токенов;
+пустое значение не передаёт параметр. Приложение дополнительно валидирует
 полученный JSON и не полагается только на заявление сервиса о соблюдении
 схемы. Запрос выполняется отдельной задачей после фиксации чека; при ошибке
 делаются две повторные попытки с задержкой, после чего товар остаётся в
-«Прочем», а причина записывается в структурированный лог.
+«Прочем», а причина записывается в структурированный лог. Ответ 4xx (кроме
+429) не повторяется: в лог попадает начало тела ответа провайдера.
 
 Модель получает только название товара и текущий справочник товарных
 категорий владельца. Она выбирает существующую категорию или предлагает

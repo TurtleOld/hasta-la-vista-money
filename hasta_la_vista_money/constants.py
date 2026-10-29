@@ -125,7 +125,7 @@ RECEIPT_PROCESSING_LOG_TASK_NAME: Final = (
 RECEIPT_EXTERNAL_CATEGORY_TASK_NAME: Final = (
     'receipts.categorize_receipt_product'
 )
-RECEIPT_CATEGORY_MAX_RESPONSE_TOKENS: Final = 100
+RECEIPT_CATEGORY_MAX_RESPONSE_TOKENS: Final = 1000
 RECEIPT_CATEGORY_RESPONSE_FORMAT: Final[dict[str, Any]] = {
     'type': 'json_schema',
     'json_schema': {
@@ -148,7 +148,7 @@ RECEIPT_CATEGORY_RESPONSE_FORMAT: Final[dict[str, Any]] = {
 RECEIPT_CATEGORY_TWIN_TASK_NAME: Final = (
     'receipts.find_category_merge_proposals'
 )
-RECEIPT_CATEGORY_TWIN_MAX_RESPONSE_TOKENS: Final = 1000
+RECEIPT_CATEGORY_TWIN_MAX_RESPONSE_TOKENS: Final = 4000
 RECEIPT_CATEGORY_TWIN_RESPONSE_FORMAT: Final[dict[str, Any]] = {
     'type': 'json_schema',
     'json_schema': {

@@ -1,10 +1,12 @@
 """Tests for the optional external receipt-category fallback."""
 
 import json
+from contextlib import suppress
 from decimal import Decimal
 from typing import Any
 from unittest.mock import Mock, call, patch
 
+import httpx
 from celery.exceptions import Retry
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -12,6 +14,9 @@ from django.utils import timezone
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.containers import (
+    _build_category_model_transport,
+)
 from hasta_la_vista_money.receipts.models import (
     Product,
     ProductCategory,
@@ -49,6 +54,82 @@ class RecordingTransport:
         if isinstance(self.response, ValueError):
             raise self.response
         return self.response
+
+
+def _patched_http(
+    handler: Any,
+) -> Any:
+    """Route transport HTTP calls to an in-memory handler."""
+    real_client = httpx.Client
+    return patch(
+        'core.services.external_model.httpx.Client',
+        side_effect=lambda **kwargs: real_client(
+            transport=httpx.MockTransport(handler),
+            **kwargs,
+        ),
+    )
+
+
+class ReceiptCategoryModelTransportTests(TestCase):
+    """Verify provider-compatibility settings of the receipt transport."""
+
+    def _complete(self, response: httpx.Response) -> dict[str, Any]:
+        """Send one categorization request and return the sent payload."""
+        sent: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.update(json.loads(request.content))
+            return response
+
+        transport = _build_category_model_transport()
+        if transport is None:
+            self.fail('Receipt category transport is disabled')
+        with _patched_http(handler):
+            transport.complete(
+                messages=[{'role': 'user', 'content': 'Молоко'}],
+                max_tokens=10,
+                temperature=0,
+                response_format=constants.RECEIPT_CATEGORY_RESPONSE_FORMAT,
+            )
+        return sent
+
+    @override_settings(RECEIPT_CATEGORY_MODEL_BASE_URL='https://model.test')
+    def test_sends_json_schema_by_default(self) -> None:
+        """Keep strict schema output for providers that support it."""
+        sent = self._complete(httpx.Response(200, json={}))
+
+        self.assertEqual(
+            sent['response_format'],
+            constants.RECEIPT_CATEGORY_RESPONSE_FORMAT,
+        )
+        self.assertNotIn('reasoning_effort', sent)
+
+    @override_settings(
+        RECEIPT_CATEGORY_MODEL_BASE_URL='https://model.test',
+        RECEIPT_CATEGORY_MODEL_JSON_SCHEMA=False,
+        RECEIPT_CATEGORY_MODEL_REASONING_EFFORT='low',
+    )
+    def test_falls_back_to_json_object_with_schema_in_prompt(self) -> None:
+        """Describe the schema in the prompt when only json_object works."""
+        sent = self._complete(httpx.Response(200, json={}))
+
+        self.assertEqual(sent['response_format'], {'type': 'json_object'})
+        self.assertEqual(sent['reasoning_effort'], 'low')
+        schema = constants.RECEIPT_CATEGORY_RESPONSE_FORMAT['json_schema']
+        self.assertIn(
+            json.dumps(schema['schema'], ensure_ascii=False),
+            sent['messages'][-1]['content'],
+        )
+
+    @override_settings(RECEIPT_CATEGORY_MODEL_BASE_URL='https://model.test')
+    def test_http_error_keeps_provider_message(self) -> None:
+        """Expose the provider error body so failures are diagnosable."""
+        with self.assertRaises(httpx.HTTPStatusError) as raised:
+            self._complete(
+                httpx.Response(400, json={'error': 'format unavailable'}),
+            )
+
+        self.assertIn('format unavailable', str(raised.exception))
 
 
 class ExternalProductCategoryServiceTests(TestCase):
@@ -422,3 +503,45 @@ class CategorizeReceiptProductTaskTests(TestCase):
             reason='invalid_response',
             error='invalid response',
         )
+
+    def test_client_error_is_logged_without_retry(self) -> None:
+        """Do not retry requests the provider rejects as malformed."""
+        self.assertFalse(self._run_with_http_error(400).called)
+
+    def test_rate_limit_is_retried(self) -> None:
+        """Retry when the provider asks to slow down."""
+        self.assertTrue(self._run_with_http_error(429).called)
+
+    def _run_with_http_error(self, status_code: int) -> Mock:
+        """Fail the service with an HTTP status and return the retry mock."""
+        request = httpx.Request('POST', 'https://model.test')
+        service = Mock(enabled=True)
+        service.categorize_product.side_effect = httpx.HTTPStatusError(
+            'rejected',
+            request=request,
+            response=httpx.Response(status_code, request=request),
+        )
+
+        with (
+            patch(
+                'hasta_la_vista_money.receipts.tasks.'
+                '_get_external_product_category_service',
+                return_value=service,
+            ),
+            patch('hasta_la_vista_money.receipts.tasks.logger.warning') as log,
+            patch.object(
+                categorize_receipt_product,
+                'retry',
+                side_effect=Retry(),
+            ) as retry,
+            suppress(Retry),
+        ):
+            categorize_receipt_product(self.product.pk)
+
+        log.assert_called_once_with(
+            'receipt_external_category_failed',
+            product_id=self.product.pk,
+            reason='model_unavailable',
+            error='rejected',
+        )
+        return retry
