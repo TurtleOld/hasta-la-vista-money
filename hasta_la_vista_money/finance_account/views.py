@@ -1840,6 +1840,10 @@ class AccountView(
         ]
         analytics_currency = get_analytics_currency(request, users_in_group)
         balance_trend_period = request.GET.get('balance_trend_period', '30d')
+        balance_trend_kind = request.GET.get(
+            'balance_trend_kind',
+            constants.BALANCE_TREND_KIND_DEBIT,
+        )
 
         page_context = page_context_service.build_account_list_context(
             user,
@@ -1847,6 +1851,7 @@ class AccountView(
             group_id=group_id,
             currency=analytics_currency.currency,
             balance_trend_period=balance_trend_period,
+            balance_trend_kind=balance_trend_kind,
         )
 
         context.update(page_context)
