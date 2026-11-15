@@ -279,13 +279,13 @@ class AccountListBalanceTrendCurrencyTests(TestCase):
 
         for period, days, start_balance, delta, headers in (
             ('30d', 30, 741991.74, -86852.19, {}),
-            ('7d', 7, 655139.55, 0.0, {'HTTP_HX_REQUEST': 'true'}),
+            ('7d', 7, 655139.55, 0.0, {'HX-Request': 'true'}),
         ):
             with self.subTest(period=period):
                 response = self.client.get(
                     reverse('finance_account:list'),
                     {'balance_trend_period': period, 'currency': 'RUB'},
-                    **headers,
+                    headers=headers,
                 )
 
                 self.assertContains(response, 'На начало периода')
