@@ -7,6 +7,8 @@
         period: '30d',
         groupId: 'my',
         chartInstance: null,
+        /* Canvas the current chart was drawn on; HTMX OOB swaps replace it. */
+        renderedCanvas: null,
 
         init: function() {
             const widget = document.getElementById('balance-trend-widget');
@@ -26,13 +28,27 @@
             }
 
             const chartContainer = widget.querySelector('[data-has-data]');
-            if (chartContainer && chartContainer.textContent === 'true') {
-                this.renderChart();
+            if (!chartContainer || chartContainer.textContent !== 'true') {
+                return;
             }
+            const canvas = widget.querySelector('[data-balance-trend-chart]');
+            /* htmx fires afterSwap for every swapped/OOB element; only draw
+               when the canvas element itself is new. Re-creating the chart on
+               the same canvas leaves its backing store at the canvas default
+               size while CSS stretches it, which inflates tick labels. */
+            if (
+                canvas &&
+                canvas === this.renderedCanvas &&
+                window.Chart &&
+                window.Chart.getChart(canvas)
+            ) {
+                return;
+            }
+            this.renderChart();
         },
 
         renderChart: function() {
-            const canvas = document.getElementById('balance-trend-chart');
+            const canvas = document.querySelector('[data-balance-trend-chart]');
             if (!canvas || typeof Chart === 'undefined') {
                 console.warn('[BalanceTrendWidget] Chart.js not available or canvas not found');
                 return;
@@ -161,8 +177,31 @@
                     }
                 }
             });
+            this.renderedCanvas = canvas;
         }
     };
+
+    /* Drop charts whose canvas htmx is removing (OOB widget swaps bypass
+       hx-target), so no instance keeps resizing a detached canvas. */
+    document.addEventListener('htmx:beforeCleanupElement', (event) => {
+        const elt = event.detail && event.detail.elt;
+        if (!elt || !elt.querySelector || typeof window.Chart === 'undefined') {
+            return;
+        }
+        const canvas = elt.matches('[data-balance-trend-chart]')
+            ? elt
+            : elt.querySelector('[data-balance-trend-chart]');
+        if (!canvas) {
+            return;
+        }
+        const chart = window.Chart.getChart(canvas);
+        if (chart) {
+            chart.destroy();
+        }
+        if (balanceTrendWidget.renderedCanvas === canvas) {
+            balanceTrendWidget.renderedCanvas = null;
+        }
+    });
 
     // Initialize when DOM is ready
     function initBalanceTrendWidget() {

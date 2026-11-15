@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import F
 from django.test import TestCase
@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     TopUpDepositCommand,
@@ -238,6 +239,79 @@ class BalanceTrendServiceTests(TestCase):
 
 
 class AccountListBalanceTrendCurrencyTests(TestCase):
+    def test_page_explains_balance_change_after_period_switch(self) -> None:
+        user = cast('User', UserFactory())
+        wallet = Account.objects.create(
+            user=user,
+            name_account='Дебетовый счёт',
+            currency='RUB',
+            balance=Decimal('55139.55'),
+        )
+        Account.objects.create(
+            user=user,
+            name_account='Кредитный счёт',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            currency='RUB',
+            balance=Decimal('300000.00'),
+        )
+        Account.objects.create_deposit(
+            user=user,
+            name_account='Вклад',
+            bank=wallet.bank,
+            currency='RUB',
+            balance=Decimal('300000.00'),
+        )
+        category = Category.objects.create(
+            user=user,
+            name='Покупки',
+            type=TransactionType.EXPENSE,
+        )
+        today = timezone.localdate()
+        Transaction.objects.create(
+            user=user,
+            account=wallet,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('86852.19'),
+            date=_noon(today - timedelta(days=10)),
+        )
+        self.client.force_login(user)
+
+        for period, days, start_balance, delta, headers in (
+            ('30d', 30, 741991.74, -86852.19, {}),
+            ('7d', 7, 655139.55, 0.0, {'HX-Request': 'true'}),
+        ):
+            with self.subTest(period=period):
+                response = self.client.get(
+                    reverse('finance_account:list'),
+                    {'balance_trend_period': period, 'currency': 'RUB'},
+                    headers=headers,
+                )
+
+                self.assertContains(response, 'На начало периода')
+                self.assertContains(response, 'Сейчас')
+                self.assertContains(
+                    response,
+                    (today - timedelta(days=days)).strftime('%d.%m.%Y'),
+                )
+                self.assertContains(response, today.strftime('%d.%m.%Y'))
+                self.assertContains(
+                    response,
+                    'Учитываются дебетовые счета, дебетовые карты и наличные',
+                )
+                self.assertEqual(
+                    response.context['balance_trend_start_balance'],
+                    start_balance,
+                )
+                self.assertEqual(
+                    response.context['balance_trend']['current_balance'],
+                    655139.55,
+                )
+                self.assertEqual(
+                    response.context['balance_trend']['delta_absolute'],
+                    delta,
+                )
+
     def test_trend_uses_selected_analytics_currency(self) -> None:
         user = cast('User', UserFactory())
         for currency, balance in (('RUB', '1000.00'), ('USD', '50.00')):
@@ -259,3 +333,275 @@ class AccountListBalanceTrendCurrencyTests(TestCase):
             response.context['balance_trend']['current_balance'],
             50.0,
         )
+
+
+class AccountListBalanceTrendKindTests(TestCase):
+    """Widget kind selector filters only the sidebar balance trend."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.today = timezone.localdate()
+        self.debit = Account.objects.create(
+            user=self.user,
+            name_account='Дебетовый счёт',
+            currency='RUB',
+            balance=Decimal('20000.00'),
+        )
+        self.credit = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            currency='RUB',
+            balance=Decimal('100000.00'),
+        )
+        self.deposit = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.debit.bank,
+            currency='RUB',
+            balance=Decimal('40000.00'),
+        )
+        self.usd_debit = Account.objects.create(
+            user=self.user,
+            name_account='Доллары',
+            currency='USD',
+            balance=Decimal('500.00'),
+        )
+        self.usd_deposit = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Долларовый вклад',
+            bank=self.debit.bank,
+            currency='USD',
+            balance=Decimal('700.00'),
+        )
+        self.client.force_login(self.user)
+
+    def _get(self, **params: str) -> Any:
+        return self.client.get(
+            reverse('finance_account:list'),
+            params,
+        )
+
+    def _category(self, transaction_type: str) -> Category:
+        return Category.objects.create(
+            user=self.user,
+            name=f'Категория {transaction_type}',
+            type=transaction_type,
+        )
+
+    def test_widget_defaults_to_debit_and_hero_stays_mixed(self) -> None:
+        for params in (
+            {'currency': 'RUB'},
+            {'currency': 'RUB', 'balance_trend_kind': 'bogus'},
+        ):
+            with self.subTest(params=params):
+                response = self._get(**params)
+
+                self.assertEqual(
+                    response.context['balance_trend_kind'],
+                    'debit',
+                )
+                self.assertEqual(
+                    response.context['balance_trend_widget']['current_balance'],
+                    20000.0,
+                )
+                self.assertEqual(
+                    response.context['balance_trend']['current_balance'],
+                    160000.0,
+                )
+                self.assertEqual(
+                    len(response.context['accounts']),
+                    Account.objects.filter(user=self.user).count(),
+                )
+                self.assertContains(response, self.credit.name_account)
+                self.assertContains(response, self.deposit.name_account)
+
+    def test_credit_kind_shows_available_balance_without_changing_hero(
+        self,
+    ) -> None:
+        credit_requests = []
+        for kind in ('debit', 'credit'):
+            response = self._get(
+                currency='RUB',
+                balance_trend_kind=kind,
+            )
+            credit_requests.append(response)
+            self.assertEqual(
+                response.context['balance_trend']['current_balance'],
+                160000.0,
+            )
+            self.assertEqual(
+                response.context['sum_all_accounts_in_group'],
+                {
+                    'RUB': Decimal('20000.00'),
+                    'USD': Decimal('500.00'),
+                },
+            )
+
+        debit_page, credit_page = credit_requests
+        self.assertEqual(
+            credit_page.context['balance_trend_widget']['current_balance'],
+            100000.0,
+        )
+        self.assertContains(credit_page, 'Доступно на кредитных счетах')
+        self.assertNotContains(debit_page, 'Доступно на кредитных счетах')
+        self.assertContains(
+            credit_page,
+            'currency=USD&amp;balance_trend_kind=credit',
+        )
+
+    def test_credit_purchase_lowers_and_repayment_raises_available(
+        self,
+    ) -> None:
+        expense = Transaction.objects.create(
+            user=self.user,
+            account=self.credit,
+            category=self._category(TransactionType.EXPENSE),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('30000.00'),
+            date=_noon(self.today - timedelta(days=10)),
+        )
+        income = Transaction.objects.create(
+            user=self.user,
+            account=self.credit,
+            category=self._category(TransactionType.INCOME),
+            type=TransactionType.INCOME,
+            amount=Decimal('10000.00'),
+            date=_noon(self.today - timedelta(days=5)),
+        )
+        self.assertEqual(
+            [expense.type, income.type],
+            [TransactionType.EXPENSE, TransactionType.INCOME],
+        )
+        Account.objects.filter(pk=self.credit.pk).update(
+            balance=F('balance') - Decimal('30000.00'),
+        )
+        Account.objects.filter(pk=self.credit.pk).update(
+            balance=F('balance') + Decimal('10000.00'),
+        )
+
+        response = self._get(currency='RUB', balance_trend_kind='credit')
+        trend = response.context['balance_trend_widget']
+
+        self.assertEqual(trend['current_balance'], 80000.0)
+        self.assertEqual(trend['delta_absolute'], -20000.0)
+        self.assertEqual(trend['series'][0]['balance'], 100000.0)
+
+    def test_transfer_between_kinds_moves_each_trend_without_expense(
+        self,
+    ) -> None:
+        container = ApplicationContainer()
+        deposit_service = container.deposits.deposit_service()
+        deposit_service.create_funded_term_deposit(
+            FundDepositCommand(
+                user=self.user,
+                name='Новый вклад',
+                bank=self.debit.bank,
+                currency='RUB',
+                amount=Decimal('10000.00'),
+                source_account_id=self.debit.pk,
+                opened_on=self.today - timedelta(days=10),
+                matures_on=self.today + timedelta(days=365),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        debit_trend = self._get(
+            currency='RUB',
+            balance_trend_kind='debit',
+        ).context['balance_trend_widget']
+        deposit_trend = self._get(
+            currency='RUB',
+            balance_trend_kind='deposit',
+        ).context['balance_trend_widget']
+
+        self.assertEqual(debit_trend['current_balance'], 10000.0)
+        self.assertEqual(debit_trend['delta_absolute'], -10000.0)
+        self.assertEqual(deposit_trend['current_balance'], 50000.0)
+        self.assertEqual(deposit_trend['delta_absolute'], 10000.0)
+        self.assertFalse(Transaction.objects.filter(user=self.user).exists())
+
+    def test_kind_switch_keeps_period_currency_and_group(self) -> None:
+        response = self.client.get(
+            reverse('finance_account:list'),
+            {
+                'balance_trend_kind': 'deposit',
+                'balance_trend_period': '7d',
+                'currency': 'USD',
+                'group_id': 'my',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+
+        body = response.content.decode()
+        # Kind buttons choose their own kind, period/currency/group survive.
+        for kind in ('debit', 'credit', 'deposit'):
+            self.assertIn(
+                f'?balance_trend_kind={kind}&amp;balance_trend_period=7d'
+                '&amp;currency=USD&amp;group_id=my',
+                body,
+            )
+        # Period buttons and group chips keep the selected kind.
+        for period in ('7d', '30d', '12m'):
+            self.assertIn(
+                '?balance_trend_kind=deposit'
+                f'&amp;balance_trend_period={period}'
+                '&amp;currency=USD&amp;group_id=my',
+                body,
+            )
+
+        self.assertIn('id="group-accounts"', body)
+        self.assertIn('hx-swap-oob="true"', body)
+        self.assertEqual(
+            response.context['balance_trend_widget']['current_balance'],
+            700.0,
+        )
+
+    def test_empty_kind_shows_specific_message_without_chart(self) -> None:
+        user = cast('User', UserFactory())
+        Account.objects.create(
+            user=user,
+            name_account='Только дебет',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        self.client.force_login(user)
+
+        response = self._get(currency='RUB', balance_trend_kind='deposit')
+
+        self.assertFalse(
+            response.context['balance_trend_widget']['has_data'],
+        )
+        self.assertContains(response, 'Нет вкладов в выбранной группе и валюте')
+        self.assertNotContains(response, 'data-balance-trend-chart')
+        self.assertNotContains(response, 'accounts-trend-stats')
+
+    def test_zero_balance_account_shows_series_and_undefined_percent(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        bank = Bank.objects.get_or_create(
+            code='SBERBANK',
+            defaults={'name': 'Сбербанк', 'is_system': True},
+        )[0]
+        Account.objects.create_deposit(
+            user=user,
+            name_account='Пустой вклад',
+            bank=bank,
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        self.client.force_login(user)
+
+        response = self._get(currency='RUB', balance_trend_kind='deposit')
+        trend = response.context['balance_trend_widget']
+
+        self.assertTrue(trend['has_data'])
+        self.assertEqual(trend['current_balance'], 0.0)
+        self.assertTrue(trend['series'])
+        self.assertEqual(
+            {point['balance'] for point in trend['series']},
+            {0.0},
+        )
+        self.assertContains(response, 'остаток был нулевым')

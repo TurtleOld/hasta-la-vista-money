@@ -1,0 +1,24 @@
+{% load i18n %}
+{% with current_group=request.GET.group_id|default:'my' %}
+    <span class="accounts-group-chips-label">{% translate 'Группа:' %}</span>
+    <button type="button"
+            class="accounts-group-chip{% if current_group == 'my' %} is-active{% endif %}"
+            data-group-chip="my"
+            hx-get="{% url 'finance_account:list' %}{% querystring group_id='my' %}"
+            hx-target="#account-cards-block"
+            hx-swap="outerHTML"
+            hx-push-url="true">
+        {% translate 'Мои' %}
+    </button>
+    {% for group in user_groups %}
+        <button type="button"
+                class="accounts-group-chip{% if current_group == group.id|stringformat:'s' %} is-active{% endif %}"
+                data-group-chip="{{ group.id }}"
+                hx-get="{% url 'finance_account:list' %}{% querystring group_id=group.id %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">
+            {{ group.name }}
+        </button>
+    {% endfor %}
+{% endwith %}

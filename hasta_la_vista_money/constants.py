@@ -351,6 +351,16 @@ MANUALLY_CREATABLE_ACCOUNT_TYPES: Final = (
     CREDIT_ACCOUNT_TYPES | LIQUID_ACCOUNT_TYPES
 )
 
+# Kinds selectable in the balance trend widget (finance_account page).
+BALANCE_TREND_KIND_DEBIT: Final = 'debit'
+BALANCE_TREND_KIND_CREDIT: Final = 'credit'
+BALANCE_TREND_KIND_DEPOSIT: Final = 'deposit'
+BALANCE_TREND_KINDS: Final = (
+    BALANCE_TREND_KIND_DEBIT,
+    BALANCE_TREND_KIND_CREDIT,
+    BALANCE_TREND_KIND_DEPOSIT,
+)
+
 # ============================================================================
 # HTTP Status Codes
 # ============================================================================
