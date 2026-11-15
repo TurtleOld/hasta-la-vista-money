@@ -11,66 +11,89 @@
 </div>
 
 <div class="accounts-trend-body">
-    <div class="accounts-trend-lbl">{% translate 'Текущий баланс' %}</div>
-    <div class="accounts-trend-amt">
-        <span class="hide-target">{{ balance_trend.current_balance|default:0|comma }}<span class="cur">{{ analytics_currency.currency }}</span></span>
+    <div class="accounts-trend-periods accounts-trend-kinds" role="group" aria-label="{% translate 'Вид счетов' %}">
+        <button type="button" class="period-btn{% if balance_trend_kind == 'debit' %} on{% endif %}"
+                aria-pressed="{% if balance_trend_kind == 'debit' %}true{% else %}false{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_kind='debit' %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate 'Дебетовые счета' %}</button>
+        <button type="button" class="period-btn{% if balance_trend_kind == 'credit' %} on{% endif %}"
+                aria-pressed="{% if balance_trend_kind == 'credit' %}true{% else %}false{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_kind='credit' %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate 'Кредитные счета' %}</button>
+        <button type="button" class="period-btn{% if balance_trend_kind == 'deposit' %} on{% endif %}"
+                aria-pressed="{% if balance_trend_kind == 'deposit' %}true{% else %}false{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_kind='deposit' %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate 'Вклады' %}</button>
     </div>
 
+    {% if balance_trend_widget.has_data %}
+        <div class="accounts-trend-lbl">
+            {% if balance_trend_kind == 'credit' %}{% translate 'Доступно на кредитных счетах' %}{% elif balance_trend_kind == 'deposit' %}{% translate 'Остатки на вкладах' %}{% else %}{% translate 'Текущий баланс' %}{% endif %}
+        </div>
+        <div class="accounts-trend-amt">
+            <span class="hide-target">{{ balance_trend_widget.current_balance|default:0|comma }}<span class="cur">{{ analytics_currency.currency }}</span></span>
+        </div>
+    {% endif %}
+
     <div class="accounts-trend-periods">
-        {% with base_qs=request.GET.urlencode %}
         <button type="button" data-period="7d"
                 class="period-btn{% if selected_period == '7d' %} on{% endif %}"
-                hx-get="{% url 'finance_account:list' %}?balance_trend_period=7d{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_period='7d' %}"
                 hx-target="#account-cards-block"
                 hx-swap="outerHTML"
                 hx-push-url="true">{% translate '7 дней' %}</button>
         <button type="button" data-period="30d"
                 class="period-btn{% if selected_period == '30d' or not selected_period %} on{% endif %}"
-                hx-get="{% url 'finance_account:list' %}?balance_trend_period=30d{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_period='30d' %}"
                 hx-target="#account-cards-block"
                 hx-swap="outerHTML"
                 hx-push-url="true">{% translate '30 дней' %}</button>
         <button type="button" data-period="12m"
                 class="period-btn{% if selected_period == '12m' %} on{% endif %}"
-                hx-get="{% url 'finance_account:list' %}?balance_trend_period=12m{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-get="{% url 'finance_account:list' %}{% querystring balance_trend_period='12m' %}"
                 hx-target="#account-cards-block"
                 hx-swap="outerHTML"
                 hx-push-url="true">{% translate '12 месяцев' %}</button>
-        {% endwith %}
     </div>
 
-    {% if balance_trend.has_data %}
+    {% if balance_trend_widget.has_data %}
         <div class="accounts-trend-chart">
-            <canvas id="balance-trend-chart" height="96"></canvas>
+            <canvas data-balance-trend-chart height="96"></canvas>
         </div>
 
         <div class="accounts-trend-stats">
             <div class="accounts-trend-stat">
                 <div class="lbl">{% translate 'Изменение' %}</div>
-                <div class="val {% if balance_trend.delta_absolute >= 0 %}pos{% else %}neg{% endif %}">
-                    <span class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
+                <div class="val {% if balance_trend_widget.delta_absolute >= 0 %}pos{% else %}neg{% endif %}">
+                    <span class="hide-target">{% if balance_trend_widget.delta_absolute >= 0 %}+{% endif %}{{ balance_trend_widget.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
                 </div>
             </div>
             <div class="accounts-trend-stat">
                 <div class="lbl">{% translate 'От начального остатка' %}</div>
-                <div class="val {% if balance_trend.delta_percent >= 0 %}pos{% else %}neg{% endif %}">
-                    {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%
+                <div class="val {% if balance_trend_widget.delta_percent >= 0 %}pos{% else %}neg{% endif %}">
+                    {% if balance_trend_widget.delta_percent >= 0 %}+{% endif %}{{ balance_trend_widget.delta_percent|floatformat:1 }}%
                 </div>
             </div>
         </div>
         <details class="accounts-balance-help accounts-balance-help-widget" data-balance-help>
             <summary>{% translate 'Как рассчитано изменение?' %}</summary>
-            {% include 'finance_account/_balance_change_explanation.html' %}
+            {% include 'finance_account/_balance_change_explanation.html' with trend=balance_trend_widget trend_start_balance=balance_trend_widget_start_balance trend_start_date=balance_trend_widget_start_date trend_end_date=balance_trend_widget_end_date trend_kind=balance_trend_kind %}
         </details>
     {% else %}
         <div class="accounts-trend-empty">
             <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-            <p>{% translate 'Нет данных о транзакциях' %}</p>
+            <p>{% if balance_trend_kind == 'credit' %}{% translate 'Нет кредитных счетов в выбранной группе и валюте' %}{% elif balance_trend_kind == 'deposit' %}{% translate 'Нет вкладов в выбранной группе и валюте' %}{% else %}{% translate 'Нет дебетовых счетов в выбранной группе и валюте' %}{% endif %}</p>
             <span>{% translate 'Добавьте счёт и записывайте операции' %}</span>
         </div>
     {% endif %}
 </div>
 
 <div data-balance-trend class="hidden">{"period": "{{ selected_period|default:'30d'|escapejs }}", "groupId": "{{ request.GET.group_id|default:'my'|escapejs }}"}</div>
-<div data-has-data class="hidden">{{ balance_trend.has_data|lower }}</div>
-{% if balance_trend.has_data %}{{ balance_trend.series|json_script:"balance-trend-series" }}{% endif %}
+<div data-has-data class="hidden">{{ balance_trend_widget.has_data|lower }}</div>
+{% if balance_trend_widget.has_data %}{{ balance_trend_widget.series|json_script:"balance-trend-series" }}{% endif %}

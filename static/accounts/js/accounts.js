@@ -435,7 +435,7 @@
          HTMX detaches it; otherwise Chart.js keeps a stale reference and
          the next render throws "Canvas is already in use". */
       if (!window.Chart) return;
-      const canvas = document.getElementById('balance-trend-chart');
+      const canvas = document.querySelector('[data-balance-trend-chart]');
       if (!canvas) return;
       const target = event.detail && event.detail.target;
       if (!target) return;

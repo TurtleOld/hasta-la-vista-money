@@ -101,6 +101,7 @@ class AccountPageContextService:
         *,
         currency: str,
         balance_trend_period: str = '30d',
+        balance_trend_kind: str = constants.BALANCE_TREND_KIND_DEBIT,
     ) -> dict[str, Any]:
         """Build complete context for account list page.
 
@@ -110,6 +111,9 @@ class AccountPageContextService:
             group_id: Optional group ID for filtering.
             currency: Analytics currency of the balance trend.
             balance_trend_period: Period for balance trend ('7d', '30d', '12m').
+            balance_trend_kind: Account kind of the sidebar balance trend
+                ('debit', 'credit', 'deposit'); invalid values fall back to
+                debit.
 
         Returns:
             Dictionary with all context data for the page.
@@ -127,6 +131,14 @@ class AccountPageContextService:
                 accounts,
                 currency,
                 balance_trend_period,
+            ),
+        )
+        context.update(
+            self._build_balance_trend_widget_context(
+                accounts,
+                currency,
+                balance_trend_period,
+                balance_trend_kind,
             ),
         )
 
@@ -244,3 +256,66 @@ class AccountPageContextService:
                 balance_trend_end_date=date.fromisoformat(last['date']),
             )
         return context
+
+    def _build_balance_trend_widget_context(
+        self,
+        accounts: QuerySet[Account],
+        currency: str,
+        period: str,
+        kind: str,
+    ) -> dict[str, Any]:
+        """Build the sidebar trend filtered to one account kind.
+
+        The upper hero keeps the mixed-type `balance_trend` context; only
+        the widget shows debit, credit or deposit accounts separately.
+
+        Args:
+            accounts: QuerySet of accounts to filter.
+            currency: Currency of the trend.
+            period: Period for trend ('7d', '30d', '12m').
+            kind: Account kind ('debit', 'credit', 'deposit').
+
+        Returns:
+            Dictionary with the widget trend and its bounds.
+        """
+        if kind not in constants.BALANCE_TREND_KINDS:
+            kind = constants.BALANCE_TREND_KIND_DEBIT
+        trend = self.balance_trend_service.get_balance_trend(
+            self._accounts_of_kind(accounts, kind),
+            currency,
+            period,
+        )
+
+        context: dict[str, Any] = {
+            'balance_trend_widget': trend,
+            'balance_trend_kind': kind,
+        }
+        if trend['series']:
+            first = trend['series'][0]
+            last = trend['series'][-1]
+            context.update(
+                balance_trend_widget_start_balance=first['balance'],
+                balance_trend_widget_start_date=date.fromisoformat(
+                    first['date'],
+                ),
+                balance_trend_widget_end_date=date.fromisoformat(last['date']),
+            )
+        return context
+
+    @staticmethod
+    def _accounts_of_kind(
+        accounts: QuerySet[Account],
+        kind: str,
+    ) -> QuerySet[Account]:
+        """Filter accounts to one balance trend kind."""
+        if kind == constants.BALANCE_TREND_KIND_CREDIT:
+            return accounts.filter(
+                type_account__in=constants.CREDIT_ACCOUNT_TYPES,
+            )
+        if kind == constants.BALANCE_TREND_KIND_DEPOSIT:
+            return accounts.filter(
+                type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+            )
+        return accounts.filter(
+            type_account__in=constants.LIQUID_ACCOUNT_TYPES,
+        )

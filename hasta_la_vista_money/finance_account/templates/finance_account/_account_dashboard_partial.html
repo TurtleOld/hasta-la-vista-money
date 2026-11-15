@@ -7,6 +7,10 @@
 </div>
 
 {# Out-of-band swaps: refresh hero amount, change-chip, sidebar widgets #}
+<div id="group-accounts" hx-swap-oob="true" class="accounts-group-chips">
+    {% include 'finance_account/_account_group_chips.html' %}
+</div>
+
 <span id="accounts-hero-amt-value" hx-swap-oob="true" class="hide-target">
     {% for currency, amount in sum_all_accounts_in_group.items %}
         {{ amount|comma }}<span class="cur">{{ currency }}</span>{% if not forloop.last %} · {% endif %}
@@ -30,10 +34,6 @@
             {{ amount|comma }}<span class="cur">{{ currency }}</span>{% if not forloop.last %} · {% endif %}
         {% endfor %}
     </span>
-</div>
-
-<div id="accounts-hero-change" hx-swap-oob="true" class="accounts-hero-change">
-    {% include 'finance_account/_balance_change.html' %}
 </div>
 
 <div id="balance-trend-widget" hx-swap-oob="true" class="accounts-trend">
