@@ -1,0 +1,17 @@
+{% load i18n comma %}
+<div class="accounts-balance-explanation">
+    <p>{% blocktranslate with start=balance_trend_start_date|date:'d.m.Y' end=balance_trend_end_date|date:'d.m.Y' %}Изменение баланса с {{ start }} по {{ end }}{% endblocktranslate %}</p>
+    <dl>
+        <div><dt>{% translate 'На начало периода' %}</dt><dd class="hide-target">{{ balance_trend_start_balance|comma }} {{ analytics_currency.currency }}</dd></div>
+        <div><dt>{% translate 'Сейчас' %}</dt><dd class="hide-target">{{ balance_trend.current_balance|comma }} {{ analytics_currency.currency }}</dd></div>
+        <div><dt>{% translate 'Разница' %}</dt><dd class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</dd></div>
+    </dl>
+    <p>{% translate 'Разница = текущий остаток − остаток на начало периода. Минус означает, что денег на выбранных счетах стало меньше; это не сумма расходов.' %}</p>
+    {% if balance_trend_start_balance %}
+        <p>{% translate 'Процент = разница / остаток на начало периода × 100.' %}</p>
+    {% else %}
+        <p>{% translate 'На начало периода остаток был нулевым: процент изменения не определён, в виджете показан 0%.' %}</p>
+    {% endif %}
+    <p>{% translate 'Учитываются счета выбранной группы только в выбранной валюте. Кредитные счета и вклады включены в динамику.' %}</p>
+    <p>{% translate 'Баланс семьи выше включает только дебетовые счета, дебетовые карты и наличные; кредитные счета и вклады показаны отдельно.' %}</p>
+</div>

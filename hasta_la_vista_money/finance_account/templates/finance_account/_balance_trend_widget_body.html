@@ -46,18 +46,22 @@
 
         <div class="accounts-trend-stats">
             <div class="accounts-trend-stat">
-                <div class="lbl">{% translate 'CHANGE' %}</div>
+                <div class="lbl">{% translate 'Изменение' %}</div>
                 <div class="val {% if balance_trend.delta_absolute >= 0 %}pos{% else %}neg{% endif %}">
                     <span class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} {{ analytics_currency.currency }}</span>
                 </div>
             </div>
             <div class="accounts-trend-stat">
-                <div class="lbl">{% translate 'PERCENT' %}</div>
+                <div class="lbl">{% translate 'От начального остатка' %}</div>
                 <div class="val {% if balance_trend.delta_percent >= 0 %}pos{% else %}neg{% endif %}">
                     {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%
                 </div>
             </div>
         </div>
+        <details class="accounts-balance-help accounts-balance-help-widget" data-balance-help>
+            <summary>{% translate 'Как рассчитано изменение?' %}</summary>
+            {% include 'finance_account/_balance_change_explanation.html' %}
+        </details>
     {% else %}
         <div class="accounts-trend-empty">
             <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>

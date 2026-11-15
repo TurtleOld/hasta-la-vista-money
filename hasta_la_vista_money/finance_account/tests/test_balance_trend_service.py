@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     TopUpDepositCommand,
@@ -238,6 +239,79 @@ class BalanceTrendServiceTests(TestCase):
 
 
 class AccountListBalanceTrendCurrencyTests(TestCase):
+    def test_page_explains_balance_change_after_period_switch(self) -> None:
+        user = cast('User', UserFactory())
+        wallet = Account.objects.create(
+            user=user,
+            name_account='Дебетовый счёт',
+            currency='RUB',
+            balance=Decimal('55139.55'),
+        )
+        Account.objects.create(
+            user=user,
+            name_account='Кредитный счёт',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            currency='RUB',
+            balance=Decimal('300000.00'),
+        )
+        Account.objects.create_deposit(
+            user=user,
+            name_account='Вклад',
+            bank=wallet.bank,
+            currency='RUB',
+            balance=Decimal('300000.00'),
+        )
+        category = Category.objects.create(
+            user=user,
+            name='Покупки',
+            type=TransactionType.EXPENSE,
+        )
+        today = timezone.localdate()
+        Transaction.objects.create(
+            user=user,
+            account=wallet,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('86852.19'),
+            date=_noon(today - timedelta(days=10)),
+        )
+        self.client.force_login(user)
+
+        for period, days, start_balance, delta, headers in (
+            ('30d', 30, 741991.74, -86852.19, {}),
+            ('7d', 7, 655139.55, 0.0, {'HTTP_HX_REQUEST': 'true'}),
+        ):
+            with self.subTest(period=period):
+                response = self.client.get(
+                    reverse('finance_account:list'),
+                    {'balance_trend_period': period, 'currency': 'RUB'},
+                    **headers,
+                )
+
+                self.assertContains(response, 'На начало периода')
+                self.assertContains(response, 'Сейчас')
+                self.assertContains(
+                    response,
+                    (today - timedelta(days=days)).strftime('%d.%m.%Y'),
+                )
+                self.assertContains(response, today.strftime('%d.%m.%Y'))
+                self.assertContains(
+                    response,
+                    'Кредитные счета и вклады включены в динамику.',
+                )
+                self.assertEqual(
+                    response.context['balance_trend_start_balance'],
+                    start_balance,
+                )
+                self.assertEqual(
+                    response.context['balance_trend']['current_balance'],
+                    655139.55,
+                )
+                self.assertEqual(
+                    response.context['balance_trend']['delta_absolute'],
+                    delta,
+                )
+
     def test_trend_uses_selected_analytics_currency(self) -> None:
         user = cast('User', UserFactory())
         for currency, balance in (('RUB', '1000.00'), ('USD', '50.00')):
