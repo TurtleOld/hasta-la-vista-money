@@ -355,6 +355,24 @@
     /* Hide-balance */
     applyHideBalance();
 
+    document.addEventListener('pointerover', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      const help = event.target.closest('[data-balance-help]');
+      if (help && !help.contains(event.relatedTarget)) help.open = true;
+    });
+    document.addEventListener('pointerout', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      const help = event.target.closest('[data-balance-help]');
+      if (help && !help.contains(event.relatedTarget)) help.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        document.querySelectorAll('[data-balance-help][open]').forEach((help) => {
+          help.open = false;
+        });
+      }
+    });
+
     /* Drawer config */
     const config = window.HLVM_QUICK_ADD_CONFIG || {};
     drawerState.incomeCategories = config.incomeCategories || [];

@@ -1,5 +1,6 @@
 """Service for building page context for account views."""
 
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet
@@ -230,7 +231,16 @@ class AccountPageContextService:
             period,
         )
 
-        return {
+        context: dict[str, Any] = {
             'balance_trend': balance_trend,
             'selected_period': period,
         }
+        if balance_trend['series']:
+            first = balance_trend['series'][0]
+            last = balance_trend['series'][-1]
+            context.update(
+                balance_trend_start_balance=first['balance'],
+                balance_trend_start_date=date.fromisoformat(first['date']),
+                balance_trend_end_date=date.fromisoformat(last['date']),
+            )
+        return context
