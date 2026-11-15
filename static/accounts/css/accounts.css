@@ -907,7 +907,7 @@
   background: var(--acc-surface);
   border: 1px solid var(--acc-border);
   border-radius: 1rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .accounts-trend-hd {
@@ -995,6 +995,16 @@
   background: var(--acc-surface);
   color: var(--acc-text);
   box-shadow: 0 0 0 1px var(--acc-border-2);
+}
+
+.accounts-trend-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.accounts-trend-kinds .period-btn {
+  white-space: nowrap;
 }
 
 .accounts-trend-chart {

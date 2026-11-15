@@ -8,7 +8,7 @@
             <span>{% if selected_period == '7d' %}{% translate 'за 7 дней' %}{% elif selected_period == '12m' %}{% translate 'за 12 месяцев' %}{% else %}{% translate 'за 30 дней' %}{% endif %} · {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%</span>
             <span class="accounts-balance-help-label">{% translate 'Как рассчитано?' %}</span>
         </summary>
-        {% include 'finance_account/_balance_change_explanation.html' %}
+        {% include 'finance_account/_balance_change_explanation.html' with trend=balance_trend trend_start_balance=balance_trend_start_balance trend_start_date=balance_trend_start_date trend_end_date=balance_trend_end_date %}
     </details>
 {% else %}
     <span>{% translate 'Недостаточно данных для расчёта динамики' %}</span>

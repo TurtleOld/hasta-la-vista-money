@@ -30,9 +30,6 @@
                         {% endfor %}
                     </span>
                 </div>
-                <div id="accounts-hero-change" class="accounts-hero-change">
-                    {% include 'finance_account/_balance_change.html' %}
-                </div>
                 <div class="accounts-hero-breakdown">
                     <div id="accounts-hero-credit" class="accounts-hero-summary{% if not credit_balances_in_group %} is-hidden-icon{% endif %}">
                         <span class="accounts-hero-summary-label">{% translate 'Кредитные деньги:' %}</span>
@@ -93,31 +90,9 @@
             <section class="accounts-panel">
                 <div class="accounts-panel-hd">
                     <h2>{% translate 'Счета' %}</h2>
-                    {% with current_group=request.GET.group_id|default:'my' %}
                     <div id="group-accounts" class="accounts-group-chips">
-                        <span class="accounts-group-chips-label">{% translate 'Группа:' %}</span>
-                        <button type="button"
-                                class="accounts-group-chip{% if current_group == 'my' %} is-active{% endif %}"
-                                data-group-chip="my"
-                                hx-get="{% url 'finance_account:list' %}?group_id=my"
-                                hx-target="#account-cards-block"
-                                hx-swap="outerHTML"
-                                hx-push-url="true">
-                            {% translate 'Мои' %}
-                        </button>
-                        {% for group in user_groups %}
-                            <button type="button"
-                                    class="accounts-group-chip{% if current_group == group.id|stringformat:'s' %} is-active{% endif %}"
-                                    data-group-chip="{{ group.id }}"
-                                    hx-get="{% url 'finance_account:list' %}?group_id={{ group.id }}"
-                                    hx-target="#account-cards-block"
-                                    hx-swap="outerHTML"
-                                    hx-push-url="true">
-                                {{ group.name }}
-                            </button>
-                        {% endfor %}
+                        {% include 'finance_account/_account_group_chips.html' %}
                     </div>
-                    {% endwith %}
                 </div>
                 <div id="account-cards-block">
                     {% include 'finance_account/_account_cards_block.html' %}
