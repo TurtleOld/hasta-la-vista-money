@@ -127,6 +127,77 @@
   flex-wrap: wrap;
 }
 
+.accounts-balance-help {
+  position: relative;
+  font-size: 0.8125rem;
+  color: var(--acc-muted);
+}
+
+.accounts-balance-help > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: help;
+  list-style: none;
+}
+
+.accounts-balance-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.accounts-balance-help > summary:focus-visible {
+  outline: 2px solid var(--acc-accent);
+  outline-offset: 4px;
+}
+
+.accounts-balance-help-label,
+.accounts-balance-help-widget > summary {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.accounts-balance-help-widget {
+  margin-top: 0.75rem;
+}
+
+.accounts-balance-explanation {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  width: min(28rem, calc(100vw - 4rem));
+  padding: 1rem;
+  border: 1px solid var(--acc-border);
+  border-radius: 0.75rem;
+  background: var(--acc-surface);
+  color: var(--acc-text);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.accounts-balance-help-widget .accounts-balance-explanation {
+  left: auto;
+  right: 0;
+}
+
+.accounts-balance-explanation p + p,
+.accounts-balance-explanation dl {
+  margin-top: 0.75rem;
+}
+
+.accounts-balance-explanation dl div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.accounts-balance-explanation dd {
+  font-variant-numeric: tabular-nums;
+}
+
 .accounts-chip-pos {
   display: inline-flex;
   align-items: center;
@@ -836,7 +907,7 @@
   background: var(--acc-surface);
   border: 1px solid var(--acc-border);
   border-radius: 1rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .accounts-trend-hd {
@@ -924,6 +995,16 @@
   background: var(--acc-surface);
   color: var(--acc-text);
   box-shadow: 0 0 0 1px var(--acc-border-2);
+}
+
+.accounts-trend-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.accounts-trend-kinds .period-btn {
+  white-space: nowrap;
 }
 
 .accounts-trend-chart {

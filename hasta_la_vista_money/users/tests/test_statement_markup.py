@@ -562,6 +562,44 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_external_income_posts_to_statement_account(self) -> None:
+        row = self._row(1, transaction_type='income', kind='unknown')
+        category = self._category('Продажа вещей', 'income')
+        page_url = reverse(
+            'finance_account:bank_statement_markup',
+            args=[self.upload.pk],
+        )
+
+        response = self.client.get(page_url)
+
+        self.assertContains(response, 'Деньги поступят на счёт: РосДорБанк')
+        self.assertContains(response, 'Со своего счёта…')
+        self.assertContains(
+            response,
+            'От другого человека — выберите категорию дохода.',
+        )
+        response = self.client.post(
+            reverse(
+                'finance_account:bank_statement_markup_decide',
+                args=[self.upload.pk],
+            ),
+            {'row': row.pk, f'category-{row.pk}': category.pk},
+        )
+
+        self.assertRedirects(response, page_url)
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1100.00'))
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        movement = row.transaction
+        if movement is None:
+            self.fail('row is not linked to an income')
+        self.assertEqual(movement.account, self.account)
+        self.assertEqual(movement.category, category)
+        self.assertEqual(movement.type, 'income')
+        self.assertIsNone(row.transfer)
+        self.assertFalse(TransferMoneyLog.objects.exists())
+
     def test_decide_post_posts_row(self) -> None:
         row = self._row(1)
         category = self._category('Продукты')
