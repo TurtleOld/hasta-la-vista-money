@@ -79,6 +79,12 @@
                         <div class="min-w-0">
                             <div class="finances-row-title">{{ row.description }}</div>
                             <div class="finances-row-sub">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }}{% if item.kind_label %} · {{ item.kind_label }}{% endif %}</div>
+                            {% if row.transaction_type == 'income' %}
+                                <div class="finances-row-sub">{% blocktranslate with account=upload.account.name_account %}Деньги поступят на счёт: {{ account }}{% endblocktranslate %}</div>
+                                {% if row.kind != 'own_c2c' %}
+                                    <div class="finances-row-sub">{% translate 'От другого человека — выберите категорию дохода. Счёт для перевода оставьте пустым.' %}</div>
+                                {% endif %}
+                            {% endif %}
                             {% if item.duplicate %}
                                 <div class="markup-duplicate">{% blocktranslate with movement=item.duplicate %}Похоже, уже учтена: {{ movement }}{% endblocktranslate %}</div>
                             {% endif %}
@@ -98,8 +104,9 @@
                             </select>
                             <button type="button" hx-get="{% url 'finance_account:bank_statement_markup_category' upload.pk row.pk %}" hx-target="#category-modal" class="finances-button finances-button-secondary">{% translate 'Новая категория' %}</button>
                             {% if item.can_transfer %}
-                                <select name="account-{{ row.pk }}" class="markup-select" aria-label="{% translate 'Счёт для перевода…' %}">
-                                    <option value="">{% translate 'Счёт для перевода…' %}</option>
+                                {% if row.transaction_type == 'income' %}{% translate 'Со своего счёта…' as transfer_label %}{% else %}{% translate 'На свой счёт…' as transfer_label %}{% endif %}
+                                <select name="account-{{ row.pk }}" class="markup-select" aria-label="{{ transfer_label }}">
+                                    <option value="">{{ transfer_label }}</option>
                                     {% for account in accounts %}
                                         <option value="{{ account.pk }}"{% if account.pk == item.transfer_account.pk %} selected{% endif %}>{{ account.name_account }}</option>
                                     {% endfor %}
