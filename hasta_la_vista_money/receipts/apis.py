@@ -282,7 +282,11 @@ class ScanQRAPIView(APIView):
                 },
             )
         return Response(
-            {'status': 'queued', 'message': _('Поставлен в обработку')},
+            {
+                'status': 'queued',
+                'message': _('Поставлен в обработку'),
+                'log_id': outcome.log_id,
+            },
         )
 
 
