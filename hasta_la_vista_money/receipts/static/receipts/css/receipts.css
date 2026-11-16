@@ -1254,63 +1254,251 @@
   color: var(--receipts-accent);
 }
 
+.receipts-upload-card .receipts-mode-tabs {
+  display: flex;
+}
+
 .receipts-scan-panel {
   display: grid;
   gap: 1rem;
 }
 
-.receipts-scan-video-wrap {
-  background: #000;
+.receipts-scan-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Camera-first stage: the whole scan surface with overlay chrome. */
+.receipts-scan-stage {
+  aspect-ratio: 4 / 5;
+  background: #05070c;
   border-radius: 1.25rem;
+  isolation: isolate;
   overflow: hidden;
   position: relative;
   touch-action: manipulation;
 }
 
-/* A portrait 9:16 stream is taller than a phone screen and pushes the
-   buttons under the bottom bar; cover crops top and bottom evenly, so the
-   frame still sits over the decoded center region. */
+.receipts-scan-stage::before {
+  background: linear-gradient(
+    to bottom,
+    rgb(5 8 12 / 55%) 0%,
+    rgb(5 8 12 / 0%) 22%,
+    rgb(5 8 12 / 0%) 56%,
+    rgb(5 8 12 / 78%) 100%
+  );
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
 .receipts-scan-video {
   display: block;
-  max-height: 60svh;
+  height: 100%;
+  inset: 0;
   object-fit: cover;
+  position: absolute;
+  width: 100%;
+  z-index: 0;
+}
+
+/* Top chrome: back, account chip, torch. */
+.receipts-scan-chrome {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  left: 0;
+  padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 5;
+}
+
+.receipts-scan-icon-button {
+  align-items: center;
+  backdrop-filter: blur(0.625rem);
+  background: rgb(15 23 42 / 72%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  color: #f1f5f9;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  height: 2.5rem;
+  justify-content: center;
+  padding: 0;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  width: 2.5rem;
+}
+
+.receipts-scan-icon-button:hover {
+  background: rgb(15 23 42 / 90%);
+  border-color: rgb(255 255 255 / 40%);
+}
+
+.receipts-scan-icon-button.is-active {
+  background: rgb(245 158 11 / 90%);
+  border-color: rgb(255 255 255 / 60%);
+  color: #111827;
+}
+
+.receipts-scan-account {
+  align-items: center;
+  backdrop-filter: blur(0.625rem);
+  background: rgb(15 23 42 / 72%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  display: flex;
+  flex: 1 1 auto;
+  height: 2.5rem;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.receipts-scan-account-select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #f1f5f9;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  height: 100%;
+  min-width: 0;
+  padding: 0 2rem 0 0.8rem;
+  text-overflow: ellipsis;
   width: 100%;
 }
 
+.receipts-scan-account-select:focus-visible {
+  outline: 2px solid var(--receipts-accent);
+  outline-offset: -2px;
+}
+
+.receipts-scan-account-select option {
+  color: #0f172a;
+}
+
+.receipts-scan-account-chevron {
+  color: #cbd5e1;
+  font-size: 1rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .receipts-scan-hint {
-  background: rgb(0 0 0 / 65%);
-  border-radius: 0.75rem;
-  color: #fff;
-  font-size: 0.95rem;
+  color: #f8fafc;
+  font-size: 0.8125rem;
   left: 50%;
-  line-height: 1.3;
-  max-width: 90%;
-  padding: 0.5rem 0.9rem;
+  line-height: 1.35;
+  margin: 0;
+  max-width: min(86%, 30ch);
+  overflow: hidden;
   pointer-events: none;
   position: absolute;
   text-align: center;
-  top: 0.75rem;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+  top: calc(max(0.75rem, env(safe-area-inset-top)) + 3.25rem);
   transform: translateX(-50%);
-  width: max-content;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.receipts-scan-frame {
+  aspect-ratio: 1;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  width: min(68%, 17rem);
+  z-index: 2;
+}
+
+.receipts-scan-frame span {
+  border-color: rgb(255 255 255 / 88%);
+  border-style: solid;
+  border-width: 0;
+  height: 2.5rem;
+  position: absolute;
+  width: 2.5rem;
+}
+
+.receipts-scan-frame .tl {
+  border-left-width: 3px;
+  border-top-left-radius: 0.625rem;
+  border-top-width: 3px;
+  left: 0;
+  top: 0;
+}
+
+.receipts-scan-frame .tr {
+  border-right-width: 3px;
+  border-top-right-radius: 0.625rem;
+  border-top-width: 3px;
+  right: 0;
+  top: 0;
+}
+
+.receipts-scan-frame .bl {
+  border-bottom-left-radius: 0.625rem;
+  border-bottom-width: 3px;
+  border-left-width: 3px;
+  bottom: 0;
+  left: 0;
+}
+
+.receipts-scan-frame .br {
+  border-bottom-right-radius: 0.625rem;
+  border-bottom-width: 3px;
+  border-right-width: 3px;
+  bottom: 0;
+  right: 0;
+}
+
+/* Result, completed-receipt notice and camera errors share one bottom slot
+   above the actions, so they never cover the viewfinder or each other. */
+.receipts-scan-overlays {
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 3.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  left: 0.75rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.75rem;
+  z-index: 4;
+}
+
+.receipts-scan-overlays > * {
+  pointer-events: auto;
 }
 
 .receipts-scan-result {
+  align-self: center;
   background: rgb(15 23 42 / 85%);
   border-radius: 0.75rem;
-  bottom: 4.25rem;
   color: #fff;
+  font-size: 0.85rem;
   font-weight: 600;
-  left: 50%;
-  max-width: 90%;
-  padding: 0.6rem 1rem;
-  position: absolute;
+  max-width: 100%;
+  padding: 0.55rem 0.9rem;
   text-align: center;
-  transform: translateX(-50%);
-  width: max-content;
 }
 
 .receipts-scan-result.is-error {
-  background: rgb(185 28 28 / 90%);
+  background: rgb(185 28 28 / 92%);
 }
 
 .receipts-scan-result a {
@@ -1318,57 +1506,172 @@
   text-decoration: underline;
 }
 
-.receipts-scan-frame {
-  aspect-ratio: 1;
-  border: 3px solid rgb(255 255 255 / 90%);
-  border-radius: 1rem;
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 28%);
-  left: 50%;
-  max-width: 22rem;
-  pointer-events: none;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(68%, 55vh);
+.receipts-scan-notice {
+  align-items: center;
+  align-self: center;
+  backdrop-filter: blur(0.75rem);
+  background: color-mix(
+    in oklab,
+    var(--receipts-positive) 26%,
+    rgb(9 14 24 / 88%)
+  );
+  border: 1px solid
+    color-mix(in oklab, var(--receipts-accent) 48%, transparent);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 26px rgb(0 0 0 / 42%);
+  color: #f1f5f9;
+  display: flex;
+  gap: 0.55rem;
+  max-width: 30rem;
+  min-height: 2.875rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.625rem;
+  width: 100%;
 }
 
-.receipts-scan-controls {
-  bottom: 0.75rem;
-  display: flex;
+.receipts-scan-notice-icon {
+  align-items: center;
+  background: color-mix(in oklab, var(--receipts-accent) 26%, transparent);
+  border-radius: 50%;
+  color: #6ee7b7;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.9375rem;
+  height: 1.625rem;
   justify-content: center;
+  width: 1.625rem;
+}
+
+.receipts-scan-notice-text {
+  flex: 1 1 auto;
+  font-size: 0.84rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipts-scan-notice-link {
+  color: #6ee7b7;
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.375rem 0.125rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+.receipts-scan-notice-close {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #cbd5e1;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.9375rem;
+  height: 2rem;
+  justify-content: center;
+  padding: 0;
+  width: 2rem;
+}
+
+.receipts-scan-notice-close:hover {
+  background: rgb(255 255 255 / 10%);
+  color: #fff;
+}
+
+.receipts-scan-error {
+  background: color-mix(
+    in oklab,
+    var(--receipts-negative) 28%,
+    rgb(9 14 24 / 92%)
+  );
+  border: 1px solid
+    color-mix(in oklab, var(--receipts-negative) 55%, transparent);
+  border-radius: 0.75rem;
+  color: #fecaca;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 0.55rem 0.75rem;
+}
+
+/* Bottom actions: file fallback, photo, done. Keeps the JS focus guard
+   class because clicks here must not move the camera focus point. */
+.receipts-scan-actions {
+  align-items: center;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 0.5rem;
   left: 0.75rem;
   position: absolute;
   right: 0.75rem;
+  z-index: 6;
 }
 
-.receipts-scan-control {
+.receipts-scan-action {
   align-items: center;
-  backdrop-filter: blur(0.5rem);
+  backdrop-filter: blur(0.75rem);
   background: rgb(15 23 42 / 78%);
-  border: 1px solid rgb(255 255 255 / 28%);
+  border: 1px solid rgb(255 255 255 / 26%);
   border-radius: 999px;
-  color: #fff;
+  color: #f1f5f9;
   cursor: pointer;
   display: inline-flex;
-  font-size: 0.85rem;
-  font-weight: 600;
-  gap: 0.4rem;
-  padding: 0.55rem 0.85rem;
+  flex: 0 0 auto;
+  font-size: 1.1875rem;
+  gap: 0.45rem;
+  height: 2.875rem;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  width: 2.875rem;
 }
 
-.receipts-scan-control.is-active {
-  background: rgb(245 158 11 / 90%);
-  border-color: rgb(255 255 255 / 70%);
-  color: #111827;
+.receipts-scan-action:hover {
+  background: rgb(15 23 42 / 94%);
+  border-color: rgb(255 255 255 / 44%);
 }
 
-.receipts-scan-photo {
-  margin-top: 0.75rem;
-}
-
-[disabled].receipts-scan-photo {
+.receipts-scan-action:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.55;
+}
+
+.receipts-scan-action-file {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0 0.95rem;
+  width: auto;
+}
+
+.receipts-scan-actions .receipts-scan-done {
+  flex: 1 1 auto;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  height: 2.875rem;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 1.1rem;
+}
+
+.receipts-scan-actions .receipts-scan-done:hover {
+  transform: none;
+}
+
+@media (min-width: 769px) {
+  .receipts-scan-panel {
+    margin: 0 auto;
+    max-width: 56rem;
+    width: 100%;
+  }
+
+  .receipts-scan-stage {
+    aspect-ratio: 16 / 10;
+    max-height: 70vh;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1378,51 +1681,110 @@
   }
 
   .is-scan-mode .receipts-header,
-  .is-scan-mode .receipts-scan-panel .receipts-section h3,
-  .is-scan-mode .receipts-scan-tip {
+  .is-scan-mode .receipts-mode-tabs {
     display: none;
   }
 
-  .is-scan-mode .receipts-mode-tabs {
-    margin-bottom: 0.5rem;
-    margin-top: 0.5rem;
+  .is-scan-mode .receipts-wrap {
+    max-width: none;
+    padding: 0;
   }
 
-  /* 13.25rem = site header + tabs above the form, bottom nav below it. */
-  .is-scan-mode #scanQrForm {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    height: calc(100svh - 13.25rem);
-    min-height: 20rem;
-    padding-bottom: 0.5rem;
+  .is-scan-mode .receipts-upload-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-top: 0;
   }
 
-  .is-scan-mode .receipts-scan-panel .receipts-section {
-    border-bottom: 0;
-    padding: 0 0.5rem;
+  .is-scan-mode .receipts-scan-panel {
+    display: block;
   }
 
-  .is-scan-mode .receipts-scan-video-wrap {
-    flex: 1;
+  /* 9rem = sticky site header (4rem) + space reserved for the bottom nav
+     (5rem on body). The camera owns everything else. */
+  .is-scan-mode .receipts-scan-form {
+    display: block;
+    height: calc(100svh - 9rem);
     min-height: 0;
   }
 
-  .is-scan-mode .receipts-scan-video {
+  .is-scan-mode .receipts-scan-stage {
+    aspect-ratio: auto;
+    border-radius: 0;
     height: 100%;
-    inset: 0;
+  }
+}
+
+/* A landscape phone is wider than the 768px breakpoint but has a short
+   viewport: keep the camera full-bleed and shrink the frame to fit. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .receipts-app.is-scan-mode {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .is-scan-mode .receipts-header,
+  .is-scan-mode .receipts-mode-tabs {
+    display: none;
+  }
+
+  .is-scan-mode .receipts-wrap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .is-scan-mode .receipts-upload-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-top: 0;
+  }
+
+  .is-scan-mode .receipts-scan-panel {
+    display: block;
+  }
+
+  .is-scan-mode .receipts-scan-form {
+    display: block;
+    height: calc(100svh - 9rem);
+    min-height: 0;
+  }
+
+  .is-scan-mode .receipts-scan-stage {
+    aspect-ratio: auto;
+    border-radius: 0.75rem;
+    height: 100%;
     max-height: none;
-    position: absolute;
   }
 
-  .is-scan-mode .receipts-scan-photo,
-  .is-scan-mode .receipts-upload-error {
-    margin: 0 0.5rem;
+  .receipts-scan-frame {
+    top: 52%;
+    width: min(26%, 7.5rem);
   }
 
-  .is-scan-mode .receipts-scan-done {
-    justify-content: center;
-    margin: 0 0.5rem;
+  .receipts-scan-hint {
+    font-size: 0.75rem;
+    top: calc(max(0.5rem, env(safe-area-inset-top)) + 3rem);
+  }
+
+  .receipts-scan-actions {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .receipts-scan-overlays {
+    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 3.25rem);
+  }
+}
+
+/* The project hides the bottom nav from 768px, so a wide landscape phone
+   only has the sticky header above the scanner. */
+@media (orientation: landscape) and (max-height: 560px) and (min-width: 768px) {
+  .is-scan-mode .receipts-scan-form {
+    /* 1px accounts for the sticky header border. */
+    height: calc(100svh - 4rem - 1px);
   }
 }
 
