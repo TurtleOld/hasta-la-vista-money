@@ -1,5 +1,20 @@
 # История изменений
 
+## [2.25.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.24.0...v2.25.0) (2026-11-16)
+
+
+### ✨ Новые возможности
+
+* **finance_account:** separate balance trends by account type ([#1171](https://github.com/TurtleOld/hasta-la-vista-money/issues/1171)) ([0965a52](https://github.com/TurtleOld/hasta-la-vista-money/commit/0965a521a1d07b80ddee65ddd42edab3a04a77d5))
+* **receipts:** prioritize camera in mobile scanner ([#1176](https://github.com/TurtleOld/hasta-la-vista-money/issues/1176)) ([587ad80](https://github.com/TurtleOld/hasta-la-vista-money/commit/587ad806fb9099d9f2da9e3b1eca71cc54079b57))
+
+
+### 🐛 Исправления
+
+* **finance_account:** clarify incoming statement income ([#1169](https://github.com/TurtleOld/hasta-la-vista-money/issues/1169)) ([1a0d34f](https://github.com/TurtleOld/hasta-la-vista-money/commit/1a0d34f5696bcfdcebc07269b77d042f63fb1e4a))
+* **finance_account:** explain balance changes and account scope ([#1170](https://github.com/TurtleOld/hasta-la-vista-money/issues/1170)) ([8ebfc33](https://github.com/TurtleOld/hasta-la-vista-money/commit/8ebfc33706fc9c68028ff55167d85e5b8a94f5ef))
+* **receipts:** scope scanner notifications to submitted receipts ([#1175](https://github.com/TurtleOld/hasta-la-vista-money/issues/1175)) ([55bd5b3](https://github.com/TurtleOld/hasta-la-vista-money/commit/55bd5b3fb4f800ea6ea8522ad3004dc6cf1d8a39))
+
 ## [2.24.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.23.0...v2.24.0) (2026-10-29)
 
 
