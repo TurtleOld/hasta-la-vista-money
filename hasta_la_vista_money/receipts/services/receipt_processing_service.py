@@ -48,6 +48,7 @@ _HASH_CHUNK_SIZE = 64 * 1024
 class QrEnqueueResult:
     status: Literal['queued', 'duplicate', 'error']
     duplicate: Receipt | ReceiptProcessingLog | None = None
+    log_id: int | None = None
 
 
 def compute_image_hash(file_obj: Any) -> str:
@@ -196,7 +197,7 @@ class ReceiptProcessingService:
             args=[log.pk],
             task_id=task_id,
         )
-        return QrEnqueueResult(status='queued')
+        return QrEnqueueResult(status='queued', log_id=log.pk)
 
     def attach_task_id(
         self,
@@ -357,9 +358,11 @@ class ReceiptProcessingService:
         self,
         *,
         user: User,
+        log_ids: list[int] | None = None,
     ) -> list[ReceiptProcessingLog]:
         return self.processing_log_repository.get_unnotified_completed(
             user=user,
+            log_ids=log_ids,
         )
 
     def is_insufficient_at_conducting(self, *, receipt: Receipt) -> bool:

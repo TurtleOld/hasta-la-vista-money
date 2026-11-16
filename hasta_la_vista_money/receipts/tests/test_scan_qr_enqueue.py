@@ -130,6 +130,16 @@ class ScanQRAPITests(TestCase):
             ReceiptProcessingLog.objects.filter(user=self.user).exists(),
         )
 
+    def test_queued_scan_returns_processing_log_id(self) -> None:
+        with mock.patch(_SEND_TASK):
+            response = self.client.post(
+                self.url,
+                {'qr_raw': _RAW_QR, 'account': self.account.pk},
+            )
+
+        log = ReceiptProcessingLog.objects.get(user=self.user)
+        self.assertEqual(response.json()['log_id'], log.pk)
+
     def test_duplicate_scan_links_saved_receipt(self) -> None:
         receipt = Receipt.objects.create(
             user=self.user,

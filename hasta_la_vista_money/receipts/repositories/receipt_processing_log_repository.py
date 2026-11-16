@@ -338,15 +338,22 @@ class ReceiptProcessingLogRepository:
         self,
         *,
         user: User,
+        log_ids: list[int] | None = None,
     ) -> list[ReceiptProcessingLog]:
-        logs = list(
-            ReceiptProcessingLog.objects.filter(
-                user=user,
-                status=ReceiptProcessingStatus.COMPLETED,
-                notified_at__isnull=True,
-                receipt__isnull=False,
-            ).select_related('receipt')[:5],
+        queryset = ReceiptProcessingLog.objects.filter(
+            user=user,
+            status=ReceiptProcessingStatus.COMPLETED,
+            notified_at__isnull=True,
+            receipt__isnull=False,
         )
+        if log_ids is not None:
+            if not log_ids:
+                return []
+            logs = list(
+                queryset.filter(pk__in=log_ids).select_related('receipt'),
+            )
+        else:
+            logs = list(queryset.select_related('receipt')[:5])
         if logs:
             ReceiptProcessingLog.objects.filter(
                 pk__in=[log.pk for log in logs],
