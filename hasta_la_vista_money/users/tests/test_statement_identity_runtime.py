@@ -100,11 +100,13 @@ def parse_result(
     *,
     bank_code: str = constants.BANK_CODE_SBERBANK,
     requires_markup: bool = False,
+    closing_balance: Decimal | None = None,
 ) -> StatementParseResult:
     return StatementParseResult(
         transactions=rows,
         bank_code=bank_code,
         requires_markup=requires_markup,
+        closing_balance=closing_balance,
     )
 
 
@@ -183,6 +185,12 @@ class StatementIdentityRuntimeFixture(TestCase):
             name='Продукты',
             type=TransactionType.EXPENSE,
         )
+
+    @staticmethod
+    def _parser(result: StatementParseResult) -> MagicMock:
+        parser = MagicMock()
+        parser.parse.return_value = result
+        return MagicMock(return_value=parser)
 
 
 @override_settings(
@@ -1195,7 +1203,7 @@ class StatementIdentityAccountStateGuardTest(StatementIdentityRuntimeFixture):
     STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
 )
 class StatementIdentityHashlessUncertaintyTest(StatementIdentityRuntimeFixture):
-    def test_hashless_manual_row_blocks_overlap_until_resolved(self) -> None:
+    def test_hashless_manual_row_stays_uncertain_after_resolution(self) -> None:
         first = self.upload('missing-keys')
         with override_settings(
             STATEMENT_ID_HMAC_KEYS='',
@@ -1215,6 +1223,7 @@ class StatementIdentityHashlessUncertaintyTest(StatementIdentityRuntimeFixture):
             )
         original = BankStatementRow.objects.get(upload=first)
         self.assertIsNone(original.source_ref_hash)
+        self.assertEqual(original.source_ref_version, 0)
 
         second = self.upload('after-keys')
         result = self.run_import(
@@ -1254,8 +1263,8 @@ class StatementIdentityHashlessUncertaintyTest(StatementIdentityRuntimeFixture):
                 ],
             ),
         )
-        self.assertEqual(result['expense_count'], 1)
-        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(result['expense_count'], 0)
+        self.assertFalse(Transaction.objects.exists())
 
     def test_genuine_manual_movement_is_not_bank_uncertainty(self) -> None:
         category = self.manual_category()
@@ -1374,10 +1383,9 @@ class StatementStaleGenerationTest(StatementIdentityRuntimeFixture):
                 pass
 
             def parse(self) -> StatementParseResult:
-                BankStatementUpload.objects.filter(pk=upload.pk).update(
-                    expires_at=timezone.now() - timedelta(seconds=1),
+                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired(
+                    now=timezone.now() + timedelta(days=365),
                 )
-                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
                 return parse_result(
                     [
                         transaction(
@@ -1388,13 +1396,17 @@ class StatementStaleGenerationTest(StatementIdentityRuntimeFixture):
                     ],
                 )
 
-        with patch(PARSER_PATH, CleanupDuringParse):
-            process_bank_statement_task.apply(args=[upload.pk])
+        with (
+            patch(PARSER_PATH, CleanupDuringParse),
+            self.assertRaises(StatementGenerationExpiredError),
+        ):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
 
         self.assertFalse(Transaction.objects.exists())
         upload.refresh_from_db()
         self.assertIsNotNone(upload.retention_cleaned_at)
-        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertIn('повторно', upload.error_message)
 
     def test_localized_manual_reason_is_lazy(self) -> None:
         self.assertTrue(
@@ -1692,4 +1704,353 @@ class DuplicateCycleGuardTest(StatementIdentityRuntimeFixture):
                 BankStatementRow.Decision.NEW,
                 self.user.pk,
             )
+        self.assertFalse(Transaction.objects.exists())
+
+
+@override_settings(
+    STATEMENT_ID_HMAC_KEYS=KEYS_A,
+    STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+)
+class StatementIdentityManualGuardRootTest(StatementIdentityRuntimeFixture):
+    def add_unrelated_legacy(self) -> None:
+        legacy = fingerprint('legacy-unverified', self.account.pk, 'old-1')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.manual_category(),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('7.00'),
+            date=timezone.now(),
+            source_ref_hash=legacy.digest,
+            source_ref_key_id=legacy.key_id,
+            source_ref_version=1,
+            source_identity_trusted=False,
+        )
+
+    def test_legacy_history_keeps_proven_duplicate_root(self) -> None:
+        self.add_unrelated_legacy()
+        root_upload = self.upload('guard-root')
+        self.run_import(
+            root_upload,
+            parse_result(
+                [
+                    transaction(
+                        amount='-60.00',
+                        source_ref='guard-op',
+                        position=0,
+                    ),
+                ],
+            ),
+        )
+        root = BankStatementRow.objects.get(upload=root_upload)
+        self.assertTrue(root.source_identity_trusted)
+        self.assertIsNone(root.duplicate_of_id)
+
+        with override_settings(
+            STATEMENT_ID_HMAC_KEYS=KEYS_AB,
+            STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-2',
+        ):
+            child_upload = self.upload('guard-child')
+            self.run_import(
+                child_upload,
+                parse_result(
+                    [
+                        transaction(
+                            amount='-60.00',
+                            source_ref='guard-op',
+                            position=0,
+                        ),
+                    ],
+                ),
+            )
+        child = BankStatementRow.objects.get(upload=child_upload)
+        self.assertEqual(child.duplicate_of_id, root.pk)
+        self.assertTrue(child.source_identity_trusted)
+        self.assertEqual(child.decision, BankStatementRow.Decision.PENDING)
+
+        reconciliation = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        reconciliation.decide(
+            root.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+        reconciliation.decide(
+            child.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+        self.assertEqual(
+            Transaction.objects.filter(amount=Decimal('60.00')).count(),
+            1,
+        )
+        child.refresh_from_db()
+        self.assertEqual(child.decision, BankStatementRow.Decision.LINKED)
+
+    def test_unsupported_stored_key_keeps_available_root_link(self) -> None:
+        root_upload = self.upload('old-root')
+        ident = fingerprint('sberbank', self.account.pk, 'old-root-op')
+        root = BankStatementRow.objects.create(
+            upload=root_upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=datetime(2026, 3, 1, 12, tzinfo=UTC),
+            amount=Decimal('70.00'),
+            description='Магазин',
+            source_ref_hash=ident.digest,
+            source_ref_key_id=ident.key_id,
+            source_ref_version=1,
+            source_identity_trusted=True,
+            source_row_position=0,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        retired = fingerprint('sberbank', self.account.pk, 'retired-2')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.manual_category(),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('8.00'),
+            date=timezone.now(),
+            source_ref_hash=retired.digest,
+            source_ref_key_id='retired-key',
+            source_ref_version=1,
+            source_identity_trusted=True,
+        )
+
+        child_upload = self.upload('old-root-child')
+        with override_settings(
+            STATEMENT_ID_HMAC_KEYS=KEYS_AB,
+            STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-2',
+        ):
+            self.run_import(
+                child_upload,
+                parse_result(
+                    [
+                        transaction(
+                            amount='-70.00',
+                            source_ref='old-root-op',
+                            position=0,
+                        ),
+                    ],
+                ),
+            )
+        child = BankStatementRow.objects.get(upload=child_upload)
+        self.assertIsNotNone(child.candidate_description)
+        self.assertEqual(child.duplicate_of_id, root.pk)
+
+
+@override_settings(
+    STATEMENT_ID_HMAC_KEYS=KEYS_A,
+    STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+)
+class HashlessPostedBankUncertaintyTest(StatementIdentityRuntimeFixture):
+    def test_hashless_posted_representation_stays_uncertain(self) -> None:
+        with override_settings(
+            STATEMENT_ID_HMAC_KEYS='',
+            STATEMENT_ID_HMAC_ACTIVE_KEY_ID='',
+        ):
+            first = self.upload('missing-keys-post')
+            self.run_import(
+                first,
+                parse_result(
+                    [
+                        transaction(
+                            amount='-80.00',
+                            source_ref='posted-op',
+                            position=0,
+                        ),
+                    ],
+                ),
+            )
+        row = BankStatementRow.objects.get(upload=first)
+        self.assertIsNone(row.source_ref_hash)
+        self.assertEqual(row.source_ref_version, 0)
+
+        ApplicationContainer().users.bank_statement_reconciliation_service().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+        movement = Transaction.objects.get()
+        self.assertIsNone(movement.source_ref_hash)
+        self.assertEqual(movement.source_ref_version, 0)
+
+        overlap = self.upload('missing-keys-overlap')
+        result = self.run_import(
+            overlap,
+            parse_result(
+                [
+                    transaction(
+                        amount='-80.00',
+                        source_ref='posted-op',
+                        position=0,
+                        when=datetime(2026, 3, 5, 12, tzinfo=UTC),
+                    ),
+                ],
+            ),
+        )
+        self.assertEqual(result['expense_count'], 0)
+        self.assertTrue(
+            BankStatementRow.objects.filter(
+                upload=overlap,
+                decision=BankStatementRow.Decision.PENDING,
+            ).exists(),
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_normal_no_id_multirow_import_still_posts(self) -> None:
+        upload = self.upload('no-id-multi')
+        result = self.run_import(
+            upload,
+            parse_result(
+                [
+                    transaction(amount='-10.00', source_ref=None, position=0),
+                    transaction(amount='-20.00', source_ref=None, position=1),
+                    transaction(amount='-30.00', source_ref=None, position=2),
+                ],
+            ),
+        )
+        self.assertEqual(result['expense_count'], 3)
+        self.assertEqual(Transaction.objects.count(), 3)
+
+
+class ImportFinalizationSafetyTest(StatementIdentityRuntimeFixture):
+    @override_settings(
+        STATEMENT_ID_HMAC_KEYS=KEYS_A,
+        STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+    )
+    def test_cleanup_before_finalize_keeps_bank_fields_clean(self) -> None:
+        upload = self.upload('finalize-cleanup')
+        original_import = BankStatementImportService.import_statement
+
+        def import_then_cleanup(
+            service: BankStatementImportService,
+            target: BankStatementUpload,
+            generation: Any = None,
+        ) -> Any:
+            result = original_import(service, target, generation=generation)
+            ApplicationContainer().users.bank_statement_retention_service().cleanup_expired(
+                now=timezone.now() + timedelta(days=365),
+            )
+            return result
+
+        with (
+            patch(
+                PARSER_PATH,
+                self._parser(
+                    parse_result([], closing_balance=Decimal('900.00')),
+                ),
+            ),
+            patch.object(
+                BankStatementImportService,
+                'import_statement',
+                autospec=True,
+                side_effect=import_then_cleanup,
+            ),
+            self.assertRaises(StatementGenerationExpiredError),
+        ):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        self.assertFalse(bool(upload.pdf_file))
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertIn('повторно', upload.error_message)
+
+    @override_settings(
+        STATEMENT_ID_HMAC_KEYS=KEYS_A,
+        STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+    )
+    def test_replaced_generation_is_not_modified_by_old_task(self) -> None:
+        upload = self.upload('finalize-replaced')
+        original_import = BankStatementImportService.import_statement
+        renewed_expiry = timezone.now() + timedelta(days=77)
+
+        def import_then_renew(
+            service: BankStatementImportService,
+            target: BankStatementUpload,
+            generation: Any = None,
+        ) -> Any:
+            result = original_import(service, target, generation=generation)
+            BankStatementUpload.objects.filter(pk=target.pk).update(
+                pdf_file='bank_statements/renewed-finalize.pdf',
+                expires_at=renewed_expiry,
+            )
+            return result
+
+        with (
+            patch(
+                PARSER_PATH,
+                self._parser(
+                    parse_result([], closing_balance=Decimal('950.00')),
+                ),
+            ),
+            patch.object(
+                BankStatementImportService,
+                'import_statement',
+                autospec=True,
+                side_effect=import_then_renew,
+            ),
+            self.assertRaises(StatementGenerationExpiredError),
+        ):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertEqual(upload.expires_at, renewed_expiry)
+        self.assertEqual(
+            upload.pdf_file.name,
+            'bank_statements/renewed-finalize.pdf',
+        )
+
+    @override_settings(
+        STATEMENT_ID_HMAC_KEYS=KEYS_A,
+        STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+    )
+    def test_bulk_finalize_after_cleanup_does_not_restore_sums(self) -> None:
+        upload = self.upload('bulk-cleanup')
+        upload.statement_closing_balance = Decimal('900.00')
+        upload.save(update_fields=['statement_closing_balance'])
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+
+        ApplicationContainer().users.statement_markup_service()._finalize(
+            upload,
+        )
+
+        upload.refresh_from_db()
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+
+
+class ExpiredTaskOutcomeTest(StatementIdentityRuntimeFixture):
+    @override_settings(
+        STATEMENT_ID_HMAC_KEYS=KEYS_A,
+        STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+    )
+    def test_expired_before_start_is_terminal_reupload(self) -> None:
+        upload = self.upload('expired-before-start')
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        with (
+            patch(PARSER_PATH, self._parser(parse_result([]))),
+            self.assertRaises(StatementGenerationExpiredError),
+        ):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertNotEqual(
+            upload.status,
+            BankStatementUpload.Status.PROCESSING,
+        )
+        self.assertIn('повторно', upload.error_message)
         self.assertFalse(Transaction.objects.exists())

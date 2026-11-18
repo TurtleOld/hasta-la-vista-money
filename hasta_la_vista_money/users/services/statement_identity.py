@@ -152,6 +152,7 @@ class StatementIdentityService:
         if source_ref:
             if not bank_code:
                 return IncomingStatementIdentity(
+                    version=0,
                     manual_reason=str(MANUAL_REASON_UNKNOWN_BANK),
                 )
             active_hash = self._active_fingerprint(
@@ -164,11 +165,7 @@ class StatementIdentityService:
                     active_hash.digest if active_hash is not None else None
                 ),
                 key_id=active_hash.key_id if active_hash is not None else '',
-                version=(
-                    active_hash.version
-                    if active_hash is not None
-                    else constants.STATEMENT_ID_FINGERPRINT_VERSION
-                ),
+                version=(active_hash.version if active_hash is not None else 0),
                 trusted=trusted_reference and active_hash is not None,
             )
             digests = self._lookup_digests(
@@ -189,16 +186,54 @@ class StatementIdentityService:
             ),
             matches=matches,
         )
-        if reason:
-            return self._manual(identity, reason, matches)
         if not source_ref:
+            if reason:
+                return self._manual(identity, reason, matches)
             return identity
-
+        root_id = None
         if trusted_reference:
-            if self._repository.trusted_movement_exists(
+            root_id = self._repository.trusted_presentation_root_id(
                 account_id,
                 digests,
                 available,
+                exclude_upload_id=exclude_upload_id,
+            )
+        return self._classify_evidence(
+            identity=identity,
+            reason=reason,
+            root_id=root_id,
+            matches=matches,
+            account_id=account_id,
+            digests=digests,
+            available_key_ids=available,
+            trusted_reference=trusted_reference,
+        )
+
+    def _classify_evidence(
+        self,
+        *,
+        identity: IncomingStatementIdentity,
+        reason: str,
+        root_id: int | None,
+        matches: tuple[Transaction, ...],
+        account_id: int,
+        digests: set[str],
+        available_key_ids: frozenset[str],
+        trusted_reference: bool,
+    ) -> IncomingStatementIdentity:
+        """Apply guard and exact evidence without losing a proven root."""
+        if reason:
+            evidence_is_supported = reason not in {
+                str(MANUAL_REASON_KEY_UNAVAILABLE),
+                str(MANUAL_REASON_STORED_KEY_UNAVAILABLE),
+            }
+            if (
+                evidence_is_supported
+                and self._repository.trusted_movement_exists(
+                    account_id,
+                    digests,
+                    available_key_ids,
+                )
             ):
                 return IncomingStatementIdentity(
                     source_ref_hash=identity.source_ref_hash,
@@ -207,19 +242,31 @@ class StatementIdentityService:
                     trusted=True,
                     exact_duplicate=True,
                 )
-            root_id = self._repository.trusted_presentation_root_id(
-                account_id,
-                digests,
-                available,
-                exclude_upload_id=exclude_upload_id,
+            return self._manual(
+                identity,
+                reason,
+                matches,
+                duplicate_of_id=root_id,
             )
-            if root_id is not None:
-                return self._manual(
-                    identity,
-                    MANUAL_REASON_DUPLICATE_PRESENTATION,
-                    (),
-                    duplicate_of_id=root_id,
-                )
+        if trusted_reference and self._repository.trusted_movement_exists(
+            account_id,
+            digests,
+            available_key_ids,
+        ):
+            return IncomingStatementIdentity(
+                source_ref_hash=identity.source_ref_hash,
+                key_id=identity.key_id,
+                version=identity.version,
+                trusted=True,
+                exact_duplicate=True,
+            )
+        if trusted_reference and root_id is not None:
+            return self._manual(
+                identity,
+                MANUAL_REASON_DUPLICATE_PRESENTATION,
+                (),
+                duplicate_of_id=root_id,
+            )
         return identity
 
     def same_file_posted(

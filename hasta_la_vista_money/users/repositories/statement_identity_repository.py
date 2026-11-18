@@ -27,10 +27,13 @@ _UNTRUSTED = Q(
     source_ref_hash__isnull=False,
     source_identity_trusted=False,
 )
-_UNVERIFIED_TRANSACTION = Q(source_ref__isnull=False) | _UNTRUSTED
+_UNVERIFIED_TRANSACTION = (
+    Q(source_ref__isnull=False) | _UNTRUSTED | Q(source_ref_version=0)
+)
 _UNVERIFIED_ROW = (
     Q(source_ref__isnull=False)
     | _UNTRUSTED
+    | Q(source_ref_version=0)
     | (
         Q(source_ref_hash__isnull=True)
         & Q(decision__in=_UNRESOLVED_ROW_DECISIONS)

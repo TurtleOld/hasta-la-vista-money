@@ -9,18 +9,16 @@ from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.users.models import (
-    BankStatementRow,
-    BankStatementUpload,
-)
+from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
 )
 from hasta_la_vista_money.users.services.bank_statement_import import (
+    GENERATION_BUSY,
+    GENERATION_CURRENT,
+    GENERATION_REPLACED,
+    GENERATION_STARTED,
     StatementGenerationExpiredError,
-)
-from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    BankStatementReconciliationService,
 )
 
 logger = structlog.get_logger(__name__)
@@ -72,6 +70,8 @@ def process_bank_statement_task(
         'bank_statement_task_started',
         upload_id=upload_id,
     )
+    service: Any = None
+    generation: Any = None
 
     try:
         upload = BankStatementUpload.objects.select_related(
@@ -79,51 +79,37 @@ def process_bank_statement_task(
             'account',
         ).get(id=upload_id)
         _assert_account_importable(upload)
-        _initialize_upload(upload, self)
 
         service = ApplicationContainer().users.bank_statement_import_service()
-        result = service.import_statement(upload)
-
-        upload.account.refresh_from_db(fields=['balance'])
-        awaiting_markup = BankStatementRow.objects.filter(
-            upload=upload,
-            decision__in=[
-                BankStatementRow.Decision.AWAITING_MARKUP,
-                BankStatementRow.Decision.DEFERRED,
-            ],
-        ).exists()
-        if result.closing_balance is not None:
-            upload.statement_closing_balance = result.closing_balance
-        # Until every row is marked up the discrepancy is known to be false.
-        if result.closing_balance is not None and not awaiting_markup:
-            upload.account_balance_after = upload.account.balance
-            upload.balance_discrepancy = (
-                result.closing_balance - upload.account.balance
+        generation, state = _start_generation(
+            service,
+            upload,
+            self.request.id or '',
+        )
+        if state == GENERATION_BUSY:
+            logger.warning(
+                'bank_statement_task_busy',
+                upload_id=upload_id,
             )
+            return {
+                'income_count': upload.income_count,
+                'expense_count': upload.expense_count,
+                'skipped_count': upload.skipped_count,
+                'needs_transfer_count': upload.needs_transfer_count,
+                'total_count': 0,
+            }
 
-        BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if (
-            awaiting_markup
-            or BankStatementRow.objects.filter(
-                upload=upload,
-                decision=BankStatementRow.Decision.PENDING,
-            ).exists()
-        ):
-            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
-        else:
-            upload.status = BankStatementUpload.Status.COMPLETED
-        upload.progress = 100
-        upload.save(
-            update_fields=[
-                'status',
-                'progress',
-                'updated_at',
-                'statement_closing_balance',
-                'account_balance_after',
-                'balance_discrepancy',
-            ],
+        upload.refresh_from_db()
+        result = service.import_statement(upload, generation=generation)
+        _finalize_generation(
+            service,
+            upload,
+            generation,
+            result,
+            self.request.id or '',
         )
 
+        upload.refresh_from_db()
         logger.info(
             'bank_statement_task_completed',
             upload_id=upload_id,
@@ -149,25 +135,31 @@ def process_bank_statement_task(
         raise
 
     except StatementGenerationExpiredError:
-        # An old parse must not post against a cleaned upload generation.
-        logger.warning(
-            'bank_statement_generation_expired',
-            upload_id=upload_id,
-        )
-        return {
-            'income_count': upload.income_count,
-            'expense_count': upload.expense_count,
-            'skipped_count': upload.skipped_count,
-            'needs_transfer_count': upload.needs_transfer_count,
-            'total_count': 0,
-        }
+        # An old parse must not post against or rewrite another generation.
+        if service is not None and generation is not None:
+            outcome = service.resolve_expired_generation(
+                upload_id,
+                generation,
+                self.request.id or '',
+            )
+            logger.warning(
+                'bank_statement_generation_expired',
+                upload_id=upload_id,
+                outcome=outcome,
+            )
+        raise
 
     except BankStatementParseError as e:
         logger.exception(
             'bank_statement_parse_failed',
             upload_id=upload_id,
         )
-        _mark_upload_failed(upload_id, f'{_("Ошибка парсинга")}: {e!s}')
+        _mark_failure_unless_replaced(
+            service,
+            generation,
+            upload_id,
+            f'{_("Ошибка парсинга")}: {e!s}',
+        )
         raise
 
     except RETRYABLE_ERRORS as e:
@@ -176,7 +168,9 @@ def process_bank_statement_task(
             upload_id=upload_id,
         )
         if self.request.retries >= self.max_retries:
-            _mark_upload_failed(
+            _mark_failure_unless_replaced(
+                service,
+                generation,
                 upload_id,
                 f'{_("Непредвиденная ошибка")}: {e!s}',
             )
@@ -190,7 +184,12 @@ def process_bank_statement_task(
             'bank_statement_task_unexpected_error',
             upload_id=upload_id,
         )
-        _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
+        _mark_failure_unless_replaced(
+            service,
+            generation,
+            upload_id,
+            f'{_("Непредвиденная ошибка")}: {e!s}',
+        )
         raise
 
 
@@ -200,6 +199,66 @@ def _assert_account_importable(upload: BankStatementUpload) -> None:
         raise BankStatementParseError(
             _('Архивный счёт или счёт вклада недоступен для импорта.'),
         )
+
+
+def _start_generation(
+    service: Any,
+    upload: BankStatementUpload,
+    task_id: str,
+) -> tuple[Any, str]:
+    """Start a job only for the upload generation it captured."""
+    generation = service.capture_generation(upload)
+    state = service.start_upload(upload.pk, generation, task_id)
+    if state not in (GENERATION_BUSY, GENERATION_STARTED):
+        service.resolve_expired_generation(upload.pk, generation, task_id)
+        raise StatementGenerationExpiredError(state)
+    return generation, state
+
+
+def _finalize_generation(
+    service: Any,
+    upload: BankStatementUpload,
+    generation: Any,
+    result: Any,
+    task_id: str,
+) -> None:
+    """Finalize only while the parsed generation is still current."""
+    state = service.finalize_import(
+        upload,
+        generation,
+        closing_balance=result.closing_balance,
+    )
+    if state != GENERATION_CURRENT:
+        service.resolve_expired_generation(upload.pk, generation, task_id)
+        raise StatementGenerationExpiredError(state)
+
+
+def _mark_failure_unless_replaced(
+    service: Any,
+    generation: Any,
+    upload_id: int,
+    message: str,
+) -> None:
+    """Mark a failed job only while it still owns the current generation."""
+    if not _generation_replaced(service, generation, upload_id):
+        _mark_upload_failed(upload_id, message)
+
+
+def _generation_replaced(
+    service: Any,
+    generation: Any,
+    upload_id: int,
+) -> bool:
+    """Tell whether failure handling belongs to a replaced generation."""
+    if service is None or generation is None:
+        return False
+    try:
+        return bool(
+            service.generation_state_for(upload_id, generation)
+            == GENERATION_REPLACED,
+        )
+    except BankStatementUpload.DoesNotExist:
+        return True
 
 
 def _mark_upload_failed(upload_id: int, message: str) -> None:
@@ -214,31 +273,6 @@ def _mark_upload_failed(upload_id: int, message: str) -> None:
     upload.save(
         update_fields=[
             'status',
-            'failed_count',
-            'error_message',
-            'updated_at',
-        ],
-    )
-
-
-def _initialize_upload(
-    upload: BankStatementUpload,
-    task: shared_task,
-) -> None:
-    """Перевести запись загрузки в статус «обрабатывается».
-
-    Args:
-        upload: Экземпляр ``BankStatementUpload`` для инициализации.
-        task: Экземпляр Celery-задачи для получения ``request.id``.
-    """
-    upload.status = BankStatementUpload.Status.PROCESSING
-    upload.celery_task_id = task.request.id
-    upload.failed_count = 0
-    upload.error_message = ''
-    upload.save(
-        update_fields=[
-            'status',
-            'celery_task_id',
             'failed_count',
             'error_message',
             'updated_at',

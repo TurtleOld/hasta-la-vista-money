@@ -49,6 +49,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParser,
     RosDorBankRowKind,
 )
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+)
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 from hasta_la_vista_money.users.services.statement_identity import (
     IncomingStatementIdentity,
@@ -74,12 +77,23 @@ logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 
 
+GENERATION_CURRENT = 'current'
+GENERATION_EXPIRED = 'expired'
+GENERATION_REPLACED = 'replaced'
+GENERATION_BUSY = 'busy'
+GENERATION_STARTED = 'started'
+
+REUPLOAD_REQUIRED_MESSAGE = (
+    'Данные выписки истекли. Загрузите выписку повторно.'
+)
+
+
 class StatementGenerationExpiredError(Exception):
     """Parsed work belongs to a cleaned or replaced upload generation."""
 
 
 @dataclass(frozen=True)
-class _StatementGeneration:
+class StatementGeneration:
     """Upload generation captured before parsing the statement."""
 
     file_hash: str
@@ -174,11 +188,13 @@ class BankStatementImportService:
     def import_statement(
         self,
         upload: BankStatementUpload,
+        generation: StatementGeneration | None = None,
     ) -> StatementImportResult:
         """Разобрать PDF выписки и создать по нему финансовые движения.
 
         Args:
             upload: Запись загрузки с уже сохранённым PDF-файлом.
+            generation: Поколение, зафиксированное вызывающим до запуска.
 
         Returns:
             Итог прогона импорта.
@@ -191,7 +207,7 @@ class BankStatementImportService:
             upload_id=upload.pk,
             user_id=upload.user_id,
         )
-        generation = self._capture_generation(upload)
+        generation = generation or self.capture_generation(upload)
         parser = BankStatementParser(upload.pdf_file.path)
         parse_result = parser.parse()
         transactions = parse_result.transactions
@@ -202,10 +218,8 @@ class BankStatementImportService:
             upload,
             parse_result.bank_code,
             generation,
+            len(transactions),
         )
-
-        upload.total_transactions = len(transactions)
-        upload.save(update_fields=['total_transactions'])
 
         logger.info(
             'bank_statement_transactions_found',
@@ -257,11 +271,11 @@ class BankStatementImportService:
         )
 
     @staticmethod
-    def _capture_generation(
+    def capture_generation(
         upload: BankStatementUpload,
-    ) -> _StatementGeneration:
+    ) -> StatementGeneration:
         """Record the upload generation the parse is allowed to touch."""
-        return _StatementGeneration(
+        return StatementGeneration(
             file_hash=upload.file_hash,
             pdf_name=upload.pdf_file.name or '',
             expires_at=upload.expires_at,
@@ -269,24 +283,232 @@ class BankStatementImportService:
         )
 
     @staticmethod
-    def _assert_generation(
+    def generation_state(
         upload: BankStatementUpload,
-        generation: _StatementGeneration,
-    ) -> None:
-        """Reject parsed work that outlived its upload generation."""
+        generation: StatementGeneration,
+    ) -> str:
+        """Classify the upload against the generation captured before parse.
+
+        A cleanup keeps the file hash and deadline but clears the PDF and
+        sets the retention marker; that is the same generation expiring.
+        Any change to the hash, deadline or a renewed file is a replacement.
+        """
         if (
             upload.file_hash != generation.file_hash
-            or (upload.pdf_file.name or '') != generation.pdf_name
             or upload.expires_at != generation.expires_at
-            or upload.retention_cleaned_at != generation.retention_cleaned_at
-            or upload.expires_at <= timezone.now()
         ):
+            return_state = GENERATION_REPLACED
+        elif upload.retention_cleaned_at != generation.retention_cleaned_at:
+            if (
+                generation.retention_cleaned_at is None
+                and upload.retention_cleaned_at is not None
+                and not upload.pdf_file.name
+            ):
+                return_state = GENERATION_EXPIRED
+            else:
+                return_state = GENERATION_REPLACED
+        elif (upload.pdf_file.name or '') != generation.pdf_name:
+            if (
+                generation.pdf_name
+                and not upload.pdf_file.name
+                and upload.retention_cleaned_at is not None
+            ):
+                return_state = GENERATION_EXPIRED
+            else:
+                return_state = GENERATION_REPLACED
+        elif upload.expires_at <= timezone.now():
+            return_state = GENERATION_EXPIRED
+        else:
+            return_state = GENERATION_CURRENT
+        return return_state
+
+    @classmethod
+    def _assert_generation(
+        cls,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+    ) -> None:
+        """Reject parsed work that outlived its upload generation."""
+        if cls.generation_state(upload, generation) != GENERATION_CURRENT:
             raise StatementGenerationExpiredError('upload generation changed')
+
+    def start_upload(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str,
+    ) -> str:
+        """Move the upload to PROCESSING only for its current generation.
+
+        Returns ``started``, ``expired``, ``replaced`` or ``busy``. A foreign
+        active task id keeps its ownership; a cleaned/renewed generation is
+        never overwritten.
+        """
+        with transaction.atomic():
+            account_id = (
+                BankStatementUpload.objects.filter(pk=upload_id)
+                .values_list('account_id', flat=True)
+                .first()
+            )
+            if account_id is None:
+                return GENERATION_REPLACED
+            self.account_repository.get_by_ids_for_update({account_id})
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload_id,
+            )
+            state = self.generation_state(locked, generation)
+            if state != GENERATION_CURRENT:
+                return state
+            if (
+                locked.status == BankStatementUpload.Status.PROCESSING
+                and locked.celery_task_id
+                and locked.celery_task_id != task_id
+            ):
+                return GENERATION_BUSY
+            locked.status = BankStatementUpload.Status.PROCESSING
+            locked.celery_task_id = task_id
+            locked.failed_count = 0
+            locked.error_message = ''
+            locked.save(
+                update_fields=[
+                    'status',
+                    'celery_task_id',
+                    'failed_count',
+                    'error_message',
+                    'updated_at',
+                ],
+            )
+        return GENERATION_STARTED
+
+    def generation_state_for(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+    ) -> str:
+        """Read the current generation state under the account lock."""
+        with transaction.atomic():
+            account_id = (
+                BankStatementUpload.objects.filter(pk=upload_id)
+                .values_list('account_id', flat=True)
+                .first()
+            )
+            if account_id is None:
+                return GENERATION_REPLACED
+            self.account_repository.get_by_ids_for_update({account_id})
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload_id,
+            )
+            return self.generation_state(locked, generation)
+
+    def resolve_expired_generation(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str | None = None,
+    ) -> str:
+        """Record a truthful reupload terminal state for this generation.
+
+        A replaced generation is left completely untouched. An expired or
+        partially cleaned same generation becomes FAILED with a safe reason;
+        bank sums are never restored and already posted money is preserved.
+        Another task that already finished successfully keeps its state.
+        """
+        with transaction.atomic():
+            account_id = (
+                BankStatementUpload.objects.filter(pk=upload_id)
+                .values_list('account_id', flat=True)
+                .first()
+            )
+            if account_id is None:
+                return GENERATION_REPLACED
+            self.account_repository.get_by_ids_for_update({account_id})
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload_id,
+            )
+            state = self.generation_state(locked, generation)
+            if state == GENERATION_REPLACED:
+                return state
+            finished = {
+                BankStatementUpload.Status.COMPLETED,
+                BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+                BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            }
+            if (
+                task_id
+                and locked.celery_task_id
+                and locked.celery_task_id != task_id
+                and locked.status in finished
+            ):
+                return state
+            locked.status = BankStatementUpload.Status.FAILED
+            locked.failed_count = 1
+            locked.error_message = str(REUPLOAD_REQUIRED_MESSAGE)
+            locked.save(
+                update_fields=[
+                    'status',
+                    'failed_count',
+                    'error_message',
+                    'updated_at',
+                ],
+            )
+            return state
+
+    def finalize_import(
+        self,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+        *,
+        closing_balance: Decimal | None,
+    ) -> str:
+        """Write status and bank sums only for the parsed generation.
+
+        The account and upload are locked in the agreed order and the
+        generation is checked again. A cleanup between the last row and
+        this save leaves the cleaned fields untouched.
+        """
+        with transaction.atomic():
+            accounts = self.account_repository.get_by_ids_for_update(
+                {upload.account_id},
+            )
+            account = accounts[upload.account_id]
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload.pk,
+            )
+            state = self.generation_state(locked, generation)
+            if state != GENERATION_CURRENT:
+                return state
+            awaiting_markup = BankStatementRow.objects.filter(
+                upload=locked,
+                decision__in=[
+                    BankStatementRow.Decision.AWAITING_MARKUP,
+                    BankStatementRow.Decision.DEFERRED,
+                ],
+            ).exists()
+            has_pending = BankStatementRow.objects.filter(
+                upload=locked,
+                decision=BankStatementRow.Decision.PENDING,
+            ).exists()
+            fields = ['progress', 'status', 'updated_at']
+            if closing_balance is not None:
+                locked.statement_closing_balance = closing_balance
+                fields.append('statement_closing_balance')
+            BankStatementReconciliationService.refresh_outcome_counts(locked)
+            if closing_balance is not None and not awaiting_markup:
+                locked.account_balance_after = account.balance
+                locked.balance_discrepancy = closing_balance - account.balance
+                fields += ['account_balance_after', 'balance_discrepancy']
+            locked.progress = 100
+            if awaiting_markup or has_pending:
+                locked.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+            else:
+                locked.status = BankStatementUpload.Status.COMPLETED
+            locked.save(update_fields=list(dict.fromkeys(fields)))
+            return GENERATION_CURRENT
 
     def _assert_row_generation(
         self,
         upload: BankStatementUpload,
-        generation: _StatementGeneration,
+        generation: StatementGeneration,
         source_row_position: int,
     ) -> None:
         """Reject a row whose stored details were cleaned while parsing."""
@@ -302,13 +524,14 @@ class BankStatementImportService:
         self,
         upload: BankStatementUpload,
         parsed_bank_code: str | None,
-        generation: _StatementGeneration,
+        generation: StatementGeneration,
+        total_transactions: int,
     ) -> str | None:
         """Freeze the parser's bank snapshot on the upload under its lock.
 
         The account is locked before the upload, matching the agreed lock
         order. A different parser result never overwrites the snapshot and
-        a cleaned generation never receives new provenance.
+        a cleaned generation never receives new provenance or progress.
 
         Raises:
             BankStatementParseError: The parser contradicts the snapshot.
@@ -327,7 +550,10 @@ class BankStatementImportService:
                     locked,
                     parsed_bank_code,
                 )
+                locked.total_transactions = total_transactions
+                locked.save(update_fields=['total_transactions'])
                 upload.source_bank_code = locked.source_bank_code
+                upload.total_transactions = total_transactions
                 return bank_code
         except StatementIdentityConflictError as error:
             raise BankStatementParseError(
@@ -344,7 +570,7 @@ class BankStatementImportService:
         transactions: list[dict[str, Any]],
         existing_categories: list[str],
         bank_code: str | None,
-        generation: _StatementGeneration,
+        generation: StatementGeneration,
     ) -> tuple[int, int, int, int]:
         """Создать транзакции из разобранных записей выписки.
 
@@ -676,7 +902,7 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
         bank_code: str | None,
-        generation: _StatementGeneration,
+        generation: StatementGeneration,
     ) -> None:
         """Save rows awaiting user markup; none of them is posted.
 
@@ -697,17 +923,20 @@ class BankStatementImportService:
                 transactions,
                 bank_code,
             )
-        upload.processed_transactions = len(transactions)
-        upload.skipped_count = len(transactions) - created
-        upload.progress = 100
-        upload.save(
-            update_fields=[
-                'processed_transactions',
-                'skipped_count',
-                'progress',
-                'updated_at',
-            ],
-        )
+            locked_upload.processed_transactions = len(transactions)
+            locked_upload.skipped_count = len(transactions) - created
+            locked_upload.progress = 100
+            locked_upload.save(
+                update_fields=[
+                    'processed_transactions',
+                    'skipped_count',
+                    'progress',
+                    'updated_at',
+                ],
+            )
+        upload.processed_transactions = locked_upload.processed_transactions
+        upload.skipped_count = locked_upload.skipped_count
+        upload.progress = locked_upload.progress
 
     def _create_markup_rows(
         self,

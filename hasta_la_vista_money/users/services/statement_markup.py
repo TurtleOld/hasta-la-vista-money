@@ -473,19 +473,34 @@ class StatementMarkupService:
         self._remember(row, upload.user, row.transaction)
         row.decision = BankStatementRow.Decision.NEW
 
+    @transaction.atomic
     def _finalize(self, upload: BankStatementUpload) -> None:
-        BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if self.pending_rows(upload).exists():
+        account = Account.objects.select_for_update().get(pk=upload.account_id)
+        locked = BankStatementUpload.objects.select_for_update().get(
+            pk=upload.pk,
+        )
+        BankStatementReconciliationService.refresh_outcome_counts(locked)
+        if self.pending_rows(locked).exists():
             return
-        fields: list[str] = []
-        closing = upload.statement_closing_balance
+        if (
+            locked.retention_cleaned_at is not None
+            or locked.expires_at <= timezone.now()
+        ):
+            # Cleanup removed the bank snapshot: never restore its sums.
+            upload.statement_closing_balance = locked.statement_closing_balance
+            upload.account_balance_after = locked.account_balance_after
+            upload.balance_discrepancy = locked.balance_discrepancy
+            return
+        closing = locked.statement_closing_balance
         if closing is not None:
-            upload.account.refresh_from_db(fields=['balance'])
-            upload.account_balance_after = upload.account.balance
-            upload.balance_discrepancy = closing - upload.account.balance
-            fields += ['account_balance_after', 'balance_discrepancy']
-        if fields:
-            upload.save(update_fields=fields)
+            locked.account_balance_after = account.balance
+            locked.balance_discrepancy = closing - account.balance
+            locked.save(
+                update_fields=[
+                    'account_balance_after',
+                    'balance_discrepancy',
+                ],
+            )
 
     def _create_movement(
         self,
