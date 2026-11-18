@@ -1375,38 +1375,92 @@ class _RosDorBankParser(BaseBankStatementParser):
         columns: dict[str, _PdfLine],
     ) -> list[_RosDorBankRow]:
         rows: list[_RosDorBankRow] = []
+        # The row whose text block is open after its ``БИК:`` anchor line.
         current: _RosDorBankRow | None = None
-        # A № or amount on the baseline of the next БИК line sorts before
-        # it, so it opens that row ahead of time.
-        upcoming: _RosDorBankRow | None = None
+        # A row opened by a leading № or amount whose anchor is still ahead;
+        # a row that never gets an anchor keeps its own fields and text.
+        pending: _RosDorBankRow | None = None
         day: date_type | None = None
         for line in lines:
             if line.text in ROSDORBANK_TABLE_HEADERS:
                 continue
             if self._date_pattern.fullmatch(line.text):
-                day = self._parse_day(line.text)
+                day = self._parse_table_day(line.text)
                 continue
             cell = self._cell_kind(line, columns)
             if cell is not None:
-                row = current
-                if (
-                    row is None
-                    or (row.amount if cell == 'amount' else row.number)
-                    is not None
-                ):
-                    upcoming = upcoming or self._open_row(rows, day)
-                    row = upcoming
-                self._fill_cell(row, line, cell, columns)
+                current, pending = self._place_cell(
+                    rows,
+                    current,
+                    pending,
+                    line,
+                    cell,
+                    columns=columns,
+                    day=day,
+                )
                 continue
             if line.text.startswith(ROSDORBANK_TOTAL_LABELS):
                 current = None
                 continue
-            if line.text.startswith('БИК:'):
-                current = upcoming or self._open_row(rows, day)
-                upcoming = None
-            if current is not None:
-                current.lines.append(line.text)
+            current, pending = self._append_text(
+                rows,
+                current,
+                pending,
+                line.text,
+                day,
+            )
         return rows
+
+    def _place_cell(
+        self,
+        rows: list[_RosDorBankRow],
+        current: _RosDorBankRow | None,
+        pending: _RosDorBankRow | None,
+        line: _PdfLine,
+        cell: str,
+        *,
+        columns: dict[str, _PdfLine],
+        day: date_type | None,
+    ) -> tuple[_RosDorBankRow | None, _RosDorBankRow | None]:
+        if cell == 'number':
+            if current is not None and current.number is None:
+                current.number = line.text
+                return current, pending
+            if pending is None or pending.number is not None:
+                # A row without an anchor never gets one, so the next №
+                # belongs to a new row and never overwrites the old one.
+                pending = self._open_row(rows, day)
+            pending.number = line.text
+            return current, pending
+        if pending is not None and pending.amount is None:
+            row = pending
+        elif current is not None and current.amount is None:
+            row = current
+        else:
+            row = self._open_row(rows, day)
+            pending = row
+        self._fill_cell(row, line, cell, columns)
+        return current, pending
+
+    def _append_text(
+        self,
+        rows: list[_RosDorBankRow],
+        current: _RosDorBankRow | None,
+        pending: _RosDorBankRow | None,
+        text: str,
+        day: date_type | None,
+    ) -> tuple[_RosDorBankRow | None, _RosDorBankRow | None]:
+        if text.startswith('БИК:'):
+            current = (
+                pending
+                if pending is not None and not pending.lines
+                else self._open_row(rows, day)
+            )
+            pending = None
+        target = pending or current
+        if target is not None:
+            target.lines.append(text)
+        return current, pending
 
     def _cell_kind(
         self,
@@ -1458,6 +1512,14 @@ class _RosDorBankParser(BaseBankStatementParser):
             .date()
         )
 
+    @classmethod
+    def _parse_table_day(cls, text: str) -> date_type | None:
+        """Broken day header: rows below it stay unknown, not the file."""
+        try:
+            return cls._parse_day(text)
+        except ValueError:
+            return None
+
     @staticmethod
     def _open_row(
         rows: list[_RosDorBankRow],
@@ -1469,6 +1531,9 @@ class _RosDorBankParser(BaseBankStatementParser):
         return row
 
     def _build_transaction(self, row: _RosDorBankRow) -> dict[str, Any]:
+        # A row without its ``БИК:`` anchor keeps its text but is not an
+        # operation: the anchor and counterparty account are missing.
+        has_anchor = bool(row.lines) and row.lines[0].startswith('БИК:')
         error_code = ''
         if row.date is None:
             error_code = 'missing_date'
@@ -1478,10 +1543,12 @@ class _RosDorBankParser(BaseBankStatementParser):
             error_code = 'missing_amount'
         elif row.is_credit is None:
             error_code = 'missing_direction'
-        elif not row.lines:
+        elif not has_anchor:
             error_code = 'missing_operation'
 
-        bik_line, *body_lines = row.lines or ['']
+        bik_line, body_lines = (
+            (row.lines[0], row.lines[1:]) if has_anchor else ('', row.lines)
+        )
         account = re.search(r'р/с: (\d{20})', bik_line)
         body = ' '.join(body_lines)
         marker = self._operation_pattern.search(body)
@@ -1494,9 +1561,16 @@ class _RosDorBankParser(BaseBankStatementParser):
             operation = ' '.join(body_lines[1:])
         kind, description, merchant_key = self._classify(party, operation)
 
+        # Amount and direction are independent: an unknown direction keeps
+        # the known absolute amount, and vice versa.
+        transaction_type: str | None = None
+        if row.is_credit is not None:
+            transaction_type = 'income' if row.is_credit else 'expense'
         amount: Decimal | None = None
-        if row.amount is not None and row.is_credit is not None:
-            amount = row.amount if row.is_credit else -row.amount
+        if row.amount is not None:
+            amount = (
+                -row.amount if transaction_type == 'expense' else row.amount
+            )
         statement_date = (
             datetime.combine(
                 row.date,
@@ -1511,6 +1585,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             'date': statement_date,
             'date_precision': 'day' if row.date is not None else 'unknown',
             'amount': amount,
+            'transaction_type': transaction_type,
             'description': description,
             'source_ref': (
                 f'{row.number}-{row.date:%d.%m.%Y}'

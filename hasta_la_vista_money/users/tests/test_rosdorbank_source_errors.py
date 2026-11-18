@@ -27,6 +27,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
     _PdfLine,
     _RosDorBankParser,
+    _RosDorBankRow,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
@@ -59,6 +60,7 @@ def _lines(*blocks: str) -> list[_PdfLine]:
 
     Each block starts with ``date=DD.MM.YYYY`` or a row given as
     ``number|amount|credit|body``; ``-`` means the field is absent.
+    A ``nobik:`` prefix builds the same row without its ``БИК:`` line.
     """
     result = [_line(0.0, HEADER)]
     result.extend(
@@ -82,11 +84,15 @@ def _lines(*blocks: str) -> list[_PdfLine]:
             result.append(_line(top, amount, DEBIT_X))
             top += 10
             continue
-        number, amount, credit, body = block.split('|')
+        has_bik = not block.startswith('nobik:')
+        number, amount, credit, body = block.removeprefix('nobik:').split('|')
         if number != '-':
             result.append(_line(top, number, NUMBER_X))
         top += 2
-        result.append(_line(top, 'БИК: 044525000 р/с: 40817810000000000001'))
+        if has_bik:
+            result.append(
+                _line(top, 'БИК: 044525000 р/с: 40817810000000000001'),
+            )
         for body_line in body.split('~'):
             top += 2
             result.append(_line(top, body_line))
@@ -107,6 +113,10 @@ class _SyntheticRosDorParser(_RosDorBankParser):
 
     def _read_lines(self) -> list[_PdfLine]:
         return self._synthetic_lines
+
+
+def _body(label: str) -> str:
+    return f'ИНН: 7700000000~Оплата товаров~Владелец устройства: {label}'
 
 
 def _parsed(*blocks: str) -> StatementParseResult:
@@ -202,6 +212,121 @@ class RosDorBankSourcePositionTest(SimpleTestCase):
             [row['row_position'] for row in result.transactions],
             [0, 1],
         )
+
+    def test_operation_without_bik_keeps_its_own_fields(self) -> None:
+        result = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP SHOP")}',
+            f'nobik:2|80.00|0|{_body("PMP NO BIK")}',
+            f'3|120.00|0|{_body("PMP OTHER")}',
+        )
+
+        self.assertEqual(len(result.transactions), 3)
+        self.assertEqual(
+            [row['row_position'] for row in result.transactions],
+            [0, 1, 2],
+        )
+        first, broken, last = result.transactions
+        self.assertEqual(first['source_ref'], '1-01.03.2026')
+        self.assertEqual(first['amount'], Decimal('-350.00'))
+        self.assertEqual(first['description'], 'PMP SHOP')
+        self.assertEqual(first['parse_error_code'], '')
+        self.assertEqual(broken['source_ref'], '2-01.03.2026')
+        self.assertEqual(broken['amount'], Decimal('-80.00'))
+        self.assertEqual(broken['description'], 'PMP NO BIK')
+        self.assertEqual(broken['parse_error_code'], 'missing_operation')
+        self.assertEqual(last['source_ref'], '3-01.03.2026')
+        self.assertEqual(last['amount'], Decimal('-120.00'))
+        self.assertEqual(last['description'], 'PMP OTHER')
+        self.assertEqual(last['parse_error_code'], '')
+
+    def test_missing_bik_fix_keeps_positions_and_neighbours(self) -> None:
+        broken = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP SHOP")}',
+            f'nobik:2|80.00|0|{_body("PMP NO BIK")}',
+            f'3|120.00|0|{_body("PMP OTHER")}',
+        )
+        fixed = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP SHOP")}',
+            f'2|80.00|0|{_body("PMP NO BIK")}',
+            f'3|120.00|0|{_body("PMP OTHER")}',
+        )
+
+        self.assertEqual(
+            [row['row_position'] for row in fixed.transactions],
+            [row['row_position'] for row in broken.transactions],
+        )
+        self.assertEqual(fixed.transactions[1]['parse_error_code'], '')
+        for index in (0, 2):
+            self.assertEqual(
+                fixed.transactions[index],
+                broken.transactions[index],
+            )
+
+    def test_invalid_table_day_leaves_rows_unknown_until_next_day(self) -> None:
+        result = _parsed(
+            'date=31.02.2026',
+            f'1|100.00|0|{_body("PMP BAD DAY")}',
+            'date=02.03.2026',
+            f'2|200.00|0|{_body("PMP GOOD DAY")}',
+        )
+
+        self.assertEqual(len(result.transactions), 2)
+        broken, fixed = result.transactions
+        self.assertIsNone(broken['date'])
+        self.assertEqual(broken['date_precision'], 'unknown')
+        self.assertEqual(broken['amount'], Decimal('-100.00'))
+        self.assertEqual(broken['description'], 'PMP BAD DAY')
+        self.assertEqual(broken['parse_error_code'], 'missing_date')
+        self.assertEqual(fixed['date'].date(), date(2026, 3, 2))
+        self.assertEqual(fixed['date_precision'], 'day')
+        self.assertEqual(fixed['amount'], Decimal('-200.00'))
+        self.assertEqual(fixed['parse_error_code'], '')
+
+    def test_valid_rows_expose_explicit_transaction_type(self) -> None:
+        result = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP SHOP")}',
+            f'2|120.00|1|{_body("PMP REFUND")}',
+        )
+
+        expense, income = result.transactions
+        self.assertEqual(expense['amount'], Decimal('-350.00'))
+        self.assertEqual(expense['transaction_type'], 'expense')
+        self.assertEqual(income['amount'], Decimal('120.00'))
+        self.assertEqual(income['transaction_type'], 'income')
+
+    def test_known_amount_with_unknown_direction_is_not_lost(self) -> None:
+        transaction = _SyntheticRosDorParser([])._build_transaction(
+            _RosDorBankRow(
+                date=date(2026, 3, 1),
+                lines=['БИК: 044525000 р/с: 40817810000000000001', 'PMP SHOP'],
+                number='1',
+                amount=Decimal('80.00'),
+                position=0,
+            ),
+        )
+
+        self.assertEqual(transaction['amount'], Decimal('80.00'))
+        self.assertIsNone(transaction['transaction_type'])
+        self.assertEqual(transaction['parse_error_code'], 'missing_direction')
+
+    def test_known_direction_without_amount_is_kept(self) -> None:
+        transaction = _SyntheticRosDorParser([])._build_transaction(
+            _RosDorBankRow(
+                date=date(2026, 3, 1),
+                lines=['БИК: 044525000 р/с: 40817810000000000001', 'PMP SHOP'],
+                number='1',
+                is_credit=False,
+                position=0,
+            ),
+        )
+
+        self.assertIsNone(transaction['amount'])
+        self.assertEqual(transaction['transaction_type'], 'expense')
+        self.assertEqual(transaction['parse_error_code'], 'missing_amount')
 
 
 def _synthetic_result(
