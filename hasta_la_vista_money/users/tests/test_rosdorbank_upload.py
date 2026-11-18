@@ -14,11 +14,16 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
+    fingerprint,
+    statement_identity_settings,
+)
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'rosdorbank_statement.pdf'
 STATEMENT_ACCOUNT_NUMBER = '40817810000000000001'
 
 
+@statement_identity_settings
 class RosDorBankUploadTest(TestCase):
     fixtures: list[str] = ['users.yaml']
 
@@ -66,7 +71,10 @@ class RosDorBankUploadTest(TestCase):
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         )
         self.assertEqual(rows.count(), 8)
-        card = rows.get(source_ref='101-01.03.2026')
+        card = rows.get(amount=Decimal('350.00'))
+        self.assertIsNone(card.source_ref)
+        self.assertTrue(card.source_ref_hash)
+        self.assertFalse(card.source_identity_trusted)
         self.assertEqual(
             (
                 card.kind,
@@ -90,38 +98,40 @@ class RosDorBankUploadTest(TestCase):
         upload = self._upload()
 
         self.assertEqual(
-            set(
-                BankStatementRow.objects.filter(
-                    upload=upload,
-                    decision=BankStatementRow.Decision.MUTUAL_CANCEL,
-                ).values_list('source_ref', flat=True),
-            ),
-            {'102-01.03.2026', '103-01.03.2026'},
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.MUTUAL_CANCEL,
+            ).count(),
+            2,
+        )
+        self.assertFalse(
+            BankStatementRow.objects.filter(upload=upload)
+            .exclude(source_ref=None)
+            .exists(),
         )
 
-    def test_overlapping_upload_skips_known_rows(self) -> None:
+    def test_overlapping_upload_keeps_rows_for_manual_decision(self) -> None:
         first = self._upload()
         BankStatementRow.objects.filter(
             upload=first,
-            source_ref='101-01.03.2026',
+            source_row_position=0,
         ).update(decision=BankStatementRow.Decision.NEW)
-        BankStatementRow.objects.filter(
-            upload=first,
-            source_ref='110-03.03.2026',
-        ).update(decision=BankStatementRow.Decision.EXPIRED)
 
         second = self._upload()
 
+        second_rows = BankStatementRow.objects.filter(upload=second)
+        self.assertEqual(second_rows.count(), 10)
+        self.assertEqual(second.skipped_count, 0)
+        self.assertFalse(second_rows.exclude(source_ref=None).exists())
         self.assertEqual(
-            list(
-                BankStatementRow.objects.filter(upload=second).values_list(
-                    'source_ref',
+            set(second_rows.values_list('source_ref_hash', flat=True)),
+            set(
+                BankStatementRow.objects.filter(upload=first).values_list(
+                    'source_ref_hash',
                     flat=True,
                 ),
             ),
-            ['110-03.03.2026'],
         )
-        self.assertEqual(second.skipped_count, 9)
 
     def test_number_from_header_is_assigned_to_selected_account(self) -> None:
         self._upload()
@@ -175,17 +185,28 @@ class RosDorBankUploadTest(TestCase):
         self.assertFalse(rows.exclude(source_ref=None).exists())
         self.assertFalse(rows.filter(data_cleaned_at__isnull=True).exists())
 
-    def test_cancel_of_debit_from_earlier_upload_awaits_markup(self) -> None:
+    def test_cancel_of_debit_from_earlier_upload_stays_local_pair(self) -> None:
         first = self._upload()
-        first.statement_rows.exclude(source_ref='102-01.03.2026').delete()
+        first.statement_rows.exclude(
+            source_ref_hash=fingerprint(
+                'rosdorbank',
+                self.account.pk,
+                '102-01.03.2026',
+            ).digest,
+        ).delete()
         first.statement_rows.update(
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
         second = self._upload()
 
-        cancel = second.statement_rows.get(source_ref='103-01.03.2026')
+        # The overlapping file keeps both representations, so the cancel
+        # pairs with its own debit as a mutual cancel and posts nothing.
+        cancel = second.statement_rows.get(kind='cancel')
         self.assertEqual(
             cancel.decision,
-            BankStatementRow.Decision.AWAITING_MARKUP,
+            BankStatementRow.Decision.MUTUAL_CANCEL,
+        )
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
         )

@@ -23,8 +23,13 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupConflictError,
 )
+from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
+    fingerprint,
+    statement_identity_settings,
+)
 
 
+@statement_identity_settings
 class StatementMarkupFixture(TestCase):
     fixtures: list[str] = ['users.yaml']
 
@@ -51,6 +56,11 @@ class StatementMarkupFixture(TestCase):
         kind: str = 'card',
         amount: str = '100.00',
     ) -> BankStatementRow:
+        identity = fingerprint(
+            'rosdorbank',
+            self.account.pk,
+            f'{position}-01.03.2026',
+        )
         return BankStatementRow.objects.create(
             upload=self.upload,
             transaction_type=transaction_type,
@@ -62,7 +72,11 @@ class StatementMarkupFixture(TestCase):
             ),
             amount=Decimal(amount),
             description='ПЯТЁРОЧКА',
-            source_ref=f'{position}-01.03.2026',
+            source_ref=None,
+            source_ref_hash=identity.digest,
+            source_ref_key_id=identity.key_id,
+            source_ref_version=identity.version,
+            source_identity_trusted=False,
             source_row_position=position,
             kind=kind,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
@@ -72,6 +86,7 @@ class StatementMarkupFixture(TestCase):
         return Category.objects.create(user=self.user, name=name, type=kind)
 
 
+@statement_identity_settings
 class StatementMarkupTest(StatementMarkupFixture):
     def test_post_expense_moves_balance_and_links_row(self) -> None:
         row = self._row(1)
@@ -87,7 +102,15 @@ class StatementMarkupTest(StatementMarkupFixture):
         if movement is None:
             self.fail('row is not linked to a movement')
         self.assertEqual(movement.category, category)
-        self.assertEqual(movement.source_ref, '1-01.03.2026')
+        self.assertEqual(
+            movement.source_ref_hash,
+            fingerprint(
+                'rosdorbank',
+                self.account.pk,
+                '1-01.03.2026',
+            ).digest,
+        )
+        self.assertIsNone(movement.source_ref)
         local = timezone.localtime(movement.date)
         self.assertEqual(
             local.date(),
@@ -332,6 +355,7 @@ class StatementMarkupTest(StatementMarkupFixture):
 OWN_NUMBER = '40817810000000000001'
 
 
+@statement_identity_settings
 class StatementOwnTransferTest(StatementMarkupFixture):
     def setUp(self) -> None:
         super().setUp()
@@ -530,6 +554,7 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         self.assertEqual(row.decision, BankStatementRow.Decision.TRANSFERRED)
 
 
+@statement_identity_settings
 class StatementMarkupViewTest(StatementMarkupFixture):
     def setUp(self) -> None:
         super().setUp()
@@ -755,6 +780,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         )
 
 
+@statement_identity_settings
 class StatementMarkupCategoryModalTest(StatementMarkupFixture):
     def setUp(self) -> None:
         super().setUp()
@@ -816,6 +842,7 @@ class StatementMarkupCategoryModalTest(StatementMarkupFixture):
         )
 
 
+@statement_identity_settings
 class RememberedMerchantCategoryTest(StatementMarkupFixture):
     def _keyed(
         self,
@@ -1030,6 +1057,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
         self.assertEqual(response.status_code, 404)
 
 
+@statement_identity_settings
 class StatementMarkupRemindersTest(StatementMarkupFixture):
     def setUp(self) -> None:
         super().setUp()
@@ -1120,6 +1148,7 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         self.assertEqual(self.service.pending_summary(999999), (0, None))
 
 
+@statement_identity_settings
 class DashboardMarkupReminderTest(StatementMarkupFixture):
     def setUp(self) -> None:
         super().setUp()
@@ -1156,6 +1185,7 @@ class DashboardMarkupReminderTest(StatementMarkupFixture):
         self.assertNotContains(response, 'ждут разметки')
 
 
+@statement_identity_settings
 class StatementBulkMarkupTest(StatementMarkupFixture):
     def test_posts_all_rows_in_one_audit_operation(self) -> None:
         rows = [self._row(1), self._row(2)]

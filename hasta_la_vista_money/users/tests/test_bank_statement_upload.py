@@ -60,11 +60,16 @@ from hasta_la_vista_money.users.services.bank_statement_retention import (
     BankStatementRetentionService,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
+    fingerprint,
+    statement_identity_settings,
+)
 
 if TYPE_CHECKING:
     from django.http import HttpResponseRedirect
 
 
+@statement_identity_settings
 class TestBankStatementUploadView(TestCase):
     """Test cases for bank statement upload view."""
 
@@ -280,6 +285,7 @@ class TestBankStatementUploadView(TestCase):
         self.assertFalse(response.context.get('show_progress', False))
 
 
+@statement_identity_settings
 class TestBankStatementUploadStatusView(TestCase):
     """Test cases for bank statement upload status API."""
 
@@ -544,6 +550,7 @@ class TestBankStatementUploadStatusView(TestCase):
         self.assertIsNone(data['balance_discrepancy'])
 
 
+@statement_identity_settings
 class TestBankStatementReconciliationView(TestCase):
     fixtures: list[str] = ['users.yaml']
 
@@ -889,10 +896,18 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(Transaction.objects.count(), 2)
 
     def test_bulk_new_continues_after_one_database_error(self) -> None:
-        self.candidate.source_ref = 'duplicate-source'
-        self.candidate.save(update_fields=['source_ref'])
-        self.row.source_ref = 'duplicate-source'
-        self.row.save(update_fields=['source_ref'])
+        self.candidate.source_ref_hash = 'a' * 64
+        self.candidate.source_identity_trusted = True
+        self.candidate.source_ref_key_id = 'test-key-1'
+        self.candidate.save(
+            update_fields=[
+                'source_ref_hash',
+                'source_identity_trusted',
+                'source_ref_key_id',
+            ],
+        )
+        self.row.source_identity_trusted = True
+        self.row.save(update_fields=['source_identity_trusted'])
         successful = BankStatementRow.objects.create(
             upload=self.upload,
             transaction_type=TransactionType.EXPENSE,
@@ -901,7 +916,9 @@ class TestBankStatementReconciliationView(TestCase):
             description='Успешная строка',
             candidate_description='Кандидат',
             suggested_category='Прочее',
-            source_ref='unique-source',
+            source_ref_hash='b' * 64,
+            source_ref_key_id='test-key-1',
+            source_identity_trusted=True,
             source_row_position=1,
         )
 
@@ -1585,6 +1602,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
 
 
+@statement_identity_settings
 class TestBankStatementUploadHistory(TestCase):
     fixtures: list[str] = ['users.yaml']
 
@@ -1729,6 +1747,7 @@ class TestBankStatementUploadHistory(TestCase):
         self.assertContains(first, '?page=2')
 
 
+@statement_identity_settings
 class TestBankStatementParser(TestCase):
     """Test cases for bank statement parser."""
 
@@ -1797,6 +1816,7 @@ class TestBankStatementParser(TestCase):
             pdf_path.unlink()
 
 
+@statement_identity_settings
 class TestProcessBankStatementTask(TestCase):
     """Test cases for Celery task processing bank statements."""
 
@@ -1992,6 +2012,7 @@ class TestProcessBankStatementTask(TestCase):
         )
 
 
+@statement_identity_settings
 class TestBankStatementUploadModel(TestCase):
     """Test cases for BankStatementUpload model."""
 
@@ -2111,6 +2132,7 @@ class TestBankStatementUploadModel(TestCase):
         self.assertEqual(upload.celery_task_id, 'abc-123-def')
 
 
+@statement_identity_settings
 class TestBankStatementParserMethods(TestCase):
     """Test cases for BankStatementParser individual methods."""
 
@@ -2311,6 +2333,7 @@ class TestBankStatementParserMethods(TestCase):
             pdf_path.unlink()
 
 
+@statement_identity_settings
 class TestBankStatementFormValidation(TestCase):
     """Test cases for BankStatementUploadForm validation."""
 
@@ -2413,6 +2436,7 @@ class TestBankStatementFormValidation(TestCase):
         self.assertIn('account', form.errors)
 
 
+@statement_identity_settings
 class TestBankStatementIntegration(TestCase):
     """Integration tests for bank statement processing."""
 
@@ -2495,6 +2519,7 @@ class TestBankStatementIntegration(TestCase):
         self.assertTrue(category.name.startswith('AAAAA'))
 
 
+@statement_identity_settings
 class TestBankStatementParserAdvanced(TestCase):
     """Advanced test cases for BankStatementParser methods."""
 
@@ -3046,6 +3071,7 @@ class TestBankStatementParserAdvanced(TestCase):
             pdf_path.unlink()
 
 
+@statement_identity_settings
 class TestBankStatementProcessIntegration(TestCase):
     """Integration tests for the bank statement import seam.
 
@@ -3461,6 +3487,7 @@ class TestBankStatementProcessIntegration(TestCase):
         self.assertEqual(second['income_count'], 0)
 
 
+@statement_identity_settings
 class TestBankStatementEdgeCases(TestCase):
     """Edge case tests for bank statement processing."""
 
@@ -3651,6 +3678,7 @@ class TestBankStatementEdgeCases(TestCase):
             return Path(temp_file.name)
 
 
+@statement_identity_settings
 class TestBankDetection(TestCase):
     """Test auto-detection of bank type from PDF text content."""
 
@@ -3773,6 +3801,7 @@ class TestBankDetection(TestCase):
             pdf_path.unlink()
 
 
+@statement_identity_settings
 class TestRaiffeisenBankParser(TestCase):
     """Unit tests for the Raiffeisen-specific amount extraction."""
 
@@ -3881,6 +3910,7 @@ class TestRaiffeisenBankParser(TestCase):
         self.assertEqual(amount, Decimal('-37177.01'))
 
 
+@statement_identity_settings
 class TestSberbankParser(TestCase):
     """Unit tests for the Sberbank credit card statement parser."""
 
@@ -4178,6 +4208,7 @@ class TestSberbankParser(TestCase):
         self.assertIsNone(transactions[0]['source_ref'])
 
 
+@statement_identity_settings
 class TestStatementParseResult(TestCase):
     """Тест структуры результата парсинга."""
 
@@ -4186,6 +4217,7 @@ class TestStatementParseResult(TestCase):
             transactions=[],
             closing_balance=Decimal('12345.67'),
             closing_balance_date=None,
+            bank_code='sberbank',
         )
         self.assertEqual(result.transactions, [])
         self.assertEqual(result.closing_balance, Decimal('12345.67'))
@@ -4216,6 +4248,7 @@ class TestStatementParseResult(TestCase):
             Path(path).unlink(missing_ok=True)
 
 
+@statement_identity_settings
 class TestProcessBankStatementTaskIntegration(TestCase):
     """Интеграционные тесты задачи Celery с classifier и полями сверки."""
 
@@ -4258,6 +4291,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                 },
             ],
             closing_balance=Decimal('9500.00'),
+            bank_code='sberbank',
         )
         mock_parser_cls.return_value = mock_parser
 
@@ -4313,6 +4347,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                 }
                 for i in range(3)
             ],
+            bank_code='sberbank',
         )
         mock_parser_cls.return_value = mock_parser
 
@@ -4372,6 +4407,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'dup-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         mock_parser_cls.return_value = mock_parser
         upload = BankStatementUpload.objects.create(
@@ -4411,6 +4447,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         mock_parser.parse.return_value = StatementParseResult(
             transactions=[],
             closing_balance=Decimal('9000.00'),
+            bank_code='sberbank',
         )
         mock_parser_cls.return_value = mock_parser
 
@@ -4476,6 +4513,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'statement-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4546,6 +4584,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'coffee-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4594,6 +4633,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'new-coffee-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4627,6 +4667,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             name='Продукты',
             type=TransactionType.EXPENSE,
         )
+        duplicate = fingerprint('sberbank', self.account.pk, 'same-ref')
         Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -4634,7 +4675,11 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             type=TransactionType.EXPENSE,
             amount=Decimal('75.00'),
             date=transaction_date,
-            source_ref='same-ref',
+            source_ref=None,
+            source_ref_hash=duplicate.digest,
+            source_ref_key_id=duplicate.key_id,
+            source_ref_version=duplicate.version,
+            source_identity_trusted=True,
         )
         classifier = MagicMock()
         ApplicationContainer.users.category_classifier.override(classifier)
@@ -4650,6 +4695,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'same-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4711,6 +4757,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'different-movement',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4782,6 +4829,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'ambiguous-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4859,6 +4907,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'ranked-ref',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4919,6 +4968,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'clear-row',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -4979,6 +5029,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'row_position': 1,
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -5024,6 +5075,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'source_ref': 'clear-only',
                 },
             ],
+            bank_code='sberbank',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -5042,6 +5094,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(self.account.balance, Decimal('9750.00'))
 
 
+@statement_identity_settings
 class TestOzonBankStatement(TestCase):
     """Tests for the Ozon Bank cash-flow statement format."""
 
@@ -5342,6 +5395,7 @@ class TestOzonBankStatement(TestCase):
                     'source': 'ozon',
                 },
             ],
+            bank_code='ozon',
         )
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -5361,6 +5415,7 @@ class TestOzonBankStatement(TestCase):
         )
 
 
+@statement_identity_settings
 class TestBankStatementImportReliability(TestCase):
     """Import must survive worker loss, retries and bank-truth balances."""
 

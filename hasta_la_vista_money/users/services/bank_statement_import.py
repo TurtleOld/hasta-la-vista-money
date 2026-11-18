@@ -50,6 +50,11 @@ from hasta_la_vista_money.users.services.bank_statement import (
     RosDorBankRowKind,
 )
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
+from hasta_la_vista_money.users.services.statement_identity import (
+    IncomingStatementIdentity,
+    StatementIdentityConflictError,
+    StatementIdentityService,
+)
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -102,10 +107,12 @@ class BankStatementImportService:
         self,
         classifier: CategoryClassifier,
         account_repository: AccountRepository,
+        identity_service: StatementIdentityService,
     ) -> None:
         """Инициализировать сервис категоризатором и репозиторием счетов."""
         self.classifier = classifier
         self.account_repository = account_repository
+        self.identity_service = identity_service
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -171,6 +178,7 @@ class BankStatementImportService:
         if parse_result.account_number:
             with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
                 self._match_account(upload, parse_result.account_number)
+        bank_code = self._resolve_bank_code(upload, parse_result.bank_code)
 
         upload.total_transactions = len(transactions)
         upload.save(update_fields=['total_transactions'])
@@ -182,7 +190,7 @@ class BankStatementImportService:
         )
 
         if parse_result.requires_markup:
-            self._save_markup_rows(upload, transactions)
+            self._save_markup_rows(upload, transactions, bank_code)
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
@@ -207,6 +215,7 @@ class BankStatementImportService:
                 upload=upload,
                 transactions=transactions,
                 existing_categories=existing_categories,
+                bank_code=bank_code,
             )
 
         return StatementImportResult(
@@ -217,17 +226,50 @@ class BankStatementImportService:
             closing_balance=parse_result.closing_balance,
         )
 
+    def _resolve_bank_code(
+        self,
+        upload: BankStatementUpload,
+        parsed_bank_code: str | None,
+    ) -> str | None:
+        """Freeze the parser's bank snapshot on the upload under its lock.
+
+        The account is locked before the upload, matching the agreed lock
+        order. A different parser result never overwrites the snapshot.
+
+        Raises:
+            BankStatementParseError: The parser contradicts the snapshot.
+        """
+        try:
+            with transaction.atomic():
+                self.account_repository.get_by_ids_for_update(
+                    {upload.account_id},
+                )
+                upload.refresh_from_db(fields=['source_bank_code'])
+                return self.identity_service.resolve_bank_code(
+                    upload,
+                    parsed_bank_code,
+                )
+        except StatementIdentityConflictError as error:
+            raise BankStatementParseError(
+                _(
+                    'Банк в повторно разобранной выписке не совпадает '
+                    'с сохранённым банком загрузки. Требуется ручная '
+                    'проверка.',
+                ),
+            ) from error
+
     def _process_transactions(
         self,
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
         existing_categories: list[str],
+        bank_code: str | None,
     ) -> tuple[int, int, int, int]:
         """Создать транзакции из разобранных записей выписки.
 
         Положительные строки кредитного счёта не становятся доходом:
         они сохраняются как непроведённые погашения (``needs_transfer``).
-        Остальные строки проходят обычную дедупликацию и проводку.
+        Остальные строки проходят проверку идентичности и дедупликацию.
 
         Args:
             upload: Запись загрузки для сохранения прогресса.
@@ -235,6 +277,7 @@ class BankStatementImportService:
                 ``StatementParseResult``.
             existing_categories: Актуальный список категорий пользователя
                 для LLM.
+            bank_code: Банк, выбранный парсером при первой загрузке.
 
         Returns:
             Кортеж ``(income_count, expense_count, skipped_count,
@@ -287,11 +330,11 @@ class BankStatementImportService:
             if (
                 category_name is None
                 and not is_credit_income
-                and not self._is_exact_duplicate(
-                    account=upload.account,
+                and not self._precheck_blocks_posting(
+                    upload=upload,
                     source_ref=source_ref,
-                    source_file_hash=upload.file_hash,
-                    source_row_position=row_position,
+                    row_position=row_position,
+                    bank_code=bank_code,
                 )
             ):
                 category_name = self._classify_category(
@@ -301,27 +344,54 @@ class BankStatementImportService:
                 )
 
             with transaction.atomic():
+                # Account before upload and row: the shared lock order.
+                self.account_repository.get_by_ids_for_update(
+                    {upload.account_id},
+                )
+                identity = self.identity_service.classify_incoming(
+                    account_id=upload.account_id,
+                    bank_code=bank_code,
+                    source_ref=source_ref,
+                    trusted_reference=self.identity_service.reference_is_trusted(
+                        bank_code,
+                        source_ref,
+                    ),
+                )
                 if is_credit_income:
-                    self._save_needs_transfer_row(
-                        upload=upload,
-                        trans=trans,
-                        row_position=row_position,
-                    )
-                    needs_transfer_count += 1
+                    if identity.exact_duplicate:
+                        skipped_count += 1
+                    else:
+                        self._save_needs_transfer_row(
+                            upload=upload,
+                            trans=trans,
+                            row_position=row_position,
+                            identity=identity,
+                        )
+                        needs_transfer_count += 1
                 else:
                     # Unclassified only if the row stopped being a duplicate
                     # after the check above.
                     row_category = str(category_name or FALLBACK_CATEGORY)
-                    candidates: list[ProbableDuplicate]
-                    if self._is_exact_duplicate(
-                        account=upload.account,
-                        source_ref=source_ref,
-                        source_file_hash=upload.file_hash,
-                        source_row_position=row_position,
-                    ):
+                    created = False
+                    same_file_duplicate = bool(
+                        not source_ref
+                        and self.identity_service.same_file_posted(
+                            account_id=upload.account_id,
+                            source_file_hash=upload.file_hash,
+                            source_row_position=row_position,
+                        ),
+                    )
+                    if same_file_duplicate or identity.exact_duplicate:
                         skipped_count += 1
-                        created = False
-                        candidates = []
+                    elif identity.manual:
+                        self._save_manual_row(
+                            upload=upload,
+                            trans=trans,
+                            type_value=type_value,
+                            row_position=row_position,
+                            identity=identity,
+                            category_name=row_category,
+                        )
                     else:
                         candidates = self._rank_probable_candidates(
                             account=upload.account,
@@ -333,62 +403,48 @@ class BankStatementImportService:
                             description=strip_pii(str(description)),
                             current_file_hash=upload.file_hash,
                         )
-                        created = True
-                    if candidates:
-                        self._save_probable_duplicate(
-                            upload=upload,
-                            trans=trans,
-                            candidates=candidates,
-                            type_value=type_value,
-                            row_position=row_position,
-                            category_name=row_category,
-                            match_calendar_date=source == 'ozon',
-                        )
-                        skipped_count += 1
-                        created = False
-                    elif created and self._is_duplicate(
-                        account=upload.account,
-                        user=upload.user,
-                        type_value=type_value,
-                        abs_amount=abs_amount,
-                        trans_date=trans_date,
-                        source_ref=source_ref,
-                        source_file_hash=upload.file_hash,
-                        source_row_position=row_position,
-                        match_calendar_date=source == 'ozon',
-                    ):
-                        skipped_count += 1
-                        created = False
-                    elif created:
-                        if row_category not in existing_categories:
-                            existing_categories.append(row_category)
-
-                        category, _created_category = (
-                            Category.objects.get_or_create(
-                                user=upload.user,
-                                name=row_category[
-                                    : constants.TWO_HUNDRED_FIFTY
-                                ],
-                                type=type_value,
+                        if candidates:
+                            self._save_probable_duplicate(
+                                upload=upload,
+                                trans=trans,
+                                candidates=candidates,
+                                type_value=type_value,
+                                row_position=row_position,
+                                category_name=row_category,
+                                match_calendar_date=source == 'ozon',
+                                identity=identity,
                             )
-                        )
-                        Transaction.objects.create(
-                            user=upload.user,
-                            account=upload.account,
-                            category=category,
-                            type=type_value,
-                            amount=abs_amount,
-                            date=trans_date,
-                            description=strip_pii(str(description))[:250],
-                            source_ref=source_ref or None,
-                            source_file_hash=(
-                                upload.file_hash if not source_ref else None
-                            ),
-                            source_row_position=(
-                                row_position if not source_ref else None
-                            ),
-                        )
-                        created = True
+                            skipped_count += 1
+                        else:
+                            if row_category not in existing_categories:
+                                existing_categories.append(row_category)
+
+                            category, _created_category = (
+                                Category.objects.get_or_create(
+                                    user=upload.user,
+                                    name=row_category[
+                                        : constants.TWO_HUNDRED_FIFTY
+                                    ],
+                                    type=type_value,
+                                )
+                            )
+                            Transaction.objects.create(
+                                user=upload.user,
+                                account=upload.account,
+                                category=category,
+                                type=type_value,
+                                amount=abs_amount,
+                                date=trans_date,
+                                description=strip_pii(str(description))[:250],
+                                source_ref=None,
+                                source_ref_hash=identity.source_ref_hash,
+                                source_ref_key_id=identity.key_id,
+                                source_ref_version=identity.version,
+                                source_identity_trusted=identity.trusted,
+                                source_file_hash=upload.file_hash or None,
+                                source_row_position=row_position,
+                            )
+                            created = True
 
                     if created:
                         # The bank is the source of truth: no funds check.
@@ -448,6 +504,32 @@ class BankStatementImportService:
         )
         return income_count, expense_count, skipped_count, needs_transfer_count
 
+    def _precheck_blocks_posting(
+        self,
+        *,
+        upload: BankStatementUpload,
+        source_ref: str | None,
+        row_position: int,
+        bank_code: str | None,
+    ) -> bool:
+        """Skip the network classifier for rows already known to need none."""
+        if not source_ref:
+            return self.identity_service.same_file_posted(
+                account_id=upload.account_id,
+                source_file_hash=upload.file_hash,
+                source_row_position=row_position,
+            )
+        identity = self.identity_service.classify_incoming(
+            account_id=upload.account_id,
+            bank_code=bank_code,
+            source_ref=source_ref,
+            trusted_reference=self.identity_service.reference_is_trusted(
+                bank_code,
+                source_ref,
+            ),
+        )
+        return identity.exact_duplicate or identity.manual
+
     def _match_account(
         self,
         upload: BankStatementUpload,
@@ -500,17 +582,19 @@ class BankStatementImportService:
         self,
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
+        bank_code: str | None,
     ) -> None:
         """Save rows awaiting user markup; none of them is posted.
 
-        Rows already known on the account, marked up or still awaiting
-        markup, are skipped, so an overlapping period adds only new rows.
+        Every parsed representation is kept: a synthetic per-bank reference
+        is not trusted evidence of an exact cross-file duplicate, so a
+        repeated period adds rows for the user to decide, while the unique
+        file position keeps a rerun of the same upload idempotent.
         """
-        refs = [trans['source_ref'] for trans in transactions]
         with transaction.atomic():
             # Serialize overlapping uploads of one account.
             self.account_repository.get_by_ids_for_update({upload.account_id})
-            created = self._create_markup_rows(upload, transactions, refs)
+            created = self._create_markup_rows(upload, transactions, bank_code)
         upload.processed_transactions = len(transactions)
         upload.skipped_count = len(transactions) - created
         upload.progress = 100
@@ -527,29 +611,22 @@ class BankStatementImportService:
         self,
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
-        refs: list[str],
+        bank_code: str | None,
     ) -> int:
-        known_refs = set(
-            BankStatementRow.objects.filter(
-                upload__account=upload.account,
-                source_ref__in=refs,
+        identities = {
+            idx: self.identity_service.classify_incoming(
+                account_id=upload.account_id,
+                bank_code=bank_code,
+                source_ref=trans['source_ref'],
+                trusted_reference=self.identity_service.reference_is_trusted(
+                    bank_code,
+                    trans['source_ref'],
+                ),
             )
-            .exclude(upload=upload)
-            .exclude(decision=BankStatementRow.Decision.EXPIRED)
-            .values_list('source_ref', flat=True),
-        ) | set(
-            Transaction.objects.filter(
-                account=upload.account,
-                source_ref__in=refs,
-            ).values_list('source_ref', flat=True),
-        )
-        new_rows = {
-            idx: trans
             for idx, trans in enumerate(transactions)
-            if trans['source_ref'] not in known_refs
         }
         # A cancel of a debit from an earlier upload is an income to mark up.
-        cancelled = _mutual_cancel_positions(new_rows)
+        cancelled = _mutual_cancel_positions(dict(enumerate(transactions)))
         rows = [
             BankStatementRow(
                 upload=upload,
@@ -563,7 +640,14 @@ class BankStatementImportService:
                 description=strip_pii(str(trans['description']))[
                     : constants.TWO_HUNDRED_FIFTY
                 ],
-                source_ref=trans['source_ref'],
+                candidate_description=identities[idx].manual_reason[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                source_ref=None,
+                source_ref_hash=identities[idx].source_ref_hash,
+                source_ref_key_id=identities[idx].key_id,
+                source_ref_version=identities[idx].version,
+                source_identity_trusted=identities[idx].trusted,
                 source_row_position=idx,
                 match_calendar_date=True,
                 kind=str(trans['kind']),
@@ -575,11 +659,83 @@ class BankStatementImportService:
                     else BankStatementRow.Decision.AWAITING_MARKUP
                 ),
             )
-            for idx, trans in new_rows.items()
+            for idx, trans in enumerate(transactions)
         ]
         # A rerun of the same upload hits the per-upload row constraint.
         BankStatementRow.objects.bulk_create(rows, ignore_conflicts=True)
+        saved = BankStatementRow.objects.filter(
+            upload=upload,
+            source_row_position__in=identities,
+        )
+        for row in saved:
+            position = row.source_row_position
+            if position is None:
+                continue
+            identity = identities[position]
+            if identity.matched_transactions:
+                self._save_identity_candidates(
+                    row,
+                    identity.matched_transactions,
+                )
         return len(rows)
+
+    def _save_manual_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        type_value: str,
+        row_position: int,
+        identity: IncomingStatementIdentity,
+        category_name: str,
+    ) -> BankStatementRow:
+        """Keep a normalized row for manual reconciliation, never posting it."""
+        row, _created = BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=row_position,
+            defaults={
+                'transaction_type': type_value,
+                'transaction_date': trans['date'],
+                'amount': abs(trans['amount']),
+                'description': strip_pii(str(trans['description']))[:250],
+                'candidate_description': identity.manual_reason[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                'suggested_category': category_name[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                'source_ref': None,
+                'source_ref_hash': identity.source_ref_hash,
+                'source_ref_key_id': identity.key_id,
+                'source_ref_version': identity.version,
+                'source_identity_trusted': identity.trusted,
+                'match_calendar_date': trans.get('source') == 'ozon',
+                'decision': BankStatementRow.Decision.PENDING,
+            },
+        )
+        self._save_identity_candidates(row, identity.matched_transactions)
+        return row
+
+    @staticmethod
+    def _save_identity_candidates(
+        row: BankStatementRow,
+        transactions: tuple[Transaction, ...],
+    ) -> None:
+        BankStatementCandidate.objects.bulk_create(
+            [
+                BankStatementCandidate(
+                    row=row,
+                    transaction=transaction,
+                    description=(
+                        transaction.description
+                        or str(transaction.category.name)
+                    )[: constants.TWO_HUNDRED_FIFTY],
+                    rank=rank,
+                )
+                for rank, transaction in enumerate(transactions)
+            ],
+            ignore_conflicts=True,
+        )
 
     def _save_needs_transfer_row(
         self,
@@ -587,6 +743,7 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         trans: dict[str, Any],
         row_position: int,
+        identity: IncomingStatementIdentity,
     ) -> None:
         """Save a credit-account credit as an unperformed repayment row."""
         BankStatementRow.objects.get_or_create(
@@ -597,32 +754,16 @@ class BankStatementImportService:
                 'transaction_date': trans['date'],
                 'amount': abs(trans['amount']),
                 'description': strip_pii(str(trans['description']))[:250],
-                'source_ref': trans.get('source_ref') or None,
+                'candidate_description': identity.manual_reason[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                'source_ref': None,
+                'source_ref_hash': identity.source_ref_hash,
+                'source_ref_key_id': identity.key_id,
+                'source_ref_version': identity.version,
+                'source_identity_trusted': identity.trusted,
                 'decision': BankStatementRow.Decision.NEEDS_TRANSFER,
             },
-        )
-
-    def _is_exact_duplicate(
-        self,
-        *,
-        account: Account,
-        source_ref: str | None,
-        source_file_hash: str,
-        source_row_position: int,
-    ) -> bool:
-        if source_ref:
-            return bool(
-                Transaction.objects.filter(
-                    account=account,
-                    source_ref=source_ref,
-                ).exists(),
-            )
-        return bool(
-            Transaction.objects.filter(
-                account=account,
-                source_file_hash=source_file_hash,
-                source_row_position=source_row_position,
-            ).exists(),
         )
 
     def _save_probable_duplicate(
@@ -635,6 +776,7 @@ class BankStatementImportService:
         row_position: int,
         category_name: str,
         match_calendar_date: bool,
+        identity: IncomingStatementIdentity,
     ) -> bool:
         clean_desc = strip_pii(str(trans['description']))
         first_transaction = next(
@@ -664,7 +806,11 @@ class BankStatementImportService:
                 'suggested_category': category_name[
                     : constants.TWO_HUNDRED_FIFTY
                 ],
-                'source_ref': trans.get('source_ref') or None,
+                'source_ref': None,
+                'source_ref_hash': identity.source_ref_hash,
+                'source_ref_key_id': identity.key_id,
+                'source_ref_version': identity.version,
+                'source_identity_trusted': identity.trusted,
                 'candidate': first_transaction,
                 'match_calendar_date': match_calendar_date,
             },
@@ -851,63 +997,6 @@ class BankStatementImportService:
 
     def _candidate_description(self, candidate: Transaction) -> str:
         return candidate.description or str(candidate.category.name)
-
-    def _is_duplicate(
-        self,
-        *,
-        account: Account,
-        user: Any,
-        type_value: str,
-        abs_amount: Decimal,
-        trans_date: datetime,
-        source_ref: str | None,
-        source_file_hash: str,
-        source_row_position: int,
-        match_calendar_date: bool = False,
-    ) -> bool:
-        """Проверить, не была ли операция уже импортирована.
-
-        При наличии ``source_ref`` сначала ищет точное совпадение, затем
-        делает откат к поиску по ``(account, user, type, amount, date)``
-        среди записей без ``source_ref`` (созданных до введения
-        идентификаторов). Если найдена такая «legacy»-запись — проставляет
-        ей ``source_ref``.
-
-        Returns:
-            ``True`` если операция уже существует в базе, иначе ``False``.
-        """
-        if source_ref:
-            if Transaction.objects.filter(
-                account=account,
-                source_ref=source_ref,
-            ).exists():
-                return True
-            legacy_queryset = Transaction.objects.without_adjustments().filter(
-                account=account,
-                user=user,
-                type=type_value,
-                amount=abs_amount,
-                source_ref__isnull=True,
-            )
-            if match_calendar_date:
-                legacy_queryset = legacy_queryset.filter(
-                    date__date=timezone.localtime(trans_date).date(),
-                )
-            else:
-                legacy_queryset = legacy_queryset.filter(date=trans_date)
-            legacy = legacy_queryset.order_by('date', 'pk').first()
-            if legacy is not None:
-                legacy.source_ref = source_ref
-                legacy.save(update_fields=['source_ref'])
-                return True
-            return False
-        return bool(
-            Transaction.objects.filter(
-                account=account,
-                source_file_hash=source_file_hash,
-                source_row_position=source_row_position,
-            ).exists(),
-        )
 
 
 def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:

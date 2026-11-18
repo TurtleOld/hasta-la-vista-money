@@ -630,13 +630,13 @@ class BankStatementReconciliationService:
             amount=amount,
             date=transaction_date,
             description=row.description,
-            source_ref=row.source_ref,
-            source_file_hash=(
-                row.upload.file_hash if not row.source_ref else None
-            ),
-            source_row_position=(
-                row.source_row_position if not row.source_ref else None
-            ),
+            source_ref=None,
+            source_ref_hash=row.source_ref_hash,
+            source_ref_key_id=row.source_ref_key_id,
+            source_ref_version=row.source_ref_version,
+            source_identity_trusted=row.source_identity_trusted,
+            source_file_hash=row.upload.file_hash or None,
+            source_row_position=row.source_row_position,
         )
         delta = amount
         if transaction_type == 'expense':

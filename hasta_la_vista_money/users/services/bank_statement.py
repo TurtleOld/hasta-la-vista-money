@@ -27,6 +27,7 @@ from pdfminer.high_level import extract_pages, extract_text
 from pdfminer.layout import LTTextContainer, LTTextLine
 from pdfminer.pdfparser import PDFSyntaxError
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.transactions.models import Category
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class StatementParseResult:
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
         requires_markup: Строки не проводятся до разметки пользователем.
+        bank_code: Банк, выбранный парсером; неизвестен для generic.
     """
 
     transactions: list[dict[str, Any]] = field(default_factory=list)
@@ -58,6 +60,7 @@ class StatementParseResult:
     account_number: str | None = None
     period_start: date_type | None = None
     requires_markup: bool = False
+    bank_code: str | None = None
 
 
 # General parsing constants
@@ -162,6 +165,9 @@ def _dedup_transactions(
 
 class BaseBankStatementParser(ABC):
     """Abstract base class for bank statement parsers."""
+
+    #: Provenance namespace of the parser, never the mutable account bank.
+    BANK_CODE: str | None = None
 
     def __init__(self, pdf_path: str | Path) -> None:
         self.pdf_path = Path(pdf_path)
@@ -329,6 +335,8 @@ class BaseBankStatementParser(ABC):
 class _GenericBankParser(BaseBankStatementParser):
     """Generic parser for Russian bank statements."""
 
+    BANK_CODE: str | None = None
+
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку неизвестного банка.
 
@@ -391,6 +399,7 @@ class _GenericBankParser(BaseBankStatementParser):
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                bank_code=self.BANK_CODE,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -541,6 +550,8 @@ class _RaiffeisenBankParser(_GenericBankParser):
     [6]=Номер карты
     """
 
+    BANK_CODE = constants.BANK_CODE_RAIFFEISEN
+
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Райффайзенбанка.
 
@@ -596,6 +607,8 @@ class _SberbankParser(BaseBankStatementParser):
 
     Columns: [0]=Дата | [1]=Категория | [2]=Сумма | [3]=Остаток
     """
+
+    BANK_CODE = constants.BANK_CODE_SBERBANK
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Сбербанка (кредитная карта).
@@ -658,6 +671,7 @@ class _SberbankParser(BaseBankStatementParser):
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                bank_code=self.BANK_CODE,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -979,6 +993,8 @@ class _OzonBankParser(BaseBankStatementParser):
     [2]=Назначение платежа | [3]=Российские рубли | [4]=Валюта
     """
 
+    BANK_CODE = constants.BANK_CODE_OZON
+
     _operation_start_pattern = re.compile(
         r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}\b',
     )
@@ -1021,7 +1037,10 @@ class _OzonBankParser(BaseBankStatementParser):
         else:
             # Transfers are intentionally excluded, so closing-balance
             # reconciliation would report an expected false discrepancy.
-            return StatementParseResult(transactions=transactions)
+            return StatementParseResult(
+                transactions=transactions,
+                bank_code=self.BANK_CODE,
+            )
 
     def _parse_table(
         self,
@@ -1081,15 +1100,16 @@ class _OzonBankParser(BaseBankStatementParser):
         where = (
             f'Операция Ozon на стр. {page} '
             f'(дата: {self._cell(rows[0], OZON_DATE_COL) or "—"}, '
-            f'документ: {source_ref or "—"}, '
+            f'документ: {"есть" if source_ref else "—"}, '
             f'назначение: {description or "—"})'
         )
 
         category = self._category_for_description(description)
         if category is None:
+            # The raw document number is personal bank data: never log it.
             logger.warning(
                 'bank_statement_ozon_operation_skipped',
-                source_ref=source_ref,
+                has_document=bool(source_ref),
             )
             return None
 
@@ -1233,6 +1253,8 @@ class _RosDorBankParser(BaseBankStatementParser):
     header above it.
     """
 
+    BANK_CODE = constants.BANK_CODE_ROSDORBANK
+
     _header_pattern = re.compile(
         r'Выписка по счету (\d{20}) с (\d{2}\.\d{2}\.\d{4}) '
         r'по (\d{2}\.\d{2}\.\d{4})',
@@ -1312,6 +1334,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             account_number=header.group(1),
             period_start=self._parse_day(header.group(2)),
             requires_markup=True,
+            bank_code=self.BANK_CODE,
         )
 
     def _split_totals(

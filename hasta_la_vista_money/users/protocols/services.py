@@ -32,6 +32,9 @@ if TYPE_CHECKING:
         DashboardSummaryStatisticsDict,
         StatisticsFilters,
     )
+    from hasta_la_vista_money.users.services.statement_identity import (
+        IncomingStatementIdentity,
+    )
     from hasta_la_vista_money.users.services.statistics import UserStatistics
     from hasta_la_vista_money.users.services.summary_statistics_service import (
         UserDetailedStatisticsDict,
@@ -271,6 +274,40 @@ class BankStatementRetentionServiceProtocol(Protocol):
     """Protocol for statement retention cleanup."""
 
     def cleanup_expired(self, now: datetime | None = None) -> int: ...
+
+
+@runtime_checkable
+class StatementIdentityServiceProtocol(Protocol):
+    """Protocol for parser provenance and fingerprint decisions."""
+
+    def resolve_bank_code(
+        self,
+        upload: BankStatementUpload,
+        parsed_bank_code: str | None,
+    ) -> str | None: ...
+
+    def reference_is_trusted(
+        self,
+        bank_code: str | None,
+        source_ref: str | None,
+    ) -> bool: ...
+
+    def classify_incoming(
+        self,
+        *,
+        account_id: int,
+        bank_code: str | None,
+        source_ref: str | None,
+        trusted_reference: bool,
+    ) -> IncomingStatementIdentity: ...
+
+    def same_file_posted(
+        self,
+        *,
+        account_id: int,
+        source_file_hash: str,
+        source_row_position: int,
+    ) -> bool: ...
 
 
 @runtime_checkable

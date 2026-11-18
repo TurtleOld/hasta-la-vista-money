@@ -15,9 +15,13 @@ from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    StatementIdentityServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
+    StatementIdentityRepository,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
@@ -38,6 +42,12 @@ from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     ExternalModelCategoryClassifier,
     NoopClassifier,
+)
+from hasta_la_vista_money.users.services.statement_id_fingerprint import (
+    StatementIdFingerprintService,
+)
+from hasta_la_vista_money.users.services.statement_identity import (
+    StatementIdentityService,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupService,
@@ -101,6 +111,18 @@ class UsersContainer(containers.DeclarativeContainer):
 
     statement_row_repository = providers.Singleton(StatementRowRepository)
 
+    statement_identity_repository = providers.Singleton(
+        StatementIdentityRepository,
+    )
+
+    statement_identity_service: providers.Factory[
+        StatementIdentityServiceProtocol
+    ] = providers.Factory(
+        StatementIdentityService,
+        fingerprint_service=providers.Factory(StatementIdFingerprintService),
+        repository=statement_identity_repository,
+    )
+
     bank_statement_reconciliation_service: providers.Factory[
         BankStatementReconciliationServiceProtocol
     ] = providers.Factory(
@@ -141,4 +163,5 @@ class UsersContainer(containers.DeclarativeContainer):
         BankStatementImportService,
         classifier=category_classifier,
         account_repository=providers.Singleton(AccountRepository),
+        identity_service=statement_identity_service,
     )

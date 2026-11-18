@@ -394,7 +394,24 @@ class StatementRetentionCleanupTest(TestCase):
             ).get(pk=self.transaction.pk),
             money_before,
         )
-        self.assertEqual(AuditLog.objects.count(), audit_count)
+        # The linked movement's audit held the legacy raw identifier: it is
+        # anonymized in place and the scrub fact is the only new entry.
+        self.assertEqual(AuditLog.objects.count(), audit_count + 1)
+        scrub_fact = AuditLog.objects.get(
+            model_name='users.BankStatementUpload',
+            object_pk='statement-audit-scrub-v1',
+        )
+        self.assertEqual(
+            scrub_fact.diff['bank_identifiers_anonymized']['new'],
+            True,
+        )
+        self.assertFalse(
+            AuditLog.objects.filter(
+                model_name='transactions.Transaction',
+                object_pk=str(self.transaction.pk),
+                diff__source_ref='movement-raw-ref',
+            ).exists(),
+        )
 
     def test_cleanup_removes_upload_bank_payload_and_pdf(self) -> None:
         self.assertEqual(self._cleanup(), 1)

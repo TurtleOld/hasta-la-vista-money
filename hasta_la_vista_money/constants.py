@@ -683,3 +683,11 @@ PDF_SIGNATURE: Final = b'%PDF-'
 STATEMENT_ID_FINGERPRINT_VERSION: Final = 1
 STATEMENT_ID_HMAC_MIN_KEY_BYTES: Final = 32
 STATEMENT_ID_HMAC_KEY_ID_MAX_LENGTH: Final = 64
+# Bank namespace of historical references whose bank is not recoverable.
+STATEMENT_ID_LEGACY_BANK_CODE: Final = 'legacy-unverified'
+
+# Bank provenance of a statement, taken from the parser that read the file.
+BANK_CODE_RAIFFEISEN: Final = 'raiffeisen'
+BANK_CODE_SBERBANK: Final = 'sberbank'
+BANK_CODE_OZON: Final = 'ozon'
+BANK_CODE_ROSDORBANK: Final = 'rosdorbank'

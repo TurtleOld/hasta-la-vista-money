@@ -51,8 +51,12 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
+    statement_identity_settings,
+)
 
 
+@statement_identity_settings
 class CreditCardStatementBaseTest(TestCase):
     """Shared setup for credit-card statement tests."""
 
@@ -121,6 +125,7 @@ class CreditCardStatementBaseTest(TestCase):
         )
 
 
+@statement_identity_settings
 class CreditCardStatementImportTest(CreditCardStatementBaseTest):
     """Positive credit-card statement rows become unperformed repayments."""
 
@@ -170,6 +175,7 @@ class CreditCardStatementImportTest(CreditCardStatementBaseTest):
         self.assertEqual(self.card.balance, Decimal('914.87'))
 
 
+@statement_identity_settings
 class PendingTransferDismissTest(CreditCardStatementBaseTest):
     """The owner can close a reminder as not a repayment."""
 
@@ -194,6 +200,7 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
         self.assertEqual(self.card.balance, Decimal('1000.00'))
 
 
+@statement_identity_settings
 class ReconciliationCreditIncomeGuardTest(CreditCardStatementBaseTest):
     """Reconciliation cannot create an income on a credit account."""
 
@@ -221,6 +228,7 @@ class ReconciliationCreditIncomeGuardTest(CreditCardStatementBaseTest):
             )
 
 
+@statement_identity_settings
 class PendingTransferRetentionTest(CreditCardStatementBaseTest):
     """Cleaned repayments stay unresolved but are no longer actionable."""
 
@@ -253,6 +261,7 @@ class PendingTransferRetentionTest(CreditCardStatementBaseTest):
         self.assertEqual(upload.needs_transfer_count, 1)
 
 
+@statement_identity_settings
 class PendingTransferStatisticsTest(CreditCardStatementBaseTest):
     """The credit-cards tab reports unperformed repayments."""
 
@@ -295,6 +304,7 @@ class PendingTransferStatisticsTest(CreditCardStatementBaseTest):
         self.assertContains(response, 'Кредитка')
 
 
+@statement_identity_settings
 class RepaymentLinkTest(CreditCardStatementBaseTest):
     """The owner closes a repayment row by an already recorded transfer."""
 
@@ -413,6 +423,7 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
         self.assertEqual(self.row.transfer_id, first.pk)
 
 
+@statement_identity_settings
 class RepaymentLinkViewTest(CreditCardStatementBaseTest):
     """The link action is a POST of the row owner."""
 
@@ -539,6 +550,7 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
         )
 
 
+@statement_identity_settings
 class PendingRepaymentListQueriesTest(CreditCardStatementBaseTest):
     """Repayment candidates on the accounts page are loaded in bulk."""
 

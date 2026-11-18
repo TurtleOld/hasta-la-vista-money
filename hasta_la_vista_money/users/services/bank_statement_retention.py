@@ -7,6 +7,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.services.statement_audit_scrub import (
+    scrub_transaction_source_ref_audit,
+)
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementRow,
@@ -101,6 +105,19 @@ class BankStatementRetentionService:
             if not due_rows and not upload_due:
                 return False
 
+            related_transaction_ids = {
+                row.transaction_id
+                for row in due_rows
+                if row.transaction_id is not None
+            }
+            if upload_due and upload.file_hash:
+                related_transaction_ids.update(
+                    Transaction.objects.filter(
+                        account_id=account_id,
+                        source_file_hash=upload.file_hash,
+                    ).values_list('pk', flat=True),
+                )
+
             if due_rows:
                 row_ids = [row.pk for row in due_rows]
                 BankStatementCandidate.objects.filter(
@@ -142,5 +159,6 @@ class BankStatementRetentionService:
                         'celery_task_id',
                     ],
                 )
+            scrub_transaction_source_ref_audit(related_transaction_ids)
             self.reconciliation_service.refresh_outcome_counts(upload)
         return True

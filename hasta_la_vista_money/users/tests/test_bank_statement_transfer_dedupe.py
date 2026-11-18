@@ -42,10 +42,14 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     StaleStatementCandidateError,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
+    statement_identity_settings,
+)
 
 WHEN: Final = datetime(2026, 2, 10, 12, 0, tzinfo=UTC)
 
 
+@statement_identity_settings
 class TransferDedupeBaseTest(TestCase):
     """Shared accounts, classifier, and import helpers."""
 
@@ -145,6 +149,7 @@ class TransferDedupeBaseTest(TestCase):
                         'source_ref': 'statement-ref',
                     },
                 ],
+                bank_code='sberbank',
             )
             result = process_bank_statement_task.apply(args=[upload.pk]).get()
         return upload, result
