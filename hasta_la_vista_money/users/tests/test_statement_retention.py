@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier
 from typing import Final, cast
@@ -16,7 +16,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -208,6 +211,7 @@ class StatementRetentionCleanupTest(TestCase):
             type=TransactionType.EXPENSE,
             amount=Decimal('100.00'),
             date=timezone.now(),
+            bank_calendar_date=date(2026, 4, 30),
             source_ref='movement-raw-ref',
         )
         self.upload = BankStatementUpload.objects.create(
@@ -271,6 +275,8 @@ class StatementRetentionCleanupTest(TestCase):
             transaction_type=BankStatementRow.TransactionType.EXPENSE,
             transaction_date=timezone.now(),
             amount=Decimal('25.00'),
+            bank_calendar_date=date(2026, 5, position),
+            date_precision=BankStatementRow.DatePrecision.DAY,
             description='Секретное назначение',
             candidate_description='Секретный кандидат',
             suggested_category='Секретная категория',
@@ -309,6 +315,8 @@ class StatementRetentionCleanupTest(TestCase):
         self.assertIsNone(row.transaction_type)
         self.assertIsNone(row.transaction_date)
         self.assertIsNone(row.amount)
+        self.assertIsNone(row.bank_calendar_date)
+        self.assertEqual(row.date_precision, BankStatementRow.DatePrecision.DAY)
         self.assertEqual(row.description, '')
         self.assertEqual(row.candidate_description, '')
         self.assertEqual(row.suggested_category, '')
@@ -321,11 +329,20 @@ class StatementRetentionCleanupTest(TestCase):
         self.assertIsNotNone(row.data_cleaned_at)
 
     def test_cleanup_preserves_decisions_positions_and_links(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.account,
+            amount=Decimal('250.00'),
+            exchange_date=timezone.now(),
+            bank_calendar_date=date(2026, 4, 28),
+        )
         audit_count = AuditLog.objects.count()
         money_before = Transaction.objects.values_list(
             'pk',
             'amount',
             'date',
+            'bank_calendar_date',
             'category_id',
         ).get(pk=self.transaction.pk)
 
@@ -390,10 +407,14 @@ class StatementRetentionCleanupTest(TestCase):
                 'pk',
                 'amount',
                 'date',
+                'bank_calendar_date',
                 'category_id',
             ).get(pk=self.transaction.pk),
             money_before,
         )
+        transfer.refresh_from_db()
+        self.assertEqual(transfer.bank_calendar_date, date(2026, 4, 28))
+        self.assertEqual(transfer.amount, Decimal('250.00'))
         # The linked movement's audit held the legacy raw identifier: it is
         # anonymized in place and the scrub fact is the only new entry.
         self.assertEqual(AuditLog.objects.count(), audit_count + 1)

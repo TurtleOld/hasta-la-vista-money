@@ -401,6 +401,7 @@ class TransferMoneyLog(TimeStampedModel):
         decimal_places=constants.TWO,
     )
     exchange_date = models.DateTimeField()
+    bank_calendar_date = models.DateField(blank=True, null=True)
     notes = models.TextField(
         blank=True,
         verbose_name=_('Примечания'),

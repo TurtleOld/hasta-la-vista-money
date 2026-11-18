@@ -17,6 +17,7 @@ from django.db.models import (
     SET_NULL,
     BooleanField,
     CharField,
+    DateField,
     DateTimeField,
     DecimalField,
     FileField,
@@ -319,6 +320,7 @@ class BankStatementRow(Model):
         null=True,
     )
     transaction_date = DateTimeField(blank=True, null=True)
+    bank_calendar_date = DateField(blank=True, null=True)
     amount = DecimalField(
         max_digits=20,
         decimal_places=2,

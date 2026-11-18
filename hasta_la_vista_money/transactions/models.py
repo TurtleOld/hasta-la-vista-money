@@ -105,6 +105,7 @@ class Transaction(models.Model):
         choices=TransactionType.choices,
     )
     date = models.DateTimeField()
+    bank_calendar_date = models.DateField(blank=True, null=True)
     amount = models.DecimalField(
         max_digits=constants.TWENTY,
         decimal_places=2,

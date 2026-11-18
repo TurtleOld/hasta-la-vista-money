@@ -126,6 +126,7 @@ class BankStatementRetentionService:
                 BankStatementRow.objects.filter(pk__in=row_ids).update(
                     transaction_type=None,
                     transaction_date=None,
+                    bank_calendar_date=None,
                     amount=None,
                     description='',
                     candidate_description='',
