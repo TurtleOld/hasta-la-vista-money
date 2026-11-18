@@ -33,6 +33,27 @@ const IDEAL_HEIGHT = 1080;
 const CAMERA_MISSING_ERRORS = ['NotFoundError', 'OverconstrainedError'];
 const SCAN_TABS_QUERY = '(max-width: 768px)';
 
+function notificationsUrl(baseUrl, logIds) {
+  if (!baseUrl || logIds.length === 0) {
+    return '';
+  }
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}log_ids=${encodeURIComponent(logIds.join(','))}`;
+}
+
+function collectNewNotifications(seenIds, notifications) {
+  const fresh = [];
+  for (const notification of notifications || []) {
+    const id = notification?.id;
+    if (id === undefined || id === null || seenIds.has(id)) {
+      continue;
+    }
+    seenIds.add(id);
+    fresh.push(notification);
+  }
+  return fresh;
+}
+
 function readSavedCameraId() {
   try {
     return window.localStorage.getItem(CAMERA_STORAGE_KEY);
@@ -308,6 +329,10 @@ function registerReceiptQRScanPage(Alpine) {
       photoPending: null,
       sentQRs: new Set(),
       sentCount: 0,
+      trackedLogIds: new Set(),
+      seenNoticeIds: new Set(),
+      noticeQueue: [],
+      pollBusy: false,
       resultMessage: '',
       resultLink: '',
       resultError: false,
@@ -325,31 +350,47 @@ function registerReceiptQRScanPage(Alpine) {
         window.addEventListener('beforeunload', this.stop.bind(this));
       },
 
+      showNotice() {
+        const notice = this.noticeQueue[0];
+        this.noticeMessage = notice?.message || '';
+        this.noticeLink = notice?.url || '';
+      },
+
+      dismissNotice() {
+        this.noticeQueue.shift();
+        this.showNotice();
+      },
+
       async pollNotifications() {
-        const notificationsUrl = this.$el.dataset.notificationsUrl;
-        if (!notificationsUrl) {
+        const baseUrl = this.$el.dataset.notificationsUrl;
+        const logIds = [...this.trackedLogIds];
+        if (!baseUrl || logIds.length === 0 || this.pollBusy) {
           return;
         }
+        this.pollBusy = true;
         try {
-          const response = await fetch(notificationsUrl, {
+          const response = await fetch(notificationsUrl(baseUrl, logIds), {
             headers: { Accept: 'application/json' },
             credentials: 'same-origin',
           });
           const payload = await response.json();
-          const notification = payload.notifications?.[0];
-          if (notification) {
-            this.noticeMessage = notification.message;
-            this.noticeLink = notification.url;
+          const fresh = collectNewNotifications(
+            this.seenNoticeIds,
+            payload.notifications,
+          );
+          this.noticeQueue.push(...fresh);
+          if (!this.noticeMessage) {
+            this.showNotice();
           }
         } catch (error) {
           console.warn('receipt QR scan: notification polling failed', error);
+        } finally {
+          this.pollBusy = false;
         }
       },
 
       async start() {
         this.errorMessage = '';
-        this.noticeMessage = '';
-        this.noticeLink = '';
         if (this.stream) {
           return;
         }
@@ -930,7 +971,13 @@ function registerReceiptQRScanPage(Alpine) {
           });
           const payload = await response.json().catch(() => null);
           if (response.ok && payload && payload.status !== 'error') {
-            this.sentCount += 1;
+            if (payload.status === 'queued') {
+              this.sentCount += 1;
+              if (payload.log_id !== undefined && payload.log_id !== null) {
+                this.trackedLogIds.add(payload.log_id);
+                this.pollNotifications();
+              }
+            }
             return payload;
           }
           message = payload?.message || message;

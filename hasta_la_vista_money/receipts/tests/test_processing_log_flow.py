@@ -304,6 +304,156 @@ class ReceiptProcessingLogScanViewTests(TestCase):
         log.refresh_from_db()
         self.assertIsNotNone(log.notified_at)
 
+    def test_notifications_with_log_ids_ignore_older_backlog(self) -> None:
+        old_receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('5.00'),
+        )
+        backlog_log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            status=ReceiptProcessingStatus.COMPLETED,
+            receipt=old_receipt,
+        )
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('10.00'),
+        )
+        log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            status=ReceiptProcessingStatus.COMPLETED,
+            receipt=receipt,
+        )
+
+        response = self.client.get(
+            reverse('receipts:processing_notifications'),
+            {'log_ids': str(log.pk)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        notifications = response.json()['notifications']
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0]['id'], log.pk)
+        self.assertEqual(
+            notifications[0]['url'],
+            reverse('receipts:view', args=[receipt.pk]),
+        )
+        backlog_log.refresh_from_db()
+        self.assertIsNone(
+            backlog_log.notified_at,
+            'Уведомление из прошлой сессии не должно попадать в текущую '
+            'и не должно помечаться показанным.',
+        )
+
+    def test_notifications_return_every_associated_log(self) -> None:
+        logs = []
+        for _ in range(6):
+            receipt = Receipt.objects.create(
+                user=self.user,
+                account=self.account,
+                receipt_date=timezone.now(),
+                total_sum=Decimal('10.00'),
+            )
+            logs.append(
+                ReceiptProcessingLog.objects.create(
+                    user=self.user,
+                    account=self.account,
+                    status=ReceiptProcessingStatus.COMPLETED,
+                    receipt=receipt,
+                ),
+            )
+
+        response = self.client.get(
+            reverse('receipts:processing_notifications'),
+            {'log_ids': ','.join(str(log.pk) for log in logs)},
+        )
+
+        notifications = response.json()['notifications']
+        self.assertEqual(
+            sorted(item['id'] for item in notifications),
+            sorted(log.pk for log in logs),
+            'Ни одно уведомление из запрошенной партии не должно теряться.',
+        )
+        for log in logs:
+            log.refresh_from_db()
+            self.assertIsNotNone(log.notified_at)
+
+    def test_notifications_reject_non_ascii_digit_log_ids(self) -> None:
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('10.00'),
+        )
+        backlog_log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            status=ReceiptProcessingStatus.COMPLETED,
+            receipt=receipt,
+        )
+
+        response = self.client.get(
+            reverse('receipts:processing_notifications'),
+            {'log_ids': '\u00b2,\u0661\u0662'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['notifications'], [])
+        backlog_log.refresh_from_db()
+        self.assertIsNone(backlog_log.notified_at)
+
+    def test_notifications_ignore_foreign_and_invalid_log_ids(self) -> None:
+        other = User.objects.create_user(username='notification-other')
+        other_account = Account.objects.create(
+            user=other,
+            name_account='Foreign',
+            balance=Decimal('10.00'),
+            currency='RUB',
+        )
+        other_receipt = Receipt.objects.create(
+            user=other,
+            account=other_account,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('10.00'),
+        )
+        foreign_log = ReceiptProcessingLog.objects.create(
+            user=other,
+            account=other_account,
+            status=ReceiptProcessingStatus.COMPLETED,
+            receipt=other_receipt,
+        )
+        own_receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('10.00'),
+        )
+        backlog_log = ReceiptProcessingLog.objects.create(
+            user=self.user,
+            account=self.account,
+            status=ReceiptProcessingStatus.COMPLETED,
+            receipt=own_receipt,
+        )
+
+        response = self.client.get(
+            reverse('receipts:processing_notifications'),
+            {
+                'log_ids': (
+                    f'abc,{foreign_log.pk},-1,999999999999999999999999'
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['notifications'], [])
+        backlog_log.refresh_from_db()
+        self.assertIsNone(backlog_log.notified_at)
+
     def test_list_polls_until_processed_receipt_appears(self) -> None:
         log = ReceiptProcessingLog.objects.create(
             user=self.user,

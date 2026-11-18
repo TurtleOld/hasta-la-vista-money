@@ -10,6 +10,9 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import View
 
+from hasta_la_vista_money.constants import (
+    RECEIPT_PROCESSING_LOG_ID_MAX_DIGITS,
+)
 from hasta_la_vista_money.receipts.models import ReceiptProcessingStatus
 
 if TYPE_CHECKING:
@@ -19,6 +22,19 @@ if TYPE_CHECKING:
 
 def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.receipts.views']
+
+
+def _parse_log_ids(raw: str) -> list[int]:
+    log_ids = []
+    for raw_token in raw.split(','):
+        token = raw_token.strip()
+        if (
+            token.isascii()
+            and token.isdigit()
+            and len(token) <= RECEIPT_PROCESSING_LOG_ID_MAX_DIGITS
+        ):
+            log_ids.append(int(token))
+    return log_ids
 
 
 class ReceiptProcessingLogRetryView(LoginRequiredMixin, View):
@@ -109,13 +125,19 @@ class ReceiptProcessingNotificationView(LoginRequiredMixin, View):
             'RequestWithContainer',
             request,
         ).container.receipts.receipt_processing_service()
-        logs = service.get_unnotified_completed(user=cast('User', request.user))
+        raw_log_ids = request.GET.get('log_ids')
+        log_ids = None if raw_log_ids is None else _parse_log_ids(raw_log_ids)
+        logs = service.get_unnotified_completed(
+            user=cast('User', request.user),
+            log_ids=log_ids,
+        )
         return JsonResponse(
             {
                 'notifications': [
                     {
+                        'id': log.pk,
                         'url': reverse('receipts:view', args=[log.receipt_id]),
-                        'message': str(_('Чек проведён. Открыть чек.')),
+                        'message': str(_('Чек проведён.')),
                     }
                     for log in logs
                 ],

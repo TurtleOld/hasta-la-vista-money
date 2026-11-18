@@ -209,6 +209,7 @@ class ReceiptProcessingServiceProtocol(Protocol):
         self,
         *,
         user: User,
+        log_ids: list[int] | None = None,
     ) -> list[ReceiptProcessingLog]: ...
 
     def is_insufficient_at_conducting(self, *, receipt: Receipt) -> bool: ...
