@@ -148,27 +148,32 @@ class RosDorBankUploadTest(TestCase):
         self.assertIn(STATEMENT_ACCOUNT_NUMBER, upload.error_message)
         self.assertFalse(upload.statement_rows.exists())
 
-    def test_retention_expires_unmarked_rows_and_scrubs_them(self) -> None:
+    def test_retention_keeps_unmarked_rows_and_scrubs_them(self) -> None:
         upload = self._upload()
         BankStatementUpload.objects.filter(pk=upload.pk).update(
             expires_at=timezone.now(),
         )
+        upload.statement_rows.update(source_ref_hash='hash')
 
         ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
 
         upload.refresh_from_db()
         self.assertEqual(
             upload.status,
-            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
         rows = upload.statement_rows.all()
         self.assertEqual(
-            rows.filter(decision=BankStatementRow.Decision.EXPIRED).count(),
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
             8,
         )
         self.assertFalse(
             rows.exclude(merchant_key='', counterparty_account='').exists(),
         )
+        self.assertFalse(rows.exclude(source_ref=None).exists())
+        self.assertFalse(rows.filter(data_cleaned_at__isnull=True).exists())
 
     def test_cancel_of_debit_from_earlier_upload_awaits_markup(self) -> None:
         first = self._upload()

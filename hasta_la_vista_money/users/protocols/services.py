@@ -231,6 +231,7 @@ class StatementRowLinkServiceProtocol(Protocol):
         self,
         row_id: int,
         *,
+        user_id: int,
         to_account: Account,
         amount: Decimal,
     ) -> BankStatementRow: ...

@@ -586,6 +586,7 @@ class TestBankStatementReconciliationView(TestCase):
             candidate_description='Такси по городу',
             suggested_category='Поездки',
             source_ref='new-source',
+            source_ref_hash='a' * 64,
             source_row_position=0,
             candidate=self.candidate,
         )
@@ -608,7 +609,8 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertIsNone(row.transaction_type)
         self.assertIsNone(row.transaction_date)
         self.assertIsNone(row.amount)
-        self.assertIsNone(row.source_row_position)
+        self.assertIsNotNone(row.source_row_position)
+        self.assertIsNotNone(row.data_cleaned_at)
         self.assertFalse(row.candidates.exists())
 
     def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
@@ -1018,6 +1020,7 @@ class TestBankStatementReconciliationView(TestCase):
             candidate_description='Секретный кандидат',
             suggested_category='Секретная категория',
             source_ref='secret-source',
+            source_ref_hash='b' * 64,
             source_row_position=1,
             candidate=self.candidate,
         )
@@ -1064,15 +1067,16 @@ class TestBankStatementReconciliationView(TestCase):
             self.upload.status,
             BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
         )
-        self.assertEqual(self.upload.expired_count, 1)
-        self.assertEqual(self.upload.awaiting_decision_count, 0)
+        self.assertEqual(self.upload.expired_count, 0)
+        self.assertEqual(self.upload.awaiting_decision_count, 1)
         self.assertEqual(self.upload.file_hash, file_hash)
         self.assertEqual(self.upload.account, self.account)
         self.assertIsNotNone(self.upload.retention_cleaned_at)
         self.assertFalse(storage.exists(file_name))
         self.assertFalse(bool(self.upload.pdf_file))
-        self.assertEqual(pending.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(pending.decision, BankStatementRow.Decision.PENDING)
         self.assert_retention_payload_scrubbed(pending)
+        self.assertEqual(pending.source_ref_hash, 'b' * 64)
         self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
         self.assertEqual(self.row.transaction, self.candidate)
         self.assertEqual(self.row.decision_audits.count(), 1)
@@ -1137,7 +1141,8 @@ class TestBankStatementReconciliationView(TestCase):
 
         self.assertEqual(cleaned, 1)
         self.row.refresh_from_db()
-        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNotNone(self.row.data_cleaned_at)
         self.assertEqual(Transaction.objects.count(), 1)
 
     def test_pending_decision_after_deadline_creates_no_transaction(

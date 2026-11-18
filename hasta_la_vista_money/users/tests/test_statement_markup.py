@@ -1059,8 +1059,11 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         self.upload.refresh_from_db()
         self.assertIsNone(self.upload.balance_discrepancy)
 
-    def test_awaiting_rows_expire_with_the_upload(self) -> None:
+    def test_awaiting_rows_are_cleaned_but_keep_their_decision(self) -> None:
         row = self._row(1)
+        BankStatementRow.objects.filter(pk=row.pk).update(
+            source_ref_hash='hash',
+        )
         self.assertGreater(
             self.upload.expires_at - timezone.now(),
             timedelta(days=constants.STATEMENT_RETENTION_DAYS - 1),
@@ -1075,7 +1078,17 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
 
         self.assertEqual(cleaned, 1)
         row.refresh_from_db()
-        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(row.description, '')
+        self.assertIsNotNone(row.data_cleaned_at)
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
 
     def test_pending_count_ignores_other_users_and_expired(self) -> None:
         self._row(1)

@@ -222,9 +222,9 @@ class ReconciliationCreditIncomeGuardTest(CreditCardStatementBaseTest):
 
 
 class PendingTransferRetentionTest(CreditCardStatementBaseTest):
-    """Unresolved repayments expire with the rest of the statement rows."""
+    """Cleaned repayments stay unresolved but are no longer actionable."""
 
-    def test_expired_reminder_disappears(self) -> None:
+    def test_cleaned_reminder_is_not_actionable(self) -> None:
         upload = self._create_upload()
         upload.expires_at = timezone.now() - timedelta(days=1)
         upload.save(update_fields=['expires_at'])
@@ -241,12 +241,16 @@ class PendingTransferRetentionTest(CreditCardStatementBaseTest):
 
         self.assertEqual(cleaned, 1)
         row.refresh_from_db()
-        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNotNone(row.data_cleaned_at)
         self.assertFalse(
             self.service.pending_transfers_for_user(self.user).exists(),
         )
         upload.refresh_from_db()
-        self.assertEqual(upload.needs_transfer_count, 0)
+        self.assertEqual(upload.needs_transfer_count, 1)
 
 
 class PendingTransferStatisticsTest(CreditCardStatementBaseTest):
@@ -480,6 +484,42 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
         response = self.client.post(self.url, {'transfer': transfer.pk})
 
         self.assertEqual(response.status_code, 409)
+
+    def test_expired_row_link_returns_gone_without_closing(self) -> None:
+        transfer = self._transfer()
+        BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {'transfer': transfer.pk})
+
+        self.assertEqual(response.status_code, 410)
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(self.row.transfer_id)
+        self.assertFalse(self.row.decision_audits.exists())
+
+    def test_cleaned_row_link_returns_gone_without_closing(self) -> None:
+        transfer = self._transfer()
+        BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+            retention_cleaned_at=timezone.now(),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {'transfer': transfer.pk})
+
+        self.assertEqual(response.status_code, 410)
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(self.row.transfer_id)
+        self.assertFalse(self.row.decision_audits.exists())
 
     def test_foreign_row_is_not_found(self) -> None:
         transfer = self._transfer()

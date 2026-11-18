@@ -24,6 +24,7 @@ from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
+        AccountRepository,
         TransferMoneyLogRepository,
     )
     from hasta_la_vista_money.users.protocols.services import (
@@ -41,6 +42,7 @@ class TransferService:
     def __init__(
         self,
         transfer_money_log_repository: 'TransferMoneyLogRepository',
+        account_repository: 'AccountRepository',
         statement_row_links: 'StatementRowLinkServiceProtocol',
     ) -> None:
         """Initialize TransferService.
@@ -48,9 +50,11 @@ class TransferService:
         Args:
             transfer_money_log_repository: Repository for transfer log
                 operations.
+            account_repository: Repository locking both transfer accounts.
             statement_row_links: Statement rows closed by transfers.
         """
         self.transfer_money_log_repository = transfer_money_log_repository
+        self.account_repository = account_repository
         self.statement_row_links = statement_row_links
         self._balance_service = BalanceService()
 
@@ -88,6 +92,14 @@ class TransferService:
         validate_positive_amount(amount)
         validate_different_accounts(from_account, to_account)
         validate_same_currency(from_account, to_account)
+        account_ids = {from_account.pk, to_account.pk}
+        locked_accounts = self.account_repository.get_by_ids_for_update(
+            account_ids,
+        )
+        if set(locked_accounts) != account_ids:
+            raise Account.DoesNotExist
+        from_account = locked_accounts[from_account.pk]
+        to_account = locked_accounts[to_account.pk]
         if from_account.user_id != user.pk or to_account.user_id != user.pk:
             raise PermissionDenied(
                 _('У вас нет прав на операции с этими счетами.'),
@@ -103,19 +115,20 @@ class TransferService:
         if statement_row_id is not None:
             row = self.statement_row_links.lock_repayment_row(
                 statement_row_id,
+                user_id=user.pk,
                 to_account=to_account,
                 amount=amount,
             )
 
         with audit_operation(kind=AuditOperationKind.TRANSFER):
-            locked_accounts = self._balance_service.apply_account_deltas(
+            balances = self._balance_service.apply_account_deltas(
                 {
                     from_account.pk: -amount,
                     to_account.pk: amount,
                 },
             )
-            from_account = locked_accounts[from_account.pk]
-            to_account = locked_accounts[to_account.pk]
+            from_account = balances[from_account.pk]
+            to_account = balances[to_account.pk]
 
             transfer = self.transfer_money_log_repository.create_log(
                 user=user,

@@ -15,10 +15,7 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.models import Transaction
-from hasta_la_vista_money.users.models import (
-    BankStatementRow,
-    BankStatementUpload,
-)
+from hasta_la_vista_money.users.models import BankStatementRow
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
@@ -29,6 +26,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     ReconciliationExpiredError,
     StaleStatementCandidateError,
+)
+from hasta_la_vista_money.users.services.statement_retention_policy import (
+    row_has_bank_data,
 )
 
 _SUSPENDABLE_DECISIONS = frozenset(
@@ -69,20 +69,35 @@ class StatementRowLinkService:
         self,
         row_id: int,
         *,
+        user_id: int,
         to_account: Account,
         amount: Decimal,
     ) -> BankStatementRow:
         """Lock the open repayment row that a transfer is about to close."""
-        row = self.statement_row_repository.lock_account_row(
-            row_id,
-            to_account,
-        )
-        if row is None:
+        try:
+            upload, row = (
+                self.statement_row_repository.lock_owned_upload_and_row(
+                    row_id,
+                    user_id,
+                )
+            )
+        except BankStatementRow.DoesNotExist as error:
+            raise ValidationError(
+                _('Строка выписки не относится к счёту получателя.'),
+            ) from error
+        if upload.account_id != to_account.pk:
             raise ValidationError(
                 _('Строка выписки не относится к счёту получателя.'),
             )
         if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
             raise ValidationError(_('Строка выписки уже закрыта.'))
+        if not row_has_bank_data(row):
+            raise ValidationError(
+                _(
+                    'Срок хранения строки выписки истёк. '
+                    'Загрузите выписку повторно.',
+                ),
+            )
         if row.amount != amount:
             raise ValidationError(
                 _('Сумма перевода должна совпадать с суммой строки выписки.'),
@@ -130,6 +145,8 @@ class StatementRowLinkService:
             )
             if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
                 raise ReconciliationDecisionConflictError(row.decision)
+            if not row_has_bank_data(row):
+                raise ReconciliationExpiredError(row.pk)
             # The lock keeps two rows of one account from taking one transfer.
             transfer = self.statement_row_repository.lock_owned_transfer(
                 transfer_id,
@@ -194,7 +211,7 @@ class StatementRowLinkService:
             }:
                 if self._resume_already_applied(row):
                     return row
-                self._assert_data_available(upload, row_id)
+                self._assert_data_available(row)
                 raise ReconciliationDecisionConflictError(row.decision)
             if row.transaction_id or row.transfer_id:
                 # A suspended row never owns a movement; return it only by
@@ -203,7 +220,7 @@ class StatementRowLinkService:
             target = row.resume_decision
             if target not in _SUSPENDABLE_DECISIONS:
                 raise ReconciliationDecisionConflictError(row.decision)
-            self._assert_data_available(upload, row_id)
+            self._assert_data_available(row)
             row.decision = target
             row.decision_reason = ''
             row.decided_at = timezone.now()
@@ -259,7 +276,7 @@ class StatementRowLinkService:
                 return row
             if row.decision not in _SUSPENDABLE_DECISIONS:
                 raise ReconciliationDecisionConflictError(row.decision)
-            self._assert_data_available(upload, row_id)
+            self._assert_data_available(row)
             if row.transaction_id or row.transfer_id:
                 raise ReconciliationDecisionConflictError('linked')
             self.statement_row_repository.suspend_row(
@@ -273,12 +290,7 @@ class StatementRowLinkService:
             return row
 
     @staticmethod
-    def _assert_data_available(
-        upload: BankStatementUpload,
-        row_id: int,
-    ) -> None:
-        if (
-            upload.retention_cleaned_at is not None
-            or timezone.now() >= upload.expires_at
-        ):
-            raise ReconciliationExpiredError(row_id)
+    def _assert_data_available(row: BankStatementRow) -> None:
+        """Reject decisions on a row whose bank details were removed."""
+        if not row_has_bank_data(row):
+            raise ReconciliationExpiredError(row.pk)

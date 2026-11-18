@@ -1,6 +1,6 @@
 """A repayment row closes only by a transfer made from that row."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
@@ -296,3 +297,84 @@ class RepaymentRowTransferViewTest(RepaymentRowTransferBase):
             self.row.decision,
             BankStatementRow.Decision.NEEDS_TRANSFER,
         )
+
+
+class RepaymentRowRetentionGuardTest(RepaymentRowTransferBase):
+    """An expired or cleaned repayment cannot move money."""
+
+    def _expire_upload(self) -> None:
+        BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+    def _clean_upload(self) -> None:
+        BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+            retention_cleaned_at=timezone.now(),
+        )
+
+    def _assert_refused_without_money(self) -> None:
+        with self.assertRaises(ValidationError):
+            self._transfer(self.row.pk)
+        self.assertFalse(TransferMoneyLog.objects.exists())
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1000.00'))
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(self.row.transfer_id)
+        self.assertFalse(self.row.decision_audits.exists())
+
+    def test_expired_repayment_is_refused_by_transfer_service(self) -> None:
+        self._expire_upload()
+
+        self._assert_refused_without_money()
+
+    def test_cleaned_repayment_is_refused_by_transfer_service(self) -> None:
+        self._clean_upload()
+
+        self._assert_refused_without_money()
+
+    def _view_post(self, row_id: int):
+        return self.client.post(
+            reverse('finance_account:transfer_money'),
+            {
+                'from_account': self.debit.pk,
+                'to_account': self.card.pk,
+                'amount': '199.00',
+                'exchange_date': '2026-02-09T12:00',
+                'notes': '',
+                'statement_row': row_id,
+            },
+        )
+
+    def test_expired_repayment_is_refused_by_transfer_view(self) -> None:
+        self._expire_upload()
+        self.client.force_login(self.user)
+
+        response = self._view_post(self.row.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Срок хранения строки выписки истёк')
+        self.assertFalse(TransferMoneyLog.objects.exists())
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1000.00'))
+
+    def test_cleaned_repayment_is_refused_by_transfer_view(self) -> None:
+        self._clean_upload()
+        self.client.force_login(self.user)
+
+        response = self._view_post(self.row.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Срок хранения строки выписки истёк')
+        self.assertFalse(TransferMoneyLog.objects.exists())
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1000.00'))

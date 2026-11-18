@@ -418,6 +418,9 @@ class RetentionKeepsDeferredTest(StatementRowDecisionFixture):
     ) -> None:
         row = self._row(1, decision=BankStatementRow.Decision.PENDING)
         self.service.defer(row.pk, self.user.pk)
+        BankStatementRow.objects.filter(pk=row.pk).update(
+            source_ref_hash='hash',
+        )
         BankStatementUpload.objects.filter(pk=self.upload.pk).update(
             expires_at=timezone.now(),
         )

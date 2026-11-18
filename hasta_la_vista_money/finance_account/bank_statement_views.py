@@ -59,6 +59,9 @@ from hasta_la_vista_money.users.services.statement_markup import (
     REFUND_CATEGORY_NAME,
     StatementMarkupConflictError,
 )
+from hasta_la_vista_money.users.services.statement_retention_policy import (
+    statement_retention_deadline,
+)
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 if TYPE_CHECKING:
@@ -167,6 +170,7 @@ class BankStatementUploadView(
                 defaults={
                     'pdf_file': pdf_file,
                     'status': BankStatementUpload.Status.PENDING,
+                    'expires_at': statement_retention_deadline(user),
                 },
             )
 
@@ -916,6 +920,8 @@ class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
             )
         except BankStatementRow.DoesNotExist as error:
             raise Http404 from error
+        except ReconciliationExpiredError:
+            return HttpResponse(status=410)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except StaleStatementCandidateError:

@@ -40,6 +40,9 @@ from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
 )
+from hasta_la_vista_money.users.services.statement_retention_policy import (
+    row_has_bank_data,
+)
 
 
 class InvalidReconciliationDecisionError(ValueError):
@@ -127,8 +130,7 @@ class BankStatementReconciliationService:
                 ),
                 restore_count=Count(
                     'statement_rows',
-                    filter=Q(retention_cleaned_at__isnull=False)
-                    & Q(
+                    filter=Q(
                         statement_rows__decision__in=[
                             BankStatementRow.Decision.PENDING,
                             BankStatementRow.Decision.NEEDS_TRANSFER,
@@ -136,6 +138,9 @@ class BankStatementReconciliationService:
                             BankStatementRow.Decision.DEFERRED,
                             BankStatementRow.Decision.EXPIRED,
                         ],
+                    )
+                    & ~StatementRowRepository.bank_data_available_q(
+                        prefix='statement_rows__',
                     ),
                 ),
                 available=ExpressionWrapper(
@@ -221,7 +226,7 @@ class BankStatementReconciliationService:
                 if not self._row_links_movement(row, movement):
                     raise ReconciliationDecisionConflictError(candidate_id)
             return row
-        if timezone.now() >= row.upload.expires_at:
+        if not row_has_bank_data(row):
             raise ReconciliationExpiredError(row_id)
 
         if decision == BankStatementRow.Decision.LINKED:
@@ -278,7 +283,7 @@ class BankStatementReconciliationService:
             return row
         if row.decision != BankStatementRow.Decision.LINKED:
             raise ReconciliationDecisionConflictError(row.decision)
-        if timezone.now() >= row.upload.expires_at:
+        if not row_has_bank_data(row):
             raise ReconciliationExpiredError(row_id)
 
         previous_transaction = row.transaction
@@ -647,6 +652,7 @@ class BankStatementReconciliationService:
         """Return unperformed repayments imported for a credit account."""
         return (
             BankStatementRow.objects.filter(
+                StatementRowRepository.bank_data_available_q(),
                 upload__account=account,
                 decision=BankStatementRow.Decision.NEEDS_TRANSFER,
             )
@@ -661,6 +667,7 @@ class BankStatementReconciliationService:
         """Return all unperformed repayments of a user's credit accounts."""
         return (
             BankStatementRow.objects.filter(
+                StatementRowRepository.bank_data_available_q(),
                 upload__user_id=user.pk,
                 upload__account__user_id=user.pk,
                 upload__account__type_account__in=(

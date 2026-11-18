@@ -5,10 +5,12 @@ including dashboard widgets and admin configurations.
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Final
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractUser, Group
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db.models import (
     CASCADE,
     SET_NULL,
@@ -23,6 +25,7 @@ from django.db.models import (
     JSONField,
     Model,
     PositiveIntegerField,
+    PositiveSmallIntegerField,
     Q,
     TextChoices,
     TextField,
@@ -37,10 +40,31 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.core.upload_paths import bank_statement_upload_to
 
+#: Largest value a PostgreSQL ``integer`` column can hold.
+MAX_DATABASE_INTEGER: Final = 2_147_483_647
+
 
 def bank_statement_expires_at() -> datetime:
     """Return the default reconciliation and retention deadline."""
     return timezone.now() + timedelta(days=STATEMENT_RETENTION_DAYS)
+
+
+def validate_statement_retention_days(value: int) -> None:
+    """Reject retention values the database or a calendar date cannot hold.
+
+    There is no product maximum: 100 years is allowed while an integer
+    outside the column range or a deadline past ``datetime.max`` is not.
+    """
+    if value > MAX_DATABASE_INTEGER:
+        raise ValidationError(
+            _('Слишком большое число дней хранения: колонка не вместит его.'),
+        )
+    try:
+        timezone.now() + timedelta(days=value)
+    except OverflowError as error:
+        raise ValidationError(
+            _('Дата удаления выходит за допустимый диапазон дат.'),
+        ) from error
 
 
 class User(AbstractUser):
@@ -57,6 +81,16 @@ class User(AbstractUser):
     timezone_name: CharField[Any, Any] = CharField(
         max_length=64,
         default=DEFAULT_TIMEZONE_NAME,
+    )
+    statement_retention_days: PositiveIntegerField[Any, Any] = (
+        PositiveIntegerField(
+            default=STATEMENT_RETENTION_DAYS,
+            validators=[
+                MinValueValidator(1),
+                validate_statement_retention_days,
+            ],
+            verbose_name=_('Срок хранения банковских выписок, дней'),
+        )
     )
 
     def __str__(self) -> str:
@@ -152,6 +186,7 @@ class BankStatementUpload(Model):
     account = ForeignKey('finance_account.Account', on_delete=CASCADE)
     pdf_file = FileField(upload_to=bank_statement_upload_to)
     file_hash = CharField(max_length=64, blank=True, default='')
+    source_bank_code = CharField(max_length=50, blank=True, default='')
     status = CharField(
         max_length=25,
         choices=Status.choices,
@@ -269,7 +304,13 @@ class BankStatementRow(Model):
     candidate_description = CharField(max_length=250, blank=True, default='')
     suggested_category = CharField(max_length=250, blank=True, default='')
     source_ref = CharField(max_length=64, blank=True, null=True)
+    source_ref_hash = CharField(max_length=64, blank=True, null=True)
+    source_ref_key_id = CharField(max_length=64, blank=True, default='')
+    source_ref_version = PositiveSmallIntegerField(default=1)
+    source_identity_trusted = BooleanField(default=False)
     source_row_position = PositiveIntegerField(blank=True, null=True)
+    data_expires_at = DateTimeField(blank=True, null=True)
+    data_cleaned_at = DateTimeField(blank=True, null=True)
     match_calendar_date = BooleanField(default=False)
     # RosDorBankRowKind of a row awaiting markup.
     kind = CharField(max_length=10, blank=True, default='')

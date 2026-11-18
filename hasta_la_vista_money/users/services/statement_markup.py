@@ -54,6 +54,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
+from hasta_la_vista_money.users.services.statement_retention_policy import (
+    row_has_bank_data,
+)
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
@@ -91,9 +94,8 @@ class StatementMarkupService:
     def pending_summary(user_id: int) -> tuple[int, int | None]:
         """Return rows awaiting markup in the newest upload and its id."""
         rows = BankStatementRow.objects.filter(
+            StatementRowRepository.bank_data_available_q(),
             upload__user_id=user_id,
-            upload__expires_at__gt=timezone.now(),
-            upload__retention_cleaned_at__isnull=True,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         )
         newest = (
@@ -393,7 +395,7 @@ class StatementMarkupService:
             return row
         if row.decision != BankStatementRow.Decision.AWAITING_MARKUP:
             raise StatementMarkupConflictError(row.decision)
-        if timezone.now() >= upload.expires_at:
+        if not row_has_bank_data(row):
             raise StatementMarkupConflictError('expired')
 
         if skip:

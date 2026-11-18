@@ -147,6 +147,14 @@ class Transaction(models.Model):
         blank=True,
         null=True,
     )
+    source_ref_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+    )
+    source_ref_key_id = models.CharField(max_length=64, blank=True, default='')
+    source_ref_version = models.PositiveSmallIntegerField(default=1)
+    source_identity_trusted = models.BooleanField(default=False)
 
     objects = TransactionManager()
 
@@ -170,6 +178,14 @@ class Transaction(models.Model):
                 fields=['account', 'source_ref'],
                 condition=Q(source_ref__isnull=False),
                 name='unique_account_source_ref',
+            ),
+            models.UniqueConstraint(
+                fields=['account', 'source_ref_hash'],
+                condition=Q(
+                    source_ref_hash__isnull=False,
+                    source_identity_trusted=True,
+                ),
+                name='unique_account_source_ref_hash',
             ),
             models.UniqueConstraint(
                 fields=[

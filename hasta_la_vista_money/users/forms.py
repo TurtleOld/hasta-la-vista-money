@@ -135,6 +135,32 @@ class RegisterByInviteForm(UserCreationForm[User]):
 class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
+    statement_retention_days = forms.IntegerField(
+        label=_('Срок хранения банковских выписок, дней'),
+        required=False,
+        widget=forms.NumberInput(
+            attrs={
+                'class': FORM_CONTROL_CLASS,
+                'min': 1,
+                'step': 1,
+            },
+        ),
+        help_text=_(
+            'Для новых загрузок. После этого срока удаляются PDF, суммы, '
+            'даты, описания, реквизиты и кандидаты строк выписки, включая '
+            'отложенные. Остаются решения, их история, связи с движениями '
+            'и защиты от дублей; нерешённые строки потребуют повторной '
+            'загрузки. Уже загруженные выписки срок не меняет.',
+        ),
+    )
+
+    def clean_statement_retention_days(self) -> int:
+        """Keep the current value when an older form omits the field."""
+        value = self.cleaned_data.get('statement_retention_days')
+        if value is None:
+            return self.instance.statement_retention_days
+        return value
+
     def clean_timezone_name(self) -> str:
         """Reject any value outside the canonical IANA timezone list."""
         timezone_name = str(self.cleaned_data.get('timezone_name', ''))
@@ -152,6 +178,7 @@ class UpdateUserForm(ModelForm[User]):
             'first_name',
             'last_name',
             'timezone_name',
+            'statement_retention_days',
         ]
         labels: ClassVar[dict[str, Any]] = {
             'username': _('Имя пользователя'),
@@ -159,6 +186,9 @@ class UpdateUserForm(ModelForm[User]):
             'first_name': _('Имя'),
             'last_name': _('Фамилия'),
             'timezone_name': _('Часовой пояс'),
+            'statement_retention_days': _(
+                'Срок хранения банковских выписок, дней',
+            ),
         }
         widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(

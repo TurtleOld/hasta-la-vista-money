@@ -53,6 +53,7 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     transfer_service = providers.Factory(
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
+        account_repository=account_repository,
         statement_row_links=users.statement_row_link_service,
     )
     balance_trend_service: providers.Factory[BalanceTrendServiceProtocol] = (

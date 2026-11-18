@@ -1,6 +1,7 @@
 """ORM access for statement rows closed by a transfer or a transaction."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from functools import reduce
 from operator import or_
 
@@ -40,6 +41,46 @@ class StatementRowRepository:
     """Statement rows linked to movements and repayment rows."""
 
     @staticmethod
+    def bank_data_available_q(
+        now: datetime | None = None,
+        prefix: str = '',
+    ) -> Q:
+        """Return the row filter for still-stored bank details.
+
+        An explicit row deadline wins over the upload-level fallback, so a
+        row restored by a re-upload is available after the original cleanup.
+        """
+        moment = now or timezone.now()
+        return Q(**{f'{prefix}data_cleaned_at__isnull': True}) & (
+            Q(**{f'{prefix}data_expires_at__gt': moment})
+            | Q(
+                **{
+                    f'{prefix}data_expires_at__isnull': True,
+                    f'{prefix}upload__expires_at__gt': moment,
+                    f'{prefix}upload__retention_cleaned_at__isnull': True,
+                },
+            )
+        )
+
+    @staticmethod
+    def bank_data_due_q(
+        now: datetime | None = None,
+        prefix: str = '',
+    ) -> Q:
+        """Return the row filter for bank details due for cleanup."""
+        moment = now or timezone.now()
+        return Q(**{f'{prefix}data_cleaned_at__isnull': True}) & (
+            Q(**{f'{prefix}data_expires_at__lte': moment})
+            | Q(
+                **{
+                    f'{prefix}data_expires_at__isnull': True,
+                    f'{prefix}upload__expires_at__lte': moment,
+                    f'{prefix}upload__retention_cleaned_at__isnull': True,
+                },
+            )
+        )
+
+    @staticmethod
     def _linked_rows(
         movement: Transaction | TransferMoneyLog,
     ) -> QuerySet[BankStatementRow]:
@@ -75,22 +116,6 @@ class StatementRowRepository:
             **reopened,
         )
         return uploads
-
-    def lock_account_row(
-        self,
-        row_id: int,
-        account: Account,
-    ) -> BankStatementRow | None:
-        return (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload')
-            .filter(
-                pk=row_id,
-                upload__user_id=account.user_id,
-                upload__account=account,
-            )
-            .first()
-        )
 
     def lock_owned_upload_and_row(
         self,
