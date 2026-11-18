@@ -16,7 +16,6 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_import import (
     GENERATION_BUSY,
     GENERATION_CURRENT,
-    GENERATION_REPLACED,
     GENERATION_STARTED,
     StatementGenerationExpiredError,
 )
@@ -78,12 +77,13 @@ def process_bank_statement_task(
             'user',
             'account',
         ).get(id=upload_id)
-        _assert_account_importable(upload)
-
         service = ApplicationContainer().users.bank_statement_import_service()
-        generation, state = _start_generation(
+        generation = service.capture_generation(upload)
+        _assert_account_importable(upload)
+        state = _start_generation(
             service,
             upload,
+            generation,
             self.request.id or '',
         )
         if state == GENERATION_BUSY:
@@ -154,10 +154,11 @@ def process_bank_statement_task(
             'bank_statement_parse_failed',
             upload_id=upload_id,
         )
-        _mark_failure_unless_replaced(
+        _mark_failure_if_current(
             service,
             generation,
             upload_id,
+            self.request.id or '',
             f'{_("Ошибка парсинга")}: {e!s}',
         )
         raise
@@ -168,10 +169,11 @@ def process_bank_statement_task(
             upload_id=upload_id,
         )
         if self.request.retries >= self.max_retries:
-            _mark_failure_unless_replaced(
+            _mark_failure_if_current(
                 service,
                 generation,
                 upload_id,
+                self.request.id or '',
                 f'{_("Непредвиденная ошибка")}: {e!s}',
             )
         raise self.retry(
@@ -184,10 +186,11 @@ def process_bank_statement_task(
             'bank_statement_task_unexpected_error',
             upload_id=upload_id,
         )
-        _mark_failure_unless_replaced(
+        _mark_failure_if_current(
             service,
             generation,
             upload_id,
+            self.request.id or '',
             f'{_("Непредвиденная ошибка")}: {e!s}',
         )
         raise
@@ -204,15 +207,15 @@ def _assert_account_importable(upload: BankStatementUpload) -> None:
 def _start_generation(
     service: Any,
     upload: BankStatementUpload,
+    generation: Any,
     task_id: str,
-) -> tuple[Any, str]:
+) -> str:
     """Start a job only for the upload generation it captured."""
-    generation = service.capture_generation(upload)
-    state = service.start_upload(upload.pk, generation, task_id)
+    state: str = service.start_upload(upload.pk, generation, task_id)
     if state not in (GENERATION_BUSY, GENERATION_STARTED):
         service.resolve_expired_generation(upload.pk, generation, task_id)
         raise StatementGenerationExpiredError(state)
-    return generation, state
+    return state
 
 
 def _finalize_generation(
@@ -233,48 +236,19 @@ def _finalize_generation(
         raise StatementGenerationExpiredError(state)
 
 
-def _mark_failure_unless_replaced(
+def _mark_failure_if_current(
     service: Any,
     generation: Any,
     upload_id: int,
+    task_id: str,
     message: str,
 ) -> None:
-    """Mark a failed job only while it still owns the current generation."""
-    if not _generation_replaced(service, generation, upload_id):
-        _mark_upload_failed(upload_id, message)
-
-
-def _generation_replaced(
-    service: Any,
-    generation: Any,
-    upload_id: int,
-) -> bool:
-    """Tell whether failure handling belongs to a replaced generation."""
+    """Record a failure only while this run owns the upload generation."""
     if service is None or generation is None:
-        return False
-    try:
-        return bool(
-            service.generation_state_for(upload_id, generation)
-            == GENERATION_REPLACED,
-        )
-    except BankStatementUpload.DoesNotExist:
-        return True
-
-
-def _mark_upload_failed(upload_id: int, message: str) -> None:
-    """Перевести загрузку в FAILED с текстом ошибки."""
-    try:
-        upload = BankStatementUpload.objects.get(id=upload_id)
-    except BankStatementUpload.DoesNotExist:
         return
-    upload.status = BankStatementUpload.Status.FAILED
-    upload.failed_count = 1
-    upload.error_message = message
-    upload.save(
-        update_fields=[
-            'status',
-            'failed_count',
-            'error_message',
-            'updated_at',
-        ],
+    service.mark_failure_if_current(
+        upload_id,
+        generation,
+        task_id,
+        message,
     )

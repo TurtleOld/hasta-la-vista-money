@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         bank_statement_reconciliation,
     )
     from hasta_la_vista_money.users.services.bank_statement_import import (
+        StatementGeneration,
         StatementImportResult,
     )
     from hasta_la_vista_money.users.services.monthly_statistics_service import (
@@ -321,3 +322,11 @@ class BankStatementImportServiceProtocol(Protocol):
         self,
         upload: BankStatementUpload,
     ) -> StatementImportResult: ...
+
+    def mark_failure_if_current(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str,
+        message: str,
+    ) -> str: ...

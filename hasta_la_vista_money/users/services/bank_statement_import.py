@@ -380,26 +380,6 @@ class BankStatementImportService:
             )
         return GENERATION_STARTED
 
-    def generation_state_for(
-        self,
-        upload_id: int,
-        generation: StatementGeneration,
-    ) -> str:
-        """Read the current generation state under the account lock."""
-        with transaction.atomic():
-            account_id = (
-                BankStatementUpload.objects.filter(pk=upload_id)
-                .values_list('account_id', flat=True)
-                .first()
-            )
-            if account_id is None:
-                return GENERATION_REPLACED
-            self.account_repository.get_by_ids_for_update({account_id})
-            locked = BankStatementUpload.objects.select_for_update().get(
-                pk=upload_id,
-            )
-            return self.generation_state(locked, generation)
-
     def resolve_expired_generation(
         self,
         upload_id: int,
@@ -450,6 +430,50 @@ class BankStatementImportService:
                     'error_message',
                     'updated_at',
                 ],
+            )
+            return state
+
+    def mark_failure_if_current(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str,
+        message: str,
+    ) -> str:
+        """Record a failed run only while it still owns the generation.
+
+        Generation state, task ownership and the write share one
+        transaction under the account and upload locks, so a renewal
+        cannot slip between the check and the write. A replaced
+        generation or a newer task is left untouched; cleaned data gets
+        only the safe reupload reason, never the raw parser error.
+        """
+        with transaction.atomic():
+            account_id = self.identity_repository.upload_account_id(
+                upload_id,
+            )
+            if account_id is None:
+                return GENERATION_REPLACED
+            self.account_repository.get_by_ids_for_update({account_id})
+            locked = self.identity_repository.lock_upload(upload_id)
+            if locked is None:
+                return GENERATION_REPLACED
+            state = self.generation_state(locked, generation)
+            if state == GENERATION_REPLACED:
+                return state
+            if (
+                task_id
+                and locked.celery_task_id
+                and locked.celery_task_id != task_id
+            ):
+                return state
+            self.identity_repository.save_failed_upload(
+                locked,
+                (
+                    str(REUPLOAD_REQUIRED_MESSAGE)
+                    if state == GENERATION_EXPIRED
+                    else message
+                ),
             )
             return state
 

@@ -1,8 +1,9 @@
 """ORM access for bank statement identity fingerprints.
 
-The repository only answers questions about stored fingerprints; whether a
-match is an exact duplicate, a manual candidate, or a reason to fail closed
-is decided by ``StatementIdentityService``.
+The repository only answers questions about stored fingerprints and the
+upload rows that carry them; whether a match is an exact duplicate, a
+manual candidate, or a reason to fail closed is decided by
+``StatementIdentityService``.
 """
 
 from collections.abc import Iterable, Sequence
@@ -189,6 +190,42 @@ class StatementIdentityRepository:
         """Persist the immutable parser provenance of the upload."""
         upload.source_bank_code = bank_code
         upload.save(update_fields=['source_bank_code'])
+
+    @staticmethod
+    def upload_account_id(upload_id: int) -> int | None:
+        """Return the upload's account to lock before the upload row."""
+        return (
+            BankStatementUpload.objects.filter(pk=upload_id)
+            .values_list('account_id', flat=True)
+            .first()
+        )
+
+    @staticmethod
+    def lock_upload(upload_id: int) -> BankStatementUpload | None:
+        """Lock one upload row after its account; None if it is gone."""
+        return (
+            BankStatementUpload.objects.select_for_update()
+            .filter(pk=upload_id)
+            .first()
+        )
+
+    @staticmethod
+    def save_failed_upload(
+        upload: BankStatementUpload,
+        message: str,
+    ) -> None:
+        """Persist a failure without touching parsed bank data."""
+        upload.status = BankStatementUpload.Status.FAILED
+        upload.failed_count = 1
+        upload.error_message = message
+        upload.save(
+            update_fields=[
+                'status',
+                'failed_count',
+                'error_message',
+                'updated_at',
+            ],
+        )
 
     @staticmethod
     def create_manual_row(

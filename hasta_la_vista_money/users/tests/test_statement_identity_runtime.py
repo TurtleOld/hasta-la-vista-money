@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import ValidationError
-from django.db import connections
+from django.db import OperationalError, connections
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django.utils.functional import Promise
@@ -2054,3 +2054,235 @@ class ExpiredTaskOutcomeTest(StatementIdentityRuntimeFixture):
         )
         self.assertIn('повторно', upload.error_message)
         self.assertFalse(Transaction.objects.exists())
+
+
+class StatementFailureGenerationTest(StatementIdentityRuntimeFixture):
+    """Failure handling keeps the generation and task that own the upload."""
+
+    def _fail_import(
+        self,
+        upload: BankStatementUpload,
+        *,
+        task_id: str,
+        side_effect: Any,
+    ) -> None:
+        with (
+            patch(PARSER_PATH, self._parser(parse_result([]))),
+            patch.object(
+                BankStatementImportService,
+                'import_statement',
+                autospec=True,
+                side_effect=side_effect,
+            ),
+        ):
+            process_bank_statement_task.apply(
+                args=[upload.pk],
+                task_id=task_id,
+            )
+
+    def test_failure_after_cleanup_keeps_safe_reason(self) -> None:
+        upload = self.upload('failure-after-cleanup')
+        raw_bank_detail = 'счёт 40817810099910004312, перевод в аптеку'
+
+        class CleanupThenFail:
+            def __init__(self, _path: str) -> None:
+                pass
+
+            def parse(self) -> StatementParseResult:
+                container = ApplicationContainer()
+                service = container.users.bank_statement_retention_service()
+                service.cleanup_expired(
+                    now=timezone.now() + timedelta(days=365),
+                )
+                raise BankStatementParseError(raw_bank_detail)
+
+        with patch(PARSER_PATH, CleanupThenFail):
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertIn('повторно', upload.error_message)
+        self.assertNotIn('40817810099910004312', upload.error_message)
+        self.assertNotIn('аптеку', upload.error_message)
+
+    def test_failure_of_replaced_task_keeps_new_owner(self) -> None:
+        upload = self.upload('failure-replaced-owner')
+
+        def rename_owner(
+            _service: BankStatementImportService,
+            target: BankStatementUpload,
+            **_kwargs: Any,
+        ) -> None:
+            BankStatementUpload.objects.filter(pk=target.pk).update(
+                status=BankStatementUpload.Status.PROCESSING,
+                celery_task_id='newer-task',
+            )
+            raise ValueError('старый запуск упал')
+
+        self._fail_import(
+            upload,
+            task_id='old-task',
+            side_effect=rename_owner,
+        )
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+        self.assertEqual(upload.celery_task_id, 'newer-task')
+        self.assertEqual(upload.error_message, '')
+
+    def test_failure_of_renewed_generation_is_not_written(self) -> None:
+        upload = self.upload('failure-renewed-generation')
+        renewed_expiry = timezone.now() + timedelta(days=11)
+
+        def renew_then_fail(
+            _service: BankStatementImportService,
+            target: BankStatementUpload,
+            **_kwargs: Any,
+        ) -> None:
+            BankStatementUpload.objects.filter(pk=target.pk).update(
+                pdf_file='bank_statements/renewed-failure.pdf',
+                expires_at=renewed_expiry,
+                status=BankStatementUpload.Status.PENDING,
+                celery_task_id='',
+            )
+            raise BankStatementParseError('ошибка старого файла')
+
+        self._fail_import(
+            upload,
+            task_id='old-task',
+            side_effect=renew_then_fail,
+        )
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
+        self.assertEqual(
+            upload.pdf_file.name,
+            'bank_statements/renewed-failure.pdf',
+        )
+        self.assertEqual(upload.expires_at, renewed_expiry)
+        self.assertEqual(upload.error_message, '')
+
+    def test_current_failure_records_the_original_message(self) -> None:
+        upload = self.upload('failure-current-generation')
+
+        def fail_current(
+            _service: BankStatementImportService,
+            _target: BankStatementUpload,
+            **_kwargs: Any,
+        ) -> None:
+            raise ValueError('непредвиденная ошибка строки')
+
+        self._fail_import(
+            upload,
+            task_id='current-task',
+            side_effect=fail_current,
+        )
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertIn('непредвиденная ошибка строки', upload.error_message)
+
+
+class StatementFailureAtomicityTest(TransactionTestCase):
+    """A renewal cannot slip between the generation check and its write."""
+
+    fixtures = ['users.yaml']
+
+    @staticmethod
+    def _processing_upload() -> tuple[BankStatementUpload, Any, Any]:
+        user = User.objects.get(pk=1)
+        account = Account.objects.create(
+            user=user,
+            name_account='Счёт',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=user,
+            account=account,
+            pdf_file='bank_statements/atomic-failure.pdf',
+            file_hash='atomic-failure',
+            status=BankStatementUpload.Status.PROCESSING,
+            celery_task_id='old-task',
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+        return upload, service, service.capture_generation(upload)
+
+    def test_renewal_waits_for_the_whole_failure_transaction(self) -> None:
+        upload, service, generation = self._processing_upload()
+        original_state = BankStatementImportService.generation_state
+        checked = threading.Barrier(2)
+        release = threading.Event()
+        errors: list[BaseException] = []
+        outcome: list[str] = []
+
+        def checked_state(
+            locked: BankStatementUpload,
+            snapshot: Any,
+        ) -> str:
+            state = original_state(locked, snapshot)
+            checked.wait(timeout=10)
+            release.wait(timeout=10)
+            return state
+
+        def fail_current() -> None:
+            try:
+                bound_connection()
+                outcome.append(
+                    service.mark_failure_if_current(
+                        upload.pk,
+                        generation,
+                        'old-task',
+                        'старая ошибка',
+                    ),
+                )
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                connections.close_all()
+
+        def renew() -> None:
+            try:
+                bound_connection()
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '300ms'")
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    pdf_file='bank_statements/renewed-atomic.pdf',
+                    expires_at=timezone.now() + timedelta(days=21),
+                    status=BankStatementUpload.Status.PENDING,
+                    celery_task_id='',
+                    error_message='',
+                )
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                connections.close_all()
+
+        with patch.object(
+            BankStatementImportService,
+            'generation_state',
+            staticmethod(checked_state),
+        ):
+            worker = threading.Thread(target=fail_current)
+            worker.start()
+            checked.wait(timeout=10)
+            renewer = threading.Thread(target=renew)
+            renewer.start()
+            renewer.join(timeout=20)
+            release.set()
+            worker.join(timeout=30)
+
+        self.assertFalse(renewer.is_alive())
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(outcome, ['current'])
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], OperationalError)
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.error_message, 'старая ошибка')
+        self.assertEqual(
+            upload.pdf_file.name,
+            'bank_statements/atomic-failure.pdf',
+        )
