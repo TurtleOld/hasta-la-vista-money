@@ -508,6 +508,34 @@ def _synthetic_result(
     )
 
 
+def _transaction(position: int, **overrides: object) -> dict[str, object]:
+    values: dict[str, object] = {
+        'row_position': position,
+        'date': datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()),
+        'date_precision': 'day',
+        'amount': Decimal('-350.00'),
+        'transaction_type': 'expense',
+        'description': 'PMP SHOP',
+        'source_ref': f'{position + 1}-01.03.2026',
+        'source': 'rosdorbank',
+        'kind': 'card',
+        'merchant_key': 'SHOP',
+        'counterparty_account': '30232810000000000001',
+        'parse_error_code': '',
+    }
+    values.update(overrides)
+    return values
+
+
+def _result_with(*transactions: dict[str, object]) -> StatementParseResult:
+    return StatementParseResult(
+        transactions=list(transactions),
+        closing_balance=Decimal('56000.00'),
+        requires_markup=True,
+        bank_code=constants.BANK_CODE_ROSDORBANK,
+    )
+
+
 class RosDorBankErrorImportTest(TestCase):
     fixtures: list[str] = ['users.yaml']
 
@@ -535,12 +563,17 @@ class RosDorBankErrorImportTest(TestCase):
         )
 
     def _import(self, upload: BankStatementUpload, *, broken: bool) -> None:
+        self._import_result(upload, _synthetic_result(broken=broken))
+
+    def _import_result(
+        self,
+        upload: BankStatementUpload,
+        result: StatementParseResult,
+    ) -> None:
         with patch(
             'hasta_la_vista_money.users.services.bank_statement_import.BankStatementParser',
         ) as parser_class:
-            parser_class.return_value.parse.return_value = _synthetic_result(
-                broken=broken,
-            )
+            parser_class.return_value.parse.return_value = result
             generation = self.import_service.capture_generation(upload)
             self.import_service.import_statement(
                 upload,
@@ -549,8 +582,15 @@ class RosDorBankErrorImportTest(TestCase):
             self.import_service.finalize_import(
                 upload,
                 generation,
-                closing_balance=Decimal('56000.00'),
+                closing_balance=result.closing_balance,
             )
+
+    def _rows(self, upload: BankStatementUpload) -> list[BankStatementRow]:
+        return list(
+            BankStatementRow.objects.filter(upload=upload).order_by(
+                'source_row_position',
+            ),
+        )
 
     def _error_row(self, upload: BankStatementUpload) -> BankStatementRow:
         return BankStatementRow.objects.get(
@@ -742,3 +782,358 @@ class RosDorBankErrorImportTest(TestCase):
             ).exists(),
         )
         self.assertFalse(Transaction.objects.filter(user=self.user).exists())
+
+    @statement_identity_settings
+    def test_explicit_unknown_direction_keeps_known_amount(self) -> None:
+        upload = self._upload()
+        self._import_result(
+            upload,
+            _result_with(
+                _transaction(
+                    0,
+                    amount=Decimal('80.00'),
+                    transaction_type=None,
+                    parse_error_code='missing_direction',
+                ),
+            ),
+        )
+
+        row = self._rows(upload)[0]
+        self.assertEqual(row.amount, Decimal('80.00'))
+        self.assertIsNone(row.transaction_type)
+        self.assertEqual(row.parse_error_code, 'missing_direction')
+        self.assertEqual(row.decision, BankStatementRow.Decision.PARSE_ERROR)
+
+    @statement_identity_settings
+    def test_explicit_direction_keeps_known_direction_without_amount(
+        self,
+    ) -> None:
+        upload = self._upload()
+        self._import_result(
+            upload,
+            _result_with(
+                _transaction(
+                    0,
+                    amount=None,
+                    transaction_type='expense',
+                    parse_error_code='missing_amount',
+                ),
+            ),
+        )
+
+        row = self._rows(upload)[0]
+        self.assertIsNone(row.amount)
+        self.assertEqual(
+            row.transaction_type,
+            BankStatementRow.TransactionType.EXPENSE,
+        )
+        self.assertEqual(row.parse_error_code, 'missing_amount')
+
+    @statement_identity_settings
+    def test_legacy_signed_amount_still_sets_direction(self) -> None:
+        upload = self._upload()
+        legacy_expense = _transaction(0, amount=Decimal('-350.00'))
+        legacy_income = _transaction(
+            1,
+            amount=Decimal('120.00'),
+            source_ref='2-01.03.2026',
+        )
+        del legacy_expense['transaction_type']
+        del legacy_income['transaction_type']
+        self._import_result(upload, _result_with(legacy_expense, legacy_income))
+
+        expense, income = self._rows(upload)
+        self.assertEqual(
+            expense.transaction_type,
+            BankStatementRow.TransactionType.EXPENSE,
+        )
+        self.assertEqual(expense.amount, Decimal('350.00'))
+        self.assertEqual(
+            income.transaction_type,
+            BankStatementRow.TransactionType.INCOME,
+        )
+        self.assertEqual(income.amount, Decimal('120.00'))
+
+    @statement_identity_settings
+    def test_parse_error_cancel_cannot_close_a_valid_debit(self) -> None:
+        upload = self._upload()
+        self._import_result(
+            upload,
+            _result_with(
+                _transaction(0, amount=Decimal('-100.00')),
+                _transaction(
+                    1,
+                    amount=Decimal('100.00'),
+                    kind='cancel',
+                    parse_error_code='missing_date',
+                ),
+            ),
+        )
+
+        debit, error = self._rows(upload)
+        self.assertEqual(
+            debit.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+
+    @statement_identity_settings
+    def test_parse_error_debit_cannot_prove_a_valid_cancel(self) -> None:
+        upload = self._upload()
+        self._import_result(
+            upload,
+            _result_with(
+                _transaction(
+                    0,
+                    amount=Decimal('-100.00'),
+                    parse_error_code='missing_date',
+                ),
+                _transaction(1, amount=Decimal('100.00'), kind='cancel'),
+            ),
+        )
+
+        error, cancel = self._rows(upload)
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+        self.assertEqual(
+            cancel.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    @statement_identity_settings
+    def test_error_row_actions_are_defer_and_exclude_only(self) -> None:
+        upload = self._upload()
+        self._import(upload, broken=True)
+        error = self._error_row(upload)
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
+            {'outcome': 'parse_error'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_row_defer',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        self.assertContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_row_exclude',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        self.assertNotContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_reconciliation_decide',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        self.assertNotContains(response, 'name="decision" value="new"')
+        self.assertNotContains(response, 'name="decision" value="linked"')
+
+    @statement_identity_settings
+    def test_error_row_actions_are_owner_only(self) -> None:
+        upload = self._upload()
+        self._import(upload, broken=True)
+        error = self._error_row(upload)
+        stranger = User.objects.create_user(username='stranger')
+        self.client.force_login(stranger)
+
+        page = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
+        )
+        defer = self.client.post(
+            reverse(
+                'finance_account:bank_statement_row_defer',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        exclude = self.client.post(
+            reverse(
+                'finance_account:bank_statement_row_exclude',
+                args=[upload.pk, error.pk],
+            ),
+            {'reason': 'Чужая строка'},
+        )
+
+        self.assertEqual(page.status_code, 404)
+        self.assertEqual(defer.status_code, 404)
+        self.assertEqual(exclude.status_code, 404)
+        error.refresh_from_db()
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+
+    @statement_identity_settings
+    def test_owner_posts_defer_exclude_and_resume_with_history(self) -> None:
+        upload = self._upload()
+        self._import(upload, broken=True)
+        error = self._error_row(upload)
+        self.client.force_login(self.user)
+        defer_url = reverse(
+            'finance_account:bank_statement_row_defer',
+            args=[upload.pk, error.pk],
+        )
+        exclude_url = reverse(
+            'finance_account:bank_statement_row_exclude',
+            args=[upload.pk, error.pk],
+        )
+        resume_url = reverse(
+            'finance_account:bank_statement_row_resume',
+            args=[upload.pk, error.pk],
+        )
+
+        defer = self.client.post(defer_url)
+        error.refresh_from_db()
+        self.assertEqual(defer.status_code, 302)
+        self.assertEqual(error.decision, BankStatementRow.Decision.DEFERRED)
+
+        resume_after_defer = self.client.post(resume_url)
+        error.refresh_from_db()
+        self.assertEqual(resume_after_defer.status_code, 302)
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+
+        exclude = self.client.post(
+            exclude_url,
+            {'reason': 'Не операция'},
+        )
+        error.refresh_from_db()
+        self.assertEqual(exclude.status_code, 302)
+        self.assertEqual(error.decision, BankStatementRow.Decision.EXCLUDED)
+        self.assertEqual(error.decision_reason, 'Не операция')
+
+        resume_after_exclude = self.client.post(resume_url)
+        error.refresh_from_db()
+        self.assertEqual(resume_after_exclude.status_code, 302)
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+        self.assertEqual(error.decision_audits.count(), 4)
+
+    @statement_identity_settings
+    def test_cleaned_error_row_hides_actions_and_keeps_restore_count(
+        self,
+    ) -> None:
+        upload = self._upload()
+        self._import(upload, broken=True)
+        error = self._error_row(upload)
+        BankStatementRow.objects.filter(pk=error.pk).update(
+            data_cleaned_at=timezone.now(),
+            transaction_type=None,
+            transaction_date=None,
+            amount=None,
+            description='',
+        )
+        self.client.force_login(self.user)
+        container = ApplicationContainer()
+
+        page = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
+            {'outcome': 'parse_error'},
+        )
+        defer = self.client.post(
+            reverse(
+                'finance_account:bank_statement_row_defer',
+                args=[upload.pk, error.pk],
+            ),
+        )
+
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Требуется повторная загрузка')
+        self.assertNotContains(
+            page,
+            reverse(
+                'finance_account:bank_statement_row_defer',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        self.assertNotContains(
+            page,
+            reverse(
+                'finance_account:bank_statement_row_exclude',
+                args=[upload.pk, error.pk],
+            ),
+        )
+        self.assertEqual(defer.status_code, 410)
+        error.refresh_from_db()
+        self.assertEqual(error.decision, BankStatementRow.Decision.PARSE_ERROR)
+        upload.refresh_from_db()
+        self.assertEqual(upload.awaiting_decision_count, 1)
+        self.assertEqual(
+            container.users.bank_statement_reconciliation_service()
+            .upload_history(self.user.pk)
+            .get(pk=upload.pk)
+            .restore_count,
+            1,
+        )
+
+    @statement_identity_settings
+    def test_parse_error_keeps_identity_uncertainty_after_cleanup(
+        self,
+    ) -> None:
+        upload = self._upload()
+        self._import_result(
+            upload,
+            _result_with(
+                _transaction(
+                    0,
+                    date=None,
+                    date_precision='unknown',
+                    amount=None,
+                    transaction_type=None,
+                    source_ref=None,
+                    kind='unknown',
+                    merchant_key='',
+                    counterparty_account=None,
+                    parse_error_code='missing_date',
+                ),
+            ),
+        )
+        error = self._error_row(upload)
+        links = ApplicationContainer().users.statement_row_link_service()
+        identities = (
+            ApplicationContainer().users.statement_identity_repository()
+        )
+
+        self.assertIsNone(error.source_ref_hash)
+        self.assertTrue(identities.has_untrusted_identity(self.account.pk))
+        links.defer(error.pk, self.user.pk)
+        links.resume(error.pk, self.user.pk)
+        self.assertTrue(identities.has_untrusted_identity(self.account.pk))
+
+        BankStatementRow.objects.filter(pk=error.pk).update(
+            data_cleaned_at=timezone.now(),
+        )
+        self.assertTrue(identities.has_untrusted_identity(self.account.pk))
+
+    @statement_identity_settings
+    def test_parser_fix_recovery_keeps_the_owner_decision_and_history(
+        self,
+    ) -> None:
+        upload = self._upload()
+        self._import(upload, broken=True)
+        error = self._error_row(upload)
+        links = ApplicationContainer().users.statement_row_link_service()
+        links.defer(error.pk, self.user.pk)
+        audits = error.decision_audits.count()
+
+        self._import(upload, broken=False)
+
+        error.refresh_from_db()
+        self.assertEqual(error.decision, BankStatementRow.Decision.DEFERRED)
+        self.assertEqual(
+            error.resume_decision,
+            BankStatementRow.Decision.PARSE_ERROR,
+        )
+        self.assertIsNone(error.amount)
+        self.assertEqual(error.decision_audits.count(), audits)

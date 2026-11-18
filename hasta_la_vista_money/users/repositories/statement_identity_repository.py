@@ -7,6 +7,7 @@ manual candidate, or a reason to fail closed is decided by
 """
 
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 from django.db.models import Q
 
@@ -22,6 +23,7 @@ _UNRESOLVED_ROW_DECISIONS = (
     BankStatementRow.Decision.AWAITING_MARKUP,
     BankStatementRow.Decision.NEEDS_TRANSFER,
     BankStatementRow.Decision.DEFERRED,
+    BankStatementRow.Decision.PARSE_ERROR,
 )
 
 _UNTRUSTED = Q(
@@ -237,6 +239,21 @@ class StatementIdentityRepository:
             upload_id=upload_id,
             decision__in=decisions,
         ).exists()
+
+    @staticmethod
+    def recover_parse_error_row(
+        row_id: int,
+        defaults: dict[str, Any],
+    ) -> int:
+        """Rewrite one still-unparsed row after its position parses again.
+
+        The decision guard keeps an owner decision that arrived between the
+        two imports; the caller owns the surrounding transaction.
+        """
+        return BankStatementRow.objects.filter(
+            pk=row_id,
+            decision=BankStatementRow.Decision.PARSE_ERROR,
+        ).update(resume_decision='', **defaults)
 
     @staticmethod
     def save_upload_fields(

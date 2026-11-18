@@ -9,7 +9,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import QuerySet
+from django.db.models import BooleanField, ExpressionWrapper, QuerySet
 from django.http import (
     Http404,
     HttpRequest,
@@ -45,6 +45,9 @@ from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     RosDorBankRowKind,
@@ -363,7 +366,12 @@ class BankStatementReconciliationView(
             self.object,
             self.request.GET.get('outcome'),
         )
-        rows = service.reconciliation_rows(self.object, outcome)
+        rows = service.reconciliation_rows(self.object, outcome).annotate(
+            bank_data_available=ExpressionWrapper(
+                StatementRowRepository.bank_data_available_q(),
+                output_field=BooleanField(),
+            ),
+        )
         context['page_obj'] = Paginator(
             rows,
             STATEMENT_RECONCILIATION_PAGE_SIZE,

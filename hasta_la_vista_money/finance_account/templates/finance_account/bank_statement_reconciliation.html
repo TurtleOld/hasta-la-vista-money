@@ -104,6 +104,7 @@
                 </div>
             </div>
             {% if row.decision == 'pending' %}
+                {% if row.bank_data_available %}
                 <div class="mt-5 flex flex-wrap gap-3">
                     <form id="linked-{{ row.pk }}" method="post" action="{% url 'finance_account:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
@@ -135,7 +136,33 @@
                         </button>
                     </form>
                 </div>
+                {% else %}
+                    <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
+                {% endif %}
+            {% elif row.decision == 'parse_error' %}
+                {% if row.bank_data_available %}
+                <div class="mt-5 flex flex-wrap gap-3">
+                    <form method="post" action="{% url 'finance_account:bank_statement_row_defer' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                            {% translate 'Отложить' %}
+                        </button>
+                    </form>
+                    <form class="flex flex-wrap items-center gap-2" method="post" action="{% url 'finance_account:bank_statement_row_exclude' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <input type="text" name="reason" class="rounded border border-gray-300 px-3 py-2" placeholder="{% translate 'Причина исключения' %}" aria-label="{% translate 'Причина исключения' %}" required>
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                            {% translate 'Исключить' %}
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                    <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
+                {% endif %}
             {% elif row.decision == 'needs_transfer' %}
+                {% if row.bank_data_available %}
                 <div class="mt-5 flex flex-wrap items-center gap-3">
                     <a class="rounded border border-gray-300 px-4 py-2" href="{% url 'finance_account:list' %}#pending-transfers">{% translate 'Провести переводом' %}</a>
                     <form method="post" action="{% url 'finance_account:bank_statement_row_defer' upload.pk row.pk %}">
@@ -150,7 +177,11 @@
                         <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Исключить' %}</button>
                     </form>
                 </div>
+                {% else %}
+                    <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
+                {% endif %}
             {% elif row.decision == 'deferred' or row.decision == 'excluded' %}
+                {% if row.bank_data_available %}
                 <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_row_resume' upload.pk row.pk %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -158,13 +189,20 @@
                         {% translate 'Возобновить' %}
                     </button>
                 </form>
+                {% else %}
+                    <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
+                {% endif %}
             {% elif row.decision == 'expired' %}
                 <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
             {% elif row.decision == 'linked' %}
+                {% if row.bank_data_available %}
                 <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_reconciliation_revise' upload.pk row.pk %}">
                     {% csrf_token %}
                     <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Пересмотреть и импортировать как новую' %}</button>
                 </form>
+                {% else %}
+                    <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
+                {% endif %}
             {% elif row.decision == 'new' %}
                 <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Связать эту строку с существующей операцией нельзя до появления безопасного аннулирования финансовых движений.' %}</p>
             {% endif %}

@@ -1026,21 +1026,16 @@ class BankStatementImportService:
                 and not trans.get('parse_error_code')
             ):
                 # A parser fix makes the same physical row readable again.
-                BankStatementRow.objects.filter(
-                    pk=row.pk,
-                    decision=BankStatementRow.Decision.PARSE_ERROR,
-                ).update(
-                    resume_decision='',
-                    **{
-                        key: value
-                        for key, value in self._markup_values(
-                            trans,
-                            identity,
-                            position,
-                            cancelled,
-                        ).items()
-                        if key != 'source_row_position'
-                    },
+                values = self._markup_values(
+                    trans,
+                    identity,
+                    position,
+                    cancelled,
+                )
+                values.pop('source_row_position')
+                self.identity_repository.recover_parse_error_row(
+                    row.pk,
+                    values,
                 )
             if identity is not None and identity.matched_transactions:
                 self._add_identity_candidates(
@@ -1059,8 +1054,13 @@ class BankStatementImportService:
         """Bank fields of one markup row; unknown values stay unknown."""
         amount = trans.get('amount')
         error_code = trans.get('parse_error_code') or ''
-        return {
-            'transaction_type': (
+        if 'transaction_type' in trans:
+            # The parser knows the direction independently of the amount:
+            # an explicit None means unknown, never a guessed direction.
+            transaction_type = trans.get('transaction_type') or None
+        else:
+            # Legacy parse results only carry a signed amount.
+            transaction_type = (
                 None
                 if amount is None
                 else (
@@ -1068,7 +1068,9 @@ class BankStatementImportService:
                     if amount > 0
                     else TransactionType.EXPENSE
                 )
-            ),
+            )
+        return {
+            'transaction_type': transaction_type,
             'transaction_date': trans.get('date'),
             'amount': abs(amount) if amount is not None else None,
             'description': strip_pii(str(trans.get('description') or ''))[
@@ -1434,12 +1436,17 @@ class BankStatementImportService:
 
 
 def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
-    """Pair each cancel with a debit of the same device owner and amount."""
+    """Pair each cancel with a debit of the same device owner and amount.
+
+    A row with a parse error carries only partial bank fields: it can neither
+    prove a cancel nor be closed by one, so a valid neighbour stays unresolved.
+    """
     debits: dict[tuple[str, Decimal], list[int]] = {}
     for idx, trans in rows.items():
         amount = trans.get('amount')
         if (
-            trans.get('kind') == RosDorBankRowKind.CARD
+            not trans.get('parse_error_code')
+            and trans.get('kind') == RosDorBankRowKind.CARD
             and amount is not None
             and amount < 0
         ):
@@ -1449,7 +1456,10 @@ def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
             ).append(idx)
     positions: set[int] = set()
     for idx, trans in rows.items():
-        if trans.get('kind') != RosDorBankRowKind.CANCEL:
+        if (
+            trans.get('parse_error_code')
+            or trans.get('kind') != RosDorBankRowKind.CANCEL
+        ):
             continue
         amount = trans.get('amount')
         if amount is None:
