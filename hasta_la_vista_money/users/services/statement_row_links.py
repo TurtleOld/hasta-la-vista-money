@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import (
@@ -14,7 +15,10 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.models import Transaction
-from hasta_la_vista_money.users.models import BankStatementRow
+from hasta_la_vista_money.users.models import (
+    BankStatementRow,
+    BankStatementUpload,
+)
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
@@ -23,7 +27,16 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
+    ReconciliationExpiredError,
     StaleStatementCandidateError,
+)
+
+_SUSPENDABLE_DECISIONS = frozenset(
+    {
+        BankStatementRow.Decision.AWAITING_MARKUP,
+        BankStatementRow.Decision.PENDING,
+        BankStatementRow.Decision.NEEDS_TRANSFER,
+    },
 )
 
 
@@ -109,9 +122,11 @@ class StatementRowLinkService:
             ),
             transaction.atomic(),
         ):
-            row = self.statement_row_repository.lock_owned_row(
-                row_id,
-                user_id,
+            _upload, row = (
+                self.statement_row_repository.lock_owned_upload_and_row(
+                    row_id,
+                    user_id,
+                )
             )
             if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
                 raise ReconciliationDecisionConflictError(row.decision)
@@ -127,3 +142,143 @@ class StatementRowLinkService:
                 raise StaleStatementCandidateError(transfer_id)
             self.close_repayment_row(row, transfer)
             return row
+
+    def defer(self, row_id: int, user_id: int) -> BankStatementRow:
+        """Leave the row unresolved without touching money."""
+        return self._suspend(
+            row_id,
+            user_id,
+            BankStatementRow.Decision.DEFERRED,
+        )
+
+    def exclude(
+        self,
+        row_id: int,
+        user_id: int,
+        reason: str,
+    ) -> BankStatementRow:
+        """Close the row as consciously left out, with the owner's reason."""
+        cleaned = (reason or '').strip()
+        if not cleaned:
+            raise ValidationError(
+                _('Укажите причину исключения строки.'),
+            )
+        return self._suspend(
+            row_id,
+            user_id,
+            BankStatementRow.Decision.EXCLUDED,
+            reason=cleaned,
+        )
+
+    def resume(self, row_id: int, user_id: int) -> BankStatementRow:
+        """Return a suspended row to the mechanism it came from.
+
+        A repeated resume is idempotent only when the last decision audit
+        proves that this row was already resumed to its current decision.
+        """
+        with (
+            audit_operation(
+                kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+            ),
+            transaction.atomic(),
+        ):
+            upload, row = (
+                self.statement_row_repository.lock_owned_upload_and_row(
+                    row_id,
+                    user_id,
+                )
+            )
+            if row.decision not in {
+                BankStatementRow.Decision.DEFERRED,
+                BankStatementRow.Decision.EXCLUDED,
+            }:
+                if self._resume_already_applied(row):
+                    return row
+                self._assert_data_available(upload, row_id)
+                raise ReconciliationDecisionConflictError(row.decision)
+            if row.transaction_id or row.transfer_id:
+                # A suspended row never owns a movement; return it only by
+                # the audited decision that detached it first.
+                raise ReconciliationDecisionConflictError('linked')
+            target = row.resume_decision
+            if target not in _SUSPENDABLE_DECISIONS:
+                raise ReconciliationDecisionConflictError(row.decision)
+            self._assert_data_available(upload, row_id)
+            row.decision = target
+            row.decision_reason = ''
+            row.decided_at = timezone.now()
+            row.save(
+                update_fields=[
+                    'decision',
+                    'decision_reason',
+                    'decided_at',
+                ],
+            )
+            self.statement_row_repository.record_decision(row, user_id)
+            self.reconciliation_service.refresh_outcome_counts(upload)
+            return row
+
+    @staticmethod
+    def _resume_already_applied(row: BankStatementRow) -> bool:
+        """Tell a repeated resume from an arbitrary decision on a row.
+
+        ``resume_decision`` is kept after a resume as the proof that the
+        row was suspended; the last audit entry must also carry the same
+        decision. An unrelated decision that merely left the row PENDING
+        has no suspension proof and is rejected.
+        """
+        if row.decision not in _SUSPENDABLE_DECISIONS:
+            return False
+        if row.resume_decision != row.decision:
+            return False
+        last = (
+            row.decision_audits.order_by('-created_at', '-pk')
+            .values_list('decision', flat=True)
+            .first()
+        )
+        return last == row.decision
+
+    @transaction.atomic
+    def _suspend(
+        self,
+        row_id: int,
+        user_id: int,
+        decision: str,
+        reason: str = '',
+    ) -> BankStatementRow:
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            upload, row = (
+                self.statement_row_repository.lock_owned_upload_and_row(
+                    row_id,
+                    user_id,
+                )
+            )
+            if row.decision == decision:
+                return row
+            if row.decision not in _SUSPENDABLE_DECISIONS:
+                raise ReconciliationDecisionConflictError(row.decision)
+            self._assert_data_available(upload, row_id)
+            if row.transaction_id or row.transfer_id:
+                raise ReconciliationDecisionConflictError('linked')
+            self.statement_row_repository.suspend_row(
+                row,
+                decision,
+                row.decision,
+                reason,
+                user_id,
+            )
+            self.reconciliation_service.refresh_outcome_counts(upload)
+            return row
+
+    @staticmethod
+    def _assert_data_available(
+        upload: BankStatementUpload,
+        row_id: int,
+    ) -> None:
+        if (
+            upload.retention_cleaned_at is not None
+            or timezone.now() >= upload.expires_at
+        ):
+            raise ReconciliationExpiredError(row_id)

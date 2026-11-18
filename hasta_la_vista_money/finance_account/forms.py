@@ -25,6 +25,7 @@ from django.forms import (
     IntegerField,
     ModelChoiceField,
     Select,
+    Textarea,
 )
 from django.utils.translation import gettext_lazy as _
 
@@ -559,3 +560,13 @@ class RepaymentTransferLinkForm(Form):
     """The transfer an owner picked to close a repayment row."""
 
     transfer = IntegerField(min_value=1)
+
+
+class StatementRowExcludeForm(Form):
+    """The owner's reason for consciously leaving a statement row out."""
+
+    reason = CharField(
+        label=_('Причина исключения'),
+        strip=True,
+        widget=Textarea(attrs={'rows': 2}),
+    )

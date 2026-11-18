@@ -253,6 +253,17 @@ class StatementRowLinkServiceProtocol(Protocol):
         user_id: int,
     ) -> BankStatementRow: ...
 
+    def defer(self, row_id: int, user_id: int) -> BankStatementRow: ...
+
+    def exclude(
+        self,
+        row_id: int,
+        user_id: int,
+        reason: str,
+    ) -> BankStatementRow: ...
+
+    def resume(self, row_id: int, user_id: int) -> BankStatementRow: ...
+
 
 @runtime_checkable
 class BankStatementRetentionServiceProtocol(Protocol):

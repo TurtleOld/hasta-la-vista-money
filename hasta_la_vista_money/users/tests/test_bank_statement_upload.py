@@ -38,6 +38,9 @@ from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
@@ -1042,7 +1045,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.save(update_fields=['file_hash', 'expires_at'])
 
         retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(),
+            BankStatementReconciliationService(StatementRowRepository()),
         )
         before_count = retention_service.cleanup_expired(
             deadline - timedelta(microseconds=1),
@@ -1111,7 +1114,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.save(update_fields=['expires_at'])
         storage = self.upload.pdf_file.storage
         retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(),
+            BankStatementReconciliationService(StatementRowRepository()),
         )
 
         with (
@@ -1535,7 +1538,8 @@ class TestBankStatementReconciliationView(TestCase):
             date=self.candidate.date,
         )
 
-        candidates = BankStatementReconciliationService().current_candidates(
+        service = BankStatementReconciliationService(StatementRowRepository())
+        candidates = service.current_candidates(
             self.row,
         )
 

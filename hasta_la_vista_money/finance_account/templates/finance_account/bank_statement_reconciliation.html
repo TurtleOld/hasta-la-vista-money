@@ -14,6 +14,9 @@
         <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>
         <a href="?outcome=linked" class="rounded px-3 py-2 {% if outcome == 'linked' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Уже учтённые' %}</a>
         <a href="?outcome=new" class="rounded px-3 py-2 {% if outcome == 'new' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Новые операции' %}</a>
+        <a href="?outcome=needs_transfer" class="rounded px-3 py-2 {% if outcome == 'needs_transfer' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нужен перевод' %}</a>
+        <a href="?outcome=deferred" class="rounded px-3 py-2 {% if outcome == 'deferred' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Отложенные' %}</a>
+        <a href="?outcome=excluded" class="rounded px-3 py-2 {% if outcome == 'excluded' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Исключённые' %}</a>
     </nav>
     {% if outcome == 'pending' %}
         <form id="bulk-form"
@@ -57,6 +60,14 @@
                 <div>
                     <h2 class="mb-3 font-semibold">{% translate 'Строка выписки' %}</h2>
                     {% if outcome == 'all' %}<p class="mb-2 text-sm font-medium">{{ row.get_decision_display }}</p>{% endif %}
+                    {% if row.decision_reason %}<p class="mb-2 text-sm">{{ row.decision_reason }}</p>{% endif %}
+                    {% if row.decision_audits.all %}
+                        <ul class="mb-2 text-sm text-gray-600 dark:text-gray-300">
+                            {% for decision_audit in row.decision_audits.all %}
+                                <li>{{ decision_audit.created_at|date:'d.m.Y H:i' }} — {{ decision_audit.get_decision_display }}{% if decision_audit.reason %}: {{ decision_audit.reason }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
                     <p>{{ row.transaction_date|date:'d.m.Y H:i' }}</p>
                     <p>{{ row.amount }} {{ upload.account.currency }}</p>
                     <p>{{ row.get_transaction_type_display }}</p>
@@ -100,7 +111,47 @@
                             {% translate 'Новая операция' %}
                         </button>
                     </form>
+                    <form method="post" action="{% url 'finance_account:bank_statement_row_defer' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                            {% translate 'Отложить' %}
+                        </button>
+                    </form>
+                    <form class="flex flex-wrap items-center gap-2" method="post" action="{% url 'finance_account:bank_statement_row_exclude' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <input type="text" name="reason" class="rounded border border-gray-300 px-3 py-2" placeholder="{% translate 'Причина исключения' %}" aria-label="{% translate 'Причина исключения' %}" required>
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                            {% translate 'Исключить' %}
+                        </button>
+                    </form>
                 </div>
+            {% elif row.decision == 'needs_transfer' %}
+                <div class="mt-5 flex flex-wrap items-center gap-3">
+                    <a class="rounded border border-gray-300 px-4 py-2" href="{% url 'finance_account:list' %}#pending-transfers">{% translate 'Провести переводом' %}</a>
+                    <form method="post" action="{% url 'finance_account:bank_statement_row_defer' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Отложить' %}</button>
+                    </form>
+                    <form class="flex flex-wrap items-center gap-2" method="post" action="{% url 'finance_account:bank_statement_row_exclude' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <input type="text" name="reason" class="rounded border border-gray-300 px-3 py-2" placeholder="{% translate 'Причина исключения' %}" aria-label="{% translate 'Причина исключения' %}" required>
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Исключить' %}</button>
+                    </form>
+                </div>
+            {% elif row.decision == 'deferred' or row.decision == 'excluded' %}
+                <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_row_resume' upload.pk row.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                        {% translate 'Возобновить' %}
+                    </button>
+                </form>
+            {% elif row.decision == 'expired' %}
+                <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Банковские данные удалены по сроку хранения. Требуется повторная загрузка выписки.' %}</p>
             {% elif row.decision == 'linked' %}
                 <form class="mt-5" method="post" action="{% url 'finance_account:bank_statement_reconciliation_revise' upload.pk row.pk %}">
                     {% csrf_token %}

@@ -129,6 +129,15 @@
                                         {% csrf_token %}
                                         <button type="submit">{% translate 'Не погашение' %}</button>
                                     </form>
+                                    <form method="post" action="{% url 'finance_account:bank_statement_row_defer' item.row.upload_id item.row.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit">{% translate 'Отложить' %}</button>
+                                    </form>
+                                    <form method="post" action="{% url 'finance_account:bank_statement_row_exclude' item.row.upload_id item.row.pk %}">
+                                        {% csrf_token %}
+                                        <input type="text" name="reason-{{ item.row.pk }}" placeholder="{% translate 'Причина исключения' %}" aria-label="{% translate 'Причина исключения' %}">
+                                        <button type="submit">{% translate 'Исключить' %}</button>
+                                    </form>
                                 </div>
                             {% endfor %}
                         </div>

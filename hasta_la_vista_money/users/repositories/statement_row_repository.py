@@ -92,17 +92,68 @@ class StatementRowRepository:
             .first()
         )
 
-    def lock_owned_row(self, row_id: int, user_id: int) -> BankStatementRow:
-        """Raises ``BankStatementRow.DoesNotExist`` for a foreign row."""
-        return (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload__account', 'upload__user')
-            .get(
+    def lock_owned_upload_and_row(
+        self,
+        row_id: int,
+        user_id: int,
+    ) -> tuple[BankStatementUpload, BankStatementRow]:
+        """Lock account, upload and row in the agreed decision order.
+
+        The upload and account are resolved without a lock first so the
+        ``FOR UPDATE`` queries lock plain rows: a nullable join cannot be
+        locked. Raises ``BankStatementRow.DoesNotExist`` for a foreign row.
+        """
+        owner = (
+            BankStatementRow.objects.filter(
                 pk=row_id,
                 upload__user_id=user_id,
                 upload__account__user_id=user_id,
             )
+            .values_list('upload_id', 'upload__account_id')
+            .first()
         )
+        if owner is None:
+            raise BankStatementRow.DoesNotExist
+        upload_id, account_id = owner
+        account = Account.objects.select_for_update().get(pk=account_id)
+        upload = BankStatementUpload.objects.select_for_update().get(
+            pk=upload_id,
+            user_id=user_id,
+        )
+        upload.account = account
+        row = BankStatementRow.objects.select_for_update().get(
+            pk=row_id,
+            upload=upload,
+        )
+        row.upload = upload
+        return upload, row
+
+    def suspend_row(
+        self,
+        row: BankStatementRow,
+        decision: str,
+        resume_decision: str,
+        reason: str,
+        actor_id: int,
+    ) -> None:
+        """Write one suspension decision with its audit entry.
+
+        Callers own the locks and the state guards; this keeps the defer
+        transition identical for markup and reconciliation paths.
+        """
+        row.decision = decision
+        row.resume_decision = resume_decision
+        row.decision_reason = reason
+        row.decided_at = timezone.now()
+        row.save(
+            update_fields=[
+                'decision',
+                'resume_decision',
+                'decision_reason',
+                'decided_at',
+            ],
+        )
+        self.record_decision(row, actor_id, reason)
 
     def lock_owned_transfer(
         self,
@@ -172,9 +223,15 @@ class StatementRowRepository:
         row.decided_at = timezone.now()
         row.save(update_fields=['transfer', 'decision', 'decided_at'])
 
-    def record_decision(self, row: BankStatementRow, actor_id: int) -> None:
+    def record_decision(
+        self,
+        row: BankStatementRow,
+        actor_id: int,
+        reason: str = '',
+    ) -> None:
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=actor_id,
             decision=row.decision,
+            reason=reason,
         )

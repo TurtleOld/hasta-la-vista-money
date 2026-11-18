@@ -60,7 +60,7 @@
                 {% endif %}
             </div>
 
-            {# one form: every action button submits the «Пропустить» marks #}
+            {# one form: every action button submits the «Отложить» marks #}
             <form id="markup-form" method="post" action="{% url 'finance_account:bank_statement_markup_decide' upload.pk %}">
                 {% csrf_token %}
                 {% for item in rows %}{% with row=item.row %}
@@ -113,9 +113,11 @@
                                 </select>
                             {% endif %}
                             <label class="markup-check-all">
-                                <input type="checkbox" name="skip-{{ row.pk }}"{% if item.duplicate %} checked{% endif %}>
-                                {% translate 'Пропустить' %}
+                                <input type="checkbox" name="defer-{{ row.pk }}"{% if item.duplicate %} checked{% endif %}>
+                                {% translate 'Отложить' %}
                             </label>
+                            <input type="text" name="reason-{{ row.pk }}" class="markup-select" placeholder="{% translate 'Причина исключения' %}" aria-label="{% translate 'Причина исключения' %}">
+                            <button type="submit" form="markup-form" formaction="{% url 'finance_account:bank_statement_row_exclude' upload.pk row.pk %}" class="finances-button finances-button-secondary">{% translate 'Исключить' %}</button>
                         </div>
                     </div>
                     {% endwith %}

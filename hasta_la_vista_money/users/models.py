@@ -231,7 +231,17 @@ class BankStatementRow(Model):
         EXPIRED = 'expired', _('Срок решения истёк')
         AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
         MUTUAL_CANCEL = 'mutual_cancel', _('Взаимная отмена')
+        # Legacy value: never written, migrated to DEFERRED.
         SKIPPED = 'skipped', _('Пропущена')
+        DEFERRED = 'deferred', _('Отложена')
+        EXCLUDED = 'excluded', _('Исключена')
+
+    class ResumeDecision(TextChoices):
+        """Mechanism a suspended row returns to when resumed."""
+
+        AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
+        PENDING = 'pending', _('Ожидает решения')
+        NEEDS_TRANSFER = 'needs_transfer', _('Нужен перевод')
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
@@ -290,6 +300,13 @@ class BankStatementRow(Model):
         max_length=20,
         choices=Decision.choices,
         default=Decision.PENDING,
+    )
+    decision_reason = TextField(blank=True, default='')
+    resume_decision = CharField(
+        max_length=20,
+        choices=ResumeDecision.choices,
+        blank=True,
+        default='',
     )
     created_at = DateTimeField(auto_now_add=True)
     decided_at = DateTimeField(blank=True, null=True)
@@ -433,6 +450,7 @@ class BankStatementDecisionAudit(Model):
         blank=True,
         null=True,
     )
+    reason = TextField(blank=True, default='')
     created_at = DateTimeField(auto_now_add=True)
 
     class Meta:

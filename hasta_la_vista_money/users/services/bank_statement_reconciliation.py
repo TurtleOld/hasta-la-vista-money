@@ -33,6 +33,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
@@ -70,6 +73,16 @@ _OUTCOMES = frozenset(
         BankStatementRow.Decision.NEEDS_TRANSFER,
         BankStatementRow.Decision.TRANSFERRED,
         BankStatementRow.Decision.NOT_A_PAYMENT,
+        BankStatementRow.Decision.DEFERRED,
+        BankStatementRow.Decision.EXCLUDED,
+    },
+)
+# Only a finished upload gets its status recomputed by outcome counts.
+_FINISHED_STATUSES = frozenset(
+    {
+        BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        BankStatementUpload.Status.COMPLETED,
+        BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
     },
 )
 
@@ -89,6 +102,12 @@ class BulkDecisionResult:
 class BankStatementReconciliationService:
     """Apply an owner decision to a probable statement duplicate."""
 
+    def __init__(
+        self,
+        statement_row_repository: StatementRowRepository,
+    ) -> None:
+        self.statement_row_repository = statement_row_repository
+
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
         return (
@@ -104,6 +123,19 @@ class BankStatementReconciliationService:
                         statement_rows__decision=(
                             BankStatementRow.Decision.AWAITING_MARKUP
                         ),
+                    ),
+                ),
+                restore_count=Count(
+                    'statement_rows',
+                    filter=Q(retention_cleaned_at__isnull=False)
+                    & Q(
+                        statement_rows__decision__in=[
+                            BankStatementRow.Decision.PENDING,
+                            BankStatementRow.Decision.NEEDS_TRANSFER,
+                            BankStatementRow.Decision.AWAITING_MARKUP,
+                            BankStatementRow.Decision.DEFERRED,
+                            BankStatementRow.Decision.EXPIRED,
+                        ],
                     ),
                 ),
                 available=ExpressionWrapper(
@@ -153,6 +185,7 @@ class BankStatementReconciliationService:
             'candidates__transaction__category',
             'candidates__transfer__from_account',
             'candidates__transfer__to_account',
+            'decision_audits',
         ).order_by('transaction_date', 'pk')
 
     def decide(
@@ -176,16 +209,10 @@ class BankStatementReconciliationService:
         user_id: int,
         candidate_id: int | None = None,
     ) -> BankStatementRow:
-        upload = self._lock_upload(row_id, user_id)
-        row = (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload__account')
-            .get(
-                pk=row_id,
-                upload=upload,
-            )
+        upload, row = self.statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
         )
-        row.upload = upload
         if row.decision != BankStatementRow.Decision.PENDING:
             if row.decision != decision:
                 raise ReconciliationDecisionConflictError(decision)
@@ -224,12 +251,6 @@ class BankStatementReconciliationService:
             transfer=row.transfer,
         )
         self.refresh_outcome_counts(upload)
-        if not BankStatementRow.objects.filter(
-            upload=row.upload,
-            decision=BankStatementRow.Decision.PENDING,
-        ).exists():
-            upload.status = BankStatementUpload.Status.COMPLETED
-            upload.save(update_fields=['status'])
         return row
 
     @transaction.atomic
@@ -249,16 +270,10 @@ class BankStatementReconciliationService:
         row_id: int,
         user_id: int,
     ) -> BankStatementRow:
-        upload = self._lock_upload(row_id, user_id)
-        row = (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload__account')
-            .get(
-                pk=row_id,
-                upload=upload,
-            )
+        upload, row = self.statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
         )
-        row.upload = upload
         if row.decision == BankStatementRow.Decision.NEW:
             return row
         if row.decision != BankStatementRow.Decision.LINKED:
@@ -349,16 +364,12 @@ class BankStatementReconciliationService:
         user_id: int,
         upload_id: int,
     ) -> BankStatementRow:
-        upload = self._lock_upload(row_id, user_id, upload_id)
-        row = (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload__account')
-            .get(
-                pk=row_id,
-                upload=upload,
-            )
+        upload, row = self.statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
         )
-        row.upload = upload
+        if upload.pk != upload_id:
+            raise BankStatementUpload.DoesNotExist
         if row.decision == BankStatementRow.Decision.LINKED:
             return row
         candidate_ids = [
@@ -381,21 +392,6 @@ class BankStatementReconciliationService:
         )
 
     @staticmethod
-    def _lock_upload(
-        row_id: int,
-        user_id: int,
-        upload_id: int | None = None,
-    ) -> BankStatementUpload:
-        uploads = BankStatementUpload.objects.select_for_update().filter(
-            statement_rows__pk=row_id,
-            user_id=user_id,
-            account__user_id=user_id,
-        )
-        if upload_id is not None:
-            uploads = uploads.filter(pk=upload_id)
-        return uploads.get()
-
-    @staticmethod
     def refresh_outcome_counts(upload: BankStatementUpload) -> None:
         decisions = (
             BankStatementRow.objects.filter(upload=upload)
@@ -409,10 +405,11 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.LINKED,
             0,
         )
+        # Deferred rows stay unresolved: they are still a problem.
         upload.awaiting_decision_count = counts.get(
             BankStatementRow.Decision.PENDING,
             0,
-        )
+        ) + counts.get(BankStatementRow.Decision.DEFERRED, 0)
         upload.needs_transfer_count = counts.get(
             BankStatementRow.Decision.NEEDS_TRANSFER,
             0,
@@ -426,15 +423,33 @@ class BankStatementReconciliationService:
             + upload.expense_count
             + counts.get(BankStatementRow.Decision.NEW, 0)
         )
-        upload.save(
-            update_fields=[
-                'linked_count',
-                'awaiting_decision_count',
-                'needs_transfer_count',
-                'expired_count',
-                'imported_count',
-            ],
+        fields = [
+            'linked_count',
+            'awaiting_decision_count',
+            'needs_transfer_count',
+            'expired_count',
+            'imported_count',
+        ]
+        unresolved = (
+            upload.awaiting_decision_count
+            + upload.needs_transfer_count
+            + upload.expired_count
         )
+        awaiting_markup = counts.get(
+            BankStatementRow.Decision.AWAITING_MARKUP,
+            0,
+        )
+        if upload.status in _FINISHED_STATUSES:
+            if awaiting_markup:
+                upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+            else:
+                upload.status = (
+                    BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
+                    if unresolved
+                    else BankStatementUpload.Status.COMPLETED
+                )
+            fields.append('status')
+        upload.save(update_fields=fields)
 
     def _validated_candidate(
         self,
@@ -670,14 +685,9 @@ class BankStatementReconciliationService:
         row_id: int,
         user_id: int,
     ) -> BankStatementRow:
-        row = (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload')
-            .get(
-                pk=row_id,
-                upload__user_id=user_id,
-                upload__account__user_id=user_id,
-            )
+        _upload, row = self.statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
         )
         if row.decision == BankStatementRow.Decision.NOT_A_PAYMENT:
             return row

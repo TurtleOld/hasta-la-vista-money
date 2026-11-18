@@ -68,9 +68,16 @@ class BankStatementRetentionService:
                     BankStatementRow.Decision.PENDING,
                     BankStatementRow.Decision.NEEDS_TRANSFER,
                     BankStatementRow.Decision.AWAITING_MARKUP,
+                    BankStatementRow.Decision.DEFERRED,
                 }
             ]
-            unresolved_ids = [row.pk for row in unresolved]
+            # shortcut: deferred rows keep their decision and lose details on
+            # cleanup; full decision preservation belongs to ticket 03.
+            unresolved_ids = [
+                row.pk
+                for row in unresolved
+                if row.decision != BankStatementRow.Decision.DEFERRED
+            ]
             if unresolved_ids:
                 BankStatementRow.objects.filter(
                     pk__in=unresolved_ids,
@@ -102,7 +109,7 @@ class BankStatementRetentionService:
             upload.celery_task_id = ''
             upload.status = (
                 BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
-                if unresolved_ids
+                if unresolved
                 else (
                     BankStatementUpload.Status.FAILED
                     if upload.status == BankStatementUpload.Status.FAILED

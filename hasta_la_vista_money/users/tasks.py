@@ -87,7 +87,10 @@ def process_bank_statement_task(
         upload.account.refresh_from_db(fields=['balance'])
         awaiting_markup = BankStatementRow.objects.filter(
             upload=upload,
-            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            decision__in=[
+                BankStatementRow.Decision.AWAITING_MARKUP,
+                BankStatementRow.Decision.DEFERRED,
+            ],
         ).exists()
         if result.closing_balance is not None:
             upload.statement_closing_balance = result.closing_balance
@@ -98,6 +101,7 @@ def process_bank_statement_task(
                 result.closing_balance - upload.account.balance
             )
 
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
         if (
             awaiting_markup
             or BankStatementRow.objects.filter(
@@ -119,7 +123,6 @@ def process_bank_statement_task(
                 'balance_discrepancy',
             ],
         )
-        BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
             'bank_statement_task_completed',

@@ -143,6 +143,11 @@
                                 <a href="{% url 'finance_account:list' %}#pending-transfers">{% translate 'Провести переводы' %}</a>
                             </p>
                         {% endif %}
+                        {% if history_upload.restore_count %}
+                            <p class="statement-warning">
+                                {% blocktranslate with count=history_upload.restore_count %}Требуется повторная загрузка: {{ count }} строк без банковских данных{% endblocktranslate %}
+                            </p>
+                        {% endif %}
                     </div>
                     {% if history_upload.available %}
                         {% if history_upload.markup_count %}

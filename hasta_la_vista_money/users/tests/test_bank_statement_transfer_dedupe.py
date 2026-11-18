@@ -31,6 +31,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
 )
@@ -74,7 +77,9 @@ class TransferDedupeBaseTest(TestCase):
             limit_credit=Decimal('100000.00'),
             currency='RUB',
         )
-        self.service = BankStatementReconciliationService()
+        self.service = BankStatementReconciliationService(
+            StatementRowRepository(),
+        )
         classifier = MagicMock()
         classifier.classify.return_value = 'Прочее'
         ApplicationContainer.users.category_classifier.override(classifier)

@@ -99,11 +99,14 @@ class UsersContainer(containers.DeclarativeContainer):
 
     category_classifier = providers.Singleton(_build_classifier)
 
+    statement_row_repository = providers.Singleton(StatementRowRepository)
+
     bank_statement_reconciliation_service: providers.Factory[
         BankStatementReconciliationServiceProtocol
-    ] = providers.Factory(BankStatementReconciliationService)
-
-    statement_row_repository = providers.Singleton(StatementRowRepository)
+    ] = providers.Factory(
+        BankStatementReconciliationService,
+        statement_row_repository=statement_row_repository,
+    )
 
     statement_row_link_service: providers.Factory[
         StatementRowLinkServiceProtocol
@@ -129,6 +132,7 @@ class UsersContainer(containers.DeclarativeContainer):
         transfer_log_repository=providers.Singleton(
             TransferMoneyLogRepository,
         ),
+        statement_row_repository=statement_row_repository,
     )
 
     bank_statement_import_service: providers.Factory[

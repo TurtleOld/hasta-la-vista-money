@@ -459,17 +459,21 @@ def _markup_message(reason: str) -> str:
 
 
 def _skip_marked_rows(request: HttpRequest, upload_id: int) -> set[int]:
-    """Skip rows ticked «Пропустить»; every page action submits the marks."""
+    """Defer rows ticked «Отложить»; every page action submits the marks."""
     marked = {
         int(value)
         for value in request.POST.getlist('row')
-        if value.isdigit() and request.POST.get(f'skip-{value}')
+        if value.isdigit()
+        and (
+            request.POST.get(f'defer-{value}')
+            or request.POST.get(f'skip-{value}')
+        )
     }
     if marked:
         _markup_service(request).decide_many(
             upload_id,
             cast('User', request.user).pk,
-            dict.fromkeys(marked, ('skip', None)),
+            dict.fromkeys(marked, ('defer', None)),
         )
     return marked
 
@@ -491,8 +495,10 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
                 continue
             account = request.POST.get(f'account-{value}', '')
             category = request.POST.get(f'category-{value}', '')
-            if request.POST.get(f'skip-{value}'):
-                decisions[int(value)] = ('skip', None)
+            if request.POST.get(f'defer-{value}') or request.POST.get(
+                f'skip-{value}',
+            ):
+                decisions[int(value)] = ('defer', None)
             elif account.isdigit():
                 decisions[int(value)] = ('transfer', int(account))
             elif category == 'refund':

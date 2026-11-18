@@ -111,7 +111,7 @@ class StatementMarkupTest(StatementMarkupFixture):
 
         row.refresh_from_db()
         self.account.refresh_from_db()
-        self.assertEqual(row.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DEFERRED)
         self.assertEqual(self.account.balance, Decimal('1000.00'))
         self.assertFalse(Transaction.objects.exists())
 
@@ -223,7 +223,7 @@ class StatementMarkupTest(StatementMarkupFixture):
         self.upload.refresh_from_db()
         self.assertEqual(
             self.upload.status,
-            BankStatementUpload.Status.COMPLETED,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
         )
 
     def test_categories_are_sorted_by_name(self) -> None:
@@ -628,7 +628,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         )
 
         row.refresh_from_db()
-        self.assertEqual(row.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DEFERRED)
 
     def test_decide_applies_every_row_of_the_page_at_once(self) -> None:
         posted, skipped, untouched = self._row(1), self._row(2), self._row(3)
@@ -656,7 +656,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
             decisions,
             {
                 posted.pk: BankStatementRow.Decision.NEW,
-                skipped.pk: BankStatementRow.Decision.SKIPPED,
+                skipped.pk: BankStatementRow.Decision.DEFERRED,
                 untouched.pk: BankStatementRow.Decision.AWAITING_MARKUP,
             },
         )
@@ -883,8 +883,8 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             ),
         )
 
-        self.assertContains(response, f'name="skip-{duplicate.pk}" checked')
-        self.assertContains(response, f'name="skip-{fresh.pk}">')
+        self.assertContains(response, f'name="defer-{duplicate.pk}" checked')
+        self.assertContains(response, f'name="defer-{fresh.pk}">')
 
     def test_type_is_part_of_the_key(self) -> None:
         expense = self._category('Продукты')
@@ -1013,7 +1013,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
 
         skipped.refresh_from_db()
         posted.refresh_from_db()
-        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.DEFERRED)
         self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
 
     def test_other_user_cannot_post_remembered(self) -> None:
@@ -1272,7 +1272,7 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
 
         skipped.refresh_from_db()
         posted.refresh_from_db()
-        self.assertEqual(skipped.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(skipped.decision, BankStatementRow.Decision.DEFERRED)
         self.assertEqual(posted.decision, BankStatementRow.Decision.NEW)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('900.00'))
@@ -1295,7 +1295,7 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         self.assertContains(response, 'id="markup-form"')
         self.assertContains(response, f'formaction="{bulk_url}"')
         self.assertNotContains(response, 'form="bulk-form"')
-        self.assertContains(response, f'name="skip-{row.pk}"')
+        self.assertContains(response, f'name="defer-{row.pk}"')
 
     def test_bulk_view_without_selection_changes_nothing(self) -> None:
         self.client.force_login(self.user)

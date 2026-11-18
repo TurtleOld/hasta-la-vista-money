@@ -27,6 +27,11 @@ from hasta_la_vista_money.finance_account.bank_statement_views import (
     BankStatementUploadStatusView,
     BankStatementUploadView,
 )
+from hasta_la_vista_money.finance_account.statement_row_decision_views import (
+    StatementRowDeferView,
+    StatementRowExcludeView,
+    StatementRowResumeView,
+)
 from hasta_la_vista_money.finance_account.views import (
     AccountArchiveView,
     AccountCreateView,
@@ -164,6 +169,21 @@ urlpatterns = [
         'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/category/',
         BankStatementMarkupCategoryView.as_view(),
         name='bank_statement_markup_category',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/row/<int:row_id>/defer/',
+        StatementRowDeferView.as_view(),
+        name='bank_statement_row_defer',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/row/<int:row_id>/exclude/',
+        StatementRowExcludeView.as_view(),
+        name='bank_statement_row_exclude',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/row/<int:row_id>/resume/',
+        StatementRowResumeView.as_view(),
+        name='bank_statement_row_resume',
     ),
     path(
         'bank-statement-upload/<int:pk>/reconciliation/',

@@ -34,6 +34,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
@@ -74,7 +77,9 @@ class CreditCardStatementBaseTest(TestCase):
             balance=Decimal('1000.00'),
             currency='RUB',
         )
-        self.service = BankStatementReconciliationService()
+        self.service = BankStatementReconciliationService(
+            StatementRowRepository(),
+        )
         self.link_service = (
             ApplicationContainer().users.statement_row_link_service()
         )

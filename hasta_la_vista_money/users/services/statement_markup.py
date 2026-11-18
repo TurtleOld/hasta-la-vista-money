@@ -41,6 +41,9 @@ from hasta_la_vista_money.users.models import (
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     TRANSFER_DATE_WINDOW,
     local_row_date,
@@ -70,10 +73,12 @@ class StatementMarkupService:
         balance_service: BalanceService,
         account_repository: AccountRepository,
         transfer_log_repository: TransferMoneyLogRepository,
+        statement_row_repository: StatementRowRepository,
     ) -> None:
         self._balance_service = balance_service
         self._account_repository = account_repository
         self._transfer_log_repository = transfer_log_repository
+        self._statement_row_repository = statement_row_repository
 
     @staticmethod
     def pending_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
@@ -315,7 +320,8 @@ class StatementMarkupService:
         """Apply per-row decisions of the markup page as one operation.
 
         A decision is ``('post', category_id)``, ``('transfer', account_id)``
-        or ``('skip', None)``. Returns the decided and the failed row counts.
+        or ``('defer', None)``; the legacy ``'skip'`` key means the same.
+        Returns the decided and the failed row counts.
         """
         upload = BankStatementUpload.objects.get(pk=upload_id, user_id=user_id)
         pending = set(
@@ -333,7 +339,7 @@ class StatementMarkupService:
                         row_id,
                         user_id,
                         value if decision == 'post' else None,
-                        skip=decision == 'skip',
+                        skip=decision in {'skip', 'defer'},
                         transfer_account_id=value,
                         as_transfer=decision == 'transfer',
                         finalize=False,
@@ -363,7 +369,7 @@ class StatementMarkupService:
             )
 
     def skip(self, row_id: int, user_id: int) -> BankStatementRow:
-        """Skip the row without touching the balance."""
+        """Defer the row without touching the balance (legacy name)."""
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
             return self._decide(row_id, user_id, None, skip=True)
 
@@ -379,22 +385,25 @@ class StatementMarkupService:
         as_transfer: bool = False,
         finalize: bool = True,
     ) -> BankStatementRow:
-        upload = (
-            BankStatementUpload.objects.select_for_update()
-            .select_related('account')
-            .get(statement_rows__pk=row_id, user_id=user_id)
+        upload, row = self._statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
         )
-        row = BankStatementRow.objects.select_for_update().get(
-            pk=row_id,
-            upload=upload,
-        )
+        if skip and row.decision == BankStatementRow.Decision.DEFERRED:
+            return row
         if row.decision != BankStatementRow.Decision.AWAITING_MARKUP:
             raise StatementMarkupConflictError(row.decision)
         if timezone.now() >= upload.expires_at:
             raise StatementMarkupConflictError('expired')
 
         if skip:
-            row.decision = BankStatementRow.Decision.SKIPPED
+            self._statement_row_repository.suspend_row(
+                row,
+                BankStatementRow.Decision.DEFERRED,
+                BankStatementRow.Decision.AWAITING_MARKUP,
+                '',
+                user_id,
+            )
         elif as_transfer:
             row.transfer = self._create_transfer(
                 row,
@@ -410,16 +419,22 @@ class StatementMarkupService:
             )
             self._remember(row, upload.user, row.transaction)
             row.decision = BankStatementRow.Decision.NEW
-        row.decided_at = timezone.now()
-        row.save(
-            update_fields=['transaction', 'transfer', 'decision', 'decided_at'],
-        )
-        BankStatementDecisionAudit.objects.create(
-            row=row,
-            actor_id=user_id,
-            decision=row.decision,
-            transaction=row.transaction,
-        )
+        if not skip:
+            row.decided_at = timezone.now()
+            row.save(
+                update_fields=[
+                    'transaction',
+                    'transfer',
+                    'decision',
+                    'decided_at',
+                ],
+            )
+            BankStatementDecisionAudit.objects.create(
+                row=row,
+                actor_id=user_id,
+                decision=row.decision,
+                transaction=row.transaction,
+            )
         if finalize:
             self._finalize(upload)
         return row
@@ -428,15 +443,15 @@ class StatementMarkupService:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
         if self.pending_rows(upload).exists():
             return
-        upload.status = BankStatementUpload.Status.COMPLETED
-        fields = ['status']
+        fields: list[str] = []
         closing = upload.statement_closing_balance
         if closing is not None:
             upload.account.refresh_from_db(fields=['balance'])
             upload.account_balance_after = upload.account.balance
             upload.balance_discrepancy = closing - upload.account.balance
             fields += ['account_balance_after', 'balance_discrepancy']
-        upload.save(update_fields=fields)
+        if fields:
+            upload.save(update_fields=fields)
 
     def _create_movement(
         self,
