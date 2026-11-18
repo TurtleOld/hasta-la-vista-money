@@ -2131,6 +2131,35 @@ class StatementFailureGenerationTest(StatementIdentityRuntimeFixture):
         self.assertEqual(upload.celery_task_id, 'newer-task')
         self.assertEqual(upload.error_message, '')
 
+    def test_expired_old_task_keeps_new_processing_owner(self) -> None:
+        upload = self.upload('expired-replaced-owner')
+
+        def expire_old_owner(
+            _service: BankStatementImportService,
+            target: BankStatementUpload,
+            **_kwargs: Any,
+        ) -> None:
+            BankStatementUpload.objects.filter(pk=target.pk).update(
+                status=BankStatementUpload.Status.PROCESSING,
+                celery_task_id='newer-task',
+                error_message='Новая обработка уже запущена',
+            )
+            raise StatementGenerationExpiredError('old row expired')
+
+        self._fail_import(
+            upload,
+            task_id='old-task',
+            side_effect=expire_old_owner,
+        )
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+        self.assertEqual(upload.celery_task_id, 'newer-task')
+        self.assertEqual(
+            upload.error_message,
+            'Новая обработка уже запущена',
+        )
+
     def test_failure_of_renewed_generation_is_not_written(self) -> None:
         upload = self.upload('failure-renewed-generation')
         renewed_expiry = timezone.now() + timedelta(days=11)

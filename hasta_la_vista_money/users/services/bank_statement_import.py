@@ -391,7 +391,7 @@ class BankStatementImportService:
         A replaced generation is left completely untouched. An expired or
         partially cleaned same generation becomes FAILED with a safe reason;
         bank sums are never restored and already posted money is preserved.
-        Another task that already finished successfully keeps its state.
+        Any different task owner keeps its state, including PROCESSING.
         """
         with transaction.atomic():
             account_id = (
@@ -408,16 +408,10 @@ class BankStatementImportService:
             state = self.generation_state(locked, generation)
             if state == GENERATION_REPLACED:
                 return state
-            finished = {
-                BankStatementUpload.Status.COMPLETED,
-                BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
-                BankStatementUpload.Status.AWAITING_CONFIRMATION,
-            }
             if (
                 task_id
                 and locked.celery_task_id
                 and locked.celery_task_id != task_id
-                and locked.status in finished
             ):
                 return state
             locked.status = BankStatementUpload.Status.FAILED
