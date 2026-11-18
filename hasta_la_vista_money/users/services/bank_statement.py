@@ -1244,6 +1244,7 @@ class _RosDorBankRow:
     is_credit: bool | None = None
     #: Physical position of the row in the statement, known before parsing.
     position: int = 0
+    anchor: _PdfLine | None = None
 
 
 class _RosDorBankParser(BaseBankStatementParser):
@@ -1408,7 +1409,7 @@ class _RosDorBankParser(BaseBankStatementParser):
                 rows,
                 current,
                 pending,
-                line.text,
+                line,
                 day,
             )
         return rows
@@ -1430,6 +1431,14 @@ class _RosDorBankParser(BaseBankStatementParser):
             # anchor, so it belongs to the upcoming row even when the open
             # row's number is empty: the open row simply has no number.
             if self._on_anchor_line(line, anchors):
+                if (
+                    current is not None
+                    and current.number is None
+                    and current.anchor is not None
+                    and self._on_anchor_line(line, [current.anchor])
+                ):
+                    current.number = line.text
+                    return current, pending
                 if pending is None or pending.number is not None:
                     pending = self._open_row(rows, day)
                 pending.number = line.text
@@ -1458,15 +1467,17 @@ class _RosDorBankParser(BaseBankStatementParser):
         rows: list[_RosDorBankRow],
         current: _RosDorBankRow | None,
         pending: _RosDorBankRow | None,
-        text: str,
+        line: _PdfLine,
         day: date_type | None,
     ) -> tuple[_RosDorBankRow | None, _RosDorBankRow | None]:
+        text = line.text
         if text.startswith('БИК:'):
             current = (
                 pending
                 if pending is not None and not pending.lines
                 else self._open_row(rows, day)
             )
+            current.anchor = line
             pending = None
         target = pending or current
         if target is not None:

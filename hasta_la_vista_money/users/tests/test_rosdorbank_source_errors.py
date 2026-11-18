@@ -3,6 +3,7 @@
 Synthetic ``_PdfLine`` input only: no real statements, no PDF fixtures.
 """
 
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -296,6 +297,26 @@ class RosDorBankSourcePositionTest(SimpleTestCase):
                 fixed.transactions[index],
                 broken.transactions[index],
             )
+
+    def test_number_after_its_anchor_stays_on_same_physical_row(self) -> None:
+        lines = _lines(
+            'date=01.03.2026',
+            f'7|100.00|0|{_body("PMP SHOP")}',
+        )
+        lines = [
+            replace(line, top=24.0)
+            if line.text == '7' and line.x0 == NUMBER_X[0]
+            else line
+            for line in lines
+        ]
+        lines.sort(key=lambda line: (line.page, line.top, line.x0))
+
+        rows = _SyntheticRosDorParser(lines).parse().transactions
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['source_ref'], '7-01.03.2026')
+        self.assertEqual(rows[0]['amount'], Decimal('-100.00'))
+        self.assertEqual(rows[0]['parse_error_code'], '')
 
     def test_valid_rows_keep_their_numbers_in_order(self) -> None:
         result = _parsed(
