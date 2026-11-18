@@ -1237,11 +1237,13 @@ class _PdfLine:
 
 @dataclass
 class _RosDorBankRow:
-    date: date_type
+    date: date_type | None
     lines: list[str] = field(default_factory=list)
     number: str | None = None
     amount: Decimal | None = None
-    is_credit: bool = False
+    is_credit: bool | None = None
+    #: Physical position of the row in the statement, known before parsing.
+    position: int = 0
 
 
 class _RosDorBankParser(BaseBankStatementParser):
@@ -1268,11 +1270,16 @@ class _RosDorBankParser(BaseBankStatementParser):
     _phone_pattern = re.compile(r'\+?\d[\d\s()\-]{9,}\d')
 
     def parse(self) -> StatementParseResult:
-        """Parse every row; none of them is final until the user marks it."""
+        """Parse every row; none of them is final until the user marks it.
+
+        Every physical row keeps its source position, including rows that
+        could not be parsed. RosDorBank's number-and-date reference is not
+        exact cross-file identity, so representations are never dropped
+        here: the per-upload position makes a rerun idempotent instead.
+        """
         try:
             logger.info('bank_statement_parse_started', parser='rosdorbank')
             result = self._parse_lines(self._read_lines())
-            result.transactions = _dedup_transactions(result.transactions)
             logger.info(
                 'bank_statement_parse_completed',
                 parser='rosdorbank',
@@ -1456,18 +1463,25 @@ class _RosDorBankParser(BaseBankStatementParser):
         rows: list[_RosDorBankRow],
         day: date_type | None,
     ) -> _RosDorBankRow:
-        if day is None:
-            error_msg = 'Строка операции до даты дня в выписке'
-            raise BankStatementParseError(error_msg)
-        row = _RosDorBankRow(date=day)
+        # An unknown day is a property of this row, not of the whole file.
+        row = _RosDorBankRow(date=day, position=len(rows))
         rows.append(row)
         return row
 
     def _build_transaction(self, row: _RosDorBankRow) -> dict[str, Any]:
-        if row.number is None or row.amount is None or not row.lines:
-            error_msg = 'Не удалось разобрать строку операции РосДорБанка'
-            raise BankStatementParseError(error_msg)
-        bik_line, *body_lines = row.lines
+        error_code = ''
+        if row.date is None:
+            error_code = 'missing_date'
+        elif row.number is None:
+            error_code = 'missing_number'
+        elif row.amount is None:
+            error_code = 'missing_amount'
+        elif row.is_credit is None:
+            error_code = 'missing_direction'
+        elif not row.lines:
+            error_code = 'missing_operation'
+
+        bik_line, *body_lines = row.lines or ['']
         account = re.search(r'р/с: (\d{20})', bik_line)
         body = ' '.join(body_lines)
         marker = self._operation_pattern.search(body)
@@ -1479,19 +1493,35 @@ class _RosDorBankParser(BaseBankStatementParser):
             party = body_lines[0] if body_lines else ''
             operation = ' '.join(body_lines[1:])
         kind, description, merchant_key = self._classify(party, operation)
-        return {
-            'date': datetime.combine(
+
+        amount: Decimal | None = None
+        if row.amount is not None and row.is_credit is not None:
+            amount = row.amount if row.is_credit else -row.amount
+        statement_date = (
+            datetime.combine(
                 row.date,
                 datetime.min.time(),
                 tzinfo=timezone.get_current_timezone(),
-            ),
-            'amount': row.amount if row.is_credit else -row.amount,
+            )
+            if row.date is not None
+            else None
+        )
+        return {
+            'row_position': row.position,
+            'date': statement_date,
+            'date_precision': 'day' if row.date is not None else 'unknown',
+            'amount': amount,
             'description': description,
-            'source_ref': f'{row.number}-{row.date:%d.%m.%Y}',
+            'source_ref': (
+                f'{row.number}-{row.date:%d.%m.%Y}'
+                if row.number is not None and row.date is not None
+                else None
+            ),
             'source': 'rosdorbank',
             'kind': kind,
             'merchant_key': merchant_key,
             'counterparty_account': account.group(1) if account else None,
+            'parse_error_code': error_code,
         }
 
     def _classify(

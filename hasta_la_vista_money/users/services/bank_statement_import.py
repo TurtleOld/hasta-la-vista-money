@@ -498,17 +498,25 @@ class BankStatementImportService:
                 locked.pk,
                 [BankStatementRow.Decision.PENDING],
             )
+            has_parse_error = self.identity_repository.has_upload_rows(
+                locked.pk,
+                [BankStatementRow.Decision.PARSE_ERROR],
+            )
             fields = ['progress', 'status', 'updated_at']
             if closing_balance is not None:
                 locked.statement_closing_balance = closing_balance
                 fields.append('statement_closing_balance')
             BankStatementReconciliationService.refresh_outcome_counts(locked)
-            if closing_balance is not None and not awaiting_markup:
+            if (
+                closing_balance is not None
+                and not awaiting_markup
+                and not has_parse_error
+            ):
                 locked.account_balance_after = account.balance
                 locked.balance_discrepancy = closing_balance - account.balance
                 fields += ['account_balance_after', 'balance_discrepancy']
             locked.progress = 100
-            if awaiting_markup or has_pending:
+            if awaiting_markup or has_pending or has_parse_error:
                 locked.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
             else:
                 locked.status = BankStatementUpload.Status.COMPLETED
@@ -957,73 +965,156 @@ class BankStatementImportService:
         transactions: list[dict[str, Any]],
         bank_code: str | None,
     ) -> int:
-        identities = {
-            idx: self.identity_service.classify_incoming(
-                account_id=upload.account_id,
-                bank_code=bank_code,
-                source_ref=trans['source_ref'],
-                trusted_reference=self.identity_service.reference_is_trusted(
-                    bank_code,
-                    trans['source_ref'],
-                ),
-                exclude_upload_id=upload.pk,
-            )
+        positions = {
+            idx: trans.get('row_position', idx)
             for idx, trans in enumerate(transactions)
         }
+        identities: dict[int, IncomingStatementIdentity] = {}
+        for idx, trans in enumerate(transactions):
+            if trans.get('parse_error_code'):
+                continue
+            identities[positions[idx]] = (
+                self.identity_service.classify_incoming(
+                    account_id=upload.account_id,
+                    bank_code=bank_code,
+                    source_ref=trans['source_ref'],
+                    trusted_reference=(
+                        self.identity_service.reference_is_trusted(
+                            bank_code,
+                            trans['source_ref'],
+                        )
+                    ),
+                    exclude_upload_id=upload.pk,
+                )
+            )
         # A cancel of a debit from an earlier upload is an income to mark up.
-        cancelled = _mutual_cancel_positions(dict(enumerate(transactions)))
+        by_position = {
+            positions[idx]: trans for idx, trans in enumerate(transactions)
+        }
+        cancelled = _mutual_cancel_positions(by_position)
         rows = [
             BankStatementRow(
                 upload=upload,
-                transaction_type=(
-                    TransactionType.INCOME
-                    if trans['amount'] > 0
-                    else TransactionType.EXPENSE
-                ),
-                transaction_date=trans['date'],
-                amount=abs(trans['amount']),
-                description=strip_pii(str(trans['description']))[
-                    : constants.TWO_HUNDRED_FIFTY
-                ],
-                candidate_description=identities[idx].manual_reason[
-                    : constants.TWO_HUNDRED_FIFTY
-                ],
-                source_ref=None,
-                source_ref_hash=identities[idx].source_ref_hash,
-                source_ref_key_id=identities[idx].key_id,
-                source_ref_version=identities[idx].version,
-                source_identity_trusted=identities[idx].trusted,
-                source_row_position=idx,
-                duplicate_of_id=identities[idx].duplicate_of_id,
-                match_calendar_date=True,
-                kind=str(trans['kind']),
-                merchant_key=trans['merchant_key'] or '',
-                counterparty_account=trans['counterparty_account'] or '',
-                decision=(
-                    BankStatementRow.Decision.MUTUAL_CANCEL
-                    if idx in cancelled
-                    else BankStatementRow.Decision.AWAITING_MARKUP
+                **self._markup_values(
+                    trans,
+                    identities.get(positions[idx]),
+                    positions[idx],
+                    cancelled,
                 ),
             )
             for idx, trans in enumerate(transactions)
         ]
         # A rerun of the same upload hits the per-upload row constraint.
         BankStatementRow.objects.bulk_create(rows, ignore_conflicts=True)
-        saved = BankStatementRow.objects.filter(
-            upload=upload,
-            source_row_position__in=identities,
+        saved = list(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                source_row_position__in=positions.values(),
+            ),
         )
         for row in saved:
             position = row.source_row_position
             if position is None:
                 continue
-            identity = identities[position]
-            if identity.matched_transactions:
+            if position not in by_position:
+                continue
+            trans = by_position[position]
+            identity = identities.get(position)
+            if (
+                row.decision == BankStatementRow.Decision.PARSE_ERROR
+                and identity is not None
+                and not trans.get('parse_error_code')
+            ):
+                # A parser fix makes the same physical row readable again.
+                BankStatementRow.objects.filter(
+                    pk=row.pk,
+                    decision=BankStatementRow.Decision.PARSE_ERROR,
+                ).update(
+                    resume_decision='',
+                    **{
+                        key: value
+                        for key, value in self._markup_values(
+                            trans,
+                            identity,
+                            position,
+                            cancelled,
+                        ).items()
+                        if key != 'source_row_position'
+                    },
+                )
+            if identity is not None and identity.matched_transactions:
                 self._add_identity_candidates(
                     row,
                     identity.matched_transactions,
                 )
         return len(rows)
+
+    @staticmethod
+    def _markup_values(
+        trans: dict[str, Any],
+        identity: IncomingStatementIdentity | None,
+        position: int,
+        cancelled: set[int],
+    ) -> dict[str, Any]:
+        """Bank fields of one markup row; unknown values stay unknown."""
+        amount = trans.get('amount')
+        error_code = trans.get('parse_error_code') or ''
+        return {
+            'transaction_type': (
+                None
+                if amount is None
+                else (
+                    TransactionType.INCOME
+                    if amount > 0
+                    else TransactionType.EXPENSE
+                )
+            ),
+            'transaction_date': trans.get('date'),
+            'amount': abs(amount) if amount is not None else None,
+            'description': strip_pii(str(trans.get('description') or ''))[
+                : constants.TWO_HUNDRED_FIFTY
+            ],
+            'candidate_description': (
+                identity.manual_reason[: constants.TWO_HUNDRED_FIFTY]
+                if identity is not None
+                else ''
+            ),
+            'source_ref': None,
+            'source_ref_hash': (
+                identity.source_ref_hash if identity is not None else None
+            ),
+            'source_ref_key_id': identity.key_id
+            if identity is not None
+            else '',
+            'source_ref_version': identity.version
+            if identity is not None
+            else 1,
+            'source_identity_trusted': (
+                identity.trusted if identity is not None else False
+            ),
+            'source_row_position': position,
+            'duplicate_of_id': (
+                identity.duplicate_of_id if identity is not None else None
+            ),
+            'match_calendar_date': trans.get('date') is not None,
+            'kind': str(trans.get('kind') or ''),
+            'merchant_key': trans.get('merchant_key') or '',
+            'counterparty_account': trans.get('counterparty_account') or '',
+            'date_precision': (
+                trans.get('date_precision')
+                or BankStatementRow.DatePrecision.UNKNOWN
+            ),
+            'parse_error_code': error_code,
+            'decision': (
+                BankStatementRow.Decision.PARSE_ERROR
+                if error_code
+                else (
+                    BankStatementRow.Decision.MUTUAL_CANCEL
+                    if position in cancelled
+                    else BankStatementRow.Decision.AWAITING_MARKUP
+                )
+            ),
+        }
 
     def _save_manual_row(
         self,
@@ -1346,16 +1437,24 @@ def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
     """Pair each cancel with a debit of the same device owner and amount."""
     debits: dict[tuple[str, Decimal], list[int]] = {}
     for idx, trans in rows.items():
-        if trans['kind'] == RosDorBankRowKind.CARD and trans['amount'] < 0:
+        amount = trans.get('amount')
+        if (
+            trans.get('kind') == RosDorBankRowKind.CARD
+            and amount is not None
+            and amount < 0
+        ):
             debits.setdefault(
-                (trans['description'], -trans['amount']),
+                (trans['description'], -amount),
                 [],
             ).append(idx)
     positions: set[int] = set()
     for idx, trans in rows.items():
-        if trans['kind'] != RosDorBankRowKind.CANCEL:
+        if trans.get('kind') != RosDorBankRowKind.CANCEL:
             continue
-        matches = debits.get((trans['description'], trans['amount']))
+        amount = trans.get('amount')
+        if amount is None:
+            continue
+        matches = debits.get((trans['description'], amount))
         if matches:
             positions |= {matches.pop(0), idx}
     return positions

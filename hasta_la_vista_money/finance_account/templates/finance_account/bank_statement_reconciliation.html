@@ -17,6 +17,7 @@
         <a href="?outcome=needs_transfer" class="rounded px-3 py-2 {% if outcome == 'needs_transfer' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нужен перевод' %}</a>
         <a href="?outcome=deferred" class="rounded px-3 py-2 {% if outcome == 'deferred' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Отложенные' %}</a>
         <a href="?outcome=excluded" class="rounded px-3 py-2 {% if outcome == 'excluded' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Исключённые' %}</a>
+        <a href="?outcome=parse_error" class="rounded px-3 py-2 {% if outcome == 'parse_error' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Ошибки разбора' %}</a>
     </nav>
     {% if outcome == 'pending' %}
         <form id="bulk-form"
@@ -68,9 +69,16 @@
                             {% endfor %}
                         </ul>
                     {% endif %}
-                    <p>{{ row.transaction_date|date:'d.m.Y H:i' }}</p>
-                    <p>{{ row.amount }} {{ upload.account.currency }}</p>
-                    <p>{{ row.get_transaction_type_display }}</p>
+                    {% if row.parse_error_code %}<p class="mb-2 text-sm text-gray-600 dark:text-gray-300">{{ row.get_parse_error_code_display }}</p>{% endif %}
+                    <p>
+                        {% if row.transaction_date %}
+                            {% if row.date_precision == 'day' %}{{ row.transaction_date|date:'d.m.Y' }}{% else %}{{ row.transaction_date|date:'d.m.Y H:i' }}{% endif %}
+                        {% else %}
+                            {% translate 'Дата неизвестна' %}
+                        {% endif %}
+                    </p>
+                    <p>{% if row.amount is not None %}{{ row.amount }} {{ upload.account.currency }}{% else %}{% translate 'Сумма неизвестна' %}{% endif %}</p>
+                    <p>{% if row.transaction_type %}{{ row.get_transaction_type_display }}{% else %}{% translate 'Направление неизвестно' %}{% endif %}</p>
                     <p>{{ row.suggested_category }}</p>
                     <p>{{ row.description }}</p>
                 </div>

@@ -36,6 +36,7 @@ _SUSPENDABLE_DECISIONS = frozenset(
         BankStatementRow.Decision.AWAITING_MARKUP,
         BankStatementRow.Decision.PENDING,
         BankStatementRow.Decision.NEEDS_TRANSFER,
+        BankStatementRow.Decision.PARSE_ERROR,
     },
 )
 

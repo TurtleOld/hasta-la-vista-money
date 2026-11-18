@@ -78,6 +78,7 @@ _OUTCOMES = frozenset(
         BankStatementRow.Decision.NOT_A_PAYMENT,
         BankStatementRow.Decision.DEFERRED,
         BankStatementRow.Decision.EXCLUDED,
+        BankStatementRow.Decision.PARSE_ERROR,
     },
 )
 # Only a finished upload gets its status recomputed by outcome counts.
@@ -137,6 +138,7 @@ class BankStatementReconciliationService:
                             BankStatementRow.Decision.AWAITING_MARKUP,
                             BankStatementRow.Decision.DEFERRED,
                             BankStatementRow.Decision.EXPIRED,
+                            BankStatementRow.Decision.PARSE_ERROR,
                         ],
                     )
                     & ~StatementRowRepository.bank_data_available_q(
@@ -422,11 +424,15 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.LINKED,
             0,
         )
-        # Deferred rows stay unresolved: they are still a problem.
-        upload.awaiting_decision_count = counts.get(
-            BankStatementRow.Decision.PENDING,
-            0,
-        ) + counts.get(BankStatementRow.Decision.DEFERRED, 0)
+        # Deferred and unparsed rows stay unresolved: they are still a problem.
+        upload.awaiting_decision_count = (
+            counts.get(
+                BankStatementRow.Decision.PENDING,
+                0,
+            )
+            + counts.get(BankStatementRow.Decision.DEFERRED, 0)
+            + counts.get(BankStatementRow.Decision.PARSE_ERROR, 0)
+        )
         upload.needs_transfer_count = counts.get(
             BankStatementRow.Decision.NEEDS_TRANSFER,
             0,

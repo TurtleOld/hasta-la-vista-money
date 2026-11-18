@@ -271,6 +271,7 @@ class BankStatementRow(Model):
         SKIPPED = 'skipped', _('Пропущена')
         DEFERRED = 'deferred', _('Отложена')
         EXCLUDED = 'excluded', _('Исключена')
+        PARSE_ERROR = 'parse_error', _('Ошибка разбора')
 
     class ResumeDecision(TextChoices):
         """Mechanism a suspended row returns to when resumed."""
@@ -278,6 +279,29 @@ class BankStatementRow(Model):
         AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
         PENDING = 'pending', _('Ожидает решения')
         NEEDS_TRANSFER = 'needs_transfer', _('Нужен перевод')
+        PARSE_ERROR = 'parse_error', _('Ошибка разбора')
+
+    class DatePrecision(TextChoices):
+        """How precisely the bank date of the row is known."""
+
+        UNKNOWN = 'unknown', _('Дата неизвестна')
+        DAY = 'day', _('Банковский день')
+        DATETIME = 'datetime', _('Дата и время')
+
+    class ParseError(TextChoices):
+        """Fixed machine reasons why a potential operation was not parsed."""
+
+        MISSING_DATE = 'missing_date', _('Не удалось определить дату')
+        MISSING_NUMBER = 'missing_number', _('Не удалось определить номер')
+        MISSING_AMOUNT = 'missing_amount', _('Не удалось определить сумму')
+        MISSING_DIRECTION = (
+            'missing_direction',
+            _('Не удалось определить направление'),
+        )
+        MISSING_OPERATION = (
+            'missing_operation',
+            _('Не удалось разобрать операцию'),
+        )
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
@@ -300,6 +324,17 @@ class BankStatementRow(Model):
         decimal_places=2,
         blank=True,
         null=True,
+    )
+    date_precision = CharField(
+        max_length=10,
+        choices=DatePrecision.choices,
+        default=DatePrecision.UNKNOWN,
+    )
+    parse_error_code = CharField(
+        max_length=20,
+        choices=ParseError.choices,
+        blank=True,
+        default='',
     )
     description = CharField(max_length=250, blank=True, default='')
     candidate_description = CharField(max_length=250, blank=True, default='')
