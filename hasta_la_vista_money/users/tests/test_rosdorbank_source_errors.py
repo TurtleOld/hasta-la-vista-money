@@ -51,8 +51,10 @@ def _line(
     top: float,
     text: str,
     x: tuple[float, float] = BODY_X,
+    *,
+    page: int = 0,
 ) -> _PdfLine:
-    return _PdfLine(page=0, top=top, x0=x[0], x1=x[1], text=text)
+    return _PdfLine(page=page, top=top, x0=x[0], x1=x[1], text=text)
 
 
 def _lines(*blocks: str) -> list[_PdfLine]:
@@ -239,6 +241,118 @@ class RosDorBankSourcePositionTest(SimpleTestCase):
         self.assertEqual(last['amount'], Decimal('-120.00'))
         self.assertEqual(last['description'], 'PMP OTHER')
         self.assertEqual(last['parse_error_code'], '')
+
+    def test_operation_without_number_does_not_take_next_number(self) -> None:
+        result = _parsed(
+            'date=01.03.2026',
+            f'-|80.00|0|{_body("PMP NO NUMBER")}',
+            f'2|120.00|0|{_body("PMP VALID")}',
+        )
+
+        self.assertEqual(len(result.transactions), 2)
+        self.assertEqual(
+            [row['row_position'] for row in result.transactions],
+            [0, 1],
+        )
+        broken, valid = result.transactions
+        self.assertIsNone(broken['source_ref'])
+        self.assertEqual(broken['parse_error_code'], 'missing_number')
+        self.assertEqual(broken['amount'], Decimal('-80.00'))
+        self.assertEqual(broken['transaction_type'], 'expense')
+        self.assertEqual(broken['description'], 'PMP NO NUMBER')
+        self.assertEqual(broken['date'].date(), date(2026, 3, 1))
+        self.assertEqual(valid['source_ref'], '2-01.03.2026')
+        self.assertEqual(valid['parse_error_code'], '')
+        self.assertEqual(valid['amount'], Decimal('-120.00'))
+        self.assertEqual(valid['transaction_type'], 'expense')
+        self.assertEqual(valid['description'], 'PMP VALID')
+        self.assertEqual(valid['date'].date(), date(2026, 3, 1))
+
+    def test_missing_number_fix_keeps_positions_and_neighbours(self) -> None:
+        broken = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP FIRST")}',
+            f'-|80.00|0|{_body("PMP NO NUMBER")}',
+            f'3|120.00|1|{_body("PMP LAST")}',
+        )
+        fixed = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP FIRST")}',
+            f'2|80.00|0|{_body("PMP NO NUMBER")}',
+            f'3|120.00|1|{_body("PMP LAST")}',
+        )
+
+        self.assertEqual(
+            [row['row_position'] for row in fixed.transactions],
+            [row['row_position'] for row in broken.transactions],
+        )
+        self.assertEqual(fixed.transactions[1]['parse_error_code'], '')
+        self.assertEqual(
+            fixed.transactions[1]['source_ref'],
+            '2-01.03.2026',
+        )
+        for index in (0, 2):
+            self.assertEqual(
+                fixed.transactions[index],
+                broken.transactions[index],
+            )
+
+    def test_valid_rows_keep_their_numbers_in_order(self) -> None:
+        result = _parsed(
+            'date=01.03.2026',
+            f'1|350.00|0|{_body("PMP FIRST")}',
+            f'2|80.00|0|{_body("PMP SECOND")}',
+            f'3|120.00|1|{_body("PMP THIRD")}',
+        )
+
+        self.assertEqual(
+            [row['source_ref'] for row in result.transactions],
+            ['1-01.03.2026', '2-01.03.2026', '3-01.03.2026'],
+        )
+        self.assertEqual(
+            [row['row_position'] for row in result.transactions],
+            [0, 1, 2],
+        )
+        self.assertEqual(
+            [row['amount'] for row in result.transactions],
+            [Decimal('-350.00'), Decimal('-80.00'), Decimal('120.00')],
+        )
+        self.assertEqual(
+            [row['description'] for row in result.transactions],
+            ['PMP FIRST', 'PMP SECOND', 'PMP THIRD'],
+        )
+
+    def test_row_continues_across_page_without_losing_its_number(self) -> None:
+        lines = [
+            _line(0.0, HEADER),
+            _line(1.0, '№', NUMBER_X),
+            _line(1.0, 'Контрагент/Операция', BODY_X),
+            _line(1.0, 'Списание', DEBIT_X),
+            _line(1.0, 'Зачисление', CREDIT_X),
+            _line(10.0, '01.03.2026'),
+            _line(20.0, '1', NUMBER_X),
+            _line(22.0, 'БИК: 044500001 р/с: 40817810000000000001'),
+            _line(24.0, 'ИНН: 0 PMP FIRST'),
+            _line(24.0, '350.00', DEBIT_X),
+            _line(30.0, 'БИК: 044500001 р/с: 40817810000000000001'),
+            _line(10.0, '2', NUMBER_X, page=1),
+            _line(10.0, '120.00', CREDIT_X, page=1),
+            _line(12.0, 'ИНН: 0 PMP SECOND', page=1),
+        ]
+        result = _SyntheticRosDorParser(lines).parse()
+
+        self.assertEqual(
+            [row['source_ref'] for row in result.transactions],
+            ['1-01.03.2026', '2-01.03.2026'],
+        )
+        self.assertEqual(
+            [row['row_position'] for row in result.transactions],
+            [0, 1],
+        )
+        self.assertEqual(
+            [row['amount'] for row in result.transactions],
+            [Decimal('-350.00'), Decimal('120.00')],
+        )
 
     def test_missing_bik_fix_keeps_positions_and_neighbours(self) -> None:
         broken = _parsed(

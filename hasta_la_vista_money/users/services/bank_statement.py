@@ -1380,6 +1380,7 @@ class _RosDorBankParser(BaseBankStatementParser):
         # A row opened by a leading № or amount whose anchor is still ahead;
         # a row that never gets an anchor keeps its own fields and text.
         pending: _RosDorBankRow | None = None
+        anchors = [line for line in lines if line.text.startswith('БИК:')]
         day: date_type | None = None
         for line in lines:
             if line.text in ROSDORBANK_TABLE_HEADERS:
@@ -1396,6 +1397,7 @@ class _RosDorBankParser(BaseBankStatementParser):
                     line,
                     cell,
                     columns=columns,
+                    anchors=anchors,
                     day=day,
                 )
                 continue
@@ -1420,9 +1422,18 @@ class _RosDorBankParser(BaseBankStatementParser):
         cell: str,
         *,
         columns: dict[str, _PdfLine],
+        anchors: list[_PdfLine],
         day: date_type | None,
     ) -> tuple[_RosDorBankRow | None, _RosDorBankRow | None]:
         if cell == 'number':
+            # A № on the baseline of a ``БИК:`` line sorts before that
+            # anchor, so it belongs to the upcoming row even when the open
+            # row's number is empty: the open row simply has no number.
+            if self._on_anchor_line(line, anchors):
+                if pending is None or pending.number is not None:
+                    pending = self._open_row(rows, day)
+                pending.number = line.text
+                return current, pending
             if current is not None and current.number is None:
                 current.number = line.text
                 return current, pending
@@ -1461,6 +1472,15 @@ class _RosDorBankParser(BaseBankStatementParser):
         if target is not None:
             target.lines.append(text)
         return current, pending
+
+    @staticmethod
+    def _on_anchor_line(line: _PdfLine, anchors: list[_PdfLine]) -> bool:
+        """The cell shares its baseline with a same-page ``БИК:`` line."""
+        return any(
+            anchor.page == line.page
+            and abs(anchor.top - line.top) <= ROSDORBANK_SAME_LINE_TOLERANCE
+            for anchor in anchors
+        )
 
     def _cell_kind(
         self,
