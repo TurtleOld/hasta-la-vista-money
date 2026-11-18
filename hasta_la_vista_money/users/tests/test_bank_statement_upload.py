@@ -4384,6 +4384,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
     ) -> None:
         """A run whose rows are all duplicates is still recorded."""
         existing_date = timezone.now()
+        duplicate = fingerprint('sberbank', self.account.pk, 'dup-ref')
         existing = Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -4395,7 +4396,11 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             type=TransactionType.EXPENSE,
             amount=Decimal('500.00'),
             date=existing_date,
-            source_ref='dup-ref',
+            source_ref=None,
+            source_ref_hash=duplicate.digest,
+            source_ref_key_id=duplicate.key_id,
+            source_ref_version=duplicate.version,
+            source_identity_trusted=True,
         )
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(

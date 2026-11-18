@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db.models import (
     CASCADE,
+    PROTECT,
     SET_NULL,
     BooleanField,
     CharField,
@@ -320,6 +321,13 @@ class BankStatementRow(Model):
         'transactions.Transaction',
         on_delete=SET_NULL,
         related_name='statement_candidates',
+        blank=True,
+        null=True,
+    )
+    duplicate_of = ForeignKey(
+        'self',
+        on_delete=PROTECT,
+        related_name='duplicate_presentations',
         blank=True,
         null=True,
     )

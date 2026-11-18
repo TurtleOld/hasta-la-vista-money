@@ -316,6 +316,7 @@ class StatementIdentityMigrationReplayTest(TransactionTestCase):
         new = ('users', '0027_fingerprint_legacy_statement_references')
         executor = MigrationExecutor(connection)
         executor.migrate([old])
+        original_leaf_nodes = executor.loader.graph.leaf_nodes()
         old_apps = executor.loader.project_state(
             [
                 old,
@@ -368,6 +369,9 @@ class StatementIdentityMigrationReplayTest(TransactionTestCase):
                 Decimal('777.00'),
             )
 
+            original_leaf_nodes = MigrationExecutor(
+                connection,
+            ).loader.graph.leaf_nodes()
             MigrationExecutor(connection).migrate(
                 [('users', '0025_statement_row_defer_exclude')],
             )
@@ -381,4 +385,4 @@ class StatementIdentityMigrationReplayTest(TransactionTestCase):
                 Decimal('777.00'),
             )
         finally:
-            MigrationExecutor(connection).migrate([new])
+            MigrationExecutor(connection).migrate(original_leaf_nodes or [new])

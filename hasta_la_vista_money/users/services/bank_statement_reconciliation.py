@@ -229,6 +229,16 @@ class BankStatementReconciliationService:
         if not row_has_bank_data(row):
             raise ReconciliationExpiredError(row_id)
 
+        if decision == BankStatementRow.Decision.NEW:
+            root = self._duplicate_root(row)
+            if root is not None:
+                return self._close_duplicate_presentation(
+                    upload,
+                    row,
+                    root,
+                    user_id,
+                )
+
         if decision == BankStatementRow.Decision.LINKED:
             movement = self._validated_candidate(row, candidate_id)
             self._link_movement(row, movement)
@@ -285,6 +295,8 @@ class BankStatementReconciliationService:
             raise ReconciliationDecisionConflictError(row.decision)
         if not row_has_bank_data(row):
             raise ReconciliationExpiredError(row_id)
+        if self._duplicate_root(row) is not None:
+            raise ReconciliationDecisionConflictError('duplicate')
 
         previous_transaction = row.transaction
         previous_transfer = row.transfer
@@ -498,6 +510,53 @@ class BankStatementReconciliationService:
         else:
             row.transaction = movement
             row.transfer = None
+
+    def _duplicate_root(
+        self,
+        row: BankStatementRow,
+    ) -> BankStatementRow | None:
+        """Return the original row of this duplicate representation, if any."""
+        root = self.statement_row_repository.lock_duplicate_root(row)
+        if row.duplicate_of_id is not None and root is None:
+            raise ReconciliationDecisionConflictError('duplicate')
+        if root is not None and root.upload.account_id != row.upload.account_id:
+            raise ReconciliationDecisionConflictError('duplicate')
+        return root
+
+    def _close_duplicate_presentation(
+        self,
+        upload: BankStatementUpload,
+        row: BankStatementRow,
+        root: BankStatementRow,
+        user_id: int,
+    ) -> BankStatementRow:
+        """Close a duplicate representation by the movement of its original.
+
+        No second financial movement is created. A transfer side can never
+        be occupied twice, so an original closed by a transfer is refused.
+        """
+        if root.transaction_id is None:
+            raise ReconciliationDecisionConflictError('duplicate')
+        row.transaction = root.transaction
+        row.transfer = None
+        row.decision = BankStatementRow.Decision.LINKED
+        row.decided_at = timezone.now()
+        row.save(
+            update_fields=[
+                'transaction',
+                'transfer',
+                'decision',
+                'decided_at',
+            ],
+        )
+        BankStatementDecisionAudit.objects.create(
+            row=row,
+            actor_id=user_id,
+            decision=row.decision,
+            transaction=row.transaction,
+        )
+        self.refresh_outcome_counts(upload)
+        return row
 
     def _candidate_is_current(
         self,

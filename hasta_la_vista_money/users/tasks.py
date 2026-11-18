@@ -16,6 +16,9 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
 )
+from hasta_la_vista_money.users.services.bank_statement_import import (
+    StatementGenerationExpiredError,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
@@ -75,10 +78,7 @@ def process_bank_statement_task(
             'user',
             'account',
         ).get(id=upload_id)
-        if upload.account.is_archived or upload.account.is_deposit:
-            raise BankStatementParseError(
-                _('Архивный счёт или счёт вклада недоступен для импорта.'),
-            )
+        _assert_account_importable(upload)
         _initialize_upload(upload, self)
 
         service = ApplicationContainer().users.bank_statement_import_service()
@@ -148,6 +148,20 @@ def process_bank_statement_task(
         )
         raise
 
+    except StatementGenerationExpiredError:
+        # An old parse must not post against a cleaned upload generation.
+        logger.warning(
+            'bank_statement_generation_expired',
+            upload_id=upload_id,
+        )
+        return {
+            'income_count': upload.income_count,
+            'expense_count': upload.expense_count,
+            'skipped_count': upload.skipped_count,
+            'needs_transfer_count': upload.needs_transfer_count,
+            'total_count': 0,
+        }
+
     except BankStatementParseError as e:
         logger.exception(
             'bank_statement_parse_failed',
@@ -178,6 +192,14 @@ def process_bank_statement_task(
         )
         _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
         raise
+
+
+def _assert_account_importable(upload: BankStatementUpload) -> None:
+    """Reject imports into archived or deposit accounts."""
+    if upload.account.is_archived or upload.account.is_deposit:
+        raise BankStatementParseError(
+            _('Архивный счёт или счёт вклада недоступен для импорта.'),
+        )
 
 
 def _mark_upload_failed(upload_id: int, message: str) -> None:

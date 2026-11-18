@@ -299,6 +299,7 @@ class StatementIdentityServiceProtocol(Protocol):
         bank_code: str | None,
         source_ref: str | None,
         trusted_reference: bool,
+        exclude_upload_id: int | None = None,
     ) -> IncomingStatementIdentity: ...
 
     def same_file_posted(

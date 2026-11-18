@@ -7,12 +7,16 @@ automatically or must go to the existing manual reconciliation path.
 
 Every decision here is fail-closed: a missing key, an unreadable stored
 version, an unverified historical fingerprint, or a match against one is a
-reason for manual review, never for automatic posting.
+reason for manual review, never for automatic posting. Manual review does
+not erase a proven technical identity: a genuine parser ID with a valid
+active-key fingerprint stays trusted so later representations can be linked.
 """
 
 from dataclasses import dataclass
+from typing import Final
 
-from django.utils.translation import gettext as _
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.transactions.models import Transaction
@@ -26,25 +30,29 @@ from hasta_la_vista_money.users.services.statement_id_fingerprint import (
     StatementIdFingerprintService,
 )
 
-MANUAL_REASON_KEY_UNAVAILABLE = _(
+MANUAL_REASON_KEY_UNAVAILABLE: Final[Promise] = _(
     'Идентификатор операции не проверен: нужен ключ отпечатков. '
     'Требуется ручная сверка.',
 )
-MANUAL_REASON_STORED_KEY_UNAVAILABLE = _(
+MANUAL_REASON_STORED_KEY_UNAVAILABLE: Final[Promise] = _(
     'Идентификатор операции не проверен: отпечаток создан недоступным '
     'ключом. Требуется ручная сверка.',
 )
-MANUAL_REASON_UNVERIFIED_HISTORY = _(
+MANUAL_REASON_UNVERIFIED_HISTORY: Final[Promise] = _(
     'Идентификатор операции не проверен: в счёте есть исторические '
     'неподтверждённые отпечатки. Требуется ручная сверка.',
 )
-MANUAL_REASON_MATCHED_UNVERIFIED = _(
+MANUAL_REASON_MATCHED_UNVERIFIED: Final[Promise] = _(
     'Найдено неподтверждённое совпадение с уже учтённой операцией. '
     'Требуется ручная сверка.',
 )
-MANUAL_REASON_UNKNOWN_BANK = _(
+MANUAL_REASON_UNKNOWN_BANK: Final[Promise] = _(
     'Банк выписки не определён, идентификатор нельзя проверить. '
     'Требуется ручная сверка.',
+)
+MANUAL_REASON_DUPLICATE_PRESENTATION: Final[Promise] = _(
+    'Найдено доказанное повторное представление операции. '
+    'Решение принимается по исходной строке.',
 )
 
 
@@ -62,6 +70,7 @@ class IncomingStatementIdentity:
     trusted: bool = False
     manual_reason: str = ''
     exact_duplicate: bool = False
+    duplicate_of_id: int | None = None
     matched_transactions: tuple[Transaction, ...] = ()
 
     @property
@@ -117,8 +126,7 @@ class StatementIdentityService:
         if saved and parsed_bank_code and saved != parsed_bank_code:
             raise StatementIdentityConflictError(parsed_bank_code)
         if not saved and parsed_bank_code:
-            upload.source_bank_code = parsed_bank_code
-            upload.save(update_fields=['source_bank_code'])
+            self._repository.save_upload_bank_code(upload, parsed_bank_code)
             saved = parsed_bank_code
         return saved or None
 
@@ -129,6 +137,7 @@ class StatementIdentityService:
         bank_code: str | None,
         source_ref: str | None,
         trusted_reference: bool,
+        exclude_upload_id: int | None = None,
     ) -> IncomingStatementIdentity:
         """Classify one parsed row against the account's stored identity.
 
@@ -137,85 +146,81 @@ class StatementIdentityService:
         number-and-date) may still be fingerprinted for same-file proof but
         never count as exact cross-file identity.
         """
-        if not source_ref:
-            return IncomingStatementIdentity()
         available = self._fingerprint_service.available_key_ids()
-        if not bank_code:
-            return IncomingStatementIdentity(
-                manual_reason=MANUAL_REASON_UNKNOWN_BANK,
+        identity = IncomingStatementIdentity()
+        digests: set[str] = set()
+        if source_ref:
+            if not bank_code:
+                return IncomingStatementIdentity(
+                    manual_reason=str(MANUAL_REASON_UNKNOWN_BANK),
+                )
+            active_hash = self._active_fingerprint(
+                bank_code=bank_code,
+                account_id=account_id,
+                source_ref=source_ref,
             )
-
-        active_hash = self._active_fingerprint(
-            bank_code=bank_code,
-            account_id=account_id,
-            source_ref=source_ref,
-        )
-        identity = IncomingStatementIdentity(
-            source_ref_hash=(
-                active_hash.digest if active_hash is not None else None
-            ),
-            key_id=active_hash.key_id if active_hash is not None else '',
-            version=(
-                active_hash.version
-                if active_hash is not None
-                else constants.STATEMENT_ID_FINGERPRINT_VERSION
-            ),
-            trusted=trusted_reference and active_hash is not None,
-        )
-        digests = self._lookup_digests(
-            account_id=account_id,
-            bank_code=bank_code,
-            source_ref=source_ref,
-            available_key_ids=available,
-        )
-        if trusted_reference and (
-            self._repository.trusted_exact_transaction_exists(
-                account_id,
-                digests,
+            identity = IncomingStatementIdentity(
+                source_ref_hash=(
+                    active_hash.digest if active_hash is not None else None
+                ),
+                key_id=active_hash.key_id if active_hash is not None else '',
+                version=(
+                    active_hash.version
+                    if active_hash is not None
+                    else constants.STATEMENT_ID_FINGERPRINT_VERSION
+                ),
+                trusted=trusted_reference and active_hash is not None,
             )
-        ):
-            return IncomingStatementIdentity(
-                source_ref_hash=identity.source_ref_hash,
-                key_id=identity.key_id,
-                version=identity.version,
-                trusted=True,
-                exact_duplicate=True,
+            digests = self._lookup_digests(
+                account_id=account_id,
+                bank_code=bank_code,
+                source_ref=source_ref,
+                available_key_ids=available,
             )
 
         matches = tuple(
             self._repository.untrusted_transactions(account_id, digests),
         )
-        reason = self._uncertainty_reason(
+        reason = self._required_guard_reason(
             account_id=account_id,
             available_key_ids=available,
-            active_key_available=active_hash is not None,
+            active_key_available=(
+                identity.source_ref_hash is not None or not source_ref
+            ),
             matches=matches,
         )
         if reason:
             return self._manual(identity, reason, matches)
-        return identity
+        if not source_ref:
+            return identity
 
-    def _uncertainty_reason(
-        self,
-        *,
-        account_id: int,
-        available_key_ids: frozenset[str],
-        active_key_available: bool,
-        matches: tuple[Transaction, ...],
-    ) -> str:
-        """Return why automatic posting is unsafe, or an empty string."""
-        if not active_key_available:
-            return MANUAL_REASON_KEY_UNAVAILABLE
-        if self._repository.has_unavailable_identity(
-            account_id,
-            available_key_ids,
-        ):
-            return MANUAL_REASON_STORED_KEY_UNAVAILABLE
-        if matches:
-            return MANUAL_REASON_MATCHED_UNVERIFIED
-        if self._repository.has_untrusted_identity(account_id):
-            return MANUAL_REASON_UNVERIFIED_HISTORY
-        return ''
+        if trusted_reference:
+            if self._repository.trusted_movement_exists(
+                account_id,
+                digests,
+                available,
+            ):
+                return IncomingStatementIdentity(
+                    source_ref_hash=identity.source_ref_hash,
+                    key_id=identity.key_id,
+                    version=identity.version,
+                    trusted=True,
+                    exact_duplicate=True,
+                )
+            root_id = self._repository.trusted_presentation_root_id(
+                account_id,
+                digests,
+                available,
+                exclude_upload_id=exclude_upload_id,
+            )
+            if root_id is not None:
+                return self._manual(
+                    identity,
+                    MANUAL_REASON_DUPLICATE_PRESENTATION,
+                    (),
+                    duplicate_of_id=root_id,
+                )
+        return identity
 
     def same_file_posted(
         self,
@@ -231,18 +236,43 @@ class StatementIdentityService:
             source_row_position,
         )
 
+    def _required_guard_reason(
+        self,
+        *,
+        account_id: int,
+        available_key_ids: frozenset[str],
+        active_key_available: bool,
+        matches: tuple[Transaction, ...],
+    ) -> str:
+        """Return why automatic posting is unsafe before evidence is used."""
+        if not active_key_available:
+            return str(MANUAL_REASON_KEY_UNAVAILABLE)
+        if self._repository.has_unavailable_identity(
+            account_id,
+            available_key_ids,
+        ):
+            return str(MANUAL_REASON_STORED_KEY_UNAVAILABLE)
+        if matches:
+            return str(MANUAL_REASON_MATCHED_UNVERIFIED)
+        if self._repository.has_untrusted_identity(account_id):
+            return str(MANUAL_REASON_UNVERIFIED_HISTORY)
+        return ''
+
     @staticmethod
     def _manual(
         identity: IncomingStatementIdentity,
-        reason: str,
+        reason: str | Promise,
         matches: tuple[Transaction, ...],
+        *,
+        duplicate_of_id: int | None = None,
     ) -> IncomingStatementIdentity:
         return IncomingStatementIdentity(
             source_ref_hash=identity.source_ref_hash,
             key_id=identity.key_id,
             version=identity.version,
-            trusted=False,
-            manual_reason=reason,
+            trusted=identity.trusted,
+            manual_reason=str(reason),
+            duplicate_of_id=duplicate_of_id,
             matched_transactions=matches,
         )
 

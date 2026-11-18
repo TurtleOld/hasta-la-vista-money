@@ -164,4 +164,5 @@ class UsersContainer(containers.DeclarativeContainer):
         classifier=category_classifier,
         account_repository=providers.Singleton(AccountRepository),
         identity_service=statement_identity_service,
+        identity_repository=statement_identity_repository,
     )

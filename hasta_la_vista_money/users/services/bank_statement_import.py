@@ -63,12 +63,29 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
     )
+    from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
+        StatementIdentityRepository,
+    )
     from hasta_la_vista_money.users.services.category_classifier import (
         CategoryClassifier,
     )
 
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
+
+
+class StatementGenerationExpiredError(Exception):
+    """Parsed work belongs to a cleaned or replaced upload generation."""
+
+
+@dataclass(frozen=True)
+class _StatementGeneration:
+    """Upload generation captured before parsing the statement."""
+
+    file_hash: str
+    pdf_name: str
+    expires_at: datetime
+    retention_cleaned_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -108,11 +125,13 @@ class BankStatementImportService:
         classifier: CategoryClassifier,
         account_repository: AccountRepository,
         identity_service: StatementIdentityService,
+        identity_repository: StatementIdentityRepository,
     ) -> None:
         """Инициализировать сервис категоризатором и репозиторием счетов."""
         self.classifier = classifier
         self.account_repository = account_repository
         self.identity_service = identity_service
+        self.identity_repository = identity_repository
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -172,13 +191,18 @@ class BankStatementImportService:
             upload_id=upload.pk,
             user_id=upload.user_id,
         )
+        generation = self._capture_generation(upload)
         parser = BankStatementParser(upload.pdf_file.path)
         parse_result = parser.parse()
         transactions = parse_result.transactions
         if parse_result.account_number:
             with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
                 self._match_account(upload, parse_result.account_number)
-        bank_code = self._resolve_bank_code(upload, parse_result.bank_code)
+        bank_code = self._resolve_bank_code(
+            upload,
+            parse_result.bank_code,
+            generation,
+        )
 
         upload.total_transactions = len(transactions)
         upload.save(update_fields=['total_transactions'])
@@ -190,7 +214,12 @@ class BankStatementImportService:
         )
 
         if parse_result.requires_markup:
-            self._save_markup_rows(upload, transactions, bank_code)
+            self._save_markup_rows(
+                upload,
+                transactions,
+                bank_code,
+                generation,
+            )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
@@ -216,6 +245,7 @@ class BankStatementImportService:
                 transactions=transactions,
                 existing_categories=existing_categories,
                 bank_code=bank_code,
+                generation=generation,
             )
 
         return StatementImportResult(
@@ -226,29 +256,79 @@ class BankStatementImportService:
             closing_balance=parse_result.closing_balance,
         )
 
+    @staticmethod
+    def _capture_generation(
+        upload: BankStatementUpload,
+    ) -> _StatementGeneration:
+        """Record the upload generation the parse is allowed to touch."""
+        return _StatementGeneration(
+            file_hash=upload.file_hash,
+            pdf_name=upload.pdf_file.name or '',
+            expires_at=upload.expires_at,
+            retention_cleaned_at=upload.retention_cleaned_at,
+        )
+
+    @staticmethod
+    def _assert_generation(
+        upload: BankStatementUpload,
+        generation: _StatementGeneration,
+    ) -> None:
+        """Reject parsed work that outlived its upload generation."""
+        if (
+            upload.file_hash != generation.file_hash
+            or (upload.pdf_file.name or '') != generation.pdf_name
+            or upload.expires_at != generation.expires_at
+            or upload.retention_cleaned_at != generation.retention_cleaned_at
+            or upload.expires_at <= timezone.now()
+        ):
+            raise StatementGenerationExpiredError('upload generation changed')
+
+    def _assert_row_generation(
+        self,
+        upload: BankStatementUpload,
+        generation: _StatementGeneration,
+        source_row_position: int,
+    ) -> None:
+        """Reject a row whose stored details were cleaned while parsing."""
+        self._assert_generation(upload, generation)
+        if BankStatementRow.objects.filter(
+            upload=upload,
+            source_row_position=source_row_position,
+            data_cleaned_at__isnull=False,
+        ).exists():
+            raise StatementGenerationExpiredError('row data cleaned')
+
     def _resolve_bank_code(
         self,
         upload: BankStatementUpload,
         parsed_bank_code: str | None,
+        generation: _StatementGeneration,
     ) -> str | None:
         """Freeze the parser's bank snapshot on the upload under its lock.
 
         The account is locked before the upload, matching the agreed lock
-        order. A different parser result never overwrites the snapshot.
+        order. A different parser result never overwrites the snapshot and
+        a cleaned generation never receives new provenance.
 
         Raises:
             BankStatementParseError: The parser contradicts the snapshot.
+            StatementGenerationExpiredError: The upload generation changed.
         """
         try:
             with transaction.atomic():
                 self.account_repository.get_by_ids_for_update(
                     {upload.account_id},
                 )
-                upload.refresh_from_db(fields=['source_bank_code'])
-                return self.identity_service.resolve_bank_code(
-                    upload,
+                locked = BankStatementUpload.objects.select_for_update().get(
+                    pk=upload.pk,
+                )
+                self._assert_generation(locked, generation)
+                bank_code = self.identity_service.resolve_bank_code(
+                    locked,
                     parsed_bank_code,
                 )
+                upload.source_bank_code = locked.source_bank_code
+                return bank_code
         except StatementIdentityConflictError as error:
             raise BankStatementParseError(
                 _(
@@ -264,6 +344,7 @@ class BankStatementImportService:
         transactions: list[dict[str, Any]],
         existing_categories: list[str],
         bank_code: str | None,
+        generation: _StatementGeneration,
     ) -> tuple[int, int, int, int]:
         """Создать транзакции из разобранных записей выписки.
 
@@ -278,6 +359,7 @@ class BankStatementImportService:
             existing_categories: Актуальный список категорий пользователя
                 для LLM.
             bank_code: Банк, выбранный парсером при первой загрузке.
+            generation: Поколение загрузки, зафиксированное до разбора.
 
         Returns:
             Кортеж ``(income_count, expense_count, skipped_count,
@@ -348,6 +430,16 @@ class BankStatementImportService:
                 self.account_repository.get_by_ids_for_update(
                     {upload.account_id},
                 )
+                locked_upload = (
+                    BankStatementUpload.objects.select_for_update().get(
+                        pk=upload.pk,
+                    )
+                )
+                self._assert_row_generation(
+                    locked_upload,
+                    generation,
+                    row_position,
+                )
                 identity = self.identity_service.classify_incoming(
                     account_id=upload.account_id,
                     bank_code=bank_code,
@@ -356,9 +448,15 @@ class BankStatementImportService:
                         bank_code,
                         source_ref,
                     ),
+                    exclude_upload_id=upload.pk,
+                )
+                same_file_duplicate = self.identity_service.same_file_posted(
+                    account_id=upload.account_id,
+                    source_file_hash=upload.file_hash,
+                    source_row_position=row_position,
                 )
                 if is_credit_income:
-                    if identity.exact_duplicate:
+                    if same_file_duplicate or identity.exact_duplicate:
                         skipped_count += 1
                     else:
                         self._save_needs_transfer_row(
@@ -373,14 +471,6 @@ class BankStatementImportService:
                     # after the check above.
                     row_category = str(category_name or FALLBACK_CATEGORY)
                     created = False
-                    same_file_duplicate = bool(
-                        not source_ref
-                        and self.identity_service.same_file_posted(
-                            account_id=upload.account_id,
-                            source_file_hash=upload.file_hash,
-                            source_row_position=row_position,
-                        ),
-                    )
                     if same_file_duplicate or identity.exact_duplicate:
                         skipped_count += 1
                     elif identity.manual:
@@ -513,12 +603,14 @@ class BankStatementImportService:
         bank_code: str | None,
     ) -> bool:
         """Skip the network classifier for rows already known to need none."""
+        if self.identity_service.same_file_posted(
+            account_id=upload.account_id,
+            source_file_hash=upload.file_hash,
+            source_row_position=row_position,
+        ):
+            return True
         if not source_ref:
-            return self.identity_service.same_file_posted(
-                account_id=upload.account_id,
-                source_file_hash=upload.file_hash,
-                source_row_position=row_position,
-            )
+            return False
         identity = self.identity_service.classify_incoming(
             account_id=upload.account_id,
             bank_code=bank_code,
@@ -527,6 +619,7 @@ class BankStatementImportService:
                 bank_code,
                 source_ref,
             ),
+            exclude_upload_id=upload.pk,
         )
         return identity.exact_duplicate or identity.manual
 
@@ -583,6 +676,7 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
         bank_code: str | None,
+        generation: _StatementGeneration,
     ) -> None:
         """Save rows awaiting user markup; none of them is posted.
 
@@ -594,7 +688,15 @@ class BankStatementImportService:
         with transaction.atomic():
             # Serialize overlapping uploads of one account.
             self.account_repository.get_by_ids_for_update({upload.account_id})
-            created = self._create_markup_rows(upload, transactions, bank_code)
+            locked_upload = BankStatementUpload.objects.select_for_update().get(
+                pk=upload.pk,
+            )
+            self._assert_generation(locked_upload, generation)
+            created = self._create_markup_rows(
+                locked_upload,
+                transactions,
+                bank_code,
+            )
         upload.processed_transactions = len(transactions)
         upload.skipped_count = len(transactions) - created
         upload.progress = 100
@@ -622,6 +724,7 @@ class BankStatementImportService:
                     bank_code,
                     trans['source_ref'],
                 ),
+                exclude_upload_id=upload.pk,
             )
             for idx, trans in enumerate(transactions)
         }
@@ -649,6 +752,7 @@ class BankStatementImportService:
                 source_ref_version=identities[idx].version,
                 source_identity_trusted=identities[idx].trusted,
                 source_row_position=idx,
+                duplicate_of_id=identities[idx].duplicate_of_id,
                 match_calendar_date=True,
                 kind=str(trans['kind']),
                 merchant_key=trans['merchant_key'] or '',
@@ -673,7 +777,7 @@ class BankStatementImportService:
                 continue
             identity = identities[position]
             if identity.matched_transactions:
-                self._save_identity_candidates(
+                self._add_identity_candidates(
                     row,
                     identity.matched_transactions,
                 )
@@ -690,7 +794,7 @@ class BankStatementImportService:
         category_name: str,
     ) -> BankStatementRow:
         """Keep a normalized row for manual reconciliation, never posting it."""
-        row, _created = BankStatementRow.objects.get_or_create(
+        row = self.identity_repository.create_manual_row(
             upload=upload,
             source_row_position=row_position,
             defaults={
@@ -709,32 +813,28 @@ class BankStatementImportService:
                 'source_ref_key_id': identity.key_id,
                 'source_ref_version': identity.version,
                 'source_identity_trusted': identity.trusted,
+                'duplicate_of_id': identity.duplicate_of_id,
                 'match_calendar_date': trans.get('source') == 'ozon',
                 'decision': BankStatementRow.Decision.PENDING,
             },
         )
-        self._save_identity_candidates(row, identity.matched_transactions)
+        self._add_identity_candidates(row, identity.matched_transactions)
         return row
 
-    @staticmethod
-    def _save_identity_candidates(
+    def _add_identity_candidates(
+        self,
         row: BankStatementRow,
         transactions: tuple[Transaction, ...],
     ) -> None:
-        BankStatementCandidate.objects.bulk_create(
+        self.identity_repository.add_statement_candidates(
+            row,
             [
-                BankStatementCandidate(
-                    row=row,
-                    transaction=transaction,
-                    description=(
-                        transaction.description
-                        or str(transaction.category.name)
-                    )[: constants.TWO_HUNDRED_FIFTY],
-                    rank=rank,
+                (
+                    transaction,
+                    transaction.description or str(transaction.category.name),
                 )
-                for rank, transaction in enumerate(transactions)
+                for transaction in transactions
             ],
-            ignore_conflicts=True,
         )
 
     def _save_needs_transfer_row(
@@ -762,6 +862,7 @@ class BankStatementImportService:
                 'source_ref_key_id': identity.key_id,
                 'source_ref_version': identity.version,
                 'source_identity_trusted': identity.trusted,
+                'duplicate_of_id': identity.duplicate_of_id,
                 'decision': BankStatementRow.Decision.NEEDS_TRANSFER,
             },
         )

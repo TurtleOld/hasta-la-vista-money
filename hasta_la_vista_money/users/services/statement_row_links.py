@@ -98,6 +98,18 @@ class StatementRowLinkService:
                     'Загрузите выписку повторно.',
                 ),
             )
+        if row.duplicate_of_id is not None:
+            root = self.statement_row_repository.lock_duplicate_root(row)
+            if root is not None and root.upload.account_id != upload.account_id:
+                raise ValidationError(
+                    _('Строка выписки не относится к счёту получателя.'),
+                )
+            raise ValidationError(
+                _(
+                    'Это повторное представление уже сохранённой операции. '
+                    'Решение принимается по исходной строке.',
+                ),
+            )
         if row.amount != amount:
             raise ValidationError(
                 _('Сумма перевода должна совпадать с суммой строки выписки.'),
@@ -147,6 +159,8 @@ class StatementRowLinkService:
                 raise ReconciliationDecisionConflictError(row.decision)
             if not row_has_bank_data(row):
                 raise ReconciliationExpiredError(row.pk)
+            if row.duplicate_of_id is not None:
+                raise ReconciliationDecisionConflictError('duplicate')
             # The lock keeps two rows of one account from taking one transfer.
             transfer = self.statement_row_repository.lock_owned_transfer(
                 transfer_id,

@@ -153,6 +153,33 @@ class StatementRowRepository:
         row.upload = upload
         return upload, row
 
+    def lock_duplicate_root(
+        self,
+        row: BankStatementRow,
+    ) -> BankStatementRow | None:
+        """Lock and return the original row of a duplicate presentation.
+
+        The account is already locked by the caller, so following the chain
+        to its root is stable. A cycle or a self-reference is invalid and
+        yields no link target; the caller must then fail closed.
+        """
+        if row.duplicate_of_id is None:
+            return None
+        seen: set[int] = set()
+        current = row.duplicate_of_id
+        while True:
+            if current == row.pk or current in seen:
+                return None
+            seen.add(current)
+            root = (
+                BankStatementRow.objects.select_for_update()
+                .select_related('upload')
+                .get(pk=current)
+            )
+            if root.duplicate_of_id is None:
+                return root
+            current = root.duplicate_of_id
+
     def suspend_row(
         self,
         row: BankStatementRow,

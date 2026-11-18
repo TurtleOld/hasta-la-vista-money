@@ -5,36 +5,101 @@ match is an exact duplicate, a manual candidate, or a reason to fail closed
 is decided by ``StatementIdentityService``.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
-from django.db.models import Q, QuerySet
+from django.db.models import Q
 
 from hasta_la_vista_money.transactions.models import Transaction
-from hasta_la_vista_money.users.models import BankStatementRow
+from hasta_la_vista_money.users.models import (
+    BankStatementCandidate,
+    BankStatementRow,
+    BankStatementUpload,
+)
+
+_UNRESOLVED_ROW_DECISIONS = (
+    BankStatementRow.Decision.PENDING,
+    BankStatementRow.Decision.AWAITING_MARKUP,
+    BankStatementRow.Decision.NEEDS_TRANSFER,
+    BankStatementRow.Decision.DEFERRED,
+)
 
 _UNTRUSTED = Q(
     source_ref_hash__isnull=False,
     source_identity_trusted=False,
 )
+_UNVERIFIED_TRANSACTION = Q(source_ref__isnull=False) | _UNTRUSTED
+_UNVERIFIED_ROW = (
+    Q(source_ref__isnull=False)
+    | _UNTRUSTED
+    | (
+        Q(source_ref_hash__isnull=True)
+        & Q(decision__in=_UNRESOLVED_ROW_DECISIONS)
+    )
+)
 
 
 class StatementIdentityRepository:
-    """Stored statement fingerprints of one account."""
+    """Stored statement fingerprints and their row/movement writers."""
 
     @staticmethod
-    def trusted_exact_transaction_exists(
+    def trusted_movement_exists(
         account_id: int,
         digests: Iterable[str],
+        available_key_ids: frozenset[str],
     ) -> bool:
-        """Tell whether a trusted movement already owns one of the digests."""
+        """Tell whether a readable trusted movement owns one of the digests."""
         wanted = set(digests)
         if not wanted:
             return False
         return Transaction.objects.filter(
             account_id=account_id,
             source_ref_hash__in=wanted,
+            source_ref_key_id__in=set(available_key_ids),
+            source_ref_version=1,
             source_identity_trusted=True,
         ).exists()
+
+    @staticmethod
+    def trusted_presentation_root_id(
+        account_id: int,
+        digests: Iterable[str],
+        available_key_ids: frozenset[str],
+        *,
+        exclude_upload_id: int | None = None,
+    ) -> int | None:
+        """Return the root row of a readable trusted duplicate presentation.
+
+        Rows written under another active key still carry the same technical
+        identifier; following ``duplicate_of`` finds the original row. A
+        cycle or a row outside the account never becomes a link target.
+        """
+        wanted = set(digests)
+        if not wanted:
+            return None
+        rows = BankStatementRow.objects.filter(
+            upload__account_id=account_id,
+            source_ref_hash__in=wanted,
+            source_ref_key_id__in=set(available_key_ids),
+            source_ref_version=1,
+            source_identity_trusted=True,
+        )
+        if exclude_upload_id is not None:
+            rows = rows.exclude(upload_id=exclude_upload_id)
+        links = dict(rows.values_list('pk', 'duplicate_of_id'))
+        if not links:
+            return None
+        for start in sorted(links):
+            seen = {start}
+            current = start
+            while True:
+                parent = links.get(current)
+                if parent is None:
+                    return current
+                if parent in seen:
+                    return None
+                seen.add(parent)
+                current = parent
+        return None
 
     @staticmethod
     def untrusted_transactions(
@@ -57,18 +122,19 @@ class StatementIdentityRepository:
 
     @staticmethod
     def has_untrusted_identity(account_id: int) -> bool:
-        """Tell whether the account keeps unverified historical fingerprints.
+        """Tell whether the account keeps unverified bank identity state.
 
-        A nonmatch is not proof of absence while such records exist: they
-        may describe the same operation under an unknown bank namespace.
+        A nonmatch is not proof of absence while such records exist. Rows
+        whose fingerprint could not be written (missing key) still count:
+        they are bank-origin unresolved identity, not a manual movement.
         """
         if Transaction.objects.filter(
-            _UNTRUSTED,
+            _UNVERIFIED_TRANSACTION,
             account_id=account_id,
         ).exists():
             return True
         return BankStatementRow.objects.filter(
-            _UNTRUSTED,
+            _UNVERIFIED_ROW,
             upload__account_id=account_id,
         ).exists()
 
@@ -98,20 +164,6 @@ class StatementIdentityRepository:
         ).exists()
 
     @staticmethod
-    def statement_rows_for_digests(
-        account_id: int,
-        digests: Iterable[str],
-    ) -> QuerySet[BankStatementRow]:
-        """Return statement rows of the account owning one of the digests."""
-        wanted = set(digests)
-        if not wanted:
-            return BankStatementRow.objects.none()
-        return BankStatementRow.objects.filter(
-            upload__account_id=account_id,
-            source_ref_hash__in=wanted,
-        )
-
-    @staticmethod
     def same_file_transaction_exists(
         account_id: int,
         source_file_hash: str,
@@ -125,3 +177,46 @@ class StatementIdentityRepository:
             source_file_hash=source_file_hash,
             source_row_position=source_row_position,
         ).exists()
+
+    @staticmethod
+    def save_upload_bank_code(
+        upload: BankStatementUpload,
+        bank_code: str,
+    ) -> None:
+        """Persist the immutable parser provenance of the upload."""
+        upload.source_bank_code = bank_code
+        upload.save(update_fields=['source_bank_code'])
+
+    @staticmethod
+    def create_manual_row(
+        *,
+        upload: BankStatementUpload,
+        source_row_position: int,
+        defaults: dict[str, object],
+    ) -> BankStatementRow:
+        """Create or reuse the manual representation of one parsed row."""
+        row, _created = BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=source_row_position,
+            defaults=defaults,
+        )
+        return row
+
+    @staticmethod
+    def add_statement_candidates(
+        row: BankStatementRow,
+        candidates: Sequence[tuple[Transaction, str]],
+    ) -> None:
+        """Attach already stored movements as manual review candidates."""
+        BankStatementCandidate.objects.bulk_create(
+            [
+                BankStatementCandidate(
+                    row=row,
+                    transaction=movement,
+                    description=description[:250],
+                    rank=rank,
+                )
+                for rank, (movement, description) in enumerate(candidates)
+            ],
+            ignore_conflicts=True,
+        )

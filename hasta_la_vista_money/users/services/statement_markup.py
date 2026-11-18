@@ -408,6 +408,8 @@ class StatementMarkupService:
                 user_id,
             )
         elif as_transfer:
+            if row.duplicate_of_id is not None:
+                raise StatementMarkupConflictError('duplicate')
             row.transfer = self._create_transfer(
                 row,
                 upload,
@@ -415,13 +417,7 @@ class StatementMarkupService:
             )
             row.decision = BankStatementRow.Decision.TRANSFERRED
         else:
-            row.transaction = self._create_movement(
-                row,
-                upload,
-                category_id,
-            )
-            self._remember(row, upload.user, row.transaction)
-            row.decision = BankStatementRow.Decision.NEW
+            self._post_transaction_decision(row, upload, category_id)
         if not skip:
             row.decided_at = timezone.now()
             row.save(
@@ -441,6 +437,41 @@ class StatementMarkupService:
         if finalize:
             self._finalize(upload)
         return row
+
+    def _duplicate_root(
+        self,
+        row: BankStatementRow,
+    ) -> BankStatementRow | None:
+        """Return the original row of this duplicate representation, if any."""
+        root = self._statement_row_repository.lock_duplicate_root(row)
+        if row.duplicate_of_id is not None and root is None:
+            raise StatementMarkupConflictError('duplicate')
+        if root is not None and root.upload.account_id != row.upload.account_id:
+            raise StatementMarkupConflictError('duplicate')
+        return root
+
+    def _post_transaction_decision(
+        self,
+        row: BankStatementRow,
+        upload: BankStatementUpload,
+        category_id: int | None,
+    ) -> None:
+        """Create the movement, or link a duplicate representation to it."""
+        duplicate_root = self._duplicate_root(row)
+        if duplicate_root is not None:
+            if duplicate_root.transaction_id is None:
+                raise StatementMarkupConflictError('duplicate')
+            row.transaction = duplicate_root.transaction
+            row.transfer = None
+            row.decision = BankStatementRow.Decision.LINKED
+            return
+        row.transaction = self._create_movement(
+            row,
+            upload,
+            category_id,
+        )
+        self._remember(row, upload.user, row.transaction)
+        row.decision = BankStatementRow.Decision.NEW
 
     def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)

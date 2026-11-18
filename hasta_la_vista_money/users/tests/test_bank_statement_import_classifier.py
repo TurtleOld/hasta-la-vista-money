@@ -95,6 +95,7 @@ class BankStatementImportClassifierTests(TestCase):
             transactions=self._rows(),
             existing_categories=[],
             bank_code=None,
+            generation=self.service._capture_generation(self.upload),
         )
 
     def test_classifier_called_outside_row_transaction(self) -> None:
@@ -114,6 +115,7 @@ class BankStatementImportClassifierTests(TestCase):
             transactions=self._rows()[:1],
             existing_categories=[],
             bank_code=None,
+            generation=self.service._capture_generation(self.upload),
         )
 
         self.assertEqual(self.classifier.atomic_depths, [])
