@@ -1,8 +1,8 @@
 """Необратимые отпечатки банковских идентификаторов строк выписки.
 
 HMAC-SHA256 с отдельным стабильным ключом и контекстом банка/счёта
-(ADR-0018). Ключи и их идентификаторы не попадают в БД, логи
-и сообщения ошибок.
+(ADR-0018). Секретные ключи не попадают в БД, логи и сообщения ошибок;
+key id и версия формата сохраняются рядом с отпечатком.
 """
 
 # ruff: noqa: N818  # имя исключения зафиксировано контрактом задачи
@@ -18,6 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from hasta_la_vista_money.constants import (
     STATEMENT_ID_FINGERPRINT_VERSION,
+    STATEMENT_ID_HMAC_KEY_ID_MAX_LENGTH,
     STATEMENT_ID_HMAC_MIN_KEY_BYTES,
 )
 
@@ -89,11 +90,20 @@ class StatementIdFingerprintService:
         return frozenset(self._keys)
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ImproperlyConfigured(_INVALID_CONFIG)
+        result[key] = value
+    return result
+
+
 def _parse_keys_setting(raw: str) -> dict[str, bytes]:
     if not raw:
         return {}
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(raw, object_pairs_hook=_unique_object)
     except json.JSONDecodeError:
         raise ImproperlyConfigured(_INVALID_CONFIG) from None
     if not isinstance(parsed, dict):
@@ -112,20 +122,23 @@ def _parse_keys_setting(raw: str) -> dict[str, bytes]:
 def _validate_keys(keys: Mapping[str, bytes]) -> dict[str, bytes]:
     validated = dict(keys)
     for key_id, key in validated.items():
+        unchecked_id: object = key_id
+        unchecked_key: object = key
         if (
-            not isinstance(key_id, str)
-            or not key_id
-            or not isinstance(key, bytes)
-            or len(key) < STATEMENT_ID_HMAC_MIN_KEY_BYTES
+            not isinstance(unchecked_id, str)
+            or not unchecked_id
+            or len(unchecked_id) > STATEMENT_ID_HMAC_KEY_ID_MAX_LENGTH
+            or not isinstance(unchecked_key, bytes)
+            or len(unchecked_key) < STATEMENT_ID_HMAC_MIN_KEY_BYTES
         ):
             raise ImproperlyConfigured(_INVALID_CONFIG)
     return validated
 
 
 def _validate_inputs(
-    bank_code: str,
-    account_id: int,
-    source_ref: str,
+    bank_code: object,
+    account_id: object,
+    source_ref: object,
 ) -> None:
     if not isinstance(bank_code, str) or not bank_code.strip():
         raise ValueError('bank_code must be a non-empty string')

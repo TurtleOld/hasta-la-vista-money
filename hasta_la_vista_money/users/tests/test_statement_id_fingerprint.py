@@ -271,3 +271,42 @@ class StatementIdFingerprintRotationTest(SimpleTestCase):
             service.lookup_fingerprints('sberbank', 42, 'op-123'),
             (),
         )
+
+
+class StatementIdFingerprintKeyringGuardTest(SimpleTestCase):
+    def test_duplicate_key_id_rejected(self) -> None:
+        raw = (
+            '{"test-key-1": "' + KEY_ONE_HEX + '",'
+            ' "test-key-1": "' + KEY_TWO_HEX + '"}'
+        )
+        with (
+            override_settings(
+                STATEMENT_ID_HMAC_KEYS=raw,
+                STATEMENT_ID_HMAC_ACTIVE_KEY_ID='test-key-1',
+            ),
+            self.assertRaises(ImproperlyConfigured) as caught,
+        ):
+            StatementIdFingerprintService()
+        message = str(caught.exception)
+        self.assertNotIn(KEY_ONE_HEX, message)
+        self.assertNotIn(KEY_TWO_HEX, message)
+
+    def test_key_id_max_length_boundary(self) -> None:
+        accepted = StatementIdFingerprintService(
+            keys={'k' * 64: KEY_ONE},
+            active_key_id='k' * 64,
+        )
+        self.assertEqual(accepted.available_key_ids(), frozenset({'k' * 64}))
+        with self.assertRaises(ImproperlyConfigured) as caught:
+            StatementIdFingerprintService(
+                keys={'k' * 65: KEY_ONE},
+                active_key_id='k' * 65,
+            )
+        self.assertNotIn('k' * 65, str(caught.exception))
+
+    def test_non_string_key_id_rejected(self) -> None:
+        with self.assertRaises(ImproperlyConfigured):
+            StatementIdFingerprintService(
+                keys={1: KEY_ONE},
+                active_key_id='test-key-1',
+            )
