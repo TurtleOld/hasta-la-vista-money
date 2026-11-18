@@ -10,6 +10,9 @@ from django.utils.translation import gettext_lazy as _
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import BankStatementUpload
+from hasta_la_vista_money.users.protocols.services import (
+    BankStatementImportServiceProtocol,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
 )
@@ -17,7 +20,9 @@ from hasta_la_vista_money.users.services.bank_statement_import import (
     GENERATION_BUSY,
     GENERATION_CURRENT,
     GENERATION_STARTED,
+    StatementGeneration,
     StatementGenerationExpiredError,
+    StatementImportResult,
 )
 
 logger = structlog.get_logger(__name__)
@@ -69,8 +74,8 @@ def process_bank_statement_task(
         'bank_statement_task_started',
         upload_id=upload_id,
     )
-    service: Any = None
-    generation: Any = None
+    service: BankStatementImportServiceProtocol | None = None
+    generation: StatementGeneration | None = None
 
     try:
         upload = BankStatementUpload.objects.select_related(
@@ -205,9 +210,9 @@ def _assert_account_importable(upload: BankStatementUpload) -> None:
 
 
 def _start_generation(
-    service: Any,
+    service: BankStatementImportServiceProtocol,
     upload: BankStatementUpload,
-    generation: Any,
+    generation: StatementGeneration,
     task_id: str,
 ) -> str:
     """Start a job only for the upload generation it captured."""
@@ -219,10 +224,10 @@ def _start_generation(
 
 
 def _finalize_generation(
-    service: Any,
+    service: BankStatementImportServiceProtocol,
     upload: BankStatementUpload,
-    generation: Any,
-    result: Any,
+    generation: StatementGeneration,
+    result: StatementImportResult,
     task_id: str,
 ) -> None:
     """Finalize only while the parsed generation is still current."""
@@ -237,8 +242,8 @@ def _finalize_generation(
 
 
 def _mark_failure_if_current(
-    service: Any,
-    generation: Any,
+    service: BankStatementImportServiceProtocol | None,
+    generation: StatementGeneration | None,
     upload_id: int,
     task_id: str,
     message: str,

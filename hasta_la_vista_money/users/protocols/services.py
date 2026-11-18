@@ -318,10 +318,30 @@ class BankStatementImportServiceProtocol(Protocol):
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool: ...
 
+    def capture_generation(
+        self,
+        upload: BankStatementUpload,
+    ) -> StatementGeneration: ...
+
     def import_statement(
         self,
         upload: BankStatementUpload,
+        generation: StatementGeneration | None = None,
     ) -> StatementImportResult: ...
+
+    def start_upload(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str,
+    ) -> str: ...
+
+    def resolve_expired_generation(
+        self,
+        upload_id: int,
+        generation: StatementGeneration,
+        task_id: str | None = None,
+    ) -> str: ...
 
     def mark_failure_if_current(
         self,
@@ -329,4 +349,12 @@ class BankStatementImportServiceProtocol(Protocol):
         generation: StatementGeneration,
         task_id: str,
         message: str,
+    ) -> str: ...
+
+    def finalize_import(
+        self,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+        *,
+        closing_balance: Decimal | None,
     ) -> str: ...

@@ -228,6 +228,25 @@ class StatementIdentityRepository:
         )
 
     @staticmethod
+    def has_upload_rows(
+        upload_id: int,
+        decisions: Sequence[str],
+    ) -> bool:
+        """Tell whether the upload keeps rows in any of these decisions."""
+        return BankStatementRow.objects.filter(
+            upload_id=upload_id,
+            decision__in=decisions,
+        ).exists()
+
+    @staticmethod
+    def save_upload_fields(
+        upload: BankStatementUpload,
+        fields: Sequence[str],
+    ) -> None:
+        """Persist lifecycle fields computed by the import service."""
+        upload.save(update_fields=fields)
+
+    @staticmethod
     def create_manual_row(
         *,
         upload: BankStatementUpload,

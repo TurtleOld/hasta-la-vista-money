@@ -12,12 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import structlog
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
@@ -62,6 +62,8 @@ from hasta_la_vista_money.users.services.statement_identity import (
 if TYPE_CHECKING:
     from decimal import Decimal
 
+    from django.utils.functional import Promise
+
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
@@ -77,14 +79,14 @@ logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 
 
-GENERATION_CURRENT = 'current'
-GENERATION_EXPIRED = 'expired'
-GENERATION_REPLACED = 'replaced'
-GENERATION_BUSY = 'busy'
-GENERATION_STARTED = 'started'
+GENERATION_CURRENT: Final = 'current'
+GENERATION_EXPIRED: Final = 'expired'
+GENERATION_REPLACED: Final = 'replaced'
+GENERATION_BUSY: Final = 'busy'
+GENERATION_STARTED: Final = 'started'
 
-REUPLOAD_REQUIRED_MESSAGE = (
-    'Данные выписки истекли. Загрузите выписку повторно.'
+REUPLOAD_REQUIRED_MESSAGE: Final[Promise] = _(
+    'Данные выписки истекли. Загрузите выписку повторно.',
 )
 
 
@@ -345,17 +347,15 @@ class BankStatementImportService:
         never overwritten.
         """
         with transaction.atomic():
-            account_id = (
-                BankStatementUpload.objects.filter(pk=upload_id)
-                .values_list('account_id', flat=True)
-                .first()
+            account_id = self.identity_repository.upload_account_id(
+                upload_id,
             )
             if account_id is None:
                 return GENERATION_REPLACED
             self.account_repository.get_by_ids_for_update({account_id})
-            locked = BankStatementUpload.objects.select_for_update().get(
-                pk=upload_id,
-            )
+            locked = self.identity_repository.lock_upload(upload_id)
+            if locked is None:
+                return GENERATION_REPLACED
             state = self.generation_state(locked, generation)
             if state != GENERATION_CURRENT:
                 return state
@@ -369,8 +369,9 @@ class BankStatementImportService:
             locked.celery_task_id = task_id
             locked.failed_count = 0
             locked.error_message = ''
-            locked.save(
-                update_fields=[
+            self.identity_repository.save_upload_fields(
+                locked,
+                [
                     'status',
                     'celery_task_id',
                     'failed_count',
@@ -394,17 +395,15 @@ class BankStatementImportService:
         Any different task owner keeps its state, including PROCESSING.
         """
         with transaction.atomic():
-            account_id = (
-                BankStatementUpload.objects.filter(pk=upload_id)
-                .values_list('account_id', flat=True)
-                .first()
+            account_id = self.identity_repository.upload_account_id(
+                upload_id,
             )
             if account_id is None:
                 return GENERATION_REPLACED
             self.account_repository.get_by_ids_for_update({account_id})
-            locked = BankStatementUpload.objects.select_for_update().get(
-                pk=upload_id,
-            )
+            locked = self.identity_repository.lock_upload(upload_id)
+            if locked is None:
+                return GENERATION_REPLACED
             state = self.generation_state(locked, generation)
             if state == GENERATION_REPLACED:
                 return state
@@ -414,16 +413,9 @@ class BankStatementImportService:
                 and locked.celery_task_id != task_id
             ):
                 return state
-            locked.status = BankStatementUpload.Status.FAILED
-            locked.failed_count = 1
-            locked.error_message = str(REUPLOAD_REQUIRED_MESSAGE)
-            locked.save(
-                update_fields=[
-                    'status',
-                    'failed_count',
-                    'error_message',
-                    'updated_at',
-                ],
+            self.identity_repository.save_failed_upload(
+                locked,
+                str(REUPLOAD_REQUIRED_MESSAGE),
             )
             return state
 
@@ -489,23 +481,23 @@ class BankStatementImportService:
                 {upload.account_id},
             )
             account = accounts[upload.account_id]
-            locked = BankStatementUpload.objects.select_for_update().get(
-                pk=upload.pk,
-            )
+            locked = self.identity_repository.lock_upload(upload.pk)
+            if locked is None:
+                return GENERATION_REPLACED
             state = self.generation_state(locked, generation)
             if state != GENERATION_CURRENT:
                 return state
-            awaiting_markup = BankStatementRow.objects.filter(
-                upload=locked,
-                decision__in=[
+            awaiting_markup = self.identity_repository.has_upload_rows(
+                locked.pk,
+                [
                     BankStatementRow.Decision.AWAITING_MARKUP,
                     BankStatementRow.Decision.DEFERRED,
                 ],
-            ).exists()
-            has_pending = BankStatementRow.objects.filter(
-                upload=locked,
-                decision=BankStatementRow.Decision.PENDING,
-            ).exists()
+            )
+            has_pending = self.identity_repository.has_upload_rows(
+                locked.pk,
+                [BankStatementRow.Decision.PENDING],
+            )
             fields = ['progress', 'status', 'updated_at']
             if closing_balance is not None:
                 locked.statement_closing_balance = closing_balance
@@ -520,7 +512,10 @@ class BankStatementImportService:
                 locked.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
             else:
                 locked.status = BankStatementUpload.Status.COMPLETED
-            locked.save(update_fields=list(dict.fromkeys(fields)))
+            self.identity_repository.save_upload_fields(
+                locked,
+                list(dict.fromkeys(fields)),
+            )
             return GENERATION_CURRENT
 
     def _assert_row_generation(
