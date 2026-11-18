@@ -678,3 +678,7 @@ RECEIPT_PROCESSING_UPLOAD_DIR: Final = 'receipt_processing_logs'
 
 CSV_FORMULA_PREFIXES: Final = ('=', '+', '-', '@', '\t', '\r')
 PDF_SIGNATURE: Final = b'%PDF-'
+
+# Statement identity HMAC keyring (ADR-0018)
+STATEMENT_ID_FINGERPRINT_VERSION: Final = 1
+STATEMENT_ID_HMAC_MIN_KEY_BYTES: Final = 32

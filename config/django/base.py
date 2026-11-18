@@ -675,6 +675,18 @@ FNS_SESSION_CACHE_TTL_SECONDS: int = config(
     cast=int,
 )
 
+# Отпечатки банковских идентификаторов выписок (ADR-0018).
+# STATEMENT_ID_HMAC_KEYS — JSON-объект key_id -> hex-ключ (>= 32 байт);
+# ключи независимы от SECRET_KEY и не хранятся в БД/репозитории.
+STATEMENT_ID_HMAC_ACTIVE_KEY_ID: str = config(
+    'STATEMENT_ID_HMAC_ACTIVE_KEY_ID',
+    default='',
+)
+STATEMENT_ID_HMAC_KEYS: str = config(
+    'STATEMENT_ID_HMAC_KEYS',
+    default='',
+)
+
 logs_dir = BASE_DIR / 'logs'
 if not logs_dir.exists():
     logs_dir.mkdir()
