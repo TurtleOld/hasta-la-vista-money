@@ -1,5 +1,6 @@
 {% load i18n %}
 {% load static %}
+{% load accounting_badges %}
 
 {% block content %}
     <nav class="sticky top-0 z-50 w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm">
@@ -100,6 +101,17 @@
 
                 <!-- User Menu -->
                 <div id="user-menu" class="flex items-center ml-4 gap-2">
+                    <a href="{% url 'finance_account:accounting_control' %}"
+                       class="relative flex items-center justify-center w-9 h-9 rounded-xl text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                       aria-label="{% translate 'Контроль учёта' %}" title="{% translate 'Контроль учёта' %}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        {% accounting_problem_count as problem_count %}
+                        {% if problem_count %}
+                            <span data-accounting-problem-count="{{ problem_count }}" class="absolute -top-1.5 -right-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 py-0.5 text-[10px] font-semibold leading-4 text-white">{{ problem_count }}</span>
+                        {% endif %}
+                    </a>
                     <button id="theme-toggle" type="button" aria-live="polite"
                             class="flex items-center justify-center w-9 h-9 rounded-xl text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                             aria-label="{% translate 'Сменить тему' %}">

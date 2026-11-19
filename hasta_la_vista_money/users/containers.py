@@ -12,6 +12,7 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
 from hasta_la_vista_money.users.protocols.services import (
+    AccountingProblemServiceProtocol,
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
@@ -19,6 +20,9 @@ from hasta_la_vista_money.users.protocols.services import (
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.accounting_problem_repository import (  # noqa: E501
+    AccountingProblemRepository,
 )
 from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
     StatementIdentityRepository,
@@ -28,6 +32,9 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
+)
+from hasta_la_vista_money.users.services.accounting_problem_service import (
+    AccountingProblemService,
 )
 from hasta_la_vista_money.users.services.bank_statement_import import (
     BankStatementImportService,
@@ -110,6 +117,17 @@ class UsersContainer(containers.DeclarativeContainer):
     category_classifier = providers.Singleton(_build_classifier)
 
     statement_row_repository = providers.Singleton(StatementRowRepository)
+
+    accounting_problem_repository = providers.Singleton(
+        AccountingProblemRepository,
+    )
+
+    accounting_problem_service: providers.Factory[
+        AccountingProblemServiceProtocol
+    ] = providers.Factory(
+        AccountingProblemService,
+        repository=accounting_problem_repository,
+    )
 
     statement_identity_repository = providers.Singleton(
         StatementIdentityRepository,

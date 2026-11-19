@@ -188,14 +188,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ),
             )
             context['selected_group_id'] = scope
-            markup_service = cast(
+            problem_service = cast(
                 'RequestWithContainer',
                 self.request,
-            ).container.users.statement_markup_service()
-            (
-                context['markup_pending_count'],
-                context['markup_upload_id'],
-            ) = markup_service.pending_summary(user.pk)
+            ).container.users.accounting_problem_service()
+            context['accounting_problem_count'] = problem_service.summary(
+                user,
+            ).total_items
 
         return context
 

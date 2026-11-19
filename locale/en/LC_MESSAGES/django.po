@@ -3835,3 +3835,174 @@ msgstr "Could not send the receipt. Point the camera at it again."
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html
 msgid "открыть"
 msgstr "open"
+
+msgid "Строка отложена и всё ещё ждёт решения"
+msgstr "The row is deferred and still awaits a decision"
+
+msgid "Строка выписки ещё не размечена"
+msgstr "The statement row has not been marked up yet"
+
+msgid "Вероятный дубль ждёт решения; отсутствие движения не доказано"
+msgstr "A probable duplicate awaits a decision; absence of a movement is not proven"
+
+msgid "Погашение ещё не проведено переводом"
+msgstr "The repayment has not been posted as a transfer yet"
+
+msgid "Операция не разобрана; неизвестные поля не заполнены"
+msgstr "The operation could not be parsed; unknown fields are not filled in"
+
+msgid "Банковские данные удалены по сроку; требуется повторная загрузка"
+msgstr "Bank details were deleted after the retention period; upload the statement again"
+
+msgid "Загрузка выписки завершилась ошибкой"
+msgstr "The statement upload failed"
+
+msgid "Расхождение с остатком выписки"
+msgstr "Discrepancy with the statement balance"
+
+msgid "Известное необъяснённое расхождение остатка; требуется решение пользователя"
+msgstr "A known unexplained balance discrepancy needs a user decision"
+
+msgid "Без причины"
+msgstr "No reason"
+
+msgid "Начало периода позже его конца."
+msgstr "The period start is later than its end."
+
+msgid "Выбран счёт другого пользователя."
+msgstr "The selected account belongs to another user."
+
+msgid "Неизвестный вид проблемы учёта."
+msgstr "Unknown accounting problem kind."
+
+msgid "Неизвестное состояние проблемы учёта."
+msgstr "Unknown accounting problem state."
+
+msgid "Отложена"
+msgstr "Deferred"
+
+msgid "Ждёт разметки"
+msgstr "Awaiting markup"
+
+msgid "Вероятный дубль"
+msgstr "Probable duplicate"
+
+msgid "Погашение без перевода"
+msgstr "Repayment without a transfer"
+
+msgid "Ошибка разбора"
+msgstr "Parsing error"
+
+msgid "Ошибка загрузки"
+msgstr "Upload error"
+
+msgid "Нужна повторная загрузка"
+msgstr "Re-upload required"
+
+msgid "Проверить остаток"
+msgstr "Check the balance"
+
+msgid "Данные доступны"
+msgstr "Data available"
+
+msgid "Только восстановление"
+msgstr "Recovery only"
+
+msgid "Контроль учёта"
+msgstr "Accounting control"
+
+msgid "Все известные проблемы банковских выписок в одном месте. Наличие проблем не является доказательством актуальности данных, а их отсутствие не подтверждает полноту учёта."
+msgstr "All known bank statement problems in one place. The presence of problems does not prove the data is current, and their absence does not prove the books are complete."
+
+msgid "Проблем в списке"
+msgstr "Problems in the list"
+
+msgid "Строк ждут восстановления"
+msgstr "Rows awaiting recovery"
+
+msgid "Исключений с причиной"
+msgstr "Exclusions with a reason"
+
+msgid "Все счета"
+msgstr "All accounts"
+
+msgid "Все банки"
+msgstr "All banks"
+
+msgid "Все валюты"
+msgstr "All currencies"
+
+msgid "Вид проблемы"
+msgstr "Problem kind"
+
+msgid "Все виды"
+msgstr "All kinds"
+
+msgid "Дата операции с"
+msgstr "Operation date from"
+
+msgid "Дата операции по"
+msgstr "Operation date to"
+
+msgid "Применить"
+msgstr "Apply"
+
+msgid "Строки с неизвестной банковской датой остаются в списке даже при фильтре по дате."
+msgstr "Rows with an unknown bank date stay in the list even with a date filter."
+
+msgid "Дата:"
+msgstr "Date:"
+
+msgid "неизвестна"
+msgstr "unknown"
+
+msgid "Сумма:"
+msgstr "Amount:"
+
+msgid "Строк:"
+msgstr "Rows:"
+
+msgid "Разметить"
+msgstr "Mark up"
+
+msgid "Открыть сверку"
+msgstr "Open reconciliation"
+
+msgid "Провести переводом"
+msgstr "Post as a transfer"
+
+msgid "По выбранным условиям проблем нет."
+msgstr "There are no problems for the selected conditions."
+
+msgid "Отсутствие проблем здесь не подтверждает полноту покрытия периода и проверку остатков."
+msgstr "No problems here does not confirm period coverage or balance verification."
+
+msgid "Известные суммы неразрешённых строк"
+msgstr "Known amounts of unresolved rows"
+
+msgid "Суммы неполные: у части строк сумма или направление неизвестны."
+msgstr "Amounts are incomplete: some rows have an unknown amount or direction."
+
+msgid "Исключённые строки"
+msgstr "Excluded rows"
+
+msgid "Оговорка полноты: исключённые строки"
+msgstr "Completeness caveat: excluded rows"
+
+msgid "Исключения закрыты решением пользователя, но не доказывают отсутствие операций."
+msgstr "Exclusions are closed by a user decision but do not prove that no operations exist."
+
+msgid "Проверка исторических остатков показана только при сохранённом известном расхождении; отсутствие данных не считается подтверждённой проверкой."
+msgstr "Historical balance verification is shown only for a stored known discrepancy; missing data is not treated as a verified check."
+
+msgid "Сводка проблем"
+msgstr "Problem summary"
+
+msgid "Проблем учёта:"
+msgstr "Accounting problems:"
+
+msgid "Все"
+msgstr "All"
+
+msgid "Состояние"
+msgstr "State"

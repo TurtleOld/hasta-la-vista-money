@@ -1,5 +1,6 @@
 {% load i18n %}
 {% load static %}
+{% load accounting_badges %}
 
 <div class="fixed inset-0 z-50 hidden lg:hidden peer-checked:block peer-checked:[&_[data-mobile-menu-overlay]]:opacity-100 peer-checked:[&_[data-mobile-menu-overlay]]:pointer-events-auto peer-checked:[&_[data-mobile-menu-panel]]:translate-y-0" id="mobileMenu">
     <label class="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200" for="mobileMenuState" data-mobile-menu-overlay></label>
@@ -22,6 +23,16 @@
             <a class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors {% if request.path == '/finance/' %}bg-linear-to-r from-green-50 to-emerald-50 text-green-700 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" href="{% url 'finances' %}" data-mobile-menu-link>
                 {% include 'partials/_icon.html' with icon='trending-up' class='size-4.5 text-green-600' %}
                 <span>{% translate 'Финансы' %}</span>
+            </a>
+        </li>
+        <li>
+            <a class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors {% if request.path == '/finance_account/accounting-control/' %}bg-linear-to-r from-green-50 to-emerald-50 text-green-700 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-300{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" href="{% url 'finance_account:accounting_control' %}" data-mobile-menu-link>
+                {% include 'partials/_icon.html' with icon='receipt' class='size-4.5' %}
+                <span>{% translate 'Контроль учёта' %}</span>
+                {% accounting_problem_count as problem_count %}
+                {% if problem_count %}
+                    <span data-accounting-problem-count="{{ problem_count }}" class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 py-0.5 text-xs font-semibold text-white">{{ problem_count }}</span>
+                {% endif %}
             </a>
         </li>
         {% if user.is_staff %}

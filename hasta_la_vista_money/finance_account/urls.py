@@ -7,6 +7,9 @@ and API endpoints.
 
 from django.urls import path
 
+from hasta_la_vista_money.finance_account.accounting_control_views import (
+    AccountingControlView,
+)
 from hasta_la_vista_money.finance_account.apis import (
     AccountListCreateAPIView,
     AccountRetrieveUpdateDestroyAPIView,
@@ -134,6 +137,11 @@ urlpatterns = [
         'transactions/<int:pk>/delete/',
         TransactionDeleteView.as_view(),
         name='transaction_delete',
+    ),
+    path(
+        'accounting-control/',
+        AccountingControlView.as_view(),
+        name='accounting_control',
     ),
     path(
         'bank-statement-upload/',

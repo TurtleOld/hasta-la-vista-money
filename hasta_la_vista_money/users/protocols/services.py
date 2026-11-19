@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import datetime
+    from datetime import date, datetime
     from decimal import Decimal
 
     from django.db.models import QuerySet
@@ -17,6 +17,11 @@ if TYPE_CHECKING:
         TransferMoneyLog,
     )
     from hasta_la_vista_money.transactions.models import Category, Transaction
+    from hasta_la_vista_money.users.accounting_types import (
+        AccountingProblemCounts,
+        AccountingProblemFilter,
+        AccountingProblemList,
+    )
     from hasta_la_vista_money.users.models import (
         BankStatementRow,
         BankStatementUpload,
@@ -358,3 +363,20 @@ class BankStatementImportServiceProtocol(Protocol):
         *,
         closing_balance: Decimal | None,
     ) -> str: ...
+
+
+@runtime_checkable
+class AccountingProblemServiceProtocol(Protocol):
+    """Protocol for the unified, request-independent accounting problems."""
+
+    def problems(
+        self,
+        owner: User,
+        *,
+        account_ids: Sequence[int] = (),
+        start: date | None = None,
+        end: date | None = None,
+        filters: AccountingProblemFilter | None = None,
+    ) -> AccountingProblemList: ...
+
+    def summary(self, owner: User) -> AccountingProblemCounts: ...
