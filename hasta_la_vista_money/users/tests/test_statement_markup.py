@@ -1219,7 +1219,7 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         self.upload.statement_closing_balance = Decimal('880.00')
         self.upload.save()
 
-    def test_discrepancy_appears_when_no_rows_await_markup(self) -> None:
+    def test_closing_check_does_not_compare_with_current_balance(self) -> None:
         first = self._row(1)
         second = self._row(2)
 
@@ -1229,8 +1229,8 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
 
         self.service.skip(second.pk, self.user.pk)
         self.upload.refresh_from_db()
-        self.assertEqual(self.upload.account_balance_after, Decimal('900.00'))
-        self.assertEqual(self.upload.balance_discrepancy, Decimal('-20.00'))
+        self.assertIsNone(self.upload.account_balance_after)
+        self.assertIsNone(self.upload.balance_discrepancy)
 
     def test_discrepancy_needs_statement_closing_balance(self) -> None:
         self.upload.statement_closing_balance = None

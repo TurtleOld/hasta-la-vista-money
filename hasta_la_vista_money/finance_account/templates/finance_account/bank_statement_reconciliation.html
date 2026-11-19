@@ -9,6 +9,64 @@
     <p class="mb-5 text-sm text-gray-600 dark:text-gray-300">
         {% translate 'Решения доступны до' %} {{ upload.expires_at|date:'d.m.Y H:i' }}.
     </p>
+    <section class="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <h2 class="mb-3 text-lg font-semibold">{% translate 'Проверка банковского остатка' %}</h2>
+        <p class="mb-3 text-sm">
+            {% translate 'Статус' %}:
+            <span class="font-medium">{{ balance_verification.status }}</span>
+            {% if balance_verification.reason %}— {{ balance_verification.reason }}{% endif %}
+        </p>
+        {% if balance_verification.bank_balance is not None %}
+            <p class="mb-1 text-sm">{% translate 'Остаток банка' %}: {{ balance_verification.bank_balance }} {{ upload.account.currency }}</p>
+        {% endif %}
+        {% if balance_verification.app_balance is not None %}
+            <p class="mb-1 text-sm">{% translate 'Остаток в приложении' %}: {{ balance_verification.app_balance }} {{ upload.account.currency }}</p>
+        {% endif %}
+        {% if balance_verification.difference is not None %}
+            <p class="mb-3 text-sm">{% translate 'Разница' %}: {{ balance_verification.difference }} {{ upload.account.currency }}</p>
+        {% endif %}
+        <form method="post" class="flex flex-wrap items-end gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="confirm_balance">
+            <label class="text-sm">
+                {% translate 'Дата остатка' %}
+                <input class="input input-bordered input-sm" type="date" name="balance_date" value="{{ upload.statement_balance_date|date:'Y-m-d' }}">
+            </label>
+            <label class="text-sm">
+                {% translate 'Семантика' %}
+                <select class="select select-bordered select-sm" name="balance_kind">
+                    {% for value, label in balance_kinds %}
+                        <option value="{{ value }}" {% if value == upload.statement_balance_kind %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="text-sm">
+                {% translate 'Часовой пояс' %}
+                <input class="input input-bordered input-sm" type="text" name="timezone_name" value="{{ upload.statement_balance_timezone }}" placeholder="Europe/Moscow">
+            </label>
+            <label class="text-sm">
+                {% translate 'Точный момент (необязательно)' %}
+                <input class="input input-bordered input-sm" type="datetime-local" name="balance_at">
+            </label>
+            <button class="btn btn-sm btn-primary" type="submit">{% translate 'Подтвердить и проверить' %}</button>
+        </form>
+        <form method="post" class="mt-2 flex flex-wrap items-end gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify_balance">
+            <button class="btn btn-sm" type="submit">{% translate 'Проверить снова' %}</button>
+        </form>
+        {% if balance_verification.unexplained_mismatch %}
+            <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="explain_mismatch">
+                <label class="grow text-sm">
+                    {% translate 'Причина расхождения' %}
+                    <input class="input input-bordered input-sm w-full" type="text" name="reason" required>
+                </label>
+                <button class="btn btn-sm btn-warning" type="submit">{% translate 'Объяснить расхождение' %}</button>
+            </form>
+        {% endif %}
+    </section>
     <nav class="mb-6 flex flex-wrap gap-2" aria-label="{% translate 'Фильтр решений' %}">
         <a href="?outcome=all" class="rounded px-3 py-2 {% if outcome == 'all' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Все' %}</a>
         <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>

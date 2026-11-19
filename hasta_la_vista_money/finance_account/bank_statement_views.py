@@ -1,7 +1,8 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Final, cast
+from zoneinfo import ZoneInfo
 
 import structlog
 from django.contrib import messages
@@ -20,6 +21,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
@@ -47,6 +49,9 @@ from hasta_la_vista_money.users.protocols.services import (
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
 )
+from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
+    StatementBalanceVerificationRepository,
+)
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
 )
@@ -58,6 +63,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     ReconciliationExpiredError,
     StaleStatementCandidateError,
+)
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    StatementBalanceVerificationService,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
     REFUND_CATEGORY_NAME,
@@ -115,6 +123,54 @@ def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
         'StatementRowLinkServiceProtocol',
         request_with_container.container.users.statement_row_link_service(),
     )
+
+
+def _balance_verification_service(
+    request: HttpRequest,
+) -> StatementBalanceVerificationService:
+    """Resolve the balance check, registered or wired here temporarily."""
+    request_with_container = cast('RequestWithContainer', request)
+    container = request_with_container.container
+    registered = getattr(
+        container.users,
+        'statement_balance_verification_service',
+        None,
+    )
+    if registered is not None:
+        return cast(
+            'StatementBalanceVerificationService',
+            registered(),
+        )
+    return StatementBalanceVerificationService(
+        repository=StatementBalanceVerificationRepository(),
+        balance_history_service=(
+            container.finance_account.balance_history_service()
+        ),
+    )
+
+
+def _balance_at_input(
+    raw_value: str,
+    zone_name: str,
+) -> datetime | None:
+    """Parse an optional explicit balance instant without guessing a zone."""
+    if not raw_value:
+        return None
+    moment = parse_datetime(raw_value)
+    if moment is None:
+        raise ValidationError(_('Не удалось разобрать момент остатка.'))
+    if timezone.is_naive(moment):
+        if not zone_name:
+            raise ValidationError(
+                _('Для момента остатка укажите часовой пояс.'),
+            )
+        try:
+            moment = moment.replace(tzinfo=ZoneInfo(zone_name))
+        except (KeyError, ValueError) as error:
+            raise ValidationError(
+                _('Неизвестный часовой пояс остатка.'),
+            ) from error
+    return moment
 
 
 class BankStatementUploadView(
@@ -444,7 +500,66 @@ class BankStatementReconciliationView(
             self.request.GET.get('page'),
         )
         context['outcome'] = outcome
+        context['balance_verification'] = _balance_verification_service(
+            self.request,
+        ).verification(self.object.pk, cast('User', self.request.user).pk)
+        context['balance_kinds'] = BankStatementUpload.BalanceKind.choices
         return context
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Confirm the balance snapshot, verify it, or explain a mismatch."""
+        self.object = self.get_object()
+        user = cast('User', request.user)
+        service = _balance_verification_service(request)
+        action = request.POST.get('action', '')
+        try:
+            if action == 'confirm_balance':
+                zone_name = request.POST.get('timezone_name', '').strip()
+                raw_date = request.POST.get('balance_date', '')
+                balance_date = parse_date(raw_date)
+                if raw_date and balance_date is None:
+                    raise ValidationError(
+                        _('Не удалось разобрать дату остатка.'),
+                    )
+                result = service.confirm_balance_snapshot(
+                    self.object.pk,
+                    user.pk,
+                    balance_kind=request.POST.get('balance_kind', ''),
+                    balance_date=balance_date,
+                    balance_at=_balance_at_input(
+                        request.POST.get('balance_at', ''),
+                        zone_name,
+                    ),
+                    timezone_name=zone_name,
+                )
+                result = service.verify(self.object.pk, user.pk)
+            elif action == 'verify_balance':
+                result = service.verify(self.object.pk, user.pk)
+            elif action == 'explain_mismatch':
+                result = service.explain_mismatch(
+                    self.object.pk,
+                    user.pk,
+                    reason=request.POST.get('reason', ''),
+                )
+            else:
+                messages.error(request, _('Неизвестное действие проверки.'))
+                return redirect(request.path)
+        except ValidationError as error:
+            messages.error(request, '; '.join(error.messages))
+            return redirect(request.path)
+        if result.blocks_final_reconciliation:
+            messages.warning(
+                request,
+                _('Известное необъяснённое расхождение блокирует сверку.'),
+            )
+        else:
+            messages.success(request, _('Проверка остатка обновлена.'))
+        return redirect(request.path)
 
 
 class BankStatementMarkupView(

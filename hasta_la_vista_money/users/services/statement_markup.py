@@ -45,6 +45,9 @@ from hasta_la_vista_money.users.models import (
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
+    StatementBalanceVerificationServiceProtocol,
+)
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
 )
@@ -85,11 +88,15 @@ class StatementMarkupService:
         account_repository: AccountRepository,
         transfer_log_repository: TransferMoneyLogRepository,
         statement_row_repository: StatementRowRepository,
+        balance_verification: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
     ) -> None:
         self._balance_service = balance_service
         self._account_repository = account_repository
         self._transfer_log_repository = transfer_log_repository
         self._statement_row_repository = statement_row_repository
+        self._balance_verification = balance_verification
 
     @staticmethod
     def pending_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
@@ -495,7 +502,7 @@ class StatementMarkupService:
 
     @transaction.atomic
     def _finalize(self, upload: BankStatementUpload) -> None:
-        account = Account.objects.select_for_update().get(pk=upload.account_id)
+        _account = Account.objects.select_for_update().get(pk=upload.account_id)
         locked = BankStatementUpload.objects.select_for_update().get(
             pk=upload.pk,
         )
@@ -511,16 +518,12 @@ class StatementMarkupService:
             upload.account_balance_after = locked.account_balance_after
             upload.balance_discrepancy = locked.balance_discrepancy
             return
-        closing = locked.statement_closing_balance
-        if closing is not None:
-            locked.account_balance_after = account.balance
-            locked.balance_discrepancy = closing - account.balance
-            locked.save(
-                update_fields=[
-                    'account_balance_after',
-                    'balance_discrepancy',
-                ],
-            )
+        if self._balance_verification is None:
+            # Without the verification service the closing balance is not
+            # compared with the current balance: that would pretend the old
+            # statement ends today. The check stays unverified.
+            return
+        self._balance_verification.verify(locked.pk, locked.user_id)
 
     def _create_movement(
         self,
