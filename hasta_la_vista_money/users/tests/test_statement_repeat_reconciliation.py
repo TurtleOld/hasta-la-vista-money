@@ -142,6 +142,23 @@ class RepeatStatementUploadTestCase(TestCase):
             **extra,
         )
 
+    def test_full_reconciliation_parse_records_processing_evidence(
+        self,
+    ) -> None:
+        upload = self._upload(reconciliation_only=True)
+
+        with _parser_patch([_transaction(0)]) as parser:
+            parser.return_value.parse.return_value.traceability_complete = True
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.processing_traceability_version, 1)
+        self.assertIsNotNone(upload.processing_verified_at)
+        self.assertEqual(upload.statement_rows.count(), 1)
+        self.assertFalse(Transaction.objects.exists())
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
     def test_repeat_upload_renews_pdf_and_forces_reconciliation_only(
         self,
     ) -> None:

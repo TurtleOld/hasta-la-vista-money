@@ -264,12 +264,19 @@ class BankStatementImportService:
                     generation,
                     requires_markup=parse_result.requires_markup,
                 )
+            self._mark_traceability(
+                upload,
+                generation,
+                parse_result.traceability_complete,
+                len(transactions),
+            )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
                 skipped_count=0,
                 needs_transfer_count=0,
                 closing_balance=parse_result.closing_balance,
+                traceability_complete=parse_result.traceability_complete,
             )
 
         if parse_result.requires_markup:
