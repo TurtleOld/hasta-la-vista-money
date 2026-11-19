@@ -99,6 +99,10 @@ class StatementRowLinkService:
                     'Загрузите выписку повторно.',
                 ),
             )
+        if row.transaction_date is None:
+            raise ValidationError(
+                _('У строки выписки не указана дата операции.'),
+            )
         if row.duplicate_of_id is not None:
             root = self.statement_row_repository.lock_duplicate_root(row)
             if root is not None and root.upload.account_id != upload.account_id:

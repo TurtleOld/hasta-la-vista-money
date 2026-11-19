@@ -161,6 +161,20 @@ class RepaymentRowTransferServiceTest(RepaymentRowTransferBase):
     def test_amount_mismatch_refuses_transfer(self) -> None:
         self._assert_refused(self.row.pk, amount=Decimal('200.00'))
 
+    def test_undated_row_refuses_transfer_without_side_effects(self) -> None:
+        self.row.transaction_date = None
+        self.row.save(update_fields=['transaction_date'])
+
+        self._assert_refused(self.row.pk)
+
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(self.row.transfer_id)
+        self.assertFalse(self.row.decision_audits.exists())
+
     def test_row_of_other_account_refuses_transfer(self) -> None:
         other_card = self._account(self.user, ACCOUNT_TYPE_CREDIT_CARD)
 
@@ -269,6 +283,27 @@ class RepaymentRowTransferViewTest(RepaymentRowTransferBase):
         self.assertContains(response, 'Строка выписки уже закрыта')
         self.assertFalse(TransferMoneyLog.objects.exists())
 
+    def test_post_with_undated_row_shows_error(self) -> None:
+        self.row.transaction_date = None
+        self.row.save(update_fields=['transaction_date'])
+
+        response = self._post(self.row.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'не указана дата операции')
+        self.assertFalse(TransferMoneyLog.objects.exists())
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1000.00'))
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(self.row.transfer_id)
+        self.assertFalse(self.row.decision_audits.exists())
+
     def test_post_with_malformed_row_shows_error(self) -> None:
         response = self._post('abc')
 
@@ -338,7 +373,7 @@ class RepaymentRowRetentionGuardTest(RepaymentRowTransferBase):
 
         self._assert_refused_without_money()
 
-    def _view_post(self, row_id: int):
+    def _view_post(self, row_id: int) -> Any:
         return self.client.post(
             reverse('finance_account:transfer_money'),
             {
