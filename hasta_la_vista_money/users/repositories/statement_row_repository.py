@@ -117,6 +117,24 @@ class StatementRowRepository:
         )
         return uploads
 
+    def get_available_owned_row(
+        self,
+        row_id: int,
+        user_id: int,
+    ) -> BankStatementRow | None:
+        """Return an owned, still-readable repayment row for display."""
+        return (
+            BankStatementRow.objects.filter(
+                self.bank_data_available_q(),
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            )
+            .select_related('upload__account')
+            .first()
+        )
+
     def lock_owned_upload_and_row(
         self,
         row_id: int,

@@ -522,3 +522,32 @@ class TestPendingRepaymentBankDay(BankDayDisplayTestCase):
         self.assertContains(response, 'type="datetime-local"')
         self.assertNotContains(response, 'value="2026-03-15"')
         self.assertNotContains(response, 'value="2026-03-14"')
+
+    def test_unicode_digit_statement_row_returns_page_without_bank_day(
+        self,
+    ) -> None:
+        params: dict[str, str | int] = {
+            'to_account': self.card.pk,
+            'statement_row': '\u00b2',
+            'date': '2026-03-14',
+        }
+        response = self.client.get(self._transfer_url(), params)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'type="datetime-local"')
+        self.assertNotContains(response, 'type="date"')
+        self.assertNotContains(response, 'value="2026-03-15"')
+
+    def test_out_of_range_statement_row_returns_page_without_bank_day(
+        self,
+    ) -> None:
+        params: dict[str, str | int] = {
+            'to_account': self.card.pk,
+            'statement_row': '2147483648',
+            'date': '2026-03-14',
+        }
+        response = self.client.get(self._transfer_url(), params)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'type="datetime-local"')
+        self.assertNotContains(response, 'value="2026-03-15"')

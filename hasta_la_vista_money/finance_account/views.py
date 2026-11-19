@@ -85,9 +85,10 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import BankStatementRow, User
-from hasta_la_vista_money.users.repositories.statement_row_repository import (
-    StatementRowRepository,
+from hasta_la_vista_money.users.models import (
+    MAX_DATABASE_INTEGER,
+    BankStatementRow,
+    User,
 )
 from hasta_la_vista_money.users.services.groups import readable_users
 
@@ -97,6 +98,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import (
         RequestWithContainer,
         WSGIRequestWithContainer,
+    )
+    from hasta_la_vista_money.users.repositories.statement_row_repository import (  # noqa: E501
+        StatementRowRepository,
     )
 
 logger = structlog.get_logger(__name__)
@@ -2272,22 +2276,20 @@ class TransferMoneyAccountView(
         raw_row_id: object,
     ) -> BankStatementRow | None:
         """Return an owned, still-readable repayment row for this transfer."""
-        if raw_row_id is None or not str(raw_row_id).isdigit():
-            return None
         user = request.user
-        if not isinstance(user, User):
+        if not isinstance(user, User) or raw_row_id is None:
             return None
-        return (
-            BankStatementRow.objects.filter(
-                StatementRowRepository.bank_data_available_q(),
-                pk=int(str(raw_row_id)),
-                upload__user_id=user.pk,
-                upload__account__user_id=user.pk,
-                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
-            )
-            .select_related('upload__account')
-            .first()
+        try:
+            row_id = int(str(raw_row_id))
+        except (TypeError, ValueError):
+            return None
+        if row_id < 1 or row_id > MAX_DATABASE_INTEGER:
+            return None
+        repository = cast(
+            'StatementRowRepository',
+            request.container.users.statement_row_repository(),
         )
+        return repository.get_available_owned_row(row_id, user.pk)
 
     @staticmethod
     def _apply_account_initial(
