@@ -538,12 +538,39 @@ class TestPendingRepaymentBankDay(BankDayDisplayTestCase):
         self.assertNotContains(response, 'type="date"')
         self.assertNotContains(response, 'value="2026-03-15"')
 
+    def test_large_owned_statement_row_pk_supplies_bank_day(self) -> None:
+        big_pk = 2**31
+        BankStatementRow.objects.create(
+            pk=big_pk,
+            upload=self.upload,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=datetime(2026, 3, 15, tzinfo=UTC),
+            bank_calendar_date=date(2026, 3, 15),
+            date_precision=BankStatementRow.DatePrecision.DAY,
+            amount=Decimal('100.00'),
+            description='Погашение',
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            source_row_position=1,
+        )
+
+        params: dict[str, str | int] = {
+            'to_account': self.card.pk,
+            'statement_row': str(big_pk),
+            'date': '2026-03-14',
+        }
+        response = self.client.get(self._transfer_url(), params)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'type="date"')
+        self.assertContains(response, 'value="2026-03-15"')
+        self.assertNotContains(response, 'value="2026-03-14"')
+
     def test_out_of_range_statement_row_returns_page_without_bank_day(
         self,
     ) -> None:
         params: dict[str, str | int] = {
             'to_account': self.card.pk,
-            'statement_row': '2147483648',
+            'statement_row': '9223372036854775808',
             'date': '2026-03-14',
         }
         response = self.client.get(self._transfer_url(), params)

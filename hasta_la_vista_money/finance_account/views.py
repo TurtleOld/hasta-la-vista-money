@@ -19,8 +19,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db import models
-from django.db.models import Model, QuerySet
+from django.db import connection, models
+from django.db.models import BigAutoField, Model, QuerySet
 from django.db.models.functions import Abs, Coalesce, TruncDate
 from django.http import (
     HttpRequest,
@@ -86,7 +86,6 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import (
-    MAX_DATABASE_INTEGER,
     BankStatementRow,
     User,
 )
@@ -2283,7 +2282,12 @@ class TransferMoneyAccountView(
             row_id = int(str(raw_row_id))
         except (TypeError, ValueError):
             return None
-        if row_id < 1 or row_id > MAX_DATABASE_INTEGER:
+        # BankStatementRow.pk is a BigAutoField; a value outside that
+        # column range can never name a row and must not reach the query.
+        _, max_row_id = connection.ops.integer_field_range(
+            BigAutoField().get_internal_type(),
+        )
+        if row_id < 1 or row_id > max_row_id:
             return None
         repository = cast(
             'StatementRowRepository',
