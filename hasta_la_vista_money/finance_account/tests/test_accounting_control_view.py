@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -210,3 +211,120 @@ class AccountingControlViewTest(AccountingControlViewFixture):
         marker = f'data-accounting-problem-count="{expected.total_items}"'
         self.assertContains(response, marker)
         self.assertContains(response, 'Контроль учёта')
+
+    def _money_snapshot(self) -> tuple[int, list[object]]:
+        return (
+            Transaction.objects.count(),
+            list(
+                Account.objects.filter(user=self.user)
+                .order_by('pk')
+                .values_list('balance', flat=True),
+            ),
+        )
+
+    def test_invalid_calendar_date_is_a_form_error_not_a_500(self) -> None:
+        self.client.force_login(self.user)
+        before = self._money_snapshot()
+
+        response = self.client.get(
+            self._url(),
+            {'date_from': '2026-02-31'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['filter_error'])
+        self.assertEqual(response.context['selected']['date_from'], '')
+        self.assertEqual(
+            response.context['problem_list'].counts.total_items,
+            3,
+        )
+        self.assertEqual(self._money_snapshot(), before)
+
+    def test_invalid_to_date_is_a_form_error_not_a_500(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            self._url(),
+            {'date_to': '2026-13-01'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['filter_error'])
+        self.assertEqual(response.context['selected']['date_to'], '')
+
+    def test_unicode_digit_account_is_rejected_without_a_500(self) -> None:
+        self.client.force_login(self.user)
+        before = self._money_snapshot()
+
+        response = self.client.get(self._url(), {'account': '²'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['filter_error'])
+        self.assertEqual(response.context['selected']['account'], '')
+        self.assertEqual(
+            response.context['problem_list'].counts.total_items,
+            3,
+        )
+        self.assertNotIn('Чужой счёт', response.content.decode())
+        self.assertEqual(self._money_snapshot(), before)
+
+    def test_huge_account_id_is_rejected_without_a_500(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            self._url(),
+            {'account': '9' * 5000},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['filter_error'])
+        self.assertEqual(
+            response.context['problem_list'].counts.total_items,
+            3,
+        )
+
+    def test_max_bigautofield_account_id_stays_in_range(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            self._url(),
+            {'account': str(2**63 - 1)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context['problem_list'].counts.total_items,
+            3,
+        )
+
+    def test_valid_date_and_account_filters_keep_semantics(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            self._url(),
+            {
+                'account': str(self.account.pk),
+                'date_from': '2026-03-02',
+                'date_to': '2026-03-02',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filter_error'], '')
+        self.assertEqual(
+            response.context['selected']['account'],
+            str(self.account.pk),
+        )
+        self.assertEqual(
+            response.context['selected']['date_from'],
+            '2026-03-02',
+        )
+        problem_list = response.context['problem_list']
+        self.assertEqual(problem_list.counts.total_items, 2)
+        row_ids = {
+            item.row_id
+            for item in problem_list.items
+            if item.row_id is not None
+        }
+        self.assertIn(self.markup_row.pk, row_ids)
+        self.assertNotIn(self.deferred_row.pk, row_ids)

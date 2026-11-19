@@ -70,8 +70,40 @@ def _valid_state(value: str) -> str:
     return value if value in set(ProblemState) else ProblemState.ALL
 
 
-def _date_or_none(value: str) -> date | None:
-    return parse_date(value) if value else None
+# PostgreSQL bigint / Django BigAutoField upper bound.
+_MAX_BIGAUTO_ID = 2**63 - 1
+
+
+def _account_id_or_none(value: str) -> tuple[int | None, bool]:
+    """Parse an account id, rejecting non-ASCII digits and overflow.
+
+    Returns ``(id, invalid)``. A missing value is not an error; malformed
+    input is reported to the existing filter-error path instead of raising.
+    """
+    if not value:
+        return None, False
+    if not value.isascii() or not value.isdigit():
+        return None, True
+    normalized = value.lstrip('0') or '0'
+    if len(normalized) > len(str(_MAX_BIGAUTO_ID)):
+        return None, True
+    candidate = int(normalized)
+    if candidate < 1 or candidate > _MAX_BIGAUTO_ID:
+        return None, True
+    return candidate, False
+
+
+def _date_or_none(value: str) -> tuple[date | None, bool]:
+    """Parse an optional filter date without letting invalid input raise."""
+    if not value:
+        return None, False
+    try:
+        parsed = parse_date(value)
+    except (TypeError, ValueError):
+        return None, True
+    if parsed is None:
+        return None, True
+    return parsed, False
 
 
 class AccountingControlView(LoginRequiredMixin, TemplateView):
@@ -86,17 +118,29 @@ class AccountingControlView(LoginRequiredMixin, TemplateView):
         selected = _selected(self.request)
         selected['kind'] = _valid_kind(selected['kind'])
         selected['state'] = _valid_state(selected['state'])
-        account_id = selected['account']
-        account_ids = [int(account_id)] if account_id.isdigit() else ()
-        start = _date_or_none(selected['date_from'])
-        end = _date_or_none(selected['date_to'])
+        account_id, account_invalid = _account_id_or_none(
+            selected['account'],
+        )
+        start, start_invalid = _date_or_none(selected['date_from'])
+        end, end_invalid = _date_or_none(selected['date_to'])
+        account_ids = (account_id,) if account_id is not None else ()
+        errors: list[str] = []
+        if account_invalid:
+            errors.append(str(_('Некорректное значение счёта в фильтре.')))
+            selected['account'] = ''
+        if start_invalid:
+            errors.append(str(_('Некорректная дата начала в фильтре.')))
+            selected['date_from'] = ''
+        if end_invalid:
+            errors.append(str(_('Некорректная дата конца в фильтре.')))
+            selected['date_to'] = ''
         filters = AccountingProblemFilter(
             bank_code=selected['bank'],
             currency=selected['currency'],
             kind=selected['kind'],
             state=selected['state'],
         )
-        error = ''
+        error = ' '.join(errors)
         try:
             problem_list = service.problems(
                 user,
@@ -106,7 +150,7 @@ class AccountingControlView(LoginRequiredMixin, TemplateView):
                 filters=filters,
             )
         except ValidationError as exc:
-            error = ' '.join(exc.messages)
+            error = ' '.join(filter(None, (error, ' '.join(exc.messages))))
             selected['account'] = ''
             problem_list = service.problems(
                 user,

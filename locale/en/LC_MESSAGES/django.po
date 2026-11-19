@@ -4006,3 +4006,12 @@ msgstr "All"
 
 msgid "Состояние"
 msgstr "State"
+
+msgid "Некорректное значение счёта в фильтре."
+msgstr "Invalid account value in the filter."
+
+msgid "Некорректная дата начала в фильтре."
+msgstr "Invalid start date in the filter."
+
+msgid "Некорректная дата конца в фильтре."
+msgstr "Invalid end date in the filter."
