@@ -1117,7 +1117,12 @@ class TestBankStatementReconciliationView(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(BankStatementUpload.objects.count(), 1)
-        task.delay.assert_not_called()
+        task.delay.assert_called_once_with(self.upload.pk)
+        self.upload.refresh_from_db()
+        self.assertTrue(self.upload.reconciliation_only)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(self.row.transaction, self.candidate)
 
     def test_cleanup_failure_keeps_pending_row_and_can_be_retried(
         self,
