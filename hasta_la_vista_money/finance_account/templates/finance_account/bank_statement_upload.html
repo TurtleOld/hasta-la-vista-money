@@ -42,6 +42,17 @@
                     </div>
 
                     <div class="statement-field">
+                        <label for="{{ form.reconciliation_only.id_for_label }}">
+                            {{ form.reconciliation_only }}
+                            <span>{{ form.reconciliation_only.label }}</span>
+                        </label>
+                        <p class="statement-help">{{ form.reconciliation_only.help_text }}</p>
+                        {% for error in form.reconciliation_only.errors %}
+                            <p class="statement-field-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="statement-field">
                         <label id="upload-zone" for="pdf-file-input" class="statement-dropzone">
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                             <strong>{% translate 'Перетащите PDF файл сюда или нажмите для выбора' %}</strong>
@@ -137,6 +148,9 @@
                     <div>
                         <p class="statement-history-account">{{ history_upload.account.name_account }}</p>
                         <p class="statement-help">{{ history_upload.created_at|date:'d.m.Y H:i' }} · {{ history_upload.get_status_display }}</p>
+                        {% if history_upload.reconciliation_only %}
+                            <p class="statement-help">{% translate 'Режим: только сверка без проведения' %}</p>
+                        {% endif %}
                         {% if history_upload.needs_transfer_count %}
                             <p class="statement-warning">
                                 {% blocktranslate with count=history_upload.needs_transfer_count %}Пропущено {{ count }} погашений — проведите их переводами{% endblocktranslate %}

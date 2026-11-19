@@ -40,6 +40,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
@@ -57,6 +60,9 @@ from hasta_la_vista_money.users.services.statement_identity import (
     IncomingStatementIdentity,
     StatementIdentityConflictError,
     StatementIdentityService,
+)
+from hasta_la_vista_money.users.services.statement_retention_policy import (
+    statement_retention_deadline,
 )
 
 if TYPE_CHECKING:
@@ -77,6 +83,16 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
+
+#: Decisions that carry no owner choice and may follow the new parse.
+RESUMABLE_DECISIONS: Final = frozenset(
+    {
+        BankStatementRow.Decision.PENDING,
+        BankStatementRow.Decision.AWAITING_MARKUP,
+        BankStatementRow.Decision.NEEDS_TRANSFER,
+        BankStatementRow.Decision.PARSE_ERROR,
+    },
+)
 
 
 GENERATION_CURRENT: Final = 'current'
@@ -228,6 +244,23 @@ class BankStatementImportService:
             upload_id=upload.pk,
             transactions=len(transactions),
         )
+
+        if upload.reconciliation_only:
+            with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+                self._reconcile_only_import(
+                    upload,
+                    transactions,
+                    bank_code,
+                    generation,
+                    requires_markup=parse_result.requires_markup,
+                )
+            return StatementImportResult(
+                income_count=0,
+                expense_count=0,
+                skipped_count=0,
+                needs_transfer_count=0,
+                closing_balance=parse_result.closing_balance,
+            )
 
         if parse_result.requires_markup:
             self._save_markup_rows(
@@ -540,6 +573,372 @@ class BankStatementImportService:
             data_cleaned_at__isnull=False,
         ).exists():
             raise StatementGenerationExpiredError('row data cleaned')
+
+    def _reconcile_only_import(
+        self,
+        upload: BankStatementUpload,
+        transactions: list[dict[str, Any]],
+        bank_code: str | None,
+        generation: StatementGeneration,
+        *,
+        requires_markup: bool,
+    ) -> None:
+        """Restore and create rows without any financial write.
+
+        The same upload and file positions are the only cross-run proof: a
+        stored row keeps its decision and links, while a movement carrying
+        the same file hash and position is linked as already accounted.
+        """
+        with transaction.atomic():
+            self.account_repository.get_by_ids_for_update(
+                {upload.account_id},
+            )
+            locked_upload = BankStatementUpload.objects.select_for_update().get(
+                pk=upload.pk,
+            )
+            self._assert_generation(locked_upload, generation)
+            deadline = statement_retention_deadline(locked_upload.user)
+            created, restored = self._restore_reconciliation_rows(
+                locked_upload,
+                transactions,
+                bank_code,
+                deadline,
+                requires_markup=requires_markup,
+            )
+            locked_upload.processed_transactions = len(transactions)
+            locked_upload.progress = 100
+            locked_upload.save(
+                update_fields=[
+                    'processed_transactions',
+                    'progress',
+                    'updated_at',
+                ],
+            )
+        upload.processed_transactions = len(transactions)
+        upload.progress = 100
+        logger.info(
+            'bank_statement_reconcile_only_imported',
+            upload_id=upload.pk,
+            created_rows=created,
+            restored_rows=restored,
+        )
+        period_from, period_to = self._period_bounds(transactions)
+        record_statement_import_summary(
+            user=upload.user,
+            account=upload.account,
+            created=0,
+            skipped_duplicates=0,
+            period_from=period_from,
+            period_to=period_to,
+        )
+
+    def _restore_reconciliation_rows(
+        self,
+        upload: BankStatementUpload,
+        transactions: list[dict[str, Any]],
+        bank_code: str | None,
+        deadline: datetime,
+        *,
+        requires_markup: bool,
+    ) -> tuple[int, int]:
+        """Restore every matched position and keep unmatched rows untouched."""
+        positions = {
+            idx: trans.get('row_position', idx)
+            for idx, trans in enumerate(transactions)
+        }
+        rows = StatementRowRepository.locked_rows_by_position(upload.pk)
+        posted = StatementRowRepository.same_file_posted_transactions(
+            upload,
+            set(positions.values()),
+        )
+        identities = self._incoming_identities(
+            upload,
+            transactions,
+            bank_code,
+        )
+        is_credit_account = (
+            upload.account.type_account in constants.CREDIT_ACCOUNT_TYPES
+        )
+        created = 0
+        restored = 0
+        for idx, trans in enumerate(transactions):
+            position = positions[idx]
+            identity = identities.get(position)
+            values = self._markup_values(
+                trans,
+                identity,
+                position,
+                set(),
+            )
+            row = rows.get(position)
+            if row is None:
+                self._create_reconciliation_row(
+                    upload,
+                    position,
+                    trans,
+                    identity=identity,
+                    values=values,
+                    posted=posted.get(position, []),
+                    deadline=deadline,
+                    requires_markup=requires_markup,
+                    is_credit_account=is_credit_account,
+                )
+                created += 1
+                continue
+            if self._restore_reconciliation_row(
+                row,
+                trans,
+                upload=upload,
+                identity=identity,
+                values=values,
+                posted=posted.get(position, []),
+                deadline=deadline,
+                requires_markup=requires_markup,
+                is_credit_account=is_credit_account,
+            ):
+                restored += 1
+        return created, restored
+
+    def _incoming_identities(
+        self,
+        upload: BankStatementUpload,
+        transactions: list[dict[str, Any]],
+        bank_code: str | None,
+    ) -> dict[int, IncomingStatementIdentity]:
+        """Classify only readable positions, mirroring the markup path."""
+        identities: dict[int, IncomingStatementIdentity] = {}
+        for idx, trans in enumerate(transactions):
+            if trans.get('parse_error_code'):
+                continue
+            position = trans.get('row_position', idx)
+            identities[position] = self.identity_service.classify_incoming(
+                account_id=upload.account_id,
+                bank_code=bank_code,
+                source_ref=trans.get('source_ref'),
+                trusted_reference=self.identity_service.reference_is_trusted(
+                    bank_code,
+                    trans.get('source_ref'),
+                ),
+                exclude_upload_id=upload.pk,
+            )
+        return identities
+
+    def _create_reconciliation_row(
+        self,
+        upload: BankStatementUpload,
+        position: int,
+        trans: dict[str, Any],
+        *,
+        identity: IncomingStatementIdentity | None,
+        values: dict[str, Any],
+        posted: list[Transaction],
+        deadline: datetime,
+        requires_markup: bool,
+        is_credit_account: bool,
+    ) -> None:
+        """Keep a new position as an unresolved manual problem."""
+        base_decision = self._reconciliation_decision(
+            trans,
+            requires_markup=requires_markup,
+            is_credit_account=is_credit_account,
+        )
+        values.pop('decision', None)
+        values['decision'] = base_decision
+        values['source_row_position'] = position
+        if self._has_bank_values(values):
+            values['data_expires_at'] = deadline
+        if base_decision in RESUMABLE_DECISIONS and len(posted) == 1:
+            values['transaction'] = posted[0]
+            values['decision'] = BankStatementRow.Decision.LINKED
+        elif base_decision in RESUMABLE_DECISIONS:
+            exact = self._exact_duplicate_movement(upload, identity)
+            if exact is not None:
+                values['transaction'] = exact
+                values['decision'] = BankStatementRow.Decision.LINKED
+        row = BankStatementRow.objects.create(upload=upload, **values)
+        if (
+            row.decision in RESUMABLE_DECISIONS
+            and identity is not None
+            and identity.matched_transactions
+        ):
+            self._add_identity_candidates(
+                row,
+                identity.matched_transactions,
+            )
+
+    def _restore_reconciliation_row(
+        self,
+        row: BankStatementRow,
+        trans: dict[str, Any],
+        *,
+        upload: BankStatementUpload,
+        identity: IncomingStatementIdentity | None,
+        values: dict[str, Any],
+        posted: list[Transaction],
+        deadline: datetime,
+        requires_markup: bool,
+        is_credit_account: bool,
+    ) -> bool:
+        """Refill one stored row without touching its decision history."""
+        fields: dict[str, Any] = {}
+        for name in (
+            'transaction_type',
+            'transaction_date',
+            'bank_calendar_date',
+            'amount',
+            'description',
+            'suggested_category',
+            'merchant_key',
+            'counterparty_account',
+            'kind',
+        ):
+            value = values.get(name)
+            if value not in (None, ''):
+                fields[name] = value
+        if values['date_precision'] != BankStatementRow.DatePrecision.UNKNOWN:
+            fields['date_precision'] = values['date_precision']
+        if values['transaction_date'] is not None:
+            fields['match_calendar_date'] = values['match_calendar_date']
+        if values['candidate_description']:
+            fields['candidate_description'] = values['candidate_description']
+        if identity is not None:
+            if identity.source_ref_hash:
+                fields['source_ref_hash'] = identity.source_ref_hash
+                fields['source_ref_key_id'] = identity.key_id
+                fields['source_ref_version'] = identity.version
+                fields['source_identity_trusted'] = identity.trusted
+            elif not row.source_ref_hash:
+                fields['source_ref_key_id'] = identity.key_id
+                fields['source_ref_version'] = identity.version
+                fields['source_identity_trusted'] = identity.trusted
+        error_code = values['parse_error_code']
+        if row.decision in RESUMABLE_DECISIONS:
+            fields['parse_error_code'] = error_code
+            if error_code:
+                fields['decision'] = BankStatementRow.Decision.PARSE_ERROR
+                fields['resume_decision'] = ''
+            elif row.decision == BankStatementRow.Decision.PARSE_ERROR:
+                fields['decision'] = self._reconciliation_decision(
+                    trans,
+                    requires_markup=requires_markup,
+                    is_credit_account=is_credit_account,
+                )
+                fields['resume_decision'] = ''
+        if (
+            row.duplicate_of_id is None
+            and identity is not None
+            and identity.duplicate_of_id is not None
+            and row.decision in RESUMABLE_DECISIONS
+        ):
+            fields['duplicate_of_id'] = identity.duplicate_of_id
+        if (
+            row.transaction_id is None
+            and row.decision in RESUMABLE_DECISIONS
+            and len(posted) == 1
+        ):
+            fields['transaction'] = posted[0]
+            fields['decision'] = BankStatementRow.Decision.LINKED
+            fields['resume_decision'] = ''
+        elif row.transaction_id is None and row.decision in RESUMABLE_DECISIONS:
+            exact = self._exact_duplicate_movement(upload, identity)
+            if exact is not None:
+                fields['transaction'] = exact
+                fields['decision'] = BankStatementRow.Decision.LINKED
+                fields['resume_decision'] = ''
+        if self._has_bank_values(fields):
+            fields['data_cleaned_at'] = None
+            fields['data_expires_at'] = deadline
+        if not fields:
+            return False
+        for name, value in fields.items():
+            setattr(row, name, value)
+        row.save(update_fields=list(fields))
+        if (
+            row.decision in RESUMABLE_DECISIONS
+            and identity is not None
+            and identity.matched_transactions
+        ):
+            self._add_identity_candidates(
+                row,
+                identity.matched_transactions,
+            )
+        return self._has_bank_values(fields)
+
+    def _exact_duplicate_movement(
+        self,
+        upload: BankStatementUpload,
+        identity: IncomingStatementIdentity | None,
+    ) -> Transaction | None:
+        """Return a movement proven by the same trusted bank identifier."""
+        if (
+            identity is None
+            or not identity.exact_duplicate
+            or not identity.source_ref_hash
+        ):
+            return None
+        return StatementRowRepository.trusted_movement_for_hash(
+            upload.account_id,
+            identity.source_ref_hash,
+            identity.key_id,
+            identity.version,
+        )
+
+    @staticmethod
+    def _reconciliation_decision(
+        trans: dict[str, Any],
+        *,
+        requires_markup: bool,
+        is_credit_account: bool,
+    ) -> str:
+        """A new row is always manual; money is never inferred here."""
+        if trans.get('parse_error_code'):
+            return BankStatementRow.Decision.PARSE_ERROR
+        amount = trans.get('amount')
+        if 'transaction_type' in trans:
+            incoming = (
+                trans.get('transaction_type')
+                == BankStatementRow.TransactionType.INCOME
+            )
+        else:
+            incoming = amount is not None and amount > 0
+        if is_credit_account and incoming:
+            return BankStatementRow.Decision.NEEDS_TRANSFER
+        if requires_markup:
+            return BankStatementRow.Decision.AWAITING_MARKUP
+        return BankStatementRow.Decision.PENDING
+
+    @staticmethod
+    def _has_bank_values(values: dict[str, Any]) -> bool:
+        """Tell whether a restored grid actually contains bank details."""
+        return any(
+            values.get(name) not in (None, '')
+            for name in (
+                'transaction_type',
+                'transaction_date',
+                'bank_calendar_date',
+                'amount',
+                'description',
+                'merchant_key',
+                'counterparty_account',
+                'kind',
+            )
+        )
+
+    @staticmethod
+    def _period_bounds(
+        transactions: list[dict[str, Any]],
+    ) -> tuple[date | None, date | None]:
+        """Return known operation dates only, never a guessed period."""
+        period_from: date | None = None
+        period_to: date | None = None
+        for trans in transactions:
+            moment = trans.get('date')
+            if moment is None:
+                continue
+            row_date = moment.date() if isinstance(moment, datetime) else moment
+            period_from = min(period_from or row_date, row_date)
+            period_to = max(period_to or row_date, row_date)
+        return period_from, period_to
 
     def _resolve_bank_code(
         self,

@@ -81,6 +81,66 @@ class StatementRowRepository:
         )
 
     @staticmethod
+    def locked_rows_by_position(
+        upload_id: int,
+    ) -> dict[int, BankStatementRow]:
+        """Lock and index one upload's rows by their stable position."""
+        rows = BankStatementRow.objects.select_for_update().filter(
+            upload_id=upload_id,
+            source_row_position__isnull=False,
+        )
+        return {
+            row.source_row_position: row
+            for row in rows
+            if row.source_row_position is not None
+        }
+
+    @staticmethod
+    def same_file_posted_transactions(
+        upload: BankStatementUpload,
+        positions: set[int],
+    ) -> dict[int, list[Transaction]]:
+        """Movements that this exact file position already produced.
+
+        Only the stored file hash plus the stable position proves the link;
+        a date or amount similarity is never used here.
+        """
+        if not upload.file_hash or not positions:
+            return {}
+        movements = Transaction.objects.filter(
+            account_id=upload.account_id,
+            source_file_hash=upload.file_hash,
+            source_row_position__in=positions,
+        ).order_by('pk')
+        posted: dict[int, list[Transaction]] = {}
+        for movement in movements:
+            if movement.source_row_position is None:
+                continue
+            posted.setdefault(movement.source_row_position, []).append(
+                movement,
+            )
+        return posted
+
+    @staticmethod
+    def trusted_movement_for_hash(
+        account_id: int,
+        source_ref_hash: str,
+        key_id: str,
+        version: int,
+    ) -> Transaction | None:
+        """Return the single movement owning this exact trusted fingerprint."""
+        movements = list(
+            Transaction.objects.filter(
+                account_id=account_id,
+                source_ref_hash=source_ref_hash,
+                source_ref_key_id=key_id,
+                source_ref_version=version,
+                source_identity_trusted=True,
+            ).order_by('pk')[:2],
+        )
+        return movements[0] if len(movements) == 1 else None
+
+    @staticmethod
     def _linked_rows(
         movement: Transaction | TransferMoneyLog,
     ) -> QuerySet[BankStatementRow]:

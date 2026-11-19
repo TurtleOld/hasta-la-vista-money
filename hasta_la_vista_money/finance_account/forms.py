@@ -15,6 +15,7 @@ from typing import Any, cast
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.forms import (
+    BooleanField,
     CharField,
     ChoiceField,
     DateField,
@@ -552,6 +553,14 @@ class BankStatementUploadForm(Form):
         error_messages={
             'required': _('Пожалуйста, выберите файл для загрузки.'),
         },
+    )
+    reconciliation_only = BooleanField(
+        label=_('Только сверить'),
+        required=False,
+        help_text=_(
+            'Сопоставить строки с учётом без создания новых операций. '
+            'Каждую найденную операцию нужно подтвердить вручную.',
+        ),
     )
 
     def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:

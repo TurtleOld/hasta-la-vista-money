@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Final, cast
@@ -18,6 +19,7 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
@@ -41,7 +43,6 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.protocols.services import (
-    BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
@@ -85,17 +86,6 @@ ROW_KIND_LABELS: Final[dict[str, Any]] = {
     RosDorBankRowKind.C2B: _('Оплата по СБП'),
     RosDorBankRowKind.UNKNOWN: _('Прочее'),
 }
-
-
-def _import_service(
-    request: HttpRequest,
-) -> BankStatementImportServiceProtocol:
-    """Resolve statement import through the request container."""
-    request_with_container = cast('RequestWithContainer', request)
-    return cast(
-        'BankStatementImportServiceProtocol',
-        request_with_container.container.users.bank_statement_import_service(),
-    )
 
 
 def _reconciliation_service(
@@ -148,16 +138,20 @@ class BankStatementUploadView(
         return kwargs
 
     def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
-        """Process uploaded PDF file asynchronously."""
+        """Store the PDF and enqueue a run without posting on a repeat."""
         user = cast('User', self.request.user)
         pdf_file = form.cleaned_data['pdf_file']
         account = form.cleaned_data['account']
+        reconciliation_only = bool(
+            form.cleaned_data.get('reconciliation_only'),
+        )
         digest = sha256()
         for chunk in pdf_file.chunks():
             digest.update(chunk)
         pdf_file.seek(0)
         file_hash = digest.hexdigest()
 
+        self.in_flight_upload = False
         try:
             logger.info(
                 'bank_statement_upload_creating',
@@ -165,50 +159,83 @@ class BankStatementUploadView(
                 account_id=account.pk,
             )
 
-            # Create upload record
-            upload, created = BankStatementUpload.objects.get_or_create(
-                user=user,
-                account=account,
-                file_hash=file_hash,
-                defaults={
-                    'pdf_file': pdf_file,
-                    'status': BankStatementUpload.Status.PENDING,
-                    'expires_at': statement_retention_deadline(user),
-                },
-            )
+            with transaction.atomic():
+                # The agreed order: the account first, then the upload.
+                Account.objects.select_for_update().get(pk=account.pk)
+                upload, created = BankStatementUpload.objects.get_or_create(
+                    user=user,
+                    account=account,
+                    file_hash=file_hash,
+                    defaults={
+                        'pdf_file': pdf_file,
+                        'status': BankStatementUpload.Status.PENDING,
+                        'expires_at': statement_retention_deadline(user),
+                        'reconciliation_only': reconciliation_only,
+                    },
+                )
+                if not created:
+                    upload = (
+                        BankStatementUpload.objects.select_for_update().get(
+                            pk=upload.pk,
+                        )
+                    )
+                    if self._is_fresh_in_flight(upload):
+                        # A live run owns the generation; never swap its PDF.
+                        self.in_flight_upload = True
+                    else:
+                        old_pdf_name = upload.pdf_file.name
+                        storage = upload.pdf_file.storage
+                        upload.pdf_file = pdf_file
+                        upload.expires_at = statement_retention_deadline(user)
+                        upload.retention_cleaned_at = None
+                        upload.reconciliation_only = True
+                        upload.status = BankStatementUpload.Status.PENDING
+                        upload.progress = 0
+                        upload.processed_transactions = 0
+                        upload.error_message = ''
+                        upload.celery_task_id = ''
+                        upload.save(
+                            update_fields=[
+                                'pdf_file',
+                                'expires_at',
+                                'retention_cleaned_at',
+                                'reconciliation_only',
+                                'status',
+                                'progress',
+                                'processed_transactions',
+                                'error_message',
+                                'celery_task_id',
+                                'updated_at',
+                            ],
+                        )
+                        reconciliation_only = True
+                        if (
+                            old_pdf_name
+                            and old_pdf_name != upload.pdf_file.name
+                        ):
+                            transaction.on_commit(
+                                lambda: storage.delete(old_pdf_name),
+                            )
 
             logger.info(
                 'bank_statement_upload_created',
                 upload_id=upload.pk,
                 user_id=user.pk,
+                repeated=not created,
             )
 
-            restart = not created and _import_service(
-                self.request,
-            ).restart_if_stale(upload)
-
-            if created or restart:
-                task_runner = cast(
-                    'Any',
-                    process_bank_statement_task,
-                )
+            if not self.in_flight_upload:
+                task_runner = cast('Any', process_bank_statement_task)
                 task = task_runner.delay(upload.pk)
                 logger.info(
                     'bank_statement_task_enqueued',
                     upload_id=upload.pk,
                     task_id=task.id,
                 )
-            else:
-                messages.warning(
-                    self.request,
-                    _('Эта выписка уже была загружена.'),
-                )
 
-            # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
-
-            if created or restart:
-                messages.success(self.request, str(self.success_message))
+            self.repeated_upload = not created
+            self.reconciliation_only_upload = reconciliation_only
 
         except Exception as e:
             logger.exception(
@@ -222,6 +249,44 @@ class BankStatementUploadView(
             return self.form_invalid(form)
 
         return super().form_valid(form)
+
+    @staticmethod
+    def _is_fresh_in_flight(upload: BankStatementUpload) -> bool:
+        """Tell whether a live run still owns this upload generation."""
+        if upload.status not in {
+            BankStatementUpload.Status.PENDING,
+            BankStatementUpload.Status.PROCESSING,
+        }:
+            return False
+        stale_after = timedelta(
+            minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
+        )
+        return timezone.now() - upload.updated_at <= stale_after
+
+    def get_success_message(self, cleaned_data: dict[str, Any]) -> str:
+        """Explain a repeat or reconciliation-only run honestly."""
+        if getattr(self, 'in_flight_upload', False):
+            return str(
+                _(
+                    'Эта выписка уже обрабатывается. Дождитесь завершения '
+                    'или повторите загрузку позже.',
+                ),
+            )
+        if getattr(self, 'repeated_upload', False):
+            return str(
+                _(
+                    'Эта выписка уже известна. Выполняется сверка без '
+                    'автоматического проведения операций.',
+                ),
+            )
+        if getattr(self, 'reconciliation_only_upload', False):
+            return str(
+                _(
+                    'Выписка загружена в режиме «Только сверить»: новые '
+                    'операции не проводятся без вашего решения.',
+                ),
+            )
+        return str(self.success_message)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add extra context data."""
