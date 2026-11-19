@@ -65,6 +65,7 @@ RECEIPT_OPERATION_TYPES: Final[Mapping[Any, str]] = MappingProxyType(
 )
 
 ACCOUNT_LABEL: Final = 'finance_account.Account'
+COVERAGE_LABEL: Final = 'finance_account.AccountCoverageConfirmation'
 TRANSACTION_LABEL: Final = 'transactions.Transaction'
 RECEIPT_LABEL: Final = 'receipts.Receipt'
 TRANSFER_LABEL: Final = 'finance_account.TransferMoneyLog'
@@ -81,6 +82,7 @@ STATEMENT_IMPORT_LABEL: Final = 'system.StatementImportSummary'
 MODEL_LABELS: Final[Mapping[str, str | Promise]] = MappingProxyType(
     {
         ACCOUNT_LABEL: _('Счёт'),
+        COVERAGE_LABEL: _('Подтверждение покрытия'),
         TRANSACTION_LABEL: _('Транзакция'),
         RECEIPT_LABEL: _('Чек'),
         TRANSFER_LABEL: _('Перевод'),
@@ -134,12 +136,56 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     _('Дата последней сверки'),
                     Formatter.DATETIME,
                 ),
+                'opened_on': AuditField(
+                    _('Дата открытия счёта'),
+                    Formatter.DATE,
+                ),
+                'closed_on': AuditField(
+                    _('Дата закрытия счёта'),
+                    Formatter.DATE,
+                ),
+            },
+        ),
+        COVERAGE_LABEL: MappingProxyType(
+            {
+                'period_start': AuditField(
+                    _('Начало покрытия'),
+                    Formatter.DATE,
+                ),
+                'period_end': AuditField(
+                    _('Конец покрытия'),
+                    Formatter.DATE,
+                ),
+                'source': AuditField(
+                    _('Источник покрытия'),
+                    Formatter.CHOICE,
+                ),
+                'statement_upload_id': AuditField(
+                    _('Выписка'),
+                    Formatter.TEXT,
+                ),
+                'confirmed_at': AuditField(
+                    _('Дата подтверждения'),
+                    Formatter.DATETIME,
+                ),
+                'needs_recheck': AuditField(
+                    _('Нужна повторная проверка'),
+                    Formatter.TEXT,
+                ),
+                'recheck_reason': AuditField(
+                    _('Причина повторной проверки'),
+                    Formatter.TEXT,
+                ),
             },
         ),
         TRANSACTION_LABEL: MappingProxyType(
             {
                 'type': AuditField(_('Тип операции'), Formatter.CHOICE),
                 'date': AuditField(_('Дата операции'), Formatter.DATETIME),
+                'bank_calendar_date': AuditField(
+                    _('Банковский день операции'),
+                    Formatter.DATE,
+                ),
                 'amount': AuditField(
                     _('Сумма'),
                     Formatter.MONEY,
@@ -214,6 +260,10 @@ AUDIT_FIELDS: Final[Mapping[str, Mapping[str, AuditField]]] = MappingProxyType(
                     _('Дата перевода'),
                     Formatter.DATETIME,
                 ),
+                'bank_calendar_date': AuditField(
+                    _('Банковский день перевода'),
+                    Formatter.DATE,
+                ),
                 'notes': AuditField(_('Примечание'), Formatter.TEXT),
             },
         ),
@@ -230,6 +280,13 @@ HIDDEN_AUDIT_FIELDS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 'user_id',
                 'created_at',
                 'updated_at',
+            },
+        ),
+        COVERAGE_LABEL: frozenset(
+            {
+                'id',
+                'account_id',
+                'confirmed_by_id',
             },
         ),
         TRANSACTION_LABEL: frozenset(

@@ -145,9 +145,9 @@ class AuditRegistryConsistencyTests(TestCase):
                 f'{model_label}: реестр описывает несуществующие поля',
             )
 
-    def test_registry_describes_twenty_eight_fields(self) -> None:
+    def test_registry_describes_all_visible_fields(self) -> None:
         total = sum(len(fields) for fields in AUDIT_FIELDS.values())
-        self.assertEqual(total, 28)
+        self.assertEqual(total, 39)
 
 
 class AuditRenderTests(TestCase):

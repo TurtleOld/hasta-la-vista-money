@@ -19,6 +19,7 @@ from django.utils.functional import Promise
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountCoverageConfirmation,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Receipt
@@ -32,7 +33,13 @@ from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
 
-AUDITED_MODELS = (Account, Transaction, Receipt, TransferMoneyLog)
+AUDITED_MODELS = (
+    Account,
+    AccountCoverageConfirmation,
+    Transaction,
+    Receipt,
+    TransferMoneyLog,
+)
 _ORIGINAL_STATE_ATTR = '_audit_original_state'
 
 #: Format of ``AuditLog.diff`` written by these signals. Entries stored
@@ -110,6 +117,8 @@ def _diff(
 
 def _get_user(instance: models.Model) -> User | None:
     user = getattr(instance, 'user', None)
+    if isinstance(instance, AccountCoverageConfirmation):
+        user = instance.confirmed_by
     return user if isinstance(user, User) else None
 
 
@@ -117,6 +126,8 @@ def _get_object_name(instance: models.Model) -> str:
     """Return human-readable name of the audited object."""
     if isinstance(instance, Account):
         return instance.name_account
+    if isinstance(instance, AccountCoverageConfirmation):
+        return instance.account.name_account
     if isinstance(instance, TransferMoneyLog):
         from_name = (
             instance.from_account.name_account if instance.from_account else '—'

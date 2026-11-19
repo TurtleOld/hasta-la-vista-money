@@ -34,6 +34,12 @@ from hasta_la_vista_money.finance_account.services.bank_calculators import (
 from hasta_la_vista_money.finance_account.services.bank_service import (
     BankService,
 )
+from hasta_la_vista_money.finance_account.services.coverage_service import (
+    AccountCoverageService,
+    CoverageInterval,
+    CoverageSummary,
+    DateWindow,
+)
 from hasta_la_vista_money.finance_account.services.credit_calculation_service import (  # noqa: E501
     CreditCalculationService,
 )
@@ -42,6 +48,7 @@ from hasta_la_vista_money.finance_account.services.credit_debt import (
     compute_total_credit_debt,
 )
 from hasta_la_vista_money.finance_account.services.protocols import (
+    AccountCoverageServiceProtocol,
     AnalyticsCurrencyServiceProtocol,
     BalanceHistoryServiceProtocol,
     BalanceServiceProtocol,
@@ -68,6 +75,8 @@ __all__ = [
     'BANK_RAIFFEISENBANK',
     'BANK_SBERBANK',
     'SUPPORTED_BANKS',
+    'AccountCoverageService',
+    'AccountCoverageServiceProtocol',
     'AccountService',
     'AnalyticsCurrencyService',
     'AnalyticsCurrencyServiceProtocol',
@@ -81,8 +90,11 @@ __all__ = [
     'BalanceTrendServiceProtocol',
     'BankCalculatorProtocol',
     'BankService',
+    'CoverageInterval',
+    'CoverageSummary',
     'CreditCalculationService',
     'CreditCalculationServiceProtocol',
+    'DateWindow',
     'DefaultBankCalculator',
     'FinancialMovement',
     'FinancialMovementSourceProtocol',

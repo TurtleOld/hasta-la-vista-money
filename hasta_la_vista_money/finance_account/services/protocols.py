@@ -16,7 +16,16 @@ from hasta_la_vista_money.finance_account.services.types import (
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
-    from hasta_la_vista_money.users.models import User
+    from hasta_la_vista_money.finance_account.models import (
+        AccountCoverageConfirmation,
+    )
+    from hasta_la_vista_money.finance_account.services.coverage_service import (
+        CoverageSummary,
+    )
+    from hasta_la_vista_money.users.models import (
+        BankStatementUpload,
+        User,
+    )
 
 
 @runtime_checkable
@@ -214,4 +223,44 @@ class BalanceTrendServiceProtocol(Protocol):
         period: str = '30d',
     ) -> BalanceTrendData:
         """Current balance, delta and daily series for `period`."""
+        ...
+
+
+@runtime_checkable
+class AccountCoverageServiceProtocol(Protocol):
+    """Owner-confirmed coverage periods and their interval arithmetic."""
+
+    def confirm(
+        self,
+        *,
+        owner: 'User',
+        account: Account,
+        period_start: date,
+        period_end: date,
+        source: str,
+        statement_upload: 'BankStatementUpload | None' = None,
+    ) -> 'AccountCoverageConfirmation':
+        """Confirm an inclusive period, refusing foreign accounts."""
+        ...
+
+    def summary(
+        self,
+        *,
+        account: Account,
+        period_start: date,
+        period_end: date,
+    ) -> 'CoverageSummary':
+        """Merged active intervals, gaps and invalidated parts."""
+        ...
+
+    def invalidate(
+        self,
+        *,
+        owner: 'User',
+        account: Account,
+        affected_start: date | None,
+        affected_end: date | None,
+        reason: str,
+    ) -> 'list[AccountCoverageConfirmation]':
+        """Recheck an exact affected interval, or the whole period."""
         ...

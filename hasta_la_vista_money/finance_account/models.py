@@ -4,8 +4,9 @@ from typing import ClassVar
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
@@ -279,6 +280,18 @@ class Account(TimeStampedModel):
         blank=True,
         verbose_name=_('Дата последней сверки'),
     )
+    opened_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата открытия счёта'),
+        help_text=_('Банковская дата открытия, если она известна'),
+    )
+    closed_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата закрытия счёта'),
+        help_text=_('Банковская дата закрытия, если она известна'),
+    )
 
     objects = AccountManager()
 
@@ -292,6 +305,16 @@ class Account(TimeStampedModel):
             models.Index(fields=['user']),
             models.Index(fields=['type_account']),
             models.Index(fields=['currency']),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=(
+                    Q(opened_on__isnull=True)
+                    | Q(closed_on__isnull=True)
+                    | Q(opened_on__lte=F('closed_on'))
+                ),
+                name='account_opened_before_closed',
+            ),
         ]
 
     def __str__(self) -> str:
@@ -435,4 +458,83 @@ class TransferMoneyLog(TimeStampedModel):
                 from_account=self.from_account,
                 to_account=self.to_account,
             ),
+        )
+
+
+class AccountCoverageConfirmation(models.Model):
+    """Owner-confirmed period of account coverage.
+
+    Coverage is independent of statement processing and balance checks.
+    A confirmation records an explicit assertion about inclusive calendar
+    dates; a later known problem may invalidate the exact affected part (or
+    the whole period when its scope is unknown) through ``needs_recheck``.
+    """
+
+    class Source(models.TextChoices):
+        BANK = 'bank', _('Банковская выписка')
+        MANUAL = 'manual', _('Ручное подтверждение')
+
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name='coverage_confirmations',
+        verbose_name=_('Счёт'),
+    )
+    period_start = models.DateField(verbose_name=_('Начало периода'))
+    period_end = models.DateField(verbose_name=_('Конец периода'))
+    source = models.CharField(
+        max_length=10,
+        choices=Source.choices,
+        verbose_name=_('Источник'),
+    )
+    statement_upload = models.ForeignKey(
+        'users.BankStatementUpload',
+        on_delete=models.SET_NULL,
+        related_name='coverage_confirmations',
+        null=True,
+        blank=True,
+        verbose_name=_('Выписка'),
+    )
+    confirmed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='coverage_confirmations',
+        null=True,
+        verbose_name=_('Подтвердил'),
+    )
+    confirmed_at = models.DateTimeField(
+        default=timezone.now,
+        verbose_name=_('Дата подтверждения'),
+    )
+    needs_recheck = models.BooleanField(
+        default=False,
+        verbose_name=_('Нужна повторная проверка'),
+    )
+    recheck_reason = models.TextField(
+        blank=True,
+        default='',
+        verbose_name=_('Причина повторной проверки'),
+    )
+
+    class Meta:
+        ordering = ['account_id', 'period_start', 'pk']
+        verbose_name = _('Подтверждение покрытия')
+        verbose_name_plural = _('Подтверждения покрытия')
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=Q(period_start__lte=F('period_end')),
+                name='account_coverage_start_before_end',
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=['account', 'period_start', 'period_end'],
+                name='account_coverage_period_idx',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f'{self.account_id}: {self.period_start}—{self.period_end} '
+            f'({self.source})'
         )

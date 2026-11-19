@@ -5,11 +5,14 @@ from hasta_la_vista_money.finance_account.page_context_service import (
     AccountPageContextService,
 )
 from hasta_la_vista_money.finance_account.repositories import (
+    AccountCoverageRepository,
     AccountRepository,
     BankRepository,
     TransferMoneyLogRepository,
 )
 from hasta_la_vista_money.finance_account.services import (
+    AccountCoverageService,
+    AccountCoverageServiceProtocol,
     AccountService,
     AnalyticsCurrencyService,
     AnalyticsCurrencyServiceProtocol,
@@ -30,6 +33,15 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     users = providers.DependenciesContainer()
 
     account_repository = providers.Singleton(AccountRepository)
+    account_coverage_repository = providers.Singleton(
+        AccountCoverageRepository,
+    )
+    account_coverage_service: providers.Factory[
+        AccountCoverageServiceProtocol
+    ] = providers.Factory(
+        AccountCoverageService,
+        repository=account_coverage_repository,
+    )
     transfer_money_log_repository = providers.Singleton(
         TransferMoneyLogRepository,
     )

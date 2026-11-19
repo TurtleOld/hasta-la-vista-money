@@ -39,10 +39,12 @@ from hasta_la_vista_money.finance_account.base_forms import (
     BaseTransferForm,
     DateFieldMixin,
     FormValidationMixin,
+    TailwindFormMixin,
 )
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountCoverageConfirmation,
     Bank,
     TransferMoneyLog,
 )
@@ -56,7 +58,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementUpload, User
 
 BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
 
@@ -140,6 +142,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         super().__init__(*args, **kwargs)
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
         self.setup_date_fields()
+        self._setup_life_date_fields()
         if self.instance.pk:
             # Balance moves only via movements; currency only while empty.
             del self.fields['balance']
@@ -161,6 +164,24 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             bank_field.queryset = Bank.objects.filter(
                 is_system=True,
             )
+
+    def _setup_life_date_fields(self) -> None:
+        """Use calendar date inputs for the optional account life bounds."""
+        for field_name in ('opened_on', 'closed_on'):
+            field = self.fields[field_name]
+            field.widget = DateInput(
+                format=constants.HTML5_DATE_INPUT_FORMAT,
+                attrs={
+                    'type': 'date',
+                    'lang': 'ru-RU',
+                    'class': (
+                        'w-full rounded-xl border border-gray-300 bg-white '
+                        'px-3 py-2 text-sm text-gray-900 shadow-sm'
+                    ),
+                },
+            )
+            if isinstance(field, DateField):
+                field.input_formats = list(constants.HTML5_DATE_INPUT_FORMATS)
 
     def clean_balance(self) -> Any:
         """Validate balance field.
@@ -210,6 +231,17 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         cleaned_data = super().clean()
 
         if cleaned_data:
+            opened_on = cleaned_data.get('opened_on')
+            closed_on = cleaned_data.get('closed_on')
+            if (
+                opened_on is not None
+                and closed_on is not None
+                and opened_on > closed_on
+            ):
+                self.add_error(
+                    'opened_on',
+                    _('Дата открытия не может быть позже даты закрытия'),
+                )
             validate_credit_fields_required(
                 type_account=cleaned_data.get('type_account'),
                 bank=cleaned_data.get('bank'),
@@ -254,6 +286,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             'grace_period_days',
             'balance',
             'currency',
+            'opened_on',
+            'closed_on',
         ]
 
     def save(self, commit: bool = True) -> Account:
@@ -605,6 +639,96 @@ class RepaymentTransferLinkForm(Form):
     """The transfer an owner picked to close a repayment row."""
 
     transfer = IntegerField(min_value=1)
+
+
+class AccountCoverageForm(TailwindFormMixin, Form):
+    """Explicit owner confirmation of inclusive account coverage dates."""
+
+    account = ModelChoiceField(
+        queryset=Account.objects.none(),
+        label=_('Счёт'),
+    )
+    period_start = DateField(
+        label=_('Начало периода'),
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=DateInput(
+            format=constants.HTML5_DATE_INPUT_FORMAT,
+            attrs={'type': 'date', 'lang': 'ru-RU'},
+        ),
+    )
+    period_end = DateField(
+        label=_('Конец периода'),
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=DateInput(
+            format=constants.HTML5_DATE_INPUT_FORMAT,
+            attrs={'type': 'date', 'lang': 'ru-RU'},
+        ),
+    )
+    source = ChoiceField(
+        choices=AccountCoverageConfirmation.Source.choices,
+        label=_('Источник покрытия'),
+    )
+    statement_upload = ModelChoiceField(
+        queryset=BankStatementUpload.objects.none(),
+        required=False,
+        label=_('Выписка'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.request_user: User | None = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if self.request_user is not None:
+            self.fields['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
+                user=self.request_user,
+            ).order_by('name_account')
+            self.fields['statement_upload'].queryset = (  # type: ignore[attr-defined]
+                BankStatementUpload.objects.filter(
+                    user=self.request_user,
+                    account__user=self.request_user,
+                ).order_by('-created_at')
+            )
+        self.add_tailwind_classes()
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        if cleaned_data:
+            start = cleaned_data.get('period_start')
+            end = cleaned_data.get('period_end')
+            if start is not None and end is not None and start > end:
+                self.add_error(
+                    'period_start',
+                    _('Начало периода не может быть позже конца'),
+                )
+            source = cleaned_data.get('source')
+            upload = cleaned_data.get('statement_upload')
+            account = cleaned_data.get('account')
+            if (
+                source == AccountCoverageConfirmation.Source.MANUAL
+                and upload is not None
+            ):
+                self.add_error(
+                    'statement_upload',
+                    _('Ручное покрытие не ссылается на выписку'),
+                )
+            if (
+                source == AccountCoverageConfirmation.Source.MANUAL
+                and account is not None
+                and account.type_account != constants.ACCOUNT_TYPE_CASH
+            ):
+                self.add_error(
+                    'source',
+                    _('Ручное покрытие доступно только для наличных'),
+                )
+            if (
+                upload is not None
+                and account is not None
+                and upload.account_id != account.pk
+            ):
+                self.add_error(
+                    'statement_upload',
+                    _('Выписка относится к другому счёту'),
+                )
+        return cleaned_data or {}
 
 
 class StatementRowExcludeForm(Form):
