@@ -4440,7 +4440,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         'hasta_la_vista_money.users.services.bank_statement_import.'
         'BankStatementParser',
     )
-    def test_balance_discrepancy_saved(
+    def test_closing_balance_saved_without_current_comparison(
         self,
         mock_parser_cls: MagicMock,
     ) -> None:
@@ -4471,18 +4471,14 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         process_bank_statement_task.apply(args=[upload.pk])
 
         upload.refresh_from_db()
+        self.account.refresh_from_db()
         self.assertEqual(
             upload.statement_closing_balance,
             Decimal('9000.00'),
         )
-        self.assertEqual(
-            upload.account_balance_after,
-            Decimal('10000.00'),
-        )
-        self.assertEqual(
-            upload.balance_discrepancy,
-            Decimal('-1000.00'),
-        )
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        self.assertEqual(self.account.balance, Decimal('10000.00'))
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement_import.'
