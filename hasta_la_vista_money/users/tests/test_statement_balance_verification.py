@@ -102,6 +102,7 @@ class StatementBalanceVerificationTestCase(TestCase):
         moment: datetime,
         transaction_type: str = TransactionType.INCOME,
         category: Category | None = None,
+        account: Account | None = None,
     ) -> Transaction:
         if category is None:
             category = Category.objects.create(
@@ -111,7 +112,7 @@ class StatementBalanceVerificationTestCase(TestCase):
             )
         return Transaction.objects.create(
             user=self.user,
-            account=self.account,
+            account=account or self.account,
             category=category,
             type=transaction_type,
             amount=Decimal(amount),
@@ -226,6 +227,27 @@ class VerificationResultTests(StatementBalanceVerificationTestCase):
         result = self.service.verify(upload.pk, self.user.pk)
 
         self.assertEqual(result.status, STATUS_VERIFIED)
+
+    def test_currencies_are_not_mixed_between_accounts(self) -> None:
+        self._later_income()
+        usd = Account.objects.create(
+            user=self.user,
+            name_account='USD',
+            currency='USD',
+            balance=Decimal('1000.00'),
+        )
+        self._transaction(
+            '500.00',
+            datetime(2026, 4, 11, 12, 0, tzinfo=UTC),
+            account=usd,
+        )
+        upload = self._upload()
+
+        result = self.service.verify(upload.pk, self.user.pk)
+
+        self.assertEqual(result.status, STATUS_VERIFIED)
+        self.assertEqual(result.app_balance, Decimal('800.00'))
+        self.assertEqual(result.bank_balance, Decimal('800.00'))
 
 
 class UnknownResultTests(StatementBalanceVerificationTestCase):
