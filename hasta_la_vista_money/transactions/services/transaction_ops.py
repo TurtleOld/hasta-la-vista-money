@@ -29,6 +29,9 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
@@ -173,6 +176,10 @@ class TransactionService:
                 command.amount,
                 command.type_value,
             )
+            mark_balance_checks_stale(
+                {command.account.pk},
+                [command.transaction_date],
+            )
         return new_transaction
 
     def update_transaction(
@@ -204,6 +211,7 @@ class TransactionService:
             old_account = transaction_obj.account
             old_amount = transaction_obj.amount
             old_type = transaction_obj.type
+            old_date = transaction_obj.date
 
             if self.statement_row_links.has_linked_row(transaction_obj) and (
                 command.account.pk != old_account.pk
@@ -272,6 +280,16 @@ class TransactionService:
             transaction_obj.bank_calendar_date = bank_day
             transaction_obj.date = date_value
             transaction_obj.save()
+            if (
+                command.account.pk != old_account.pk
+                or command.amount != old_amount
+                or command.type_value != old_type
+                or date_value != old_date
+            ):
+                mark_balance_checks_stale(
+                    {old_account.pk, command.account.pk},
+                    [old_date, date_value],
+                )
         return transaction_obj
 
     def delete_transaction(
@@ -296,7 +314,10 @@ class TransactionService:
                 transaction_obj.type,
             )
             self.statement_row_links.release_linked_rows(transaction_obj)
+            account_id = transaction_obj.account_id
+            transaction_date = transaction_obj.date
             transaction_obj.delete()
+            mark_balance_checks_stale({account_id}, [transaction_date])
 
     def copy_transaction(
         self,
@@ -328,5 +349,9 @@ class TransactionService:
                     new_transaction.account,
                     new_transaction.amount,
                     new_transaction.type,
+                )
+                mark_balance_checks_stale(
+                    {new_transaction.account_id},
+                    [new_transaction.date],
                 )
         return new_transaction

@@ -8,6 +8,9 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 
 
 class ReceiptDeleterService:
@@ -33,4 +36,7 @@ class ReceiptDeleterService:
         )
 
         receipt.product.all().delete()
+        account_id = receipt.account_id
+        receipt_date = receipt.receipt_date
         receipt.delete()
+        mark_balance_checks_stale({account_id}, [receipt_date])

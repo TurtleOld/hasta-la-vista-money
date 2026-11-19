@@ -32,6 +32,9 @@ from hasta_la_vista_money.receipts.validators.product_line import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
@@ -216,6 +219,7 @@ class ReceiptCreatorService:
             if not manual:
                 self._enqueue_external_category_tasks(created_products)
 
+        mark_balance_checks_stale({receipt.account_id}, [receipt.receipt_date])
         return receipt
 
     @staticmethod
@@ -306,6 +310,7 @@ class ReceiptCreatorService:
                         product,
                     )
 
+        mark_balance_checks_stale({receipt.account_id}, [receipt.receipt_date])
         return receipt
 
     def _create_or_update_seller(

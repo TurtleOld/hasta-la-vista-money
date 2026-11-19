@@ -21,6 +21,9 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 from hasta_la_vista_money.users.services.statement_date_policy import (
     statement_row_movement_date,
 )
@@ -147,6 +150,10 @@ class TransferService:
             )
             if row is not None:
                 self.statement_row_links.close_repayment_row(row, transfer)
+            mark_balance_checks_stale(
+                {from_account.pk, to_account.pk},
+                [transfer.exchange_date],
+            )
             return transfer
 
     def get_last_used_accounts(
@@ -215,4 +222,9 @@ class TransferService:
                 },
             )
             self.statement_row_links.release_linked_rows(transfer_log)
+            exchange_date = transfer_log.exchange_date
             self.transfer_money_log_repository.delete_log(transfer_log)
+            mark_balance_checks_stale(
+                {from_account.pk, to_account.pk},
+                [exchange_date],
+            )

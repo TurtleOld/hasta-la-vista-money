@@ -30,6 +30,9 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
@@ -106,6 +109,7 @@ class ReceiptUpdaterService:
         old_total_sum = receipt.total_sum
         old_account_id = receipt.account_id
         old_operation_type = receipt.operation_type
+        old_receipt_date = receipt.receipt_date
         previous_products = list(receipt.product.all())
         previous = _PreviousProductsSnapshot(
             categories={
@@ -188,6 +192,16 @@ class ReceiptUpdaterService:
             deltas.get(receipt.account_id, 0) + new_delta
         )
         self.account_service.apply_account_deltas(deltas)
+        if (
+            old_account_id != receipt.account_id
+            or old_total_sum != receipt.total_sum
+            or old_operation_type != receipt.operation_type
+            or old_receipt_date != receipt.receipt_date
+        ):
+            mark_balance_checks_stale(
+                {old_account_id, receipt.account_id},
+                [old_receipt_date, receipt.receipt_date],
+            )
         return receipt
 
     def _remember_category_correction(
