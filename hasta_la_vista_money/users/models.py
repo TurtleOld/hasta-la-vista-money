@@ -180,6 +180,21 @@ class BankStatementUpload(Model):
         )
         FAILED = 'failed', _('Ошибка')
 
+    class BalanceKind(TextChoices):
+        """Meaning of the bank balance snapshot on the upload."""
+
+        UNKNOWN = 'unknown', _('Семантика остатка неизвестна')
+        OPENING = 'opening', _('Входящий остаток')
+        CLOSING = 'closing', _('Исходящий остаток')
+        AVAILABLE = 'available', _('Доступный остаток')
+
+    class BalanceVerificationStatus(TextChoices):
+        """Last conclusive historical balance comparison."""
+
+        UNKNOWN = 'unknown', _('Не проверен')
+        VERIFIED = 'verified', _('Совпадает')
+        MISMATCH = 'mismatch', _('Расхождение')
+
     user = ForeignKey(
         User,
         on_delete=CASCADE,
@@ -240,6 +255,38 @@ class BankStatementUpload(Model):
     # Statement period taken from the document or confirmed by the user.
     statement_period_start = DateField(blank=True, null=True)
     statement_period_end = DateField(blank=True, null=True)
+    # Verified historical bank balance. The moment and kind are only known
+    # when the document or the owner supplies them; nothing is inferred.
+    statement_balance_date = DateField(blank=True, null=True)
+    statement_balance_at = DateTimeField(blank=True, null=True)
+    statement_balance_kind = CharField(
+        max_length=20,
+        choices=BalanceKind.choices,
+        default=BalanceKind.UNKNOWN,
+    )
+    statement_balance_timezone = CharField(
+        max_length=64,
+        blank=True,
+        default='',
+    )
+    balance_verification_status = CharField(
+        max_length=20,
+        choices=BalanceVerificationStatus.choices,
+        default=BalanceVerificationStatus.UNKNOWN,
+    )
+    balance_verified_at = DateTimeField(blank=True, null=True)
+    balance_needs_recheck = BooleanField(default=False)
+    balance_stale_reason = TextField(blank=True, default='')
+    balance_unexplained_mismatch = BooleanField(default=False)
+    balance_explained_by = ForeignKey(
+        User,
+        on_delete=SET_NULL,
+        related_name='explained_statement_balance_checks',
+        blank=True,
+        null=True,
+    )
+    balance_explained_at = DateTimeField(blank=True, null=True)
+    balance_explanation = TextField(blank=True, default='')
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 
