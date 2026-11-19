@@ -438,6 +438,25 @@ class FinalReconciliationGuardTests(StatementBalanceVerificationTestCase):
             self.fail('retention cleared the blocker')
         self.assertEqual(block.upload_ids, (upload.pk,))
 
+    def test_guard_uses_retained_flag_even_when_status_unknown(self) -> None:
+        upload = self._upload(statement_closing_balance=Decimal('900.00'))
+        self.service.verify(upload.pk, self.user.pk)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            balance_verification_status=(
+                BankStatementUpload.BalanceVerificationStatus.UNKNOWN
+            ),
+            balance_needs_recheck=True,
+        )
+
+        block = self.service.final_reconciliation_block(
+            user_id=self.user.pk,
+            account_ids={self.account.pk},
+        )
+
+        if block is None:
+            self.fail('retained flag was ignored because of the last result')
+        self.assertEqual(block.upload_ids, (upload.pk,))
+
     def test_guard_does_not_leak_to_another_user(self) -> None:
         upload = self._upload(statement_closing_balance=Decimal('900.00'))
         self.service.verify(upload.pk, self.user.pk)
