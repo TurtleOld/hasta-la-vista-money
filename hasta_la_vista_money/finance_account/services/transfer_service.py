@@ -21,6 +21,9 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_movement_date,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
@@ -119,6 +122,9 @@ class TransferService:
                 to_account=to_account,
                 amount=amount,
             )
+        bank_calendar_date = None
+        if row is not None:
+            exchange_date, bank_calendar_date = statement_row_movement_date(row)
 
         with audit_operation(kind=AuditOperationKind.TRANSFER):
             balances = self._balance_service.apply_account_deltas(
@@ -136,6 +142,7 @@ class TransferService:
                 to_account=to_account,
                 amount=amount,
                 exchange_date=exchange_date,
+                bank_calendar_date=bank_calendar_date,
                 notes=notes or '',
             )
             if row is not None:

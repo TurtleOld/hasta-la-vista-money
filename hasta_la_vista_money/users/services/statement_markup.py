@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Final
 
@@ -53,6 +53,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
+)
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_movement_date,
 )
 from hasta_la_vista_money.users.services.statement_retention_policy import (
     row_has_bank_data,
@@ -526,14 +529,15 @@ class StatementMarkupService:
                 constants.CREDIT_CARD_INCOME_BAN,
             )
         category = self._category(row, upload.user, category_id)
+        moment, bank_calendar_date = statement_row_movement_date(row)
         created = Transaction.objects.create(
             user=upload.user,
             account=account,
             category=category,
             type=transaction_type,
             amount=row.amount,
-            date=self._movement_moment(row),
-            bank_calendar_date=row.bank_calendar_date,
+            date=moment,
+            bank_calendar_date=bank_calendar_date,
             description=row.description,
             source_ref=None,
             source_ref_hash=row.source_ref_hash,
@@ -570,20 +574,6 @@ class StatementMarkupService:
             defaults={'category': movement.category},
         )
 
-    @staticmethod
-    def _movement_moment(row: BankStatementRow) -> datetime:
-        # A known bank day is a technical UTC midnight anchor, not the bank's
-        # time. A legacy row without it keeps its original moment exactly.
-        if row.bank_calendar_date is not None:
-            return datetime.combine(
-                row.bank_calendar_date,
-                datetime.min.time(),
-                tzinfo=UTC,
-            )
-        if row.transaction_date is None:
-            raise StatementMarkupConflictError('row')
-        return row.transaction_date
-
     def _create_transfer(
         self,
         row: BankStatementRow,
@@ -615,13 +605,14 @@ class StatementMarkupService:
             {source.pk: -row.amount, target.pk: row.amount},
             check_funds=False,
         )
+        moment, bank_calendar_date = statement_row_movement_date(row)
         return self._transfer_log_repository.create_log(
             user=upload.user,
             from_account=locked[source.pk],
             to_account=locked[target.pk],
             amount=row.amount,
-            exchange_date=self._movement_moment(row),
-            bank_calendar_date=row.bank_calendar_date,
+            exchange_date=moment,
+            bank_calendar_date=bank_calendar_date,
             notes=row.description,
         )
 

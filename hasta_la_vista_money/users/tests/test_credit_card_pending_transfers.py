@@ -1,6 +1,6 @@
 """Tests for credit-card income ban and unperformed statement repayments."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -389,6 +389,67 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
         self.debit.refresh_from_db()
         self.assertEqual(self.card.balance, Decimal('1000.00'))
         self.assertEqual(self.debit.balance, Decimal('1000.00'))
+
+    def test_statement_linked_transfer_keeps_the_bank_day(self) -> None:
+        self.row.bank_calendar_date = date(2026, 2, 9)
+        self.row.date_precision = BankStatementRow.DatePrecision.DAY
+        self.row.save(
+            update_fields=['bank_calendar_date', 'date_precision'],
+        )
+        chosen = datetime(2026, 2, 10, 9, 0, tzinfo=UTC)
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+
+        transfer = transfer_service.transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            user=self.user,
+            exchange_date=chosen,
+            statement_row_id=self.row.pk,
+        )
+
+        self.assertEqual(
+            transfer.exchange_date,
+            datetime(2026, 2, 9, tzinfo=UTC),
+        )
+        self.assertEqual(transfer.bank_calendar_date, date(2026, 2, 9))
+
+    def test_statement_linked_transfer_keeps_a_legacy_moment(self) -> None:
+        chosen = datetime(2026, 2, 10, 9, 0, tzinfo=UTC)
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+
+        transfer = transfer_service.transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            user=self.user,
+            exchange_date=chosen,
+            statement_row_id=self.row.pk,
+        )
+
+        self.assertEqual(transfer.exchange_date, self.ROW_DATE)
+        self.assertIsNone(transfer.bank_calendar_date)
+
+    def test_transfer_without_row_keeps_the_chosen_moment(self) -> None:
+        chosen = datetime(2026, 2, 10, 9, 0, tzinfo=UTC)
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+
+        transfer = transfer_service.transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            user=self.user,
+            exchange_date=chosen,
+        )
+
+        self.assertEqual(transfer.exchange_date, chosen)
+        self.assertIsNone(transfer.bank_calendar_date)
 
     def test_link_rejects_transfer_that_is_not_a_candidate(self) -> None:
         transfer = self._transfer(amount='200.00')

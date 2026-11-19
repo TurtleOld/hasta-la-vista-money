@@ -40,6 +40,9 @@ from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
 )
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_movement_date,
+)
 from hasta_la_vista_money.users.services.statement_retention_policy import (
     row_has_bank_data,
 )
@@ -663,13 +666,13 @@ class BankStatementReconciliationService:
     def _create_transaction(self, row: BankStatementRow) -> Transaction:
         transaction_type = row.transaction_type
         amount = row.amount
-        transaction_date = row.transaction_date
         if (
             transaction_type is None
             or amount is None
-            or transaction_date is None
+            or row.transaction_date is None
         ):
             raise InvalidReconciliationDecisionError('expired_row')
+        moment, bank_calendar_date = statement_row_movement_date(row)
         category, _ = Category.objects.get_or_create(
             user=row.upload.user,
             name=row.suggested_category,
@@ -693,7 +696,8 @@ class BankStatementReconciliationService:
             category=category,
             type=transaction_type,
             amount=amount,
-            date=transaction_date,
+            date=moment,
+            bank_calendar_date=bank_calendar_date,
             description=row.description,
             source_ref=None,
             source_ref_hash=row.source_ref_hash,

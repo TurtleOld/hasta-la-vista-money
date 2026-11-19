@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -148,6 +148,84 @@ class StatementMarkupTest(StatementMarkupFixture):
             self.fail('row is not linked to a movement')
         self.assertEqual(movement.date, original)
         self.assertIsNone(movement.bank_calendar_date)
+
+    def test_datetime_precision_is_not_marked_as_a_bank_day(self) -> None:
+        row = self._row(1)
+        original = datetime(
+            2026,
+            3,
+            1,
+            18,
+            45,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        row.transaction_date = original
+        row.bank_calendar_date = date(2026, 3, 1)
+        row.date_precision = BankStatementRow.DatePrecision.DATETIME
+        row.save(
+            update_fields=[
+                'transaction_date',
+                'bank_calendar_date',
+                'date_precision',
+            ],
+        )
+        category = self._category('Продукты')
+
+        with timezone.override('Pacific/Pago_Pago'):
+            self.service.post(row.pk, self.user.pk, category.pk)
+
+        row.refresh_from_db()
+        movement = row.transaction
+        if movement is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(movement.date, original)
+        self.assertIsNone(movement.bank_calendar_date)
+
+    def test_reopened_bank_day_row_reposts_on_the_bank_day(self) -> None:
+        row = self._row(1)
+        row.transaction_date = datetime(
+            2026,
+            3,
+            1,
+            15,
+            30,
+            tzinfo=UTC,
+        )
+        row.bank_calendar_date = date(2026, 3, 1)
+        row.date_precision = BankStatementRow.DatePrecision.DAY
+        row.save(
+            update_fields=[
+                'transaction_date',
+                'bank_calendar_date',
+                'date_precision',
+            ],
+        )
+        category = self._category('Продукты')
+        self.service.post(row.pk, self.user.pk, category.pk)
+        row.refresh_from_db()
+        first = row.transaction
+        if first is None:
+            self.fail('row is not linked to a movement')
+
+        container = ApplicationContainer()
+        container.transactions.transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=first,
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        container.users.bank_statement_reconciliation_service().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        row.refresh_from_db()
+        second = row.transaction
+        if second is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(second.date, datetime(2026, 3, 1, tzinfo=UTC))
+        self.assertEqual(second.bank_calendar_date, date(2026, 3, 1))
 
     def test_linked_duplicate_does_not_rewrite_the_movement(self) -> None:
         category = self._category('Продукты')
