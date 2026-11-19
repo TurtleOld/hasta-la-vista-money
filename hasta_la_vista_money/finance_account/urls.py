@@ -30,6 +30,9 @@ from hasta_la_vista_money.finance_account.bank_statement_views import (
     BankStatementUploadStatusView,
     BankStatementUploadView,
 )
+from hasta_la_vista_money.finance_account.coverage_views import (
+    AccountCoverageConfirmView,
+)
 from hasta_la_vista_money.finance_account.statement_row_decision_views import (
     StatementRowDeferView,
     StatementRowExcludeView,
@@ -72,6 +75,11 @@ urlpatterns = [
         'adjust-balance/<int:pk>/',
         BalanceAdjustmentView.as_view(),
         name='adjust_balance',
+    ),
+    path(
+        'coverage/confirm/',
+        AccountCoverageConfirmView.as_view(),
+        name='coverage_confirm',
     ),
     path(
         'delete/<int:pk>',

@@ -62,6 +62,7 @@ from hasta_la_vista_money.finance_account.analytics_currency import (
     get_analytics_currency,
 )
 from hasta_la_vista_money.finance_account.forms import (
+    AccountCoverageForm,
     AddAccountForm,
     BalanceAdjustmentForm,
     TransferMoneyAccountForm,
@@ -88,6 +89,9 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     User,
+)
+from hasta_la_vista_money.users.services.accounting_completeness import (
+    create_accounting_completeness_service,
 )
 from hasta_la_vista_money.users.services.groups import readable_users
 
@@ -1935,6 +1939,33 @@ class AccountView(
                 },
             )
         context['pending_card_transfers'] = list(grouped_transfers.values())
+
+        own_accounts = [
+            account
+            for account in accounts
+            if account.user_id == current_user.pk
+        ]
+        if own_accounts:
+            coverage_end = timezone.localdate()
+            coverage_start = coverage_end - timedelta(days=29)
+            completeness_service = create_accounting_completeness_service(
+                coverage_service=(container.account_coverage_service()),
+            )
+            context['accounting_completeness'] = completeness_service.assess(
+                owner=current_user,
+                account_ids=[account.pk for account in own_accounts],
+                period_start=coverage_start,
+                period_end=coverage_end,
+            )
+            context['coverage_form'] = AccountCoverageForm(
+                user=current_user,
+                initial={
+                    'period_start': coverage_start,
+                    'period_end': coverage_end,
+                },
+            )
+            context['coverage_period_start'] = coverage_start
+            context['coverage_period_end'] = coverage_end
         return context
 
 

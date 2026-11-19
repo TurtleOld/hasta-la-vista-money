@@ -1,0 +1,53 @@
+{% load i18n %}
+
+<section class="accounts-panel" id="account-coverage">
+    <div class="accounts-panel-hd">
+        <h2>{% translate 'Покрытие периода' %}</h2>
+    </div>
+    <p class="text-sm text-gray-600 dark:text-gray-300">
+        {% translate 'Подтверждение покрытия не доказывает обработку выписки и не заменяет проверку остатка.' %}
+    </p>
+
+    {% if accounting_completeness %}
+        <div class="accounts-pending-card">
+            {% for item in accounting_completeness.accounts %}
+                <div class="accounts-pending-row">
+                    <span><strong>{{ item.account_name }}</strong></span>
+                    {% if item.coverage.fully_covered %}
+                        <span class="statistics-badge statistics-badge-positive">{% translate 'Период покрыт' %}</span>
+                    {% elif item.coverage_required %}
+                        <span class="statistics-badge statistics-badge-warning">
+                            {% translate 'Разрывы:' %}
+                            {% for gap in item.coverage.gaps %}
+                                {{ gap.start|date:'d.m.Y' }}—{{ gap.end|date:'d.m.Y' }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </span>
+                    {% else %}
+                        <span>{% translate 'Счёт не действовал в выбранном периоде' %}</span>
+                    {% endif %}
+                    {% if not item.processing_verified %}
+                        <span class="statistics-badge statistics-badge-warning">
+                            {% translate 'Обработка выписки не доказана' %}
+                            {% if item.processing_reasons %}({{ item.processing_reasons|join:', ' }}){% endif %}
+                        </span>
+                    {% endif %}
+                    {% if item.unresolved_count %}
+                        <span class="statistics-badge statistics-badge-negative">
+                            {% blocktranslate with count=item.unresolved_count %}Нерешённых проблем: {{ count }}{% endblocktranslate %}
+                        </span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if coverage_form %}
+        <form method="post" action="{% url 'finance_account:coverage_confirm' %}" class="mt-4 space-y-3">
+            {% csrf_token %}
+            {{ coverage_form.as_p }}
+            <button type="submit" class="accounts-btn accounts-btn-primary">
+                {% translate 'Подтвердить покрытие' %}
+            </button>
+        </form>
+    {% endif %}
+</section>
