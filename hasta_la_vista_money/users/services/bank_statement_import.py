@@ -513,10 +513,9 @@ class BankStatementImportService:
         this save leaves the cleaned fields untouched.
         """
         with transaction.atomic():
-            accounts = self.account_repository.get_by_ids_for_update(
+            self.account_repository.get_by_ids_for_update(
                 {upload.account_id},
             )
-            account = accounts[upload.account_id]
             locked = self.identity_repository.lock_upload(upload.pk)
             if locked is None:
                 return GENERATION_REPLACED
@@ -543,14 +542,10 @@ class BankStatementImportService:
                 locked.statement_closing_balance = closing_balance
                 fields.append('statement_closing_balance')
             BankStatementReconciliationService.refresh_outcome_counts(locked)
-            if (
-                closing_balance is not None
-                and not awaiting_markup
-                and not has_parse_error
-            ):
-                locked.account_balance_after = account.balance
-                locked.balance_discrepancy = closing_balance - account.balance
-                fields += ['account_balance_after', 'balance_discrepancy']
+            # The bank closing balance is a snapshot of its own moment, not
+            # of today's balance. The historical comparison is recorded by
+            # StatementBalanceVerificationService, never against the current
+            # account balance.
             locked.progress = 100
             if awaiting_markup or has_pending or has_parse_error:
                 locked.status = BankStatementUpload.Status.AWAITING_CONFIRMATION

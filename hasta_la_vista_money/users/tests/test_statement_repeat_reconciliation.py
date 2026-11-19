@@ -64,12 +64,14 @@ def _parser_patch(
     transactions: list[dict[str, Any]],
     *,
     bank_code: str | None = None,
+    closing_balance: Decimal | None = None,
 ) -> Any:
     """Patch the parser facade with synthetic rows."""
     parser = MagicMock()
     parser.parse.return_value = StatementParseResult(
         transactions=list(transactions),
         bank_code=bank_code,
+        closing_balance=closing_balance,
     )
     return patch(
         'hasta_la_vista_money.users.services.bank_statement_import.'
@@ -497,6 +499,30 @@ class RepeatStatementUploadTestCase(TestCase):
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
         self.assertIsNotNone(row.data_cleaned_at)
         self.assertFalse(bool(upload.pdf_file))
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_repeat_never_compares_bank_balance_with_current_balance(
+        self,
+    ) -> None:
+        upload = self._upload(reconciliation_only=True)
+
+        with _parser_patch(
+            [_transaction(1)],
+            closing_balance=Decimal('9000.00'),
+        ):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('9000.00'),
+        )
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('1000.00'),
+        )
         self.assertFalse(Transaction.objects.exists())
 
     def test_upload_form_selects_reconciliation_only_for_new_file(self) -> None:
