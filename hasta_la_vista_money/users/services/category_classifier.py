@@ -1,10 +1,17 @@
-from typing import Protocol, runtime_checkable
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 import structlog
 
-from core.services.external_model import ExternalModelTransport
+if TYPE_CHECKING:
+    from core.services.external_model import ExternalModelTransport
 
 logger = structlog.get_logger(__name__)
+
+#: Category name that means "the local rules did not recognise this row".
+FALLBACK_CATEGORY: Final = 'Без категории'
 
 _SYSTEM_PROMPT = (
     'Ты помощник по категоризации финансовых операций. '
@@ -38,6 +45,47 @@ class CategoryClassifier(Protocol):
             Название категории (существующей или новой).
         """
         ...
+
+
+class LocalCategoryClassifier:
+    """Deterministic local category rules for bank statement rows.
+
+    Only an existing user category named in the operation description is an
+    explicit local category. Everything else stays unknown and is sent to
+    manual markup. This implementation never performs a network request and
+    never invents a category.
+    """
+
+    def classify(
+        self,
+        description: str,
+        transaction_type: str,
+        existing_categories: list[str],
+    ) -> str:
+        """Return an existing matching category or the fallback marker."""
+        del transaction_type
+        normalized = _normalize_category_text(description)
+        if not normalized:
+            return FALLBACK_CATEGORY
+        for category in sorted(
+            existing_categories,
+            key=lambda name: (-len(name), name),
+        ):
+            candidate = _normalize_category_text(category)
+            if candidate and _contains_category(normalized, candidate):
+                return category
+        return FALLBACK_CATEGORY
+
+
+def _normalize_category_text(text: str) -> str:
+    """Casefold and collapse separators without changing word boundaries."""
+    return re.sub(r'\s+', ' ', str(text).casefold()).strip(' .,;:-')
+
+
+def _contains_category(text: str, category: str) -> bool:
+    """Match a category as whole words inside the operation description."""
+    pattern = rf'(?<!\w){re.escape(category)}(?!\w)'
+    return re.search(pattern, text) is not None
 
 
 class NoopClassifier:

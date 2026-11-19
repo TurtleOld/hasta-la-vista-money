@@ -451,7 +451,11 @@ class BankStatementReconciliationService:
         upload.imported_count = (
             upload.income_count
             + upload.expense_count
-            + counts.get(BankStatementRow.Decision.NEW, 0)
+            + BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+                decided_at__isnull=False,
+            ).count()
         )
         fields = [
             'linked_count',

@@ -261,9 +261,9 @@ class OutgoingRowTransferDedupeTest(TransferDedupeBaseTest):
 
         self.assertEqual(result['expense_count'], 1)
         self.assertEqual(result['skipped_count'], 0)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
-        )
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
         self.assertTrue(
             Transaction.objects.filter(account=self.source).exists(),
         )
@@ -313,9 +313,8 @@ class OutgoingRowTransferDedupeTest(TransferDedupeBaseTest):
         )
 
         self.assertEqual(result['expense_count'], 1)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
-        )
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
 
     def test_transfer_linked_on_other_end_is_still_offered(self) -> None:
         transfer = self._create_transfer(

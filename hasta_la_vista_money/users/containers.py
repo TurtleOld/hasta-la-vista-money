@@ -1,9 +1,7 @@
 """Dependency injection container for users application."""
 
 from dependency_injector import containers, providers
-from django.conf import settings
 
-from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -47,8 +45,7 @@ from hasta_la_vista_money.users.services.bank_statement_retention import (
 )
 from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
-    ExternalModelCategoryClassifier,
-    NoopClassifier,
+    LocalCategoryClassifier,
 )
 from hasta_la_vista_money.users.services.statement_id_fingerprint import (
     StatementIdFingerprintService,
@@ -68,38 +65,13 @@ from hasta_la_vista_money.users.services.statistics import (
 
 
 def _build_classifier() -> CategoryClassifier:
-    """Собрать экземпляр категоризатора на основе настроек Django.
+    """Build the local-only bank statement categorizer.
 
-    Returns:
-        ``ExternalModelCategoryClassifier`` если
-        ``BANK_STATEMENT_CATEGORY_MODEL_BASE_URL`` задан, иначе
-        ``NoopClassifier``.
+    Bank statements are classified exclusively by local rules: an existing
+    user category named in the operation description, otherwise manual
+    markup. No external model is configured or called.
     """
-    base_url = getattr(
-        settings,
-        'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
-        '',
-    ) or getattr(settings, 'CATEGORY_CLASSIFIER_BASE_URL', '')
-    if not base_url:
-        return NoopClassifier()
-    transport = ExternalModelTransport(
-        base_url=base_url,
-        api_key=getattr(
-            settings,
-            'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
-            '',
-        )
-        or getattr(settings, 'CATEGORY_CLASSIFIER_API_KEY', ''),
-        model=getattr(
-            settings,
-            'BANK_STATEMENT_CATEGORY_MODEL_NAME',
-            '',
-        )
-        or getattr(settings, 'CATEGORY_CLASSIFIER_MODEL', ''),
-    )
-    return ExternalModelCategoryClassifier(
-        transport=transport,
-    )
+    return LocalCategoryClassifier()
 
 
 class UsersContainer(containers.DeclarativeContainer):

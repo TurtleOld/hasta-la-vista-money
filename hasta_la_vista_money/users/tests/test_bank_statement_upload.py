@@ -2645,12 +2645,13 @@ class TestBankStatementParserAdvanced(TestCase):
             )
 
             row = df.iloc[1]
-            transaction = parser._parse_transaction_row(row, df, 1)
+            transaction = parser._parse_transaction_row(row, df, 1, 0)
 
-            # Basic validation - just check it returns a dict or None
-            self.assertTrue(
-                transaction is None or isinstance(transaction, dict),
-            )
+            self.assertIsInstance(transaction, dict)
+            self.assertEqual(transaction['transaction_type'], 'income')
+            self.assertEqual(transaction['amount'], Decimal('50000.00'))
+            self.assertEqual(transaction['parse_error_code'], '')
+            self.assertIsNotNone(transaction['date'])
         finally:
             pdf_path.unlink()
 
@@ -2674,12 +2675,13 @@ class TestBankStatementParserAdvanced(TestCase):
             )
 
             row = df.iloc[1]
-            transaction = parser._parse_transaction_row(row, df, 1)
+            transaction = parser._parse_transaction_row(row, df, 1, 0)
 
-            # Basic validation - just check it returns a dict or None
-            self.assertTrue(
-                transaction is None or isinstance(transaction, dict),
-            )
+            self.assertIsInstance(transaction, dict)
+            self.assertEqual(transaction['transaction_type'], 'expense')
+            self.assertEqual(transaction['amount'], Decimal('-1500.00'))
+            self.assertEqual(transaction['parse_error_code'], '')
+            self.assertIsNotNone(transaction['date'])
         finally:
             pdf_path.unlink()
 
@@ -2703,10 +2705,13 @@ class TestBankStatementParserAdvanced(TestCase):
             )
 
             row = df.iloc[0]
-            transaction = parser._parse_transaction_row(row, df, 0)
+            transaction = parser._parse_transaction_row(row, df, 0, 0)
 
-            # Should return None if no date is found
-            self.assertIsNone(transaction)
+            # A potential operation without a date is kept as a problem.
+            self.assertIsInstance(transaction, dict)
+            self.assertEqual(transaction['parse_error_code'], 'missing_date')
+            self.assertIsNone(transaction['date'])
+            self.assertEqual(transaction['amount'], Decimal('1500.00'))
         finally:
             pdf_path.unlink()
 
@@ -3116,16 +3121,23 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_camelot: MagicMock,
     ) -> None:
         """Test that the import task creates transactions."""
-        # Create mock transaction data
+        Category.objects.create(
+            user=self.user,
+            name='Зарплата',
+            type=TransactionType.INCOME,
+        )
+        Category.objects.create(
+            user=self.user,
+            name='Покупка',
+            type=TransactionType.EXPENSE,
+        )
         mock_df = pd.DataFrame(
             {
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
                 2: ['', '', 'Зарплата', 'Покупка'],
-                3: ['', '', '', ''],
-                4: ['', '', '', ''],
-                5: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
-                6: ['', '', '', ''],
+                3: ['', '', '+50000,00 ₽', ''],
+                4: ['', '', '', '-1500,00 ₽'],
             },
         )
 
@@ -3170,18 +3182,18 @@ class TestBankStatementProcessIntegration(TestCase):
         self.assertEqual(result['total_count'], 0)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_process_bank_statement_creates_categories(
+    def test_unknown_categories_wait_for_markup(
         self,
         mock_camelot: MagicMock,
     ) -> None:
-        """Test that categories are created for transactions."""
+        """Unknown local categories never post as "Без категории"."""
         mock_df = pd.DataFrame(
             {
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
                 2: ['', '', 'Зарплата Январь', 'Продукты Магнит'],
-                3: ['', '', '', ''],
-                4: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
+                3: ['', '', '+50000,00 ₽', ''],
+                4: ['', '', '', '-1500,00 ₽'],
             },
         )
 
@@ -3191,21 +3203,31 @@ class TestBankStatementProcessIntegration(TestCase):
 
         upload = self._create_upload()
 
-        process_bank_statement_task.apply(args=[upload.pk]).get()
+        result = process_bank_statement_task.apply(args=[upload.pk]).get()
 
-        self.assertTrue(
-            Category.objects.filter(
-                user=self.user,
-                name='Зарплата Январь',
-                type=TransactionType.INCOME,
-            ).exists(),
+        self.assertEqual(result['total_count'], 0)
+        self.assertFalse(
+            Category.objects.filter(user=self.user).exists(),
         )
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
+        )
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        rows = list(BankStatementRow.objects.filter(upload=upload))
+        self.assertEqual(len(rows), 2)
         self.assertTrue(
-            Category.objects.filter(
-                user=self.user,
-                name='Продукты Магнит',
-                type=TransactionType.EXPENSE,
-            ).exists(),
+            all(
+                row.decision
+                in (
+                    BankStatementRow.Decision.AWAITING_MARKUP,
+                    BankStatementRow.Decision.PENDING,
+                )
+                for row in rows
+            ),
         )
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
@@ -3997,8 +4019,8 @@ class TestSberbankParser(TestCase):
         self.assertEqual(transactions[0]['amount'], Decimal('50546.00'))
         self.assertGreater(transactions[0]['amount'], 0)
 
-    def test_parse_table_skips_zero_amount(self) -> None:
-        """Rows where amount cannot be extracted are skipped."""
+    def test_parse_table_keeps_unreadable_amount_as_problem(self) -> None:
+        """A potential operation without an amount stays as a problem row."""
         parser = self._make_parser()
         df = self._make_df(
             [
@@ -4007,7 +4029,12 @@ class TestSberbankParser(TestCase):
             ],
         )
         transactions = parser._parse_table(df)
-        self.assertEqual(len(transactions), 0)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['parse_error_code'],
+            'missing_amount',
+        )
+        self.assertIsNone(transactions[0]['amount'])
 
     def test_parse_table_multiple_transactions(self) -> None:
         """Multiple consecutive two-row transactions are all parsed."""
@@ -4618,7 +4645,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         'hasta_la_vista_money.users.services.bank_statement_import.'
         'BankStatementParser',
     )
-    def test_classifier_failure_uses_fallback_for_new_row(
+    def test_classifier_failure_does_not_post_fallback_category(
         self,
         mock_parser_cls: MagicMock,
     ) -> None:
@@ -4650,13 +4677,23 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         process_bank_statement_task.apply(args=[upload.pk])
 
         upload.refresh_from_db()
-        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
-        self.assertTrue(
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertFalse(
             Category.objects.filter(
                 user=self.user,
                 name='Без категории',
-                type=TransactionType.EXPENSE,
             ).exists(),
+        )
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
+        )
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
     @patch(
@@ -4713,9 +4750,9 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
-        )
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(row.transaction_id, Transaction.objects.get().pk)
         classifier.classify.assert_not_called()
 
     @patch(
@@ -4775,9 +4812,9 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
-        )
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('9900.00'))
 
@@ -5000,7 +5037,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(
             BankStatementRow.objects.filter(upload=upload).count(),
-            1,
+            2,
         )
 
     @patch(
@@ -5052,8 +5089,20 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(upload.imported_count, 2)
         self.assertEqual(self.account.balance, Decimal('9800.00'))
         self.assertEqual(Transaction.objects.count(), 2)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            list(
+                BankStatementRow.objects.filter(upload=upload)
+                .order_by('source_row_position')
+                .values_list('source_row_position', flat=True),
+            ),
+            [0, 1],
         )
 
     @patch(
@@ -5170,7 +5219,7 @@ class TestOzonBankStatement(TestCase):
         self.assertIsInstance(parser, _OzonBankParser)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_parses_allowed_operations_and_skips_transfer(
+    def test_parses_allowed_operations_and_keeps_transfer_problem(
         self,
         mock_camelot: MagicMock,
     ) -> None:
@@ -5180,22 +5229,33 @@ class TestOzonBankStatement(TestCase):
 
         result = _OzonBankParser(self.pdf_path).parse()
 
-        self.assertEqual(len(result.transactions), 3)
+        supported = [
+            item for item in result.transactions if not item['parse_error_code']
+        ]
+        self.assertEqual(len(supported), 3)
         self.assertIsNone(result.closing_balance)
         self.assertEqual(
-            [item['description'] for item in result.transactions],
+            [item['description'] for item in supported],
             ['Возвраты Ozon', 'Покупки Ozon', 'Чаевые Ozon'],
         )
         self.assertEqual(
-            [item['amount'] for item in result.transactions],
+            [item['amount'] for item in supported],
             [Decimal('101.00'), Decimal('-2561.00'), Decimal('-49.00')],
         )
         self.assertTrue(
-            all(item['source'] == 'ozon' for item in result.transactions),
+            all(item['source'] == 'ozon' for item in supported),
+        )
+        self.assertEqual(
+            [
+                item['parse_error_code']
+                for item in result.transactions
+                if item['parse_error_code']
+            ],
+            ['missing_operation'],
         )
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_statement_with_only_transfers_is_valid(
+    def test_statement_with_only_transfers_keeps_problem_rows(
         self,
         mock_camelot: MagicMock,
     ) -> None:
@@ -5215,7 +5275,12 @@ class TestOzonBankStatement(TestCase):
 
         result = _OzonBankParser(self.pdf_path).parse()
 
-        self.assertEqual(result.transactions, [])
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(
+            result.transactions[0]['parse_error_code'],
+            'missing_operation',
+        )
+        self.assertEqual(result.transactions[0]['amount'], Decimal('2600.00'))
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_parses_format_with_processing_date_rows(
@@ -5257,13 +5322,19 @@ class TestOzonBankStatement(TestCase):
                     Decimal('-500.00'),
                     'aaaa1111-bbbb-2222-cccc3333',
                 ),
+                (None, Decimal('500.00'), 'T0000001T0000002'),
                 ('Чаевые Ozon', Decimal('-50.00'), 'dddd4444-eeee-'),
                 ('Возвраты Ozon', Decimal('12.34'), 'ffff5555-6666-'),
+                (None, Decimal('-9.00'), '7777aaaa-bbbb-'),
             ],
+        )
+        self.assertEqual(
+            result.transactions[-1]['parse_error_code'],
+            'missing_operation',
         )
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_unparsed_operation_error_names_row_and_missing_fields(
+    def test_operation_without_document_number_keeps_unknown_ref(
         self,
         mock_camelot: MagicMock,
     ) -> None:
@@ -5281,13 +5352,17 @@ class TestOzonBankStatement(TestCase):
         )
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with self.assertRaises(BankStatementParseError) as ctx:
-            _OzonBankParser(self.pdf_path).parse()
+        result = _OzonBankParser(self.pdf_path).parse()
 
-        message = str(ctx.exception)
-        self.assertIn('стр. 2', message)
-        self.assertIn('05.08.2026 10:00:00', message)
-        self.assertIn('номер документа', message)
+        self.assertEqual(len(result.transactions), 1)
+        row = result.transactions[0]
+        self.assertIsNone(row['source_ref'])
+        self.assertEqual(row['parse_error_code'], '')
+        self.assertEqual(row['amount'], Decimal('-10.00'))
+        self.assertEqual(
+            row['date'].strftime('%d.%m.%Y %H:%M:%S'),
+            '05.08.2026 10:00:00',
+        )
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -5438,6 +5513,16 @@ class TestBankStatementImportReliability(TestCase):
         )
         self.client = Client()
         self.client.force_login(self.user)
+        Category.objects.create(
+            user=self.user,
+            name='Большая покупка',
+            type=TransactionType.EXPENSE,
+        )
+        Category.objects.create(
+            user=self.user,
+            name='Зарплата',
+            type=TransactionType.INCOME,
+        )
 
     def _create_upload(self) -> BankStatementUpload:
         return BankStatementUpload.objects.create(
@@ -5456,10 +5541,8 @@ class TestBankStatementImportReliability(TestCase):
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
                 2: ['', '', 'Большая покупка', 'Зарплата'],
-                3: ['', '', '', ''],
-                4: ['', '', '', ''],
-                5: ['', '', '-5000,00 ₽', '+50000,00 ₽'],
-                6: ['', '', '', ''],
+                3: ['', '', '', '+50000,00 ₽'],
+                4: ['', '', '-5000,00 ₽', ''],
             },
         )
         mock_table = MagicMock()

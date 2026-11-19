@@ -6,6 +6,7 @@ from config.containers import ApplicationContainer
 from core.services.external_model import ExternalModelTransport
 from hasta_la_vista_money.users.services.category_classifier import (
     ExternalModelCategoryClassifier,
+    LocalCategoryClassifier,
     NoopClassifier,
 )
 
@@ -92,58 +93,80 @@ class TestExternalModelCategoryClassifier(TestCase):
         self.assertEqual(result, 'Транспорт')
 
 
+class TestLocalCategoryClassifier(TestCase):
+    def setUp(self) -> None:
+        self.classifier = LocalCategoryClassifier()
+
+    def test_matches_existing_category_by_name(self) -> None:
+        result = self.classifier.classify(
+            'Оплата в магазине Продукты у дома',
+            'expense',
+            ['Транспорт', 'Продукты'],
+        )
+
+        self.assertEqual(result, 'Продукты')
+
+    def test_matches_case_insensitively(self) -> None:
+        result = self.classifier.classify(
+            'magnit supermarket',
+            'expense',
+            ['MAGNIT'],
+        )
+
+        self.assertEqual(result, 'MAGNIT')
+
+    def test_unknown_category_returns_fallback(self) -> None:
+        result = self.classifier.classify(
+            'Неизвестный получатель',
+            'expense',
+            ['Продукты', 'Транспорт'],
+        )
+
+        self.assertEqual(result, 'Без категории')
+
+    def test_empty_description_returns_fallback(self) -> None:
+        result = self.classifier.classify('   ', 'income', ['Зарплата'])
+
+        self.assertEqual(result, 'Без категории')
+
+    @patch(
+        'core.services.external_model.httpx.Client',
+    )
+    def test_never_calls_a_network_model(
+        self,
+        mock_client_cls: MagicMock,
+    ) -> None:
+        self.classifier.classify('Магазин', 'expense', ['Продукты'])
+
+        mock_client_cls.assert_not_called()
+
+
 @override_settings(
     RECEIPT_CATEGORY_MODEL_BASE_URL='http://localhost:1234/v1',
     RECEIPT_CATEGORY_MODEL_API_KEY='receipt-key',
     RECEIPT_CATEGORY_MODEL_NAME='receipt-model',
-    BANK_STATEMENT_CATEGORY_MODEL_BASE_URL='',
-    BANK_STATEMENT_CATEGORY_MODEL_API_KEY='',
-    BANK_STATEMENT_CATEGORY_MODEL_NAME='',
 )
-class TestCategoryModelSettings(TestCase):
-    def test_receipt_model_does_not_enable_bank_statement_model(self) -> None:
+class TestBankStatementClassifierIsLocal(TestCase):
+    def test_bank_statement_classifier_is_local(self) -> None:
         container = ApplicationContainer()
 
         self.assertIsInstance(
-            container.receipts.category_model_transport(),
-            ExternalModelTransport,
-        )
-        self.assertIsInstance(
             container.users.category_classifier(),
-            NoopClassifier,
+            LocalCategoryClassifier,
         )
 
-    def test_bank_statement_model_does_not_enable_receipt_model(self) -> None:
+    def test_bank_statement_model_settings_never_enable_network(self) -> None:
         with self.settings(
-            RECEIPT_CATEGORY_MODEL_BASE_URL='',
-            RECEIPT_CATEGORY_MODEL_API_KEY='',
-            RECEIPT_CATEGORY_MODEL_NAME='',
             BANK_STATEMENT_CATEGORY_MODEL_BASE_URL=('http://localhost:1234/v1'),
             BANK_STATEMENT_CATEGORY_MODEL_API_KEY='bank-key',
             BANK_STATEMENT_CATEGORY_MODEL_NAME='bank-model',
-        ):
-            container = ApplicationContainer()
-
-            self.assertIsNone(container.receipts.category_model_transport())
-            self.assertIsInstance(
-                container.users.category_classifier(),
-                ExternalModelCategoryClassifier,
-            )
-
-    def test_legacy_bank_statement_settings_remain_supported(self) -> None:
-        with self.settings(
-            RECEIPT_CATEGORY_MODEL_BASE_URL='',
-            BANK_STATEMENT_CATEGORY_MODEL_BASE_URL='',
-            BANK_STATEMENT_CATEGORY_MODEL_API_KEY='',
-            BANK_STATEMENT_CATEGORY_MODEL_NAME='',
             CATEGORY_CLASSIFIER_BASE_URL='http://localhost:1234/v1',
             CATEGORY_CLASSIFIER_API_KEY='legacy-key',
             CATEGORY_CLASSIFIER_MODEL='legacy-model',
         ):
             container = ApplicationContainer()
 
-            self.assertIsNone(container.receipts.category_model_transport())
             self.assertIsInstance(
                 container.users.category_classifier(),
-                ExternalModelCategoryClassifier,
+                LocalCategoryClassifier,
             )

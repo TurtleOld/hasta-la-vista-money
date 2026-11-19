@@ -61,6 +61,10 @@ class StatementParseResult:
     period_start: date_type | None = None
     requires_markup: bool = False
     bank_code: str | None = None
+    #: The parser enumerated every potential operation position, including
+    #: unparsable rows and duplicate representations. Only then may the
+    #: import claim row-by-row traceability of the whole document.
+    traceability_complete: bool = False
 
 
 # General parsing constants
@@ -137,25 +141,60 @@ class BankStatementParseError(Exception):
 def _dedup_transactions(
     transactions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Remove duplicate transactions within a single parsed statement.
+    """Assign stable source positions to parsed representations.
 
-    Transactions with the same non-empty ``source_ref`` are considered
-    duplicates regardless of other fields. Transactions without a
-    ``source_ref`` fall back to ``(date, amount, description)``.
+    Repeated representations are kept: a second presentation of the same
+    operation is a traceable row, never a silently dropped one. A row that
+    lost its position keeps the order it was parsed in.
     """
-    seen_refs: set[str] = set()
-    unique: list[dict[str, Any]] = []
-    for position, t in enumerate(transactions):
-        t['row_position'] = position
-        ref = t.get('source_ref')
-        if ref:
-            if ref in seen_refs:
-                continue
-            seen_refs.add(ref)
-            unique.append(t)
-            continue
-        unique.append(t)
-    return unique
+    for position, transaction in enumerate(transactions):
+        transaction.setdefault('row_position', position)
+    return transactions
+
+
+def _transaction_row(
+    *,
+    row_position: int,
+    date: datetime | None,
+    amount: Decimal | None,
+    description: str,
+    source_ref: str | None,
+    transaction_type: str | None = None,
+    date_precision: str = 'unknown',
+    bank_calendar_date: date_type | None = None,
+    parse_error_code: str = '',
+    **extra: Any,
+) -> dict[str, Any]:
+    """Build one traceable operation representation.
+
+    Unknown values stay ``None``: a missing amount, date or direction is
+    never replaced with zero, the current date or a guessed direction.
+    """
+    return {
+        'row_position': row_position,
+        'date': date,
+        'amount': amount,
+        'transaction_type': transaction_type,
+        'description': description,
+        'source_ref': source_ref,
+        'date_precision': date_precision,
+        'bank_calendar_date': bank_calendar_date,
+        'parse_error_code': parse_error_code,
+        **extra,
+    }
+
+
+def _date_parts(moment: datetime | None) -> tuple[str, date_type | None]:
+    """Return the precision and bank day of a parsed bank date.
+
+    A real datetime keeps its moment; only a day-only date becomes the
+    explicit bank calendar day.
+    """
+    if moment is None:
+        return 'unknown', None
+    if moment.hour or moment.minute or moment.second:
+        return 'datetime', None
+    return 'day', moment.date()
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +210,16 @@ class BaseBankStatementParser(ABC):
 
     def __init__(self, pdf_path: str | Path) -> None:
         self.pdf_path = Path(pdf_path)
+        self._source_position = 0
         if not self.pdf_path.exists():
             error_msg = f'PDF file not found: {pdf_path}'
             raise FileNotFoundError(error_msg)
+
+    def _next_source_position(self) -> int:
+        """Return the next stable source position of a potential operation."""
+        position = self._source_position
+        self._source_position += 1
+        return position
 
     @abstractmethod
     def parse(self) -> StatementParseResult:
@@ -349,6 +395,7 @@ class _GenericBankParser(BaseBankStatementParser):
         """
         try:
             logger.info('bank_statement_parse_started', parser='generic')
+            self._source_position = 0
             try:
                 full_text = extract_text(str(self.pdf_path))
             except Exception:
@@ -377,9 +424,6 @@ class _GenericBankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            transactions = [
-                t for t in transactions if t['amount'] != Decimal(0)
-            ]
             transactions = _dedup_transactions(transactions)
             closing_balance = self._extract_closing_balance(full_text)
 
@@ -400,6 +444,7 @@ class _GenericBankParser(BaseBankStatementParser):
                 transactions=transactions,
                 closing_balance=closing_balance,
                 bank_code=self.BANK_CODE,
+                traceability_complete=True,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -426,7 +471,13 @@ class _GenericBankParser(BaseBankStatementParser):
                 if self._extract_transaction_number(first_col) is None:
                     continue
                 row_index = int(row_idx) if isinstance(row_idx, int) else 0
-                trans = self._parse_transaction_row(row, df, row_index)
+                position = self._next_source_position()
+                trans = self._parse_transaction_row(
+                    row,
+                    df,
+                    row_index,
+                    position,
+                )
                 if trans:
                     transactions.append(trans)
             except ValueError as e:
@@ -442,16 +493,16 @@ class _GenericBankParser(BaseBankStatementParser):
         row: pd.Series,
         df: pd.DataFrame,
         index: int,
-    ) -> dict[str, Any] | None:
-        amount = self._extract_amount_from_row(row)
-        if amount is None:
-            return None
+        position: int,
+    ) -> dict[str, Any]:
+        """Keep one representation of a potential operation.
 
+        A row that cannot be parsed keeps its known fields and an explicit
+        reason; it is never dropped and its unknown fields stay unknown.
+        """
+        amount, transaction_type = self._extract_amount_with_direction(row)
         description_col_idx = self._get_description_column_index(row)
         date = self._extract_date_from_context(df, index)
-        if date is None:
-            return None
-
         description = self._extract_description(
             row,
             df,
@@ -459,31 +510,78 @@ class _GenericBankParser(BaseBankStatementParser):
             description_col_idx,
         )
         description = self._clean_description(description)
-        if not description:
+        precision, bank_day = _date_parts(date)
+
+        parse_error_code = ''
+        if amount is None or amount == Decimal(0):
+            parse_error_code = 'missing_amount'
+        elif transaction_type is None:
+            parse_error_code = 'missing_direction'
+        elif date is None:
+            parse_error_code = 'missing_date'
+        elif not description:
             description = 'Операция'
 
-        return {
-            'date': date,
-            'amount': amount,
-            'description': description[:250],
-            'source_ref': self._extract_source_ref(row),
-        }
+        if parse_error_code:
+            return _transaction_row(
+                row_position=position,
+                date=date,
+                amount=abs(amount) if amount is not None else None,
+                description=description[:250],
+                source_ref=self._extract_source_ref(row),
+                transaction_type=transaction_type,
+                date_precision=precision,
+                bank_calendar_date=bank_day,
+                parse_error_code=parse_error_code,
+            )
+
+        signed_amount = (
+            amount
+            if transaction_type == 'income'
+            else -abs(cast('Decimal', amount))
+        )
+        return _transaction_row(
+            row_position=position,
+            date=date,
+            amount=signed_amount,
+            description=description[:250],
+            source_ref=self._extract_source_ref(row),
+            transaction_type=transaction_type,
+            date_precision=precision,
+            bank_calendar_date=bank_day,
+        )
 
     def _extract_source_ref(self, row: pd.Series) -> str | None:
         """Return a stable per-bank operation id, or None if unavailable."""
         return None
 
-    def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
+    def _extract_amount_with_direction(
+        self,
+        row: pd.Series,
+    ) -> tuple[Decimal | None, str | None]:
+        """Return the absolute amount and its explicit direction.
+
+        An unsigned amount on a shared column does not prove a direction,
+        so it is returned without one instead of being guessed.
+        """
         for col_idx in range(2, len(row)):
             col_text = str(row.iloc[col_idx])
             extracted = self._extract_amount_from_column(col_text)
             if extracted is not None:
                 if '+' in col_text:
-                    return extracted
+                    return extracted, 'income'
                 if '-' in col_text:
-                    return -extracted
-                return extracted
-        return None
+                    return extracted, 'expense'
+                return extracted, None
+        return None, None
+
+    def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
+        amount, transaction_type = self._extract_amount_with_direction(row)
+        if amount is None:
+            return None
+        if transaction_type == 'expense':
+            return -abs(amount)
+        return amount
 
     def _get_description_column_index(self, row: pd.Series) -> int:
         return 5 if len(row) >= MIN_STANDARD_COLUMNS else 2
@@ -493,7 +591,7 @@ class _GenericBankParser(BaseBankStatementParser):
         df: pd.DataFrame,
         index: int,
     ) -> datetime | None:
-        for i in range(index, max(0, index - 5), -1):
+        for i in range(index, max(-1, index - 5), -1):
             check_row = df.iloc[i]
             for col_idx in range(min(2, len(check_row))):
                 if len(check_row) > col_idx:
@@ -561,21 +659,33 @@ class _RaiffeisenBankParser(_GenericBankParser):
         logger.info('bank_statement_parse_started', parser='raiffeisen')
         return super().parse()
 
-    def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
+    def _extract_amount_with_direction(
+        self,
+        row: pd.Series,
+    ) -> tuple[Decimal | None, str | None]:
         """Read income from col[3] and expense from col[4]."""
         if len(row) > RAIFFEISEN_INCOME_COL:
             income_text = str(row.iloc[RAIFFEISEN_INCOME_COL])
             amount = self._extract_amount_from_column(income_text)
             if amount is not None:
-                return amount  # positive → Income
+                return amount, 'income'
 
         if len(row) > RAIFFEISEN_EXPENSE_COL:
             expense_text = str(row.iloc[RAIFFEISEN_EXPENSE_COL])
             amount = self._extract_amount_from_column(expense_text)
             if amount is not None:
-                return -amount  # negative → Expense
+                return amount, 'expense'
 
-        return None
+        return None, None
+
+    def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
+        """Read income from col[3] and expense from col[4]."""
+        amount, transaction_type = self._extract_amount_with_direction(row)
+        if amount is None:
+            return None
+        if transaction_type == 'expense':
+            return -amount
+        return amount
 
     def _get_description_column_index(self, row: pd.Series) -> int:
         return RAIFFEISEN_DESCRIPTION_COL
@@ -621,6 +731,7 @@ class _SberbankParser(BaseBankStatementParser):
         """
         try:
             logger.info('bank_statement_parse_started', parser='sberbank')
+            self._source_position = 0
             try:
                 full_text = extract_text(str(self.pdf_path))
             except Exception:
@@ -649,9 +760,6 @@ class _SberbankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            transactions = [
-                t for t in transactions if t['amount'] != Decimal(0)
-            ]
             transactions = _dedup_transactions(transactions)
             closing_balance = self._extract_closing_balance(full_text)
 
@@ -672,6 +780,7 @@ class _SberbankParser(BaseBankStatementParser):
                 transactions=transactions,
                 closing_balance=closing_balance,
                 bank_code=self.BANK_CODE,
+                traceability_complete=True,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -755,6 +864,8 @@ class _SberbankParser(BaseBankStatementParser):
 
         Handles the edge case where row A is the last row in the table
         (no row B available) by treating the transaction as single-row.
+        Every row that carries a date and looks like row A of an operation
+        yields one representation, even when its amount is unreadable.
         """
         row_a = df.iloc[i]
         row_b = df.iloc[i + 1] if i + 1 < len(df) else None
@@ -768,14 +879,40 @@ class _SberbankParser(BaseBankStatementParser):
             return i + 1
 
         if merged_col:
-            return self._parse_merged_layout(
-                row_a,
-                row_b,
-                i,
-                date,
-                transactions,
+            category = self._extract_category_from_merged_col0(
+                self._cell_text(row_a, SBERBANK_DATE_COL),
             )
-        return self._parse_standard_layout(row_a, row_b, i, date, transactions)
+            amount_text = self._cell_text(row_a, SBERBANK_CATEGORY_COL)
+            next_index = i + 2 if row_b is not None else i + 1
+        else:
+            row_b_amount = (
+                self._cell_text(row_b, SBERBANK_AMOUNT_COL)
+                if row_b is not None
+                else ''
+            )
+            if row_b_amount:
+                # Row A is the continuation line of the previous operation.
+                return i + 1
+            category = self._cell_text(row_a, SBERBANK_CATEGORY_COL)
+            amount_text = self._cell_text(row_a, SBERBANK_AMOUNT_COL)
+            next_index = i + 2 if row_b is not None else i + 1
+
+        self._append_sberbank_row(
+            transactions,
+            position=self._next_source_position(),
+            date=date,
+            amount_text=amount_text,
+            category=category,
+            source_ref=self._extract_authcode(row_b),
+        )
+        return next_index
+
+    def _cell_text(self, row: pd.Series | None, index: int) -> str:
+        """Return a stripped cell value; ``nan`` and missing cells are empty."""
+        if row is None or len(row) <= index:
+            return ''
+        value = str(row.iloc[index]).strip()
+        return '' if value == 'nan' else value
 
     def _extract_authcode(self, row: pd.Series | None) -> str | None:
         """Extract Sberbank authorization code from a row B-like cell.
@@ -797,63 +934,42 @@ class _SberbankParser(BaseBankStatementParser):
             return match.group(1)
         return None
 
-    def _parse_merged_layout(
+    def _append_sberbank_row(
         self,
-        row_a: pd.Series,
-        row_b: pd.Series | None,
-        i: int,
-        date: datetime,
         transactions: list[dict[str, Any]],
-    ) -> int:
-        """Parse 3-column merged layout used on the last PDF page.
-
-        The merged layout packs row A into:
-        * col[0]: ``'DD.MM.YYYY\\nHH:MM\\nCategory'``
-        * col[1]: amount, e.g. ``'2 958,00'`` (no ₽ sign)
-        * col[2]: balance
-
-        Row B (continuation) carries the authcode in col[0] as
-        ``'DD.MM.YYYY\\nAUTHCODE\\nDescription'``.
-        """
-        col0_text = (
-            str(row_a.iloc[SBERBANK_DATE_COL]).strip()
-            if len(row_a) > SBERBANK_DATE_COL
-            else ''
-        )
-        if col0_text == 'nan':
-            col0_text = ''
-
-        category = self._extract_category_from_merged_col0(col0_text)
-        amount_text = (
-            str(row_a.iloc[SBERBANK_CATEGORY_COL]).strip()
-            if len(row_a) > SBERBANK_CATEGORY_COL
-            else ''
-        )
-        if amount_text == 'nan':
-            amount_text = ''
-
-        if row_b is None:
-            self._add_transaction_if_valid(
-                transactions,
-                date,
-                amount_text,
-                category,
-                None,
-            )
-            return i + 1
-
-        source_ref = self._extract_authcode(row_b)
+        *,
+        position: int,
+        date: datetime,
+        amount_text: str,
+        category: str,
+        source_ref: str | None,
+    ) -> None:
+        """Append one traceable Sberbank operation representation."""
         amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
-        return i + 2
+        precision, bank_day = _date_parts(date)
+        error_code = ''
+        transaction_type: str | None = None
+        if amount is None or amount == Decimal(0):
+            error_code = 'missing_amount'
+        else:
+            transaction_type = 'income' if amount > 0 else 'expense'
+        description = (category if error_code else (category or 'Операция'))[
+            :250
+        ]
+        transactions.append(
+            _transaction_row(
+                row_position=position,
+                date=date,
+                amount=amount,
+                description=description,
+                source_ref=source_ref,
+                transaction_type=transaction_type,
+                date_precision=precision,
+                bank_calendar_date=bank_day,
+                parse_error_code=error_code,
+                category_name=category or None,
+            ),
+        )
 
     def _extract_category_from_merged_col0(self, text: str) -> str:
         """Return the category line from a merged col[0] cell.
@@ -867,75 +983,6 @@ class _SberbankParser(BaseBankStatementParser):
         cleaned = re.sub(r'^\s*\d{2}\.\d{2}\.\d{4}\s*\n?', '', text)
         cleaned = re.sub(r'^\s*\d{2}:\d{2}\s*\n?', '', cleaned)
         return cleaned.strip()
-
-    def _parse_standard_layout(
-        self,
-        row_a: pd.Series,
-        row_b: pd.Series | None,
-        i: int,
-        date: datetime,
-        transactions: list[dict[str, Any]],
-    ) -> int:
-        """Parse 4-column standard layout.
-
-        When row_b is None (row_a is the last row in the table) the
-        transaction is treated as single-row: still emit it, just without
-        the row B continuation.
-        """
-        if row_b is not None:
-            row_b_amount = (
-                str(row_b.iloc[SBERBANK_AMOUNT_COL])
-                if len(row_b) > SBERBANK_AMOUNT_COL
-                else ''
-            )
-            if row_b_amount not in ('', 'nan'):
-                return i + 1
-
-        category = (
-            str(row_a.iloc[SBERBANK_CATEGORY_COL]).strip()
-            if len(row_a) > SBERBANK_CATEGORY_COL
-            else ''
-        )
-        if category == 'nan':
-            category = ''
-
-        amount_text = (
-            str(row_a.iloc[SBERBANK_AMOUNT_COL])
-            if len(row_a) > SBERBANK_AMOUNT_COL
-            else ''
-        )
-        source_ref = self._extract_authcode(row_b)
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
-        return i + 2 if row_b is not None else i + 1
-
-    def _add_transaction_if_valid(
-        self,
-        transactions: list[dict[str, Any]],
-        date: datetime,
-        amount_text: str,
-        category: str,
-        source_ref: str | None,
-    ) -> None:
-        """Add transaction to list if amount is valid and non-zero."""
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
 
     def _extract_sberbank_amount(self, text: str) -> Decimal | None:
         """Extract signed amount: '+' → positive, else negative.
@@ -1003,6 +1050,7 @@ class _OzonBankParser(BaseBankStatementParser):
         """Parse purchases, refunds, and tips from an Ozon statement."""
         try:
             logger.info('bank_statement_parse_started', parser='ozon')
+            self._source_position = 0
             tables = self._read_tables(edge_tol=OZON_TABLE_EDGE_TOL)
             transactions: list[dict[str, Any]] = []
             operation_rows = 0
@@ -1010,16 +1058,9 @@ class _OzonBankParser(BaseBankStatementParser):
             for table in tables:
                 parsed, table_operation_rows = self._parse_table(
                     table.df,
-                    table.page,
                 )
                 transactions.extend(parsed)
                 operation_rows += table_operation_rows
-
-            if operation_rows == 0:
-                error_msg = (
-                    'В выписке Ozon не найдены строки банковских операций'
-                )
-                raise BankStatementParseError(error_msg)
 
             transactions = _dedup_transactions(transactions)
             logger.info(
@@ -1035,17 +1076,17 @@ class _OzonBankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF Ozon: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
-            # Transfers are intentionally excluded, so closing-balance
-            # reconciliation would report an expected false discrepancy.
+            # An explicit empty document proves empty traceability; an
+            # unsupported operation is kept as a problem row, never dropped.
             return StatementParseResult(
                 transactions=transactions,
                 bank_code=self.BANK_CODE,
+                traceability_complete=True,
             )
 
     def _parse_table(
         self,
         df: pd.DataFrame,
-        page: str,
     ) -> tuple[list[dict[str, Any]], int]:
         transactions: list[dict[str, Any]] = []
         operation_rows = 0
@@ -1067,9 +1108,12 @@ class _OzonBankParser(BaseBankStatementParser):
                 parts.append(next_row)
                 next_index += 1
 
-            transaction = self._parse_operation(parts, page)
-            if transaction is not None:
-                transactions.append(transaction)
+            transactions.append(
+                self._parse_operation(
+                    parts,
+                    self._next_source_position(),
+                ),
+            )
             index = next_index
 
         return transactions, operation_rows
@@ -1086,58 +1130,55 @@ class _OzonBankParser(BaseBankStatementParser):
     def _parse_operation(
         self,
         rows: list[pd.Series],
-        page: str,
-    ) -> dict[str, Any] | None:
+        position: int,
+    ) -> dict[str, Any]:
+        """Keep one traceable Ozon operation, including unsupported ones."""
         date_text = ' '.join(self._cell(row, OZON_DATE_COL) for row in rows)
         trans_date = self._extract_ozon_date(date_text)
-        source_ref = re.sub(
-            r'\s+',
-            '',
-            self._joined_column(rows, OZON_DOCUMENT_COL),
+        source_ref = (
+            re.sub(
+                r'\s+',
+                '',
+                self._joined_column(rows, OZON_DOCUMENT_COL),
+            )
+            or None
         )
-        description = self._joined_column(rows, OZON_DESCRIPTION_COL)
+        raw_description = self._joined_column(rows, OZON_DESCRIPTION_COL)
         amount_text = self._joined_column(rows, OZON_AMOUNT_COL)
-        where = (
-            f'Операция Ozon на стр. {page} '
-            f'(дата: {self._cell(rows[0], OZON_DATE_COL) or "—"}, '
-            f'документ: {"есть" if source_ref else "—"}, '
-            f'назначение: {description or "—"})'
-        )
+        amount = self._extract_ozon_amount(amount_text)
+        category = self._category_for_description(raw_description)
+        transaction_type: str | None = None
+        if amount is not None and amount != Decimal(0):
+            transaction_type = 'income' if amount > 0 else 'expense'
+        elif amount == Decimal(0):
+            amount = None
 
-        category = self._category_for_description(description)
-        if category is None:
+        parse_error_code = ''
+        if trans_date is None:
+            parse_error_code = 'missing_date'
+        elif amount is None:
+            parse_error_code = 'missing_amount'
+        elif category is None:
+            parse_error_code = 'missing_operation'
             # The raw document number is personal bank data: never log it.
             logger.warning(
-                'bank_statement_ozon_operation_skipped',
+                'bank_statement_ozon_operation_unsupported',
                 has_document=bool(source_ref),
             )
-            return None
 
-        missing = [
-            field
-            for field, value in (
-                ('дата операции', trans_date),
-                ('номер документа', source_ref),
-            )
-            if not value
-        ]
-        if missing:
-            error_msg = f'{where}: не найдены {", ".join(missing)}'
-            raise BankStatementParseError(error_msg)
-
-        amount = self._extract_ozon_amount(amount_text)
-        if amount is None or amount == Decimal(0):
-            error_msg = f'{where}: не удалось разобрать сумму «{amount_text}»'
-            raise BankStatementParseError(error_msg)
-
-        return {
-            'date': trans_date,
-            'amount': amount,
-            'description': category,
-            'category_name': category,
-            'source_ref': source_ref,
-            'source': 'ozon',
-        }
+        description = category or raw_description
+        return _transaction_row(
+            row_position=position,
+            date=trans_date,
+            amount=amount,
+            description=description[:250],
+            source_ref=source_ref,
+            transaction_type=transaction_type,
+            date_precision='datetime' if trans_date is not None else 'unknown',
+            parse_error_code=parse_error_code,
+            category_name=category,
+            source='ozon',
+        )
 
     def _cell(self, row: pd.Series, index: int) -> str:
         if len(row) <= index:

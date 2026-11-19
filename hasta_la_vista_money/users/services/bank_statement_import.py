@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import structlog
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -58,8 +59,12 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
+from hasta_la_vista_money.users.services.category_classifier import (
+    FALLBACK_CATEGORY,
+)
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 from hasta_la_vista_money.users.services.statement_identity import (
+    MANUAL_REASON_DUPLICATE_PRESENTATION,
     IncomingStatementIdentity,
     StatementIdentityConflictError,
     StatementIdentityService,
@@ -85,7 +90,6 @@ if TYPE_CHECKING:
     )
 
 logger = structlog.get_logger(__name__)
-FALLBACK_CATEGORY = 'Без категории'
 
 #: Decisions that carry no owner choice and may follow the new parse.
 RESUMABLE_DECISIONS: Final = frozenset(
@@ -135,6 +139,8 @@ class StatementImportResult:
         needs_transfer_count: Число зачислений на кредитный счёт,
             сохранённых как непроведённые погашения.
         closing_balance: Конечный остаток из выписки, если удалось извлечь.
+        traceability_complete: Парсер перечислил все потенциальные операции
+            документа, включая ошибки и повторные представления.
     """
 
     income_count: int
@@ -142,6 +148,7 @@ class StatementImportResult:
     skipped_count: int
     needs_transfer_count: int
     closing_balance: Decimal | None
+    traceability_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -272,12 +279,19 @@ class BankStatementImportService:
                 bank_code,
                 generation,
             )
+            self._mark_traceability(
+                upload,
+                generation,
+                parse_result.traceability_complete,
+                len(transactions),
+            )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
                 skipped_count=upload.skipped_count,
                 needs_transfer_count=0,
                 closing_balance=parse_result.closing_balance,
+                traceability_complete=parse_result.traceability_complete,
             )
 
         existing_categories = list(
@@ -300,12 +314,20 @@ class BankStatementImportService:
                 generation=generation,
             )
 
+        self._mark_traceability(
+            upload,
+            generation,
+            parse_result.traceability_complete,
+            len(transactions),
+        )
+
         return StatementImportResult(
             income_count=income_count,
             expense_count=expense_count,
             skipped_count=skipped_count,
             needs_transfer_count=needs_transfer_count,
             closing_balance=parse_result.closing_balance,
+            traceability_complete=parse_result.traceability_complete,
         )
 
     @staticmethod
@@ -938,6 +960,51 @@ class BankStatementImportService:
             period_to = max(period_to or row_date, row_date)
         return period_from, period_to
 
+    def _mark_traceability(
+        self,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+        complete: bool,
+        expected_positions: int,
+    ) -> None:
+        """Record row-by-row processing proof for this upload generation.
+
+        Version 1 is written only when the parser enumerated every potential
+        operation and every one of those source positions has a row. A legacy
+        status, counters or a partial representation never prove it.
+        """
+        if not complete:
+            return
+        with transaction.atomic():
+            self.account_repository.get_by_ids_for_update({upload.account_id})
+            locked = self.identity_repository.lock_upload(upload.pk)
+            if locked is None:
+                return
+            self._assert_generation(locked, generation)
+            rows = BankStatementRow.objects.filter(upload=locked)
+            if rows.filter(
+                Q(source_row_position__isnull=True)
+                | Q(data_cleaned_at__isnull=False),
+            ).exists():
+                return
+            positions = list(
+                rows.values_list('source_row_position', flat=True).distinct(),
+            )
+            if len(positions) != expected_positions:
+                return
+            locked.processing_traceability_version = (
+                constants.STATEMENT_TRACEABILITY_VERSION
+            )
+            locked.processing_verified_at = timezone.now()
+            self.identity_repository.save_upload_fields(
+                locked,
+                [
+                    'processing_traceability_version',
+                    'processing_verified_at',
+                    'updated_at',
+                ],
+            )
+
     def _resolve_bank_code(
         self,
         upload: BankStatementUpload,
@@ -1022,21 +1089,39 @@ class BankStatementImportService:
         period_to: date | None = None
 
         for idx, trans in enumerate(transactions):
-            if idx < resume_from:
-                row_date = (
-                    trans['date'].date()
-                    if isinstance(trans['date'], datetime)
-                    else trans['date']
-                )
-                period_from = min(period_from or row_date, row_date)
-                period_to = max(period_to or row_date, row_date)
-                continue
-            amount = trans['amount']
-            description = trans['description']
-            trans_date = trans['date']
-            source_ref = trans.get('source_ref')
             row_position = trans.get('row_position', idx)
+            if idx < resume_from:
+                row_date = trans.get('date')
+                if isinstance(row_date, datetime):
+                    row_date = row_date.date()
+                if row_date is not None:
+                    period_from = min(period_from or row_date, row_date)
+                    period_to = max(period_to or row_date, row_date)
+                continue
+            amount = trans.get('amount')
+            description = trans.get('description')
+            trans_date = trans.get('date')
+            source_ref = trans.get('source_ref')
             source = trans.get('source')
+            parse_error_code = trans.get('parse_error_code') or ''
+            if parse_error_code or not amount or trans_date is None:
+                with transaction.atomic():
+                    self._lock_statement(upload, generation, row_position)
+                    self._save_parse_error_row(
+                        upload=upload,
+                        trans=trans,
+                        row_position=row_position,
+                    )
+                    self._advance_upload(
+                        upload,
+                        idx=idx,
+                        total=total,
+                        income_count=income_count,
+                        expense_count=expense_count,
+                        skipped_count=skipped_count,
+                        needs_transfer_count=needs_transfer_count,
+                    )
+                continue
             abs_amount = abs(amount)
             is_credit_income = (
                 amount > 0
@@ -1050,8 +1135,8 @@ class BankStatementImportService:
                 type_value = TransactionType.EXPENSE
                 balance_change = -abs_amount
 
-            # The classifier is a network call: keep it out of the row
-            # transaction so a slow model does not hold it open.
+            # The classifier is local but may still be slow; keep it out of
+            # the row transaction.
             category_name = trans.get('category_name')
             if (
                 category_name is None
@@ -1071,19 +1156,7 @@ class BankStatementImportService:
 
             with transaction.atomic():
                 # Account before upload and row: the shared lock order.
-                self.account_repository.get_by_ids_for_update(
-                    {upload.account_id},
-                )
-                locked_upload = (
-                    BankStatementUpload.objects.select_for_update().get(
-                        pk=upload.pk,
-                    )
-                )
-                self._assert_row_generation(
-                    locked_upload,
-                    generation,
-                    row_position,
-                )
+                self._lock_statement(upload, generation, row_position)
                 identity = self.identity_service.classify_incoming(
                     account_id=upload.account_id,
                     bank_code=bank_code,
@@ -1101,7 +1174,26 @@ class BankStatementImportService:
                 )
                 if is_credit_income:
                     if same_file_duplicate or identity.exact_duplicate:
+                        self._save_duplicate_row(
+                            upload=upload,
+                            trans=trans,
+                            row_position=row_position,
+                            identity=identity,
+                        )
                         skipped_count += 1
+                    elif identity.manual_reason == str(
+                        MANUAL_REASON_DUPLICATE_PRESENTATION,
+                    ):
+                        # A proven repeat of an unresolved repayment must not
+                        # become a second independent repayment row.
+                        self._save_manual_row(
+                            upload=upload,
+                            trans=trans,
+                            type_value=type_value,
+                            row_position=row_position,
+                            identity=identity,
+                            category_name=FALLBACK_CATEGORY,
+                        )
                     else:
                         self._save_needs_transfer_row(
                             upload=upload,
@@ -1111,11 +1203,15 @@ class BankStatementImportService:
                         )
                         needs_transfer_count += 1
                 else:
-                    # Unclassified only if the row stopped being a duplicate
-                    # after the check above.
                     row_category = str(category_name or FALLBACK_CATEGORY)
                     created = False
                     if same_file_duplicate or identity.exact_duplicate:
+                        self._save_duplicate_row(
+                            upload=upload,
+                            trans=trans,
+                            row_position=row_position,
+                            identity=identity,
+                        )
                         skipped_count += 1
                     elif identity.manual:
                         self._save_manual_row(
@@ -1152,6 +1248,15 @@ class BankStatementImportService:
                                 identity=identity,
                             )
                             skipped_count += 1
+                        elif row_category == FALLBACK_CATEGORY:
+                            # No explicit local category: the row waits for
+                            # markup and never posts as "Без категории".
+                            self._save_awaiting_markup_row(
+                                upload=upload,
+                                trans=trans,
+                                row_position=row_position,
+                                identity=identity,
+                            )
                         else:
                             if row_category not in existing_categories:
                                 existing_categories.append(row_category)
@@ -1165,7 +1270,7 @@ class BankStatementImportService:
                                     type=type_value,
                                 )
                             )
-                            Transaction.objects.create(
+                            movement = Transaction.objects.create(
                                 user=upload.user,
                                 account=upload.account,
                                 category=category,
@@ -1180,6 +1285,14 @@ class BankStatementImportService:
                                 source_identity_trusted=identity.trusted,
                                 source_file_hash=upload.file_hash or None,
                                 source_row_position=row_position,
+                            )
+                            self._save_posted_row(
+                                upload=upload,
+                                trans=trans,
+                                row_position=row_position,
+                                identity=identity,
+                                transaction=movement,
+                                category_name=row_category,
                             )
                             created = True
 
@@ -1204,22 +1317,14 @@ class BankStatementImportService:
                         if period_to is None or row_date > period_to:
                             period_to = row_date
 
-                upload.processed_transactions = idx + 1
-                upload.income_count = income_count
-                upload.expense_count = expense_count
-                upload.skipped_count = skipped_count
-                upload.needs_transfer_count = needs_transfer_count
-                upload.progress = int((idx + 1) / total * 100)
-                upload.save(
-                    update_fields=[
-                        'processed_transactions',
-                        'income_count',
-                        'expense_count',
-                        'skipped_count',
-                        'needs_transfer_count',
-                        'progress',
-                        'updated_at',
-                    ],
+                self._advance_upload(
+                    upload,
+                    idx=idx,
+                    total=total,
+                    income_count=income_count,
+                    expense_count=expense_count,
+                    skipped_count=skipped_count,
+                    needs_transfer_count=needs_transfer_count,
                 )
 
             if (idx + 1) % batch_size == 0 or idx == total - 1:
@@ -1240,6 +1345,188 @@ class BankStatementImportService:
             period_to=period_to,
         )
         return income_count, expense_count, skipped_count, needs_transfer_count
+
+    def _lock_statement(
+        self,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+        row_position: int,
+    ) -> None:
+        """Take the shared account -> upload locks before touching a row."""
+        self.account_repository.get_by_ids_for_update({upload.account_id})
+        locked_upload = BankStatementUpload.objects.select_for_update().get(
+            pk=upload.pk,
+        )
+        self._assert_row_generation(
+            locked_upload,
+            generation,
+            row_position,
+        )
+
+    @staticmethod
+    def _advance_upload(
+        upload: BankStatementUpload,
+        *,
+        idx: int,
+        total: int,
+        income_count: int,
+        expense_count: int,
+        skipped_count: int,
+        needs_transfer_count: int,
+    ) -> None:
+        """Persist the resume cursor and counters with the row."""
+        upload.processed_transactions = idx + 1
+        upload.income_count = income_count
+        upload.expense_count = expense_count
+        upload.skipped_count = skipped_count
+        upload.needs_transfer_count = needs_transfer_count
+        upload.progress = int((idx + 1) / total * 100)
+        upload.save(
+            update_fields=[
+                'processed_transactions',
+                'income_count',
+                'expense_count',
+                'skipped_count',
+                'needs_transfer_count',
+                'progress',
+                'updated_at',
+            ],
+        )
+
+    def _row_values(
+        self,
+        trans: dict[str, Any],
+        row_position: int,
+        identity: IncomingStatementIdentity | None,
+    ) -> dict[str, Any]:
+        """Return the common bank snapshot of one traceable row."""
+        values = self._markup_values(
+            trans,
+            identity,
+            row_position,
+            set(),
+        )
+        values.pop('source_row_position', None)
+        return values
+
+    def _save_parse_error_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+    ) -> None:
+        """Keep a row the parser could not fully read; it never posts."""
+        BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=row_position,
+            defaults=self._row_values(trans, row_position, None),
+        )
+
+    def _save_awaiting_markup_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        identity: IncomingStatementIdentity,
+    ) -> None:
+        """Keep a row without an explicit local category for manual markup."""
+        BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=row_position,
+            defaults=self._row_values(trans, row_position, identity),
+        )
+
+    def _save_posted_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        identity: IncomingStatementIdentity,
+        transaction: Transaction,
+        category_name: str,
+    ) -> None:
+        """Keep the row of a movement this import posted itself."""
+        values = self._row_values(trans, row_position, identity)
+        values.update(
+            decision=BankStatementRow.Decision.NEW,
+            transaction=transaction,
+            suggested_category=category_name[: constants.TWO_HUNDRED_FIFTY],
+        )
+        BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=row_position,
+            defaults=values,
+        )
+
+    def _save_duplicate_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        identity: IncomingStatementIdentity,
+    ) -> None:
+        """Keep an exact duplicate presentation without a second movement.
+
+        The duplicate points at the original presentation when one is known;
+        it never takes a transfer side and never closes the original row.
+        """
+        values = self._row_values(trans, row_position, identity)
+        values.update(duplicate_of_id=identity.duplicate_of_id)
+        movement = self._matching_transaction(
+            upload=upload,
+            identity=identity,
+            row_position=row_position,
+        )
+        if movement is None:
+            # No readable movement proves the duplicate: leave it to the user.
+            values['decision'] = BankStatementRow.Decision.PENDING
+        else:
+            values.update(
+                decision=BankStatementRow.Decision.LINKED,
+                transaction=movement,
+            )
+        BankStatementRow.objects.get_or_create(
+            upload=upload,
+            source_row_position=row_position,
+            defaults=values,
+        )
+
+    def _matching_transaction(
+        self,
+        *,
+        upload: BankStatementUpload,
+        identity: IncomingStatementIdentity,
+        row_position: int,
+    ) -> Transaction | None:
+        """Return the proven movement this row repeats, if readable."""
+        same_file = (
+            Transaction.objects.without_adjustments()
+            .filter(
+                account_id=upload.account_id,
+                source_file_hash=upload.file_hash,
+                source_row_position=row_position,
+            )
+            .first()
+        )
+        if same_file is not None:
+            return same_file
+        if identity.source_ref_hash:
+            return (
+                Transaction.objects.without_adjustments()
+                .filter(
+                    account_id=upload.account_id,
+                    source_ref_hash=identity.source_ref_hash,
+                    source_ref_key_id=identity.key_id,
+                    source_ref_version=identity.version,
+                    source_identity_trusted=True,
+                )
+                .first()
+            )
+        return None
 
     def _precheck_blocks_posting(
         self,

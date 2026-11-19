@@ -150,6 +150,13 @@ class StatementIdentityRuntimeFixture(TestCase):
             balance=Decimal('1000.00'),
             currency='RUB',
         )
+        # An explicit local category: the default statement descriptions
+        # are recognised locally and may post without network classifiers.
+        Category.objects.create(
+            user=self.user,
+            name='Операция',
+            type=TransactionType.EXPENSE,
+        )
 
     def upload(
         self,
@@ -884,6 +891,13 @@ class StatementIdentityConcurrencyTest(TransactionTestCase):
             balance=Decimal('1000.00'),
             currency='RUB',
         )
+        # An explicit local category: the default statement descriptions
+        # are recognised locally and may post without network classifiers.
+        Category.objects.create(
+            user=self.user,
+            name='Операция',
+            type=TransactionType.EXPENSE,
+        )
         self.first = BankStatementUpload.objects.create(
             user=self.user,
             account=self.account,
@@ -1346,7 +1360,7 @@ class StatementIdentitySameFileProofTest(StatementIdentityRuntimeFixture):
             account=card,
         )
         category = self.manual_category()
-        Transaction.objects.create(
+        movement = Transaction.objects.create(
             user=self.user,
             account=card,
             category=category,
@@ -1365,9 +1379,12 @@ class StatementIdentitySameFileProofTest(StatementIdentityRuntimeFixture):
         )
 
         self.assertEqual(result['needs_transfer_count'], 0)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.LINKED,
         )
+        self.assertEqual(row.transaction_id, movement.pk)
 
 
 @override_settings(

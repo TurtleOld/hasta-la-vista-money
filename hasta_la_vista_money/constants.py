@@ -490,6 +490,9 @@ STATEMENT_TRANSFER_DATE_WINDOW_DAYS: Final = 1
 STATEMENT_UPLOAD_STALE_MINUTES: Final = 30
 STATEMENT_IMPORT_MAX_RETRIES: Final = 3
 STATEMENT_IMPORT_RETRY_DELAY_SECONDS: Final = 60
+# Row traceability proofs written by the parser that processed every
+# potential source position (including errors and duplicate presentations).
+STATEMENT_TRACEABILITY_VERSION: Final = 1
 TOP_CATEGORIES_LIMIT: Final = 10
 RECEIPTS_DISTINCT_LIMIT: Final = 10
 TRANSFER_MONEY_LOG_LIMIT: Final = 10
