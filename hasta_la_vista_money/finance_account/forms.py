@@ -9,6 +9,7 @@ error handling for financial operations.
 """
 
 from collections.abc import Sequence
+from datetime import UTC, date, datetime, time
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
@@ -17,6 +18,8 @@ from django.forms import (
     CharField,
     ChoiceField,
     DateField,
+    DateInput,
+    DateTimeField,
     DecimalField,
     FileField,
     FileInput,
@@ -53,6 +56,8 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -283,23 +288,43 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         transfer_service: Any,
         account_repository: Any,
         *args: Any,
+        bank_day: date | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize transfer form with user-specific account choices.
 
         Sets up form fields with accounts filtered by the specified user
-        and applies Tailwind styling to all form widgets.
+        and applies Tailwind styling to all form widgets. A statement-linked
+        transfer with a known bank day renders a date-only field instead of
+        exposing the technical timestamp as bank time.
 
         Args:
             user: User whose accounts should be available for transfer.
             transfer_service: TransferService instance from DI container.
             account_repository: AccountRepository instance from DI container.
             *args: Additional positional arguments.
+            bank_day: Known bank day of the owned statement row, if any.
             **kwargs: Additional keyword arguments.
         """
         super().__init__(*args, **kwargs)
         self.transfer_service = transfer_service
         self.account_repository = account_repository
+        self.bank_day = bank_day
+        if bank_day is not None:
+            self.fields['exchange_date'] = DateTimeField(
+                label=_('Дата перевода'),
+                widget=DateInput(
+                    format=BANK_DAY_INPUT_FORMAT,
+                    attrs={
+                        'type': 'date',
+                        'data-flatpickr': 'true',
+                        'data-flatpickr-mode': 'date',
+                    },
+                ),
+                input_formats=[BANK_DAY_INPUT_FORMAT],
+            )
+            self.fields['exchange_date'].initial = bank_day
+            self.initial['exchange_date'] = bank_day
 
         user_accounts = (
             self.account_repository.get_by_user(user)
@@ -358,6 +383,17 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             self.fields['exchange_date'].initial = self.initial['exchange_date']
 
         self.add_tailwind_classes()
+
+    def clean_exchange_date(self) -> datetime | None:
+        """Anchor a known bank day to technical UTC midnight."""
+        value = self.cleaned_data.get('exchange_date')
+        if self.bank_day is not None:
+            return datetime.combine(
+                self.bank_day,
+                time.min,
+                tzinfo=UTC,
+            )
+        return value
 
     def _get_default_transfer_accounts(
         self,

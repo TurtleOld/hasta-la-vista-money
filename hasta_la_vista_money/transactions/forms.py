@@ -1,6 +1,7 @@
 """Forms for the unified transactions app."""
 
-from datetime import datetime
+from datetime import UTC, datetime
+from datetime import date as dt_date
 from typing import Any, ClassVar
 from urllib.parse import urlencode
 
@@ -8,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 from django.forms import (
     CharField,
+    DateInput,
     DateTimeField,
     DateTimeInput,
     DecimalField,
@@ -40,6 +42,7 @@ FORM_CONTROL_CLASS = (
     'focus:ring-0 dark:border-gray-600 '
     'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400'
 )
+BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
 
 
 class TransactionForm(
@@ -105,15 +108,43 @@ class TransactionForm(
             **kwargs,
         )
         self.credit_card_transfer_url: str | None = None
+        self.bank_day_only = self.instance.bank_calendar_date is not None
+        if self.bank_day_only:
+            self.fields['date'] = DateTimeField(
+                label=_('Дата операции'),
+                widget=DateInput(
+                    format=BANK_DAY_INPUT_FORMAT,
+                    attrs={
+                        'type': 'date',
+                        'class': FORM_CONTROL_CLASS,
+                        'data-flatpickr': 'true',
+                        'data-flatpickr-mode': 'date',
+                        'placeholder': 'ДД.ММ.ГГГГ',
+                    },
+                ),
+                input_formats=[BANK_DAY_INPUT_FORMAT],
+                help_text=_('Укажите банковский день операции'),
+            )
+            self.initial['date'] = self.instance.bank_calendar_date
 
     def clean_date(self) -> datetime:
-        """Make naive ``date`` values timezone-aware."""
+        """Normalize a datetime, or a bank day's technical UTC midnight."""
         date_value = self.cleaned_data.get('date')
-        if not isinstance(date_value, datetime):
+        if not isinstance(date_value, (datetime, dt_date)):
             raise ValidationError(_('Укажите корректную дату и время'))
-        if timezone.is_naive(date_value):
-            return timezone.make_aware(date_value)
-        return date_value
+        if self.bank_day_only:
+            return datetime.combine(
+                date_value,
+                datetime.min.time(),
+                tzinfo=UTC,
+            )
+        if isinstance(date_value, datetime):
+            if timezone.is_naive(date_value):
+                return timezone.make_aware(date_value)
+            return date_value
+        return timezone.make_aware(
+            datetime.combine(date_value, datetime.min.time()),
+        )
 
     def clean(self) -> dict[str, Any]:
         """Enforce type/category consistency and balance check for expenses."""

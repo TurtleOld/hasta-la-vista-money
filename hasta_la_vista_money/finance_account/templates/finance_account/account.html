@@ -111,7 +111,7 @@
                                     <span>{% if item.row.bank_calendar_date %}{{ item.row.bank_calendar_date|date:'d.m.Y' }}{% else %}{{ item.row.transaction_date|date:'d.m.Y' }}{% endif %}</span>
                                     <span>{{ item.row.amount|comma }} {{ group.account.currency }}</span>
                                     <span>{% blocktranslate with days=item.days_left %}Осталось дней: {{ days }}{% endblocktranslate %}</span>
-                                    <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount|unlocalize }}&date={{ item.row.transaction_date|date:'Y-m-d' }}&statement_row={{ item.row.pk }}">
+                                    <a href="{% url 'finance_account:transfer_money' %}?to_account={{ group.account.pk }}&amount={{ item.row.amount|unlocalize }}&date={% if item.row.bank_calendar_date %}{{ item.row.bank_calendar_date|date:'Y-m-d' }}{% else %}{{ item.row.transaction_date|date:'Y-m-d' }}{% endif %}&statement_row={{ item.row.pk }}">
                                         {% translate 'Провести переводом' %}
                                     </a>
                                     {% if item.candidates %}

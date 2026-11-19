@@ -85,7 +85,10 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementRow, User
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
@@ -2196,6 +2199,11 @@ class TransferMoneyAccountView(
         kwargs['account_repository'] = (
             request.container.finance_account.account_repository()
         )
+        kwargs['bank_day'] = getattr(
+            self,
+            '_statement_row_bank_day',
+            None,
+        )
         return kwargs
 
     def get_initial(self) -> dict[str, Any]:
@@ -2204,7 +2212,9 @@ class TransferMoneyAccountView(
         The accounts page lets users start a transfer from a specific card
         via swipe action (``?from_account=<id>``). Pending statement
         repayments pass ``to_account``, ``amount`` and ``datetime``/``date``
-        so the repayment can be conducted from the reminder.
+        so the repayment can be conducted from the reminder. For a
+        statement-linked repayment the known bank day comes from the owned
+        row, never from the route parameters.
         """
         initial = super().get_initial()
         request = cast('WSGIRequestWithContainer', self.request)
@@ -2224,9 +2234,60 @@ class TransferMoneyAccountView(
             'to_account',
         )
         self._apply_amount_initial(initial, request)
-        initial['statement_row'] = request.GET.get('statement_row')
-        self._apply_exchange_date_initial(initial, request)
+        initial['statement_row'] = request.POST.get(
+            'statement_row',
+        ) or request.GET.get('statement_row')
+        self._apply_statement_date_initial(initial, request)
         return initial
+
+    def _apply_statement_date_initial(
+        self,
+        initial: dict[str, Any],
+        request: 'WSGIRequestWithContainer',
+    ) -> None:
+        """Use an owned statement row for day metadata, not query params."""
+        self._statement_row_bank_day: date | None = None
+        raw_row_id = initial.get('statement_row')
+        if not raw_row_id:
+            self._apply_exchange_date_initial(initial, request)
+            return
+        row = self._get_owned_statement_row(request, raw_row_id)
+        if row is None:
+            # An unowned or expired row must not lend its precision to a
+            # query-supplied date; the service rejects the POST as well.
+            return
+        if (
+            row.date_precision == BankStatementRow.DatePrecision.DAY
+            and row.bank_calendar_date is not None
+        ):
+            self._statement_row_bank_day = row.bank_calendar_date
+            initial['exchange_date'] = row.bank_calendar_date
+            return
+        if row.transaction_date is not None:
+            initial['exchange_date'] = row.transaction_date
+
+    @staticmethod
+    def _get_owned_statement_row(
+        request: 'WSGIRequestWithContainer',
+        raw_row_id: object,
+    ) -> BankStatementRow | None:
+        """Return an owned, still-readable repayment row for this transfer."""
+        if raw_row_id is None or not str(raw_row_id).isdigit():
+            return None
+        user = request.user
+        if not isinstance(user, User):
+            return None
+        return (
+            BankStatementRow.objects.filter(
+                StatementRowRepository.bank_data_available_q(),
+                pk=int(str(raw_row_id)),
+                upload__user_id=user.pk,
+                upload__account__user_id=user.pk,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            )
+            .select_related('upload__account')
+            .first()
+        )
 
     @staticmethod
     def _apply_account_initial(

@@ -5,7 +5,7 @@ balance reconciliation. Income transactions credit the account; expense
 transactions debit it.
 """
 
-from datetime import datetime, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -217,6 +217,45 @@ class TransactionService:
                     ),
                 )
 
+            date_value = command.transaction_date
+            bank_day = transaction_obj.bank_calendar_date
+            if bank_day is not None:
+                day_value: date
+                if isinstance(date_value, datetime):
+                    day_value = date_value.date()
+                    if date_value != datetime.combine(
+                        day_value,
+                        time.min,
+                        tzinfo=UTC,
+                    ):
+                        raise ValidationError(
+                            _(
+                                'Для операции с банковским днём укажите '
+                                'дату без времени.',
+                            ),
+                        )
+                elif isinstance(date_value, date):
+                    day_value = date_value
+                else:
+                    raise ValidationError(
+                        _(
+                            'Для операции с банковским днём укажите дату '
+                            'без времени.',
+                        ),
+                    )
+                bank_day = day_value
+                date_value = datetime.combine(
+                    bank_day,
+                    time.min,
+                    tzinfo=UTC,
+                )
+            elif not isinstance(date_value, datetime):
+                date_value = timezone.make_aware(
+                    datetime.combine(date_value, time.min),
+                )
+            elif timezone.is_naive(date_value):
+                date_value = timezone.make_aware(date_value)
+
             deltas = {
                 old_account.pk: -self._balance_delta(old_amount, old_type),
             }
@@ -230,14 +269,7 @@ class TransactionService:
             transaction_obj.category = command.category
             transaction_obj.amount = command.amount
             transaction_obj.type = command.type_value
-
-            date_value = command.transaction_date
-            if not isinstance(date_value, datetime):
-                date_value = timezone.make_aware(
-                    datetime.combine(date_value, time.min),
-                )
-            elif timezone.is_naive(date_value):
-                date_value = timezone.make_aware(date_value)
+            transaction_obj.bank_calendar_date = bank_day
             transaction_obj.date = date_value
             transaction_obj.save()
         return transaction_obj
