@@ -9,6 +9,9 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.users.protocols.accounting_completeness import (
+    AccountingCompletenessServiceProtocol,
+)
 from hasta_la_vista_money.users.protocols.services import (
     AccountingProblemServiceProtocol,
     BankStatementImportServiceProtocol,
@@ -19,8 +22,17 @@ from hasta_la_vista_money.users.protocols.services import (
     StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
 )
+from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
+    StatementBalanceVerificationServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.accounting_completeness_repository import (  # noqa: E501
+    AccountingCompletenessRepository,
+)
 from hasta_la_vista_money.users.repositories.accounting_problem_repository import (  # noqa: E501
     AccountingProblemRepository,
+)
+from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
+    StatementBalanceVerificationRepository,
 )
 from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
     StatementIdentityRepository,
@@ -30,6 +42,9 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
+)
+from hasta_la_vista_money.users.services.accounting_completeness import (
+    AccountingCompletenessService,
 )
 from hasta_la_vista_money.users.services.accounting_problem_service import (
     AccountingProblemService,
@@ -46,6 +61,9 @@ from hasta_la_vista_money.users.services.bank_statement_retention import (
 from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     LocalCategoryClassifier,
+)
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    StatementBalanceVerificationService,
 )
 from hasta_la_vista_money.users.services.statement_id_fingerprint import (
     StatementIdFingerprintService,
@@ -65,17 +83,14 @@ from hasta_la_vista_money.users.services.statistics import (
 
 
 def _build_classifier() -> CategoryClassifier:
-    """Build the local-only bank statement categorizer.
-
-    Bank statements are classified exclusively by local rules: an existing
-    user category named in the operation description, otherwise manual
-    markup. No external model is configured or called.
-    """
+    """Build the local-only bank statement categorizer."""
     return LocalCategoryClassifier()
 
 
 class UsersContainer(containers.DeclarativeContainer):
     """DI-контейнер для приложения users."""
+
+    finance_account = providers.DependenciesContainer()
 
     statistics_repository = providers.Singleton(StatisticsRepository)
 
@@ -90,6 +105,31 @@ class UsersContainer(containers.DeclarativeContainer):
 
     statement_row_repository = providers.Singleton(StatementRowRepository)
 
+    accounting_completeness_repository = providers.Singleton(
+        AccountingCompletenessRepository,
+    )
+
+    statement_balance_verification_repository = providers.Singleton(
+        StatementBalanceVerificationRepository,
+    )
+
+    statement_balance_verification_service: providers.Factory[
+        StatementBalanceVerificationServiceProtocol
+    ] = providers.Factory(
+        StatementBalanceVerificationService,
+        repository=statement_balance_verification_repository,
+        balance_history_service=finance_account.balance_history_service,
+    )
+
+    accounting_completeness_service: providers.Factory[
+        AccountingCompletenessServiceProtocol
+    ] = providers.Factory(
+        AccountingCompletenessService,
+        coverage_service=finance_account.account_coverage_service,
+        repository=accounting_completeness_repository,
+        balance_provider=statement_balance_verification_service,
+    )
+
     accounting_problem_repository = providers.Singleton(
         AccountingProblemRepository,
     )
@@ -99,6 +139,7 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         AccountingProblemService,
         repository=accounting_problem_repository,
+        completeness_service=accounting_completeness_service,
     )
 
     statement_identity_repository = providers.Singleton(
@@ -145,6 +186,7 @@ class UsersContainer(containers.DeclarativeContainer):
             TransferMoneyLogRepository,
         ),
         statement_row_repository=statement_row_repository,
+        balance_verification=statement_balance_verification_service,
     )
 
     bank_statement_import_service: providers.Factory[

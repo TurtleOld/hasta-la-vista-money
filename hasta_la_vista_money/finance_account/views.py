@@ -95,9 +95,6 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     User,
 )
-from hasta_la_vista_money.users.services.accounting_completeness import (
-    create_accounting_completeness_service,
-)
 from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
@@ -2017,8 +2014,8 @@ class AccountView(
         if own_accounts:
             coverage_end = timezone.localdate()
             coverage_start = coverage_end - timedelta(days=29)
-            completeness_service = create_accounting_completeness_service(
-                coverage_service=(container.account_coverage_service()),
+            completeness_service = (
+                request.container.users.accounting_completeness_service()
             )
             context['accounting_completeness'] = completeness_service.assess(
                 owner=current_user,

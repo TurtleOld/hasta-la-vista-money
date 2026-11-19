@@ -25,6 +25,12 @@ from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
     User,
 )
+from hasta_la_vista_money.users.services.accounting_completeness import (
+    BalanceBlockProjection,
+)
+from hasta_la_vista_money.users.services.accounting_problem_service import (
+    AccountingProblemService,
+)
 
 
 class AccountingProblemServiceFixture(TestCase):
@@ -246,8 +252,8 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertEqual(counts[ProblemKind.PARSE_ERROR], 1)
         self.assertEqual(counts[ProblemKind.RECOVERY], 1)
         self.assertEqual(counts[ProblemKind.UPLOAD_FAILED], 1)
-        self.assertEqual(counts[ProblemKind.BALANCE_ATTENTION], 1)
-        self.assertEqual(result.counts.total_items, 8)
+        self.assertEqual(counts[ProblemKind.BALANCE_ATTENTION], 0)
+        self.assertEqual(result.counts.total_items, 7)
 
         deferred = next(
             item for item in result.items if item.kind == ProblemKind.DEFERRED
@@ -277,7 +283,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertIsNone(recovery[0].row_id)
         self.assertFalse(recovery[0].data_available)
         self.assertEqual(result.counts.recovery_row_count, 2)
-        self.assertEqual(result.counts.total_items, 8)
+        self.assertEqual(result.counts.total_items, 7)
 
         self.cleaned_row.refresh_from_db()
         self.expired_row.refresh_from_db()
@@ -301,7 +307,106 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertFalse(
             any(item.row_id == self.excluded_row.pk for item in result.items),
         )
+        self.assertEqual(result.counts.total_items, 7)
+
+    def test_legacy_discrepancy_alone_is_inert(self) -> None:
+        result = self.service.problems(self.user)
+
+        self.assertFalse(
+            any(
+                item.kind == ProblemKind.BALANCE_ATTENTION
+                for item in result.items
+            ),
+        )
+        self.assertEqual(result.incomplete_reasons, ())
+
+    def test_balance_attention_comes_from_the_08_projection(self) -> None:
+        class _Block:
+            upload_ids = (self.balance_upload.pk,)
+            reasons = ('balance_unexplained_mismatch',)
+
+        class _Completeness:
+            @staticmethod
+            def balance_block(**kwargs: Any) -> BalanceBlockProjection:
+                del kwargs
+                return BalanceBlockProjection(block=_Block(), checked=True)
+
+        service = AccountingProblemService(
+            repository=(
+                ApplicationContainer().users.accounting_problem_repository()
+            ),
+            completeness_service=_Completeness(),  # type: ignore[arg-type]
+        )
+
+        result = service.problems(self.user)
+        balance_items = [
+            item
+            for item in result.items
+            if item.kind == ProblemKind.BALANCE_ATTENTION
+        ]
+
+        self.assertEqual(len(balance_items), 1)
+        self.assertEqual(balance_items[0].upload_id, self.balance_upload.pk)
+        self.assertIsNone(balance_items[0].amount)
+        self.assertNotIn(
+            'balance_verification_not_integrated',
+            result.incomplete_reasons,
+        )
         self.assertEqual(result.counts.total_items, 8)
+
+    def test_container_wires_09_retained_mismatch_into_07_and_08(self) -> None:
+        self.balance_upload.balance_unexplained_mismatch = True
+        self.balance_upload.save(update_fields=['balance_unexplained_mismatch'])
+        container = ApplicationContainer()
+
+        problems = container.users.accounting_problem_service().problems(
+            self.user,
+        )
+        balance_items = [
+            item
+            for item in problems.items
+            if item.kind == ProblemKind.BALANCE_ATTENTION
+        ]
+        self.assertEqual(len(balance_items), 1)
+        self.assertEqual(
+            balance_items[0].upload_id,
+            self.balance_upload.pk,
+        )
+        self.assertNotIn(
+            'balance_verification_not_integrated',
+            problems.incomplete_reasons,
+        )
+
+        assessment = container.users.accounting_completeness_service().assess(
+            owner=self.user,
+            account_ids=[self.account.pk],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+        )
+        self.assertIn('balance_discrepancy', assessment.blockers)
+        self.assertIsNotNone(assessment.balance_block)
+
+        self.balance_upload.balance_needs_recheck = True
+        self.balance_upload.save(update_fields=['balance_needs_recheck'])
+        stale_problems = container.users.accounting_problem_service().problems(
+            self.user,
+        )
+        self.assertTrue(
+            any(
+                item.kind == ProblemKind.BALANCE_ATTENTION
+                and item.upload_id == self.balance_upload.pk
+                for item in stale_problems.items
+            ),
+        )
+        stale_assessment = (
+            container.users.accounting_completeness_service().assess(
+                owner=self.user,
+                account_ids=[self.account.pk],
+                period_start=date(2026, 3, 1),
+                period_end=date(2026, 3, 31),
+            )
+        )
+        self.assertIn('balance_discrepancy', stale_assessment.blockers)
 
     def test_known_totals_stay_split_by_currency_and_direction(self) -> None:
         result = self.service.problems(self.user)
@@ -352,7 +457,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
                 self.user,
                 account_ids=[self.account.pk],
             ).counts.total_items,
-            7,
+            6,
         )
         self.assertEqual(
             self.service.problems(
@@ -397,7 +502,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertNotIn(ProblemKind.INCOMPLETE_MARKUP, kinds)
         self.assertNotIn(ProblemKind.REPAYMENT, kinds)
         self.assertIn(ProblemKind.RECOVERY, kinds)
-        self.assertEqual(result.counts.total_items, 6)
+        self.assertEqual(result.counts.total_items, 5)
 
     def test_invalid_period_is_rejected(self) -> None:
         with self.assertRaises(ValidationError):
@@ -467,8 +572,8 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
             )
 
         self.assertEqual(len(base_queries), len(grown_queries))
-        self.assertLessEqual(len(base_queries), 5)
-        self.assertEqual(result.counts.total_items, 11)
+        self.assertLessEqual(len(base_queries), 6)
+        self.assertEqual(result.counts.total_items, 10)
 
     def test_service_never_moves_money(self) -> None:
         before = Transaction.objects.count()

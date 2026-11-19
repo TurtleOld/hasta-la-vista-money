@@ -68,6 +68,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     loan = providers.Container(LoanContainer, core=core)
 
     users = providers.Container(UsersContainer)
+    users.finance_account.override(finance_account)
 
     transactions.users.override(users)
     finance_account.users.override(users)

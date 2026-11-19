@@ -1309,35 +1309,33 @@ class DashboardMarkupReminderTest(StatementMarkupFixture):
         super().setUp()
         self.client.force_login(self.user)
 
-    def test_banner_links_to_markup_screen(self) -> None:
+    def test_banner_links_to_unified_accounting_control(self) -> None:
         self._row(1)
         self._row(2)
 
         response = self.client.get(reverse('users:dashboard'))
 
-        self.assertContains(response, '2 строки ждут разметки')
+        self.assertContains(response, 'Проблем учёта: 2')
         self.assertContains(
             response,
-            reverse(
-                'finance_account:bank_statement_markup',
-                args=[self.upload.pk],
-            ),
+            reverse('finance_account:accounting_control'),
         )
 
-    def test_banner_uses_russian_plural_forms(self) -> None:
-        for count, text in ((1, '1 строка ждёт'), (3, '3 строки ждут')):
+    def test_banner_count_uses_the_unified_service(self) -> None:
+        for count in (1, 3):
             BankStatementRow.objects.all().delete()
             for position in range(count):
                 self._row(position)
 
             response = self.client.get(reverse('users:dashboard'))
 
-            self.assertContains(response, f'{text} разметки')
+            self.assertContains(response, f'Проблем учёта: {count}')
 
     def test_no_banner_without_pending_rows(self) -> None:
         response = self.client.get(reverse('users:dashboard'))
 
-        self.assertNotContains(response, 'ждут разметки')
+        self.assertNotContains(response, 'Проблем учёта:')
+        self.assertNotContains(response, 'data-accounting-problem-count')
 
 
 @statement_identity_settings

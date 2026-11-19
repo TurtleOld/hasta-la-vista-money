@@ -36,9 +36,6 @@ from hasta_la_vista_money.users.forms import (
 from hasta_la_vista_money.users.models import (
     User,
 )
-from hasta_la_vista_money.users.services.accounting_completeness import (
-    create_accounting_completeness_service,
-)
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
@@ -243,11 +240,8 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 if account.user_id == user.pk
             ]
             if own_accounts:
-                container = request_with_container.container
-                fa = container.finance_account
-                coverage_service = fa.account_coverage_service()
-                completeness = create_accounting_completeness_service(
-                    coverage_service=coverage_service,
+                completeness = (
+                    request_with_container.container.users.accounting_completeness_service()
                 ).assess(
                     owner=user,
                     account_ids=[account.pk for account in own_accounts],

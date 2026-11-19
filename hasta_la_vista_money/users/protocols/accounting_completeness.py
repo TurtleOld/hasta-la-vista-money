@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
     from hasta_la_vista_money.users.services.accounting_completeness import (
         AccountingCompletenessResult,
+        BalanceBlockProjection,
     )
 
 
@@ -27,3 +28,13 @@ class AccountingCompletenessServiceProtocol(Protocol):
         period_end: date,
         balance_provider: object | None = None,
     ) -> AccountingCompletenessResult: ...
+
+    def balance_block(
+        self,
+        *,
+        owner: User,
+        account_ids: Sequence[int] | None = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
+        provider: object | None = None,
+    ) -> BalanceBlockProjection: ...

@@ -36,6 +36,9 @@ if TYPE_CHECKING:
 
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
+    from hasta_la_vista_money.users.protocols.accounting_completeness import (
+        AccountingCompletenessServiceProtocol,
+    )
     from hasta_la_vista_money.users.repositories.accounting_problem_repository import (  # noqa: E501
         AccountingProblemRepository,
     )
@@ -93,8 +96,12 @@ class AccountingProblemService:
     def __init__(
         self,
         repository: AccountingProblemRepository,
+        completeness_service: (
+            AccountingCompletenessServiceProtocol | None
+        ) = None,
     ) -> None:
         self.repository = repository
+        self.completeness_service = completeness_service
 
     def summary(self, owner: User) -> AccountingProblemCounts:
         """Return badge counters using the same list as the page."""
@@ -162,6 +169,14 @@ class AccountingProblemService:
                 upload,
                 recovery_rows.get(upload.pk, 0),
             )
+        balance_checked = self._append_balance_items(
+            items,
+            owner=owner,
+            uploads=uploads,
+            account_ids=selected_ids,
+            start=start,
+            end=end,
+        )
 
         items = self._filtered_items(items, active, start, end)
         counts = self._counts(
@@ -179,7 +194,11 @@ class AccountingProblemService:
             totals=self._known_totals(totals),
             totals_incomplete=totals.incomplete,
             excluded_reasons=tuple(sorted(excluded_reasons.items())),
-            incomplete_reasons=('balance_verification_not_integrated',),
+            incomplete_reasons=(
+                ()
+                if balance_checked
+                else ('balance_verification_not_integrated',)
+            ),
         )
 
     def _validated_filters(
@@ -277,7 +296,38 @@ class AccountingProblemService:
                     data_available=False,
                 ),
             )
-        if self._balance_needs_attention(upload):
+
+    def _append_balance_items(
+        self,
+        items: list[AccountingProblemItem],
+        *,
+        owner: User,
+        uploads: list[BankStatementUpload],
+        account_ids: Sequence[int],
+        start: date | None,
+        end: date | None,
+    ) -> bool:
+        """Project ticket 09's retained guard through the 08 assessment.
+
+        Returns whether the balance verification provider is wired. The
+        service never reads the legacy current-balance discrepancy as a
+        substitute for the retained 09 flag.
+        """
+        if self.completeness_service is None:
+            return False
+        projection = self.completeness_service.balance_block(
+            owner=owner,
+            account_ids=tuple(account_ids) or None,
+            period_start=start,
+            period_end=end,
+        )
+        block = projection.block
+        upload_ids = getattr(block, 'upload_ids', ())
+        uploads_by_id = {upload.pk: upload for upload in uploads}
+        for upload_id in upload_ids:
+            upload = uploads_by_id.get(upload_id)
+            if upload is None:
+                continue
             items.append(
                 self._item(
                     kind=ProblemKind.BALANCE_ATTENTION,
@@ -286,7 +336,7 @@ class AccountingProblemService:
                     row_id=None,
                     upload=upload,
                     transaction_date=None,
-                    amount=upload.balance_discrepancy,
+                    amount=None,
                     description=_('Расхождение с остатком выписки'),
                     reason=_(
                         'Известное необъяснённое расхождение остатка; '
@@ -295,19 +345,7 @@ class AccountingProblemService:
                     data_available=True,
                 ),
             )
-
-    @staticmethod
-    def _balance_needs_attention(upload: BankStatementUpload) -> bool:
-        """Conservatively report only an already stored discrepancy.
-
-        Ticket 09 replaces this adapter with moment/type/actuality metadata.
-        Absence of balance metadata is not treated as a verified balance.
-        """
-        return bool(
-            upload.retention_cleaned_at is None
-            and upload.balance_discrepancy is not None
-            and upload.balance_discrepancy != Decimal(0),
-        )
+        return projection.checked
 
     def _item(
         self,

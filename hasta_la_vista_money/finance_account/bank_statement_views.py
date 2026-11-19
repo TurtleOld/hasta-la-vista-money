@@ -49,8 +49,8 @@ from hasta_la_vista_money.users.protocols.services import (
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
 )
-from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
-    StatementBalanceVerificationRepository,
+from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
+    StatementBalanceVerificationServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
@@ -63,9 +63,6 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     ReconciliationExpiredError,
     StaleStatementCandidateError,
-)
-from hasta_la_vista_money.users.services.statement_balance_verification import (
-    StatementBalanceVerificationService,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
     REFUND_CATEGORY_NAME,
@@ -127,25 +124,12 @@ def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
 
 def _balance_verification_service(
     request: HttpRequest,
-) -> StatementBalanceVerificationService:
-    """Resolve the balance check, registered or wired here temporarily."""
+) -> StatementBalanceVerificationServiceProtocol:
+    """Resolve the balance check through the canonical users container."""
     request_with_container = cast('RequestWithContainer', request)
-    container = request_with_container.container
-    registered = getattr(
-        container.users,
-        'statement_balance_verification_service',
-        None,
-    )
-    if registered is not None:
-        return cast(
-            'StatementBalanceVerificationService',
-            registered(),
-        )
-    return StatementBalanceVerificationService(
-        repository=StatementBalanceVerificationRepository(),
-        balance_history_service=(
-            container.finance_account.balance_history_service()
-        ),
+    return cast(
+        'StatementBalanceVerificationServiceProtocol',
+        request_with_container.container.users.statement_balance_verification_service(),
     )
 
 

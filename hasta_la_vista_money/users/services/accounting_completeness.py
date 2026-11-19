@@ -19,9 +19,6 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
 )
-from hasta_la_vista_money.users.repositories.accounting_completeness_repository import (  # noqa: E501
-    AccountingCompletenessRepository,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -36,6 +33,9 @@ if TYPE_CHECKING:
         AccountCoverageServiceProtocol,
     )
     from hasta_la_vista_money.users.models import User
+    from hasta_la_vista_money.users.repositories.accounting_completeness_repository import (  # noqa: E501
+        AccountingCompletenessRepository,
+    )
 
 UNRESOLVED_DECISIONS = frozenset(
     {
@@ -120,6 +120,14 @@ class BalanceAttention:
     checked: bool
     blocked: bool
     reason: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class BalanceBlockProjection:
+    """Read-only projection of ticket 09's retained finality guard."""
+
+    block: object | None
+    checked: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -349,9 +357,11 @@ class AccountingCompletenessService:
         *,
         coverage_service: AccountCoverageServiceProtocol,
         repository: AccountingCompletenessRepository,
+        balance_provider: object | None = None,
     ) -> None:
         self.coverage_service = coverage_service
         self.repository = repository
+        self.balance_provider = balance_provider
 
     def assess(
         self,
@@ -398,12 +408,17 @@ class AccountingCompletenessService:
         for row in rows:
             rows_by_upload[row.upload_id].append(row)
 
+        provider = (
+            balance_provider
+            if balance_provider is not None
+            else self.balance_provider
+        )
         balance_block = self._balance_block(
             owner=owner,
             account_ids=[account.pk for account in accounts],
             period_start=period_start,
             period_end=period_end,
-            provider=balance_provider,
+            provider=provider,
         )
 
         results = tuple(
@@ -414,13 +429,13 @@ class AccountingCompletenessService:
                 period_start=period_start,
                 period_end=period_end,
                 balance_block=balance_block,
-                balance_checked=balance_provider is not None,
+                balance_checked=provider is not None,
             )
             for account in accounts
         )
         warnings = self._warnings(
             results,
-            balance_checked=balance_provider is not None,
+            balance_checked=provider is not None,
         )
         blockers = tuple(
             dict.fromkeys(
@@ -446,6 +461,39 @@ class AccountingCompletenessService:
             can_finalize=bool(results) and not blockers,
             balance_block=balance_block,
         )
+
+    def balance_block(
+        self,
+        *,
+        owner: User,
+        account_ids: Sequence[int] | None = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
+        provider: object | None = None,
+    ) -> BalanceBlockProjection:
+        """Return ticket 09's retained guard without a full assessment."""
+        requested_ids = list(dict.fromkeys(account_ids or ()))
+        accounts = list(
+            self.repository.accounts_for_owner(
+                owner,
+                requested_ids or None,
+            ),
+        )
+        if requested_ids and {account.pk for account in accounts} != set(
+            requested_ids,
+        ):
+            raise PermissionDenied(
+                _('Выбраны счета другого пользователя'),
+            )
+        active = provider if provider is not None else self.balance_provider
+        block = self._balance_block(
+            owner=owner,
+            account_ids=[account.pk for account in accounts],
+            period_start=period_start,
+            period_end=period_end,
+            provider=active,
+        )
+        return BalanceBlockProjection(block=block, checked=active is not None)
 
     def _account_result(
         self,
@@ -631,8 +679,8 @@ class AccountingCompletenessService:
         *,
         owner: User,
         account_ids: Sequence[int],
-        period_start: date,
-        period_end: date,
+        period_start: date | None,
+        period_end: date | None,
         provider: object | None,
     ) -> object | None:
         if provider is None:
@@ -800,14 +848,3 @@ class AccountingCompletenessService:
                 ),
             )
         return tuple(warnings)
-
-
-def create_accounting_completeness_service(
-    *,
-    coverage_service: AccountCoverageServiceProtocol,
-) -> AccountingCompletenessService:
-    """Build the service with its read repository until wired in users DI."""
-    return AccountingCompletenessService(
-        coverage_service=coverage_service,
-        repository=AccountingCompletenessRepository(),
-    )
