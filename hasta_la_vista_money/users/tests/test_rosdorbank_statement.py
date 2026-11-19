@@ -159,6 +159,14 @@ class RosDorBankParserTest(SimpleTestCase):
             all(t['source'] == 'rosdorbank' for t in result.transactions),
         )
 
+    def test_bank_calendar_date_is_the_parsed_day(self) -> None:
+        result = _RosDorBankParser(FIXTURE).parse()
+
+        for t in result.transactions:
+            with self.subTest(source_ref=t['source_ref']):
+                self.assertEqual(t['bank_calendar_date'], t['date'].date())
+                self.assertEqual(type(t['bank_calendar_date']), date)
+
     def test_incoming_c2c_without_name_gets_fallback_description(
         self,
     ) -> None:

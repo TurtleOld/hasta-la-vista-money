@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Final
 
@@ -515,7 +515,6 @@ class StatementMarkupService:
             or row.transaction_date is None
         ):
             raise StatementMarkupConflictError('row')
-        transaction_date = row.transaction_date
         account = upload.account
         if account.is_archived or account.is_deposit:
             raise StatementMarkupConflictError('account')
@@ -527,14 +526,14 @@ class StatementMarkupService:
                 constants.CREDIT_CARD_INCOME_BAN,
             )
         category = self._category(row, upload.user, category_id)
-        moment = self._moment(transaction_date)
         created = Transaction.objects.create(
             user=upload.user,
             account=account,
             category=category,
             type=transaction_type,
             amount=row.amount,
-            date=moment,
+            date=self._movement_moment(row),
+            bank_calendar_date=row.bank_calendar_date,
             description=row.description,
             source_ref=None,
             source_ref_hash=row.source_ref_hash,
@@ -572,14 +571,18 @@ class StatementMarkupService:
         )
 
     @staticmethod
-    def _moment(statement_date: datetime) -> datetime:
-        # The statement has no time of day: use the moment of markup.
-        now = timezone.localtime()
-        return datetime.combine(
-            timezone.localtime(statement_date).date(),
-            now.time(),
-            tzinfo=now.tzinfo,
-        )
+    def _movement_moment(row: BankStatementRow) -> datetime:
+        # A known bank day is a technical UTC midnight anchor, not the bank's
+        # time. A legacy row without it keeps its original moment exactly.
+        if row.bank_calendar_date is not None:
+            return datetime.combine(
+                row.bank_calendar_date,
+                datetime.min.time(),
+                tzinfo=UTC,
+            )
+        if row.transaction_date is None:
+            raise StatementMarkupConflictError('row')
+        return row.transaction_date
 
     def _create_transfer(
         self,
@@ -617,7 +620,8 @@ class StatementMarkupService:
             from_account=locked[source.pk],
             to_account=locked[target.pk],
             amount=row.amount,
-            exchange_date=self._moment(row.transaction_date),
+            exchange_date=self._movement_moment(row),
+            bank_calendar_date=row.bank_calendar_date,
             notes=row.description,
         )
 

@@ -1072,6 +1072,7 @@ class BankStatementImportService:
         return {
             'transaction_type': transaction_type,
             'transaction_date': trans.get('date'),
+            'bank_calendar_date': trans.get('bank_calendar_date'),
             'amount': abs(amount) if amount is not None else None,
             'description': strip_pii(str(trans.get('description') or ''))[
                 : constants.TWO_HUNDRED_FIFTY
@@ -1135,6 +1136,7 @@ class BankStatementImportService:
             defaults={
                 'transaction_type': type_value,
                 'transaction_date': trans['date'],
+                'bank_calendar_date': trans.get('bank_calendar_date'),
                 'amount': abs(trans['amount']),
                 'description': strip_pii(str(trans['description']))[:250],
                 'candidate_description': identity.manual_reason[
@@ -1187,6 +1189,7 @@ class BankStatementImportService:
             defaults={
                 'transaction_type': TransactionType.INCOME,
                 'transaction_date': trans['date'],
+                'bank_calendar_date': trans.get('bank_calendar_date'),
                 'amount': abs(trans['amount']),
                 'description': strip_pii(str(trans['description']))[:250],
                 'candidate_description': identity.manual_reason[
@@ -1234,6 +1237,7 @@ class BankStatementImportService:
             defaults={
                 'transaction_type': type_value,
                 'transaction_date': trans['date'],
+                'bank_calendar_date': trans.get('bank_calendar_date'),
                 'amount': abs(trans['amount']),
                 'description': clean_desc,
                 'candidate_description': candidate_description[

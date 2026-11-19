@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -111,12 +111,8 @@ class StatementMarkupTest(StatementMarkupFixture):
             ).digest,
         )
         self.assertIsNone(movement.source_ref)
-        local = timezone.localtime(movement.date)
-        self.assertEqual(
-            local.date(),
-            datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()).date(),
-        )
-        self.assertNotEqual((local.hour, local.minute), (0, 0))
+        self.assertEqual(movement.date, row.transaction_date)
+        self.assertIsNone(movement.bank_calendar_date)
 
     def test_post_income_adds_to_balance(self) -> None:
         row = self._row(1, transaction_type='income')
@@ -126,6 +122,68 @@ class StatementMarkupTest(StatementMarkupFixture):
 
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1100.00'))
+
+    def test_legacy_row_without_bank_day_keeps_the_original_moment(
+        self,
+    ) -> None:
+        row = self._row(1)
+        original = datetime(
+            2026,
+            3,
+            1,
+            18,
+            45,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        row.transaction_date = original
+        row.save(update_fields=['transaction_date'])
+        category = self._category('Продукты')
+
+        with timezone.override('Pacific/Pago_Pago'):
+            self.service.post(row.pk, self.user.pk, category.pk)
+
+        row.refresh_from_db()
+        movement = row.transaction
+        if movement is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(movement.date, original)
+        self.assertIsNone(movement.bank_calendar_date)
+
+    def test_linked_duplicate_does_not_rewrite_the_movement(self) -> None:
+        category = self._category('Продукты')
+        original = self._row(1)
+        moment = datetime(
+            2026,
+            3,
+            1,
+            18,
+            30,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type='expense',
+            amount=Decimal('100.00'),
+            date=moment,
+            bank_calendar_date=date(2026, 3, 1),
+        )
+        original.transaction = movement
+        original.decision = BankStatementRow.Decision.NEW
+        original.save(update_fields=['transaction', 'decision'])
+        duplicate = self._row(2)
+        duplicate.duplicate_of = original
+        duplicate.save(update_fields=['duplicate_of'])
+
+        self.service.post(duplicate.pk, self.user.pk, category.pk)
+
+        movement.refresh_from_db()
+        duplicate.refresh_from_db()
+        self.assertEqual(movement.date, moment)
+        self.assertEqual(movement.bank_calendar_date, date(2026, 3, 1))
+        self.assertEqual(duplicate.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(duplicate.transaction_id, movement.pk)
 
     def test_skip_does_not_touch_balance(self) -> None:
         row = self._row(1)

@@ -1,13 +1,14 @@
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
 from django.core.files import File
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.models import Transaction
+from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -93,6 +94,89 @@ class RosDorBankUploadTest(TestCase):
                 'PMP STRELKACARD13.',
             ),
         )
+
+    def test_rows_keep_the_bank_calendar_day(self) -> None:
+        upload = self._upload()
+
+        card = upload.statement_rows.get(amount=Decimal('350.00'))
+        self.assertEqual(card.bank_calendar_date, date(2026, 3, 1))
+        self.assertEqual(
+            card.date_precision,
+            BankStatementRow.DatePrecision.DAY,
+        )
+        credit = upload.statement_rows.get(amount=Decimal('10000.00'))
+        self.assertEqual(credit.bank_calendar_date, date(2026, 3, 2))
+
+    @override_settings(TIME_ZONE='Pacific/Kiritimati')
+    def test_expense_bank_day_is_kept_when_posted_elsewhere(self) -> None:
+        upload = self._upload()
+        row = upload.statement_rows.get(amount=Decimal('350.00'))
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type='expense',
+        )
+
+        with timezone.override('Pacific/Pago_Pago'):
+            ApplicationContainer().users.statement_markup_service().post(
+                row.pk,
+                self.user.pk,
+                category.pk,
+            )
+
+        row.refresh_from_db()
+        movement = row.transaction
+        if movement is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(movement.date, datetime(2026, 3, 1, tzinfo=UTC))
+        self.assertEqual(movement.bank_calendar_date, date(2026, 3, 1))
+
+    @override_settings(TIME_ZONE='Pacific/Kiritimati')
+    def test_income_bank_day_is_kept_when_posted_elsewhere(self) -> None:
+        upload = self._upload()
+        row = upload.statement_rows.get(amount=Decimal('10000.00'))
+        category = Category.objects.create(
+            user=self.user,
+            name='Зарплата',
+            type='income',
+        )
+
+        with timezone.override('Pacific/Pago_Pago'):
+            ApplicationContainer().users.statement_markup_service().post(
+                row.pk,
+                self.user.pk,
+                category.pk,
+            )
+
+        row.refresh_from_db()
+        movement = row.transaction
+        if movement is None:
+            self.fail('row is not linked to a movement')
+        self.assertEqual(movement.date, datetime(2026, 3, 2, tzinfo=UTC))
+        self.assertEqual(movement.bank_calendar_date, date(2026, 3, 2))
+
+    @override_settings(TIME_ZONE='Pacific/Kiritimati')
+    def test_own_transfer_bank_day_is_kept_when_posted_elsewhere(self) -> None:
+        upload = self._upload()
+        row = upload.statement_rows.get(amount=Decimal('700.00'))
+        other = self._create_account('Накопительный')
+
+        with timezone.override('Pacific/Pago_Pago'):
+            ApplicationContainer().users.statement_markup_service().post_transfer(
+                row.pk,
+                self.user.pk,
+                other.pk,
+            )
+
+        row.refresh_from_db()
+        transfer = row.transfer
+        if transfer is None:
+            self.fail('row is not linked to a transfer')
+        self.assertEqual(
+            transfer.exchange_date,
+            datetime(2026, 3, 2, tzinfo=UTC),
+        )
+        self.assertEqual(transfer.bank_calendar_date, date(2026, 3, 2))
 
     def test_mutual_cancel_pair_is_marked_not_posted(self) -> None:
         upload = self._upload()

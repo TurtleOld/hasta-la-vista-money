@@ -1614,6 +1614,7 @@ class _RosDorBankParser(BaseBankStatementParser):
         return {
             'row_position': row.position,
             'date': statement_date,
+            'bank_calendar_date': row.date,
             'date_precision': 'day' if row.date is not None else 'unknown',
             'amount': amount,
             'transaction_type': transaction_type,
