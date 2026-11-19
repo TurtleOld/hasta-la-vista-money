@@ -231,6 +231,15 @@ class BankStatementUpload(Model):
     celery_task_id = CharField(max_length=255, blank=True, default='')
     expires_at = DateTimeField(default=bank_statement_expires_at)
     retention_cleaned_at = DateTimeField(blank=True, null=True)
+    # Reconciliation-only import: no movement is posted automatically.
+    reconciliation_only = BooleanField(default=False)
+    # Version of the row traceability proofs this upload was processed with.
+    processing_traceability_version = PositiveSmallIntegerField(default=0)
+    # When row-by-row processing was proven, not when the file arrived.
+    processing_verified_at = DateTimeField(blank=True, null=True)
+    # Statement period taken from the document or confirmed by the user.
+    statement_period_start = DateField(blank=True, null=True)
+    statement_period_end = DateField(blank=True, null=True)
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 
