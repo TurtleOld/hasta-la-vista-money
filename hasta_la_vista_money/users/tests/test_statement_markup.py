@@ -710,6 +710,25 @@ class StatementMarkupViewTest(StatementMarkupFixture):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'ПЯТЁРОЧКА', count=2)
 
+    def test_row_shows_explicit_bank_day(self) -> None:
+        self.user.timezone_name = 'Pacific/Pago_Pago'
+        self.user.save(update_fields=['timezone_name'])
+        row = self._row(1)
+        row.transaction_date = datetime(2026, 3, 1, tzinfo=UTC)
+        row.bank_calendar_date = date(2026, 3, 1)
+        row.save(update_fields=['transaction_date', 'bank_calendar_date'])
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '01.03.2026')
+        self.assertNotContains(response, '28.02.2026')
+
     def test_other_user_gets_404(self) -> None:
         other = User.objects.create_user(username='other', password='x')
         self.client.force_login(other)

@@ -72,7 +72,9 @@ def _serialize(transaction_obj: Transaction) -> dict[str, Any]:
         'category_name': transaction_obj.category.name,
         'account_name': transaction_obj.account.name_account,
         'amount': float(transaction_obj.amount),
-        'date': transaction_obj.date.strftime('%d.%m.%Y'),
+        'date': (
+            transaction_obj.bank_calendar_date or transaction_obj.date
+        ).strftime('%d.%m.%Y'),
         'user_name': transaction_obj.user.username,
         'user_id': transaction_obj.user.pk,
     }

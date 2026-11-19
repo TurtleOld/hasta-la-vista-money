@@ -126,6 +126,7 @@ class FinancesTransaction:
     delete_url: str
     can_edit: bool
     is_receipt: bool = False
+    bank_calendar_date: date | None = None
     transfer_amount: Decimal | None = None
     transfer_from_account_name: str = ''
     transfer_to_account_name: str = ''
@@ -151,6 +152,24 @@ class FinancesTransaction:
         """Return whether this row represents an account transfer."""
 
         return self.source == 'transfer'
+
+    @property
+    def has_bank_calendar_date(self) -> bool:
+        """Return whether the row carries an explicit bank day."""
+
+        return self.bank_calendar_date is not None
+
+    @property
+    def display_date(self) -> Any:
+        """Return the day to show, preferring the explicit bank day.
+
+        A movement with a known bank day must not be converted to the
+        viewer's timezone; the legacy movement still renders its moment.
+        """
+
+        if self.bank_calendar_date is not None:
+            return self.bank_calendar_date
+        return self.date
 
 
 @dataclass(frozen=True)
@@ -1288,6 +1307,7 @@ def _build_transaction_row(
         source=transaction_obj.type,
         source_id=transaction_obj.pk,
         date=transaction_obj.date,
+        bank_calendar_date=transaction_obj.bank_calendar_date,
         amount=amount,
         category_name=transaction_obj.category.name,
         category_key=f'{transaction_obj.type}-{transaction_obj.category_id}',
@@ -1324,6 +1344,7 @@ def _build_transfer_row(
         source='transfer',
         source_id=transfer.pk,
         date=transfer.exchange_date,
+        bank_calendar_date=transfer.bank_calendar_date,
         amount=Decimal(),
         category_name=str(_('Перевод')),
         category_key='transfer',
@@ -1612,7 +1633,12 @@ def _group_finances_by_day(
 ) -> list[FinancesDayGroup]:
     groups: dict[date, list[FinancesTransaction]] = {}
     for tx in transactions:
-        groups.setdefault(_to_date(tx.date), []).append(tx)
+        day = (
+            tx.bank_calendar_date
+            if tx.bank_calendar_date is not None
+            else _to_date(tx.date)
+        )
+        groups.setdefault(day, []).append(tx)
     return [
         FinancesDayGroup(
             date=group_date,

@@ -78,7 +78,7 @@
                         </div>
                         <div class="min-w-0">
                             <div class="finances-row-title">{{ row.description }}</div>
-                            <div class="finances-row-sub">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_transaction_type_display }}{% if item.kind_label %} · {{ item.kind_label }}{% endif %}</div>
+                            <div class="finances-row-sub">{% if row.bank_calendar_date %}{{ row.bank_calendar_date|date:'d.m.Y' }}{% else %}{{ row.transaction_date|date:'d.m.Y' }}{% endif %} · {{ row.get_transaction_type_display }}{% if item.kind_label %} · {{ item.kind_label }}{% endif %}</div>
                             {% if row.transaction_type == 'income' %}
                                 <div class="finances-row-sub">{% blocktranslate with account=upload.account.name_account %}Деньги поступят на счёт: {{ account }}{% endblocktranslate %}</div>
                                 {% if row.kind != 'own_c2c' %}

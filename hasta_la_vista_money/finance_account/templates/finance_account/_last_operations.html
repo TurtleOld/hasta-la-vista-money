@@ -29,8 +29,10 @@
                     {% endif %}
                     <span class="sep"></span>
                     <span>{{ op.user_name }}</span>
-                    <span class="sep"></span>
-                    <span>{{ op.date|date:"H:i" }}</span>
+                    {% if not op.has_bank_calendar_date %}
+                        <span class="sep"></span>
+                        <span>{{ op.date|date:"H:i" }}</span>
+                    {% endif %}
                 </div>
             </div>
             <div class="accounts-op-right">

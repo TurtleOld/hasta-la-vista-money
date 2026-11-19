@@ -87,7 +87,7 @@
             <span class="finances-money">{% if tx.is_transfer %}{{ tx.abs_amount|floatformat:2 }} ₽{% elif tx.amount > 0 %}+{{ tx.abs_amount|floatformat:2 }} ₽{% else %}-{{ tx.abs_amount|floatformat:2 }} ₽{% endif %}</span>
             <span class="finances-money-hidden">•••</span>
         </div>
-        <div class="finances-row-date finances-muted">{{ tx.date|date:'d.m.Y' }}</div>
+        <div class="finances-row-date finances-muted">{{ tx.display_date|date:'d.m.Y' }}</div>
         <div class="finances-row-actions finances-row-actions-inline swipe-hide-mobile">
             {% if tx.can_edit %}
                 {% if tx.is_transfer %}

@@ -1,6 +1,6 @@
 """Tests for transaction REST API endpoints."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.test import TestCase
@@ -96,3 +96,16 @@ class TransactionAPITest(TestCase):
         self.api_client.force_authenticate(user=None)
         response = self.api_client.get(reverse('api:transactions:by_group'))
         self.assertEqual(response.status_code, 401)
+
+    def test_date_string_uses_explicit_bank_calendar_day(self) -> None:
+        self.user.timezone_name = 'Pacific/Pago_Pago'
+        self.user.save(update_fields=['timezone_name'])
+        self.income.bank_calendar_date = date(2026, 1, 15)
+        self.income.save(update_fields=['bank_calendar_date'])
+
+        response = self.api_client.get(
+            reverse('api:transactions:retrieve', args=[self.income.pk]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['date'], '15.01.2026')
