@@ -1,6 +1,6 @@
 """Unified accounting control page and its counters."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from django.test import TestCase
@@ -42,8 +42,12 @@ class AccountingControlViewFixture(TestCase):
         self.deferred_row = BankStatementRow.objects.create(
             upload=self.upload,
             transaction_type='expense',
-            transaction_date=timezone.make_aware(
-                timezone.datetime(2026, 3, 1, 12),
+            transaction_date=datetime(
+                2026,
+                3,
+                1,
+                12,
+                tzinfo=timezone.get_current_timezone(),
             ),
             bank_calendar_date=date(2026, 3, 1),
             amount=Decimal('100.00'),
@@ -54,8 +58,12 @@ class AccountingControlViewFixture(TestCase):
         self.markup_row = BankStatementRow.objects.create(
             upload=self.upload,
             transaction_type='expense',
-            transaction_date=timezone.make_aware(
-                timezone.datetime(2026, 3, 2, 12),
+            transaction_date=datetime(
+                2026,
+                3,
+                2,
+                12,
+                tzinfo=timezone.get_current_timezone(),
             ),
             bank_calendar_date=date(2026, 3, 2),
             amount=Decimal('200.00'),

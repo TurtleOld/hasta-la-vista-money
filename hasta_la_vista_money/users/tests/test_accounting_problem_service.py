@@ -437,9 +437,9 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         result = self.service.problems(self.user)
 
         with self.assertRaises(FrozenInstanceError):
-            result.counts.total_items = 0  # type: ignore[misc]
+            result.counts.total_items = 0
         with self.assertRaises(TypeError):
-            result.counts.by_kind[ProblemKind.DEFERRED] = 2  # type: ignore[index]
+            result.counts.by_kind[ProblemKind.DEFERRED] = 2
 
     def test_query_count_does_not_grow_with_rows_or_uploads(self) -> None:
         with CaptureQueriesContext(connection) as base_queries:
