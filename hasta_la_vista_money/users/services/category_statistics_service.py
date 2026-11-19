@@ -7,6 +7,11 @@ from django.db.models import Avg, Count, F, Q, QuerySet, Sum, Window
 from django.db.models.functions import RowNumber, TruncMonth
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    filter_calendar_from,
+    filter_calendar_range,
+    filter_calendar_to,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -43,11 +48,9 @@ def _filter_transaction_queryset(
     end: date | None = None,
 ) -> QuerySet[Transaction]:
     if start is not None:
-        queryset = queryset.filter(date__gte=_date_to_aware(start))
+        queryset = filter_calendar_from(queryset, start)
     if end is not None:
-        queryset = queryset.filter(
-            date__lte=_date_to_aware(end, end_of_day=True),
-        )
+        queryset = filter_calendar_to(queryset, end)
     if stats_filter.account_ids:
         queryset = queryset.filter(account_id__in=stats_filter.account_ids)
     if stats_filter.currency:
@@ -374,10 +377,11 @@ def _transfer_logs(
         return TransferMoneyLog.objects.none()
 
     queryset = (
-        TransferMoneyLog.objects.filter(
-            user__in=users,
-            exchange_date__gte=_date_to_aware(start),
-            exchange_date__lte=_date_to_aware(end, end_of_day=True),
+        filter_calendar_range(
+            TransferMoneyLog.objects.filter(user__in=users),
+            start,
+            end,
+            field='exchange_date',
         )
         .select_related('to_account', 'from_account', 'user')
         .order_by('-exchange_date')

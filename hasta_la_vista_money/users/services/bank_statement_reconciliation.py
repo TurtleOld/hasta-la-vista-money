@@ -15,6 +15,10 @@ from django.db.models.functions import Now
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    filter_calendar_range,
+    movement_calendar_date,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -38,9 +42,9 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 )
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
-    local_row_date,
 )
 from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_calendar_date,
     statement_row_movement_date,
 )
 from hasta_la_vista_money.users.services.statement_retention_policy import (
@@ -606,10 +610,10 @@ class BankStatementReconciliationService:
         transaction_type, amount, transaction_date = bounds
         date_matches = candidate.date == transaction_date
         if row.match_calendar_date:
-            date_matches = (
-                timezone.localtime(candidate.date).date()
-                == timezone.localtime(transaction_date).date()
-            )
+            date_matches = movement_calendar_date(
+                candidate.date,
+                candidate.bank_calendar_date,
+            ) == statement_row_calendar_date(row)
         return bool(
             candidate.account_id == row.upload.account_id
             and candidate.user_id == row.upload.user_id
@@ -626,14 +630,14 @@ class BankStatementReconciliationService:
         bounds = self._movement_bounds(row)
         if bounds is None:
             return False
-        transaction_type, amount, transaction_date = bounds
+        transaction_type, amount, _transaction_date = bounds
         return (
             find_mirroring_transfers(
                 account=row.upload.account,
                 user=row.upload.user,
                 transaction_type=transaction_type,
                 amount=amount,
-                row_date=local_row_date(transaction_date),
+                row_date=statement_row_calendar_date(row),
                 exclude_row_id=row.pk,
             )
             .filter(pk=transfer.pk)
@@ -655,9 +659,11 @@ class BankStatementReconciliationService:
             amount=amount,
         )
         if row.match_calendar_date:
-            return candidates.filter(
-                date__date=local_row_date(transaction_date),
-            ).order_by('date', 'pk')
+            day = statement_row_calendar_date(row)
+            return filter_calendar_range(candidates, day, day).order_by(
+                'date',
+                'pk',
+            )
         return candidates.filter(date=transaction_date).order_by(
             'date',
             'pk',

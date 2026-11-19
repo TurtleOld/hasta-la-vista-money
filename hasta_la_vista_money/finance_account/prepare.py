@@ -12,6 +12,10 @@ from typing import cast
 
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money.core.calendar_days import (
+    filter_calendar_from,
+    filter_calendar_to,
+)
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -83,9 +87,9 @@ def collect_info_income(
         type=TransactionType.INCOME,
     ).select_related('user', 'account', 'category')
     if start is not None:
-        queryset = queryset.filter(date__gte=start)
+        queryset = filter_calendar_from(queryset, start)
     if end is not None:
-        queryset = queryset.filter(date__lte=end)
+        queryset = filter_calendar_to(queryset, end)
     if account_ids:
         queryset = queryset.filter(account_id__in=account_ids)
     if currency:
@@ -129,9 +133,9 @@ def collect_info_expense(
         type=TransactionType.EXPENSE,
     ).select_related('user', 'account', 'category')
     if start is not None:
-        queryset = queryset.filter(date__gte=start)
+        queryset = filter_calendar_from(queryset, start)
     if end is not None:
-        queryset = queryset.filter(date__lte=end)
+        queryset = filter_calendar_to(queryset, end)
     if account_ids:
         queryset = queryset.filter(account_id__in=account_ids)
     if currency:

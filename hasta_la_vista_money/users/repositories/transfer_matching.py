@@ -15,6 +15,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import calendar_day
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.transactions.models import TransactionType
 from hasta_la_vista_money.users.models import BankStatementRow
@@ -46,11 +47,18 @@ def mirroring_transfer_q(
         if transaction_type == TransactionType.EXPENSE
         else Q(to_account_id=account_id)
     )
-    return side & Q(
-        user_id=user_id,
-        amount=amount,
-        exchange_date__date__gte=row_date - TRANSFER_DATE_WINDOW,
-        exchange_date__date__lte=row_date + TRANSFER_DATE_WINDOW,
+    start = row_date - TRANSFER_DATE_WINDOW
+    end = row_date + TRANSFER_DATE_WINDOW
+    return (
+        side
+        & Q(user_id=user_id, amount=amount)
+        & (
+            Q(bank_calendar_date__range=(start, end))
+            | Q(
+                bank_calendar_date__isnull=True,
+                exchange_date__date__range=(start, end),
+            )
+        )
     )
 
 
@@ -81,7 +89,8 @@ def find_mirroring_transfers(
             ),
         )
         .exclude(pk__in=occupied.values_list('transfer_id', flat=True))
-        .order_by('exchange_date', 'pk')
+        .annotate(_calendar_day=calendar_day('exchange_date'))
+        .order_by('_calendar_day', 'exchange_date', 'pk')
     )
 
 

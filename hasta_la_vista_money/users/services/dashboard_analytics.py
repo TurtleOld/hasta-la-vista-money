@@ -4,7 +4,7 @@ This module provides analytics functions for dashboard widgets,
 including trend calculation, period comparison, and drill-down data.
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +14,11 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    filter_calendar_range,
+    local_calendar_date,
+)
 from hasta_la_vista_money.deposits.reporting import (
     actual_interest_totals_for_periods,
 )
@@ -143,37 +148,46 @@ def get_period_comparison(
     transaction_totals = (
         Transaction.objects.without_adjustments()
         .filter(user=user, account__currency=currency)
+        .annotate(_calendar_day=calendar_day())
         .aggregate(
             current_expense=Sum(
                 'amount',
                 filter=Q(
                     type=TransactionType.EXPENSE,
-                    date__gte=current_start_dt,
-                    date__lte=today_dt,
+                    _calendar_day__range=(
+                        local_calendar_date(current_start_dt),
+                        local_calendar_date(today_dt),
+                    ),
                 ),
             ),
             previous_expense=Sum(
                 'amount',
                 filter=Q(
                     type=TransactionType.EXPENSE,
-                    date__gte=previous_start_dt,
-                    date__lte=previous_end_dt,
+                    _calendar_day__range=(
+                        local_calendar_date(previous_start_dt),
+                        local_calendar_date(previous_end_dt),
+                    ),
                 ),
             ),
             current_income=Sum(
                 'amount',
                 filter=Q(
                     type=TransactionType.INCOME,
-                    date__gte=current_start_dt,
-                    date__lte=today_dt,
+                    _calendar_day__range=(
+                        local_calendar_date(current_start_dt),
+                        local_calendar_date(today_dt),
+                    ),
                 ),
             ),
             previous_income=Sum(
                 'amount',
                 filter=Q(
                     type=TransactionType.INCOME,
-                    date__gte=previous_start_dt,
-                    date__lte=previous_end_dt,
+                    _calendar_day__range=(
+                        local_calendar_date(previous_start_dt),
+                        local_calendar_date(previous_end_dt),
+                    ),
                 ),
             ),
         )
@@ -299,11 +313,6 @@ def get_drill_down_data(
 
     month_start, month_end = get_month_start_end(period_date)
 
-    month_start_dt = timezone.make_aware(
-        datetime.combine(month_start, time.min),
-    )
-    month_end_dt = timezone.make_aware(datetime.combine(month_end, time.max))
-
     type_value = (
         TransactionType.EXPENSE
         if data_type == 'expense'
@@ -312,14 +321,15 @@ def get_drill_down_data(
 
     if category_id is None:
         top_categories = (
-            Transaction.objects.without_adjustments()
-            .filter(
-                user=user,
-                account__currency=currency,
-                type=type_value,
-                date__gte=month_start_dt,
-                date__lte=month_end_dt,
-                category__parent_category__isnull=True,
+            filter_calendar_range(
+                Transaction.objects.without_adjustments().filter(
+                    user=user,
+                    account__currency=currency,
+                    type=type_value,
+                    category__parent_category__isnull=True,
+                ),
+                month_start,
+                month_end,
             )
             .values('category__id', 'category__name')
             .annotate(total=Sum('amount'))
@@ -355,14 +365,15 @@ def get_drill_down_data(
         return {'error': 'Категория не найдена', 'data': []}
 
     subcategories = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user=user,
-            account__currency=currency,
-            type=type_value,
-            date__gte=month_start_dt,
-            date__lte=month_end_dt,
-            category__parent_category_id=category_pk,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user=user,
+                account__currency=currency,
+                type=type_value,
+                category__parent_category_id=category_pk,
+            ),
+            month_start,
+            month_end,
         )
         .values('category__id', 'category__name')
         .annotate(total=Sum('amount'))
@@ -380,16 +391,20 @@ def get_drill_down_data(
 
     if not data:
         transactions = list(
-            Transaction.objects.without_adjustments()
-            .filter(
-                user=user,
-                account__currency=currency,
-                type=type_value,
-                date__gte=month_start_dt,
-                date__lte=month_end_dt,
-                category__id=category_id,
+            filter_calendar_range(
+                Transaction.objects.without_adjustments().filter(
+                    user=user,
+                    account__currency=currency,
+                    type=type_value,
+                    category__id=category_id,
+                ),
+                month_start,
+                month_end,
             )
-            .order_by('-date')[: constants.RECENT_RECEIPTS_LIMIT],
+            .annotate(_calendar_day=calendar_day())
+            .order_by('-_calendar_day', '-date')[
+                : constants.RECENT_RECEIPTS_LIMIT
+            ],
         )
 
         data = [

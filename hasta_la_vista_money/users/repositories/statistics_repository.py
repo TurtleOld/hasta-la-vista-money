@@ -5,6 +5,11 @@ from decimal import Decimal
 
 from django.db.models import Count, QuerySet, Sum
 
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    filter_calendar_from,
+    filter_calendar_to,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.transactions.models import (
@@ -39,14 +44,16 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        qs = Transaction.objects.without_adjustments().filter(
-            user=user,
-            account__currency=currency,
-            type=TransactionType.EXPENSE,
-            date__gte=start_date,
+        qs = filter_calendar_from(
+            Transaction.objects.without_adjustments().filter(
+                user=user,
+                account__currency=currency,
+                type=TransactionType.EXPENSE,
+            ),
+            start_date,
         )
         if end_date:
-            qs = qs.filter(date__lte=end_date)
+            qs = filter_calendar_to(qs, end_date)
         result = qs.aggregate(total=Sum('amount'))['total']
         return result or Decimal(0)
 
@@ -57,14 +64,16 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        qs = Transaction.objects.without_adjustments().filter(
-            user=user,
-            account__currency=currency,
-            type=TransactionType.INCOME,
-            date__gte=start_date,
+        qs = filter_calendar_from(
+            Transaction.objects.without_adjustments().filter(
+                user=user,
+                account__currency=currency,
+                type=TransactionType.INCOME,
+            ),
+            start_date,
         )
         if end_date:
-            qs = qs.filter(date__lte=end_date)
+            qs = filter_calendar_to(qs, end_date)
         result = qs.aggregate(total=Sum('amount'))['total']
         return result or Decimal(0)
 
@@ -76,7 +85,8 @@ class StatisticsRepository:
         return (
             Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
             .select_related('category', 'account')
-            .order_by('-date')[:limit]
+            .annotate(_calendar_day=calendar_day())
+            .order_by('-_calendar_day', '-date')[:limit]
         )
 
     def get_recent_incomes(
@@ -87,7 +97,8 @@ class StatisticsRepository:
         return (
             Transaction.objects.filter(user=user, type=TransactionType.INCOME)
             .select_related('category', 'account')
-            .order_by('-date')[:limit]
+            .annotate(_calendar_day=calendar_day())
+            .order_by('-_calendar_day', '-date')[:limit]
         )
 
     def get_receipts_count(self, user: User) -> int:
@@ -101,12 +112,13 @@ class StatisticsRepository:
         limit: int = 5,
     ) -> QuerySet[Transaction, dict[str, str | Decimal]]:
         return (
-            Transaction.objects.without_adjustments()
-            .filter(
-                user=user,
-                account__currency=currency,
-                type=TransactionType.EXPENSE,
-                date__gte=start_date,
+            filter_calendar_from(
+                Transaction.objects.without_adjustments().filter(
+                    user=user,
+                    account__currency=currency,
+                    type=TransactionType.EXPENSE,
+                ),
+                start_date,
             )
             .values('category__name')
             .annotate(total=Sum('amount'))

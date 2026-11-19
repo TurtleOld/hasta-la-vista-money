@@ -119,6 +119,8 @@ class TestRaiffeisenbankCalculator(TestCase):
             ),
         )
         self.transaction_repository = MagicMock()
+        filtered = self.transaction_repository.filter.return_value
+        filtered.alias.return_value.filter.return_value = filtered
         self.receipt_repository = MagicMock()
         self.calculator = RaiffeisenbankCalculator(
             transaction_repository=self.transaction_repository,
@@ -226,6 +228,8 @@ class TestCreateBankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.transaction_repository = MagicMock()
+        filtered = self.transaction_repository.filter.return_value
+        filtered.alias.return_value.filter.return_value = filtered
         self.receipt_repository = MagicMock()
 
     def test_create_sberbank_calculator(self) -> None:

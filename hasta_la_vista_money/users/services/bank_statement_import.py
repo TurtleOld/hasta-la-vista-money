@@ -20,6 +20,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    filter_calendar_range,
+    movement_calendar_date,
+)
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
@@ -45,7 +49,6 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 )
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
-    local_row_date,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
@@ -1138,6 +1141,9 @@ class BankStatementImportService:
                             match_calendar_date=source == 'ozon',
                             description=strip_pii(str(description)),
                             current_file_hash=upload.file_hash,
+                            bank_calendar_date=trans.get(
+                                'bank_calendar_date',
+                            ),
                         )
                         if candidates:
                             self._save_probable_duplicate(
@@ -1708,6 +1714,7 @@ class BankStatementImportService:
         match_calendar_date: bool,
         description: str,
         current_file_hash: str,
+        bank_calendar_date: date | None = None,
     ) -> list[ProbableDuplicate]:
         candidates = [
             ProbableDuplicate(
@@ -1723,6 +1730,7 @@ class BankStatementImportService:
                 match_calendar_date=match_calendar_date,
                 description=description,
                 current_file_hash=current_file_hash,
+                bank_calendar_date=bank_calendar_date,
             )
         ]
         candidates.extend(
@@ -1736,6 +1744,7 @@ class BankStatementImportService:
                 type_value=type_value,
                 abs_amount=abs_amount,
                 trans_date=trans_date,
+                bank_calendar_date=bank_calendar_date,
             )
         )
         return sorted(
@@ -1758,6 +1767,7 @@ class BankStatementImportService:
         type_value: str,
         abs_amount: Decimal,
         trans_date: datetime,
+        bank_calendar_date: date | None = None,
     ) -> list[TransferMoneyLog]:
         """Return transfers mirroring the statement row within one day."""
         return list(
@@ -1766,7 +1776,10 @@ class BankStatementImportService:
                 user=user,
                 transaction_type=type_value,
                 amount=abs_amount,
-                row_date=local_row_date(trans_date),
+                row_date=movement_calendar_date(
+                    trans_date,
+                    bank_calendar_date,
+                ),
             ),
         )
 
@@ -1804,6 +1817,7 @@ class BankStatementImportService:
         match_calendar_date: bool,
         description: str,
         current_file_hash: str,
+        bank_calendar_date: date | None = None,
     ) -> list[Transaction]:
         queryset = Transaction.objects.without_adjustments().filter(
             account=account,
@@ -1814,9 +1828,8 @@ class BankStatementImportService:
         if current_file_hash:
             queryset = queryset.exclude(source_file_hash=current_file_hash)
         if match_calendar_date:
-            queryset = queryset.filter(
-                date__date=timezone.localtime(trans_date).date(),
-            )
+            day = movement_calendar_date(trans_date, bank_calendar_date)
+            queryset = filter_calendar_range(queryset, day, day)
         else:
             queryset = queryset.filter(date=trans_date)
         candidates = list(

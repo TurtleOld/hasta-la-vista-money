@@ -11,7 +11,6 @@ import structlog
 from dateutil.parser import parse as parse_date
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncDate
 from django.http import (
     HttpRequest,
     JsonResponse,
@@ -25,6 +24,10 @@ from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.services.budget import get_categories
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    filter_calendar_range,
+)
 from hasta_la_vista_money.finance_account.analytics_currency import (
     get_analytics_currency,
 )
@@ -381,12 +384,14 @@ class DashboardDataView(LoginRequiredMixin, View):
         recent_expenses = (
             Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
             .select_related('category', 'account')
-            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+            .annotate(_calendar_day=calendar_day())
+            .order_by('-_calendar_day', '-date')[: constants.RECENT_ITEMS_LIMIT]
         )
         recent_incomes = (
             Transaction.objects.filter(user=user, type=TransactionType.INCOME)
             .select_related('category', 'account')
-            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+            .annotate(_calendar_day=calendar_day())
+            .order_by('-_calendar_day', '-date')[: constants.RECENT_ITEMS_LIMIT]
         )
 
         expense_transactions: list[TransactionDict] = [
@@ -431,15 +436,16 @@ class DashboardDataView(LoginRequiredMixin, View):
         current_end = period_dates['current_end']
 
         grouped_expenses = (
-            Transaction.objects.without_adjustments()
-            .filter(
-                user=user,
-                account__currency=currency,
-                type=TransactionType.EXPENSE,
-                date__gte=current_start,
-                date__lte=current_end,
+            filter_calendar_range(
+                Transaction.objects.without_adjustments().filter(
+                    user=user,
+                    account__currency=currency,
+                    type=TransactionType.EXPENSE,
+                ),
+                current_start,
+                current_end,
             )
-            .annotate(day=TruncDate('date'))
+            .annotate(day=calendar_day())
             .values('day')
             .annotate(total=Sum('amount'))
             .order_by('day')

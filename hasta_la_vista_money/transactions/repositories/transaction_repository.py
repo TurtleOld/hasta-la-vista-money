@@ -9,9 +9,15 @@ from datetime import date, datetime, time
 from typing import Any
 
 from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    calendar_month,
+    filter_calendar_from,
+    filter_calendar_range,
+    filter_calendar_to,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import User
@@ -71,10 +77,10 @@ class TransactionRepository:
         type_value: str | None = None,
     ) -> QuerySet[Transaction]:
         """Filter transactions by user and a datetime range."""
-        qs = Transaction.objects.filter(
-            user=user,
-            date__gte=start_date,
-            date__lte=end_date,
+        qs = filter_calendar_range(
+            Transaction.objects.filter(user=user),
+            start_date,
+            end_date,
         )
         if type_value is not None:
             qs = qs.filter(type=type_value)
@@ -106,7 +112,11 @@ class TransactionRepository:
         type_value: str | None = None,
     ) -> QuerySet[Transaction]:
         """Return transactions for the account ordered by date."""
-        qs = Transaction.objects.filter(account=account).order_by('date')
+        qs = (
+            Transaction.objects.filter(account=account)
+            .annotate(_calendar_day=calendar_day())
+            .order_by('_calendar_day', 'date')
+        )
         if type_value is not None:
             qs = qs.filter(type=type_value)
         return qs
@@ -205,13 +215,13 @@ class TransactionRepository:
         if account is not None:
             qs = qs.filter(account=account)
         if start_date is not None:
-            qs = qs.filter(date__gte=start_date)
+            qs = filter_calendar_from(qs, start_date)
         if end_date is not None:
-            qs = qs.filter(date__lte=end_date)
+            qs = filter_calendar_to(qs, end_date)
         if type_value is not None:
             qs = qs.filter(type=type_value)
         return (
-            qs.annotate(month=TruncMonth('date'))
+            qs.annotate(month=calendar_month())
             .values('month')
             .annotate(total=Sum('amount'))
         )

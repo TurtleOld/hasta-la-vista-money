@@ -24,6 +24,11 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    calendar_month,
+    filter_calendar_range,
+)
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
     BANK_SBERBANK,
@@ -324,7 +329,7 @@ def _dates_amounts(
 ) -> tuple[list[str], list[float]]:
     dates, amounts = [], []
     for item in dataset:
-        dates.append(item['date'].strftime('%Y-%m-%d'))
+        dates.append(item['day'].strftime('%Y-%m-%d'))
         amounts.append(float(item['total_amount']))
     return dates, amounts
 
@@ -367,9 +372,10 @@ def _build_chart(
             start=start,
             end=end,
         )
-        .values('date')
+        .annotate(day=calendar_day())
+        .values('day')
         .annotate(total_amount=Sum('amount'))
-        .order_by('date')
+        .order_by('day')
     )
     inc_ds = (
         _filtered_transactions(
@@ -379,9 +385,10 @@ def _build_chart(
             start=start,
             end=end,
         )
-        .values('date')
+        .annotate(day=calendar_day())
+        .values('day')
         .annotate(total_amount=Sum('amount'))
-        .order_by('date')
+        .order_by('day')
     )
 
     exp_dates, exp_amts = _dates_amounts(exp_ds)
@@ -819,7 +826,7 @@ def _card_months_block(
             start=period_start,
             end=period_end,
         )
-        .annotate(month=TruncMonth('date'))
+        .annotate(month=calendar_month())
         .values('month')
         .annotate(total=Sum('amount'))
     )
@@ -845,7 +852,7 @@ def _card_months_block(
     withdrawals_by_month = (
         TransferMoneyLog.objects.by_date_range(period_start, period_end)
         .filter(from_account=card)
-        .annotate(month=TruncMonth('exchange_date'))
+        .annotate(month=calendar_month('exchange_date'))
         .values('month')
         .annotate(total=Sum('amount'))
     )
@@ -969,20 +976,25 @@ def _collect_card_payments(
     income rather than inter-account transfers.
     """
     transfers = list(
-        TransferMoneyLog.objects.filter(
-            user=card.user,
-            to_account=card,
-            exchange_date__date__gte=period_start,
-            exchange_date__date__lte=period_end,
+        filter_calendar_range(
+            TransferMoneyLog.objects.filter(
+                user=card.user,
+                to_account=card,
+            ),
+            period_start,
+            period_end,
+            field='exchange_date',
         ).values('amount', 'exchange_date'),
     )
     income_txns = list(
-        Transaction.objects.filter(
-            user=card.user,
-            account=card,
-            type=TransactionType.INCOME,
-            date__date__gte=period_start,
-            date__date__lte=period_end,
+        filter_calendar_range(
+            Transaction.objects.filter(
+                user=card.user,
+                account=card,
+                type=TransactionType.INCOME,
+            ),
+            period_start,
+            period_end,
         ).values('amount', 'date'),
     )
     payments: list[PaymentItemDict] = [

@@ -15,6 +15,7 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
+from hasta_la_vista_money.core.calendar_days import filter_calendar_range
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
 )
@@ -103,11 +104,15 @@ class CreditCalculationService:
         receipts_queryset = self.receipt_repository.filter(account=account)
 
         if start_date_dt and end_date_dt:
-            expenses_queryset = expenses_queryset.filter(
-                date__range=(start_date_dt, end_date_dt),
+            expenses_queryset = filter_calendar_range(
+                expenses_queryset,
+                start_date_dt,
+                end_date_dt,
             )
-            income_queryset = income_queryset.filter(
-                date__range=(start_date_dt, end_date_dt),
+            income_queryset = filter_calendar_range(
+                income_queryset,
+                start_date_dt,
+                end_date_dt,
             )
             receipts_queryset = receipts_queryset.filter(
                 receipt_date__range=(start_date_dt, end_date_dt),
@@ -145,8 +150,11 @@ class CreditCalculationService:
             to_account=account,
         )
         if start_date_dt and end_date_dt:
-            transfer_payments_queryset = transfer_payments_queryset.filter(
-                exchange_date__range=(start_date_dt, end_date_dt),
+            transfer_payments_queryset = filter_calendar_range(
+                transfer_payments_queryset,
+                start_date_dt,
+                end_date_dt,
+                field='exchange_date',
             )
         total_transfer_payments = (
             transfer_payments_queryset.aggregate(total=Sum('amount'))['total']
@@ -205,8 +213,11 @@ class CreditCalculationService:
             from_account=account,
         )
         if start_date_dt and end_date_dt:
-            queryset = queryset.filter(
-                exchange_date__range=(start_date_dt, end_date_dt),
+            queryset = filter_calendar_range(
+                queryset,
+                start_date_dt,
+                end_date_dt,
+                field='exchange_date',
             )
         total = Decimal(
             str(queryset.aggregate(total=Sum('amount'))['total'] or 0),
@@ -258,14 +269,19 @@ class CreditCalculationService:
         transfer_queryset = TransferMoneyLog.objects.filter(to_account=account)
 
         if start_date_dt and end_date_dt:
-            income_queryset = income_queryset.filter(
-                date__range=(start_date_dt, end_date_dt),
+            income_queryset = filter_calendar_range(
+                income_queryset,
+                start_date_dt,
+                end_date_dt,
             )
             receipts_queryset = receipts_queryset.filter(
                 receipt_date__range=(start_date_dt, end_date_dt),
             )
-            transfer_queryset = transfer_queryset.filter(
-                exchange_date__range=(start_date_dt, end_date_dt),
+            transfer_queryset = filter_calendar_range(
+                transfer_queryset,
+                start_date_dt,
+                end_date_dt,
+                field='exchange_date',
             )
 
         total_income = (
@@ -317,10 +333,13 @@ class CreditCalculationService:
         )
 
         first_expense = (
-            self.transaction_repository.filter(
-                account=account,
-                type=TransactionType.EXPENSE,
-                date__range=(month_start, month_end),
+            filter_calendar_range(
+                self.transaction_repository.filter(
+                    account=account,
+                    type=TransactionType.EXPENSE,
+                ),
+                month_start,
+                month_end,
             )
             .order_by('date')
             .first()

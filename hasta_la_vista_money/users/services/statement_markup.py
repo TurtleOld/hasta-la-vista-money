@@ -9,6 +9,10 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    filter_calendar_range,
+    movement_calendar_date,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -55,6 +59,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
 from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_calendar_date,
     statement_row_movement_date,
 )
 from hasta_la_vista_money.users.services.statement_retention_policy import (
@@ -132,7 +137,7 @@ class StatementMarkupService:
         one matches at most one row.
         """
         rows = [
-            (row, local_row_date(row.transaction_date))
+            (row, statement_row_calendar_date(row))
             for row in self.pending_rows(upload)
             if row.transaction_date is not None
         ]
@@ -145,16 +150,21 @@ class StatementMarkupService:
             (
                 movement.type,
                 movement.amount,
-                local_row_date(movement.date),
+                movement_calendar_date(
+                    movement.date,
+                    movement.bank_calendar_date,
+                ),
                 timedelta(0),
                 str(movement.category.name),
             )
-            for movement in Transaction.objects.without_adjustments()
-            .filter(
-                account_id=account_id,
-                source_ref__isnull=True,
-                source_ref_hash__isnull=True,
-                date__date__range=(start, end),
+            for movement in filter_calendar_range(
+                Transaction.objects.without_adjustments().filter(
+                    account_id=account_id,
+                    source_ref__isnull=True,
+                    source_ref_hash__isnull=True,
+                ),
+                start,
+                end,
             )
             .select_related('category')
             .order_by('date', 'pk')
@@ -169,7 +179,10 @@ class StatementMarkupService:
                 if transfer.from_account_id == account_id
                 else TransactionType.INCOME,
                 transfer.amount,
-                local_row_date(transfer.exchange_date),
+                movement_calendar_date(
+                    transfer.exchange_date,
+                    transfer.bank_calendar_date,
+                ),
                 TRANSFER_DATE_WINDOW,
                 _('Перевод: {source} → {target}')
                 .format(
@@ -178,10 +191,14 @@ class StatementMarkupService:
                 )
                 .strip(' →'),
             )
-            for transfer in TransferMoneyLog.objects.filter(
-                Q(from_account_id=account_id) | Q(to_account_id=account_id),
-                user_id=upload.user_id,
-                exchange_date__date__range=(start, end),
+            for transfer in filter_calendar_range(
+                TransferMoneyLog.objects.filter(
+                    Q(from_account_id=account_id) | Q(to_account_id=account_id),
+                    user_id=upload.user_id,
+                ),
+                start,
+                end,
+                field='exchange_date',
             )
             .exclude(pk__in=occupied)
             .select_related('from_account', 'to_account')

@@ -10,6 +10,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import filter_calendar_range
 from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
 from hasta_la_vista_money.deposits.reporting import (
     signed_adjustment_expense,
@@ -57,17 +58,15 @@ def _sum_for_month(
     start: datetime,
     end: datetime,
 ) -> Decimal:
-    total = (
-        Transaction.objects.without_adjustments()
-        .filter(
+    total = filter_calendar_range(
+        Transaction.objects.without_adjustments().filter(
             user__in=users,
             account__currency=currency,
             type=type_value,
-            date__gte=start,
-            date__lte=end,
-        )
-        .aggregate(total=Sum('amount'))['total']
-    )
+        ),
+        start,
+        end,
+    ).aggregate(total=Sum('amount'))['total']
     return Decimal(total or constants.ZERO)
 
 
@@ -167,13 +166,14 @@ def get_dashboard_month_kpis(
     )
 
     top_category = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=selected_users,
-            account__currency=currency,
-            type=TransactionType.EXPENSE,
-            date__gte=start_dt,
-            date__lte=end_dt,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=selected_users,
+                account__currency=currency,
+                type=TransactionType.EXPENSE,
+            ),
+            period_start,
+            period_end,
         )
         .values('category__id', 'category__name')
         .annotate(total=Sum('amount'))

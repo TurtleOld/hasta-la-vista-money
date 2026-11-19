@@ -1,12 +1,14 @@
 """Custom QuerySet for the Transaction model with type-aware shortcuts."""
 
-from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 
 from django.db import models
 from django.db.models import Q, Sum
-from django.db.models.functions import TruncMonth
-from django.utils import timezone
+
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_month,
+    filter_calendar_range,
+)
 
 if TYPE_CHECKING:
     from datetime import date
@@ -53,14 +55,8 @@ class TransactionQuerySet(models.QuerySet['Transaction']):
         start_date: 'date',
         end_date: 'date',
     ) -> 'TransactionQuerySet':
-        """Return transactions within an inclusive date range."""
-        start_datetime = timezone.make_aware(
-            datetime.combine(start_date, time.min),
-        )
-        end_datetime = timezone.make_aware(
-            datetime.combine(end_date, time.max),
-        )
-        return self.filter(date__gte=start_datetime, date__lte=end_datetime)
+        """Return transactions within an inclusive calendar-day range."""
+        return filter_calendar_range(self, start_date, end_date)
 
     def for_category(self, category: 'Category') -> 'TransactionQuerySet':
         """Return transactions for the category or its direct descendants."""
@@ -75,7 +71,7 @@ class TransactionQuerySet(models.QuerySet['Transaction']):
     def by_month(self) -> Any:
         """Return transactions grouped by month with running totals."""
         return (
-            self.annotate(month=TruncMonth('date'))
+            self.annotate(month=calendar_month())
             .values('month')
             .annotate(total=Sum('amount'))
             .order_by('month')

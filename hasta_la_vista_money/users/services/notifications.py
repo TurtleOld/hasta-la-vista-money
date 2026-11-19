@@ -4,6 +4,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import filter_calendar_from
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Transaction,
@@ -62,23 +63,23 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
             },
         )
     current_month_expenses = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user=user,
-            type=TransactionType.EXPENSE,
-            date__gte=month_start,
-        )
-        .aggregate(total=Sum('amount'))['total']
+        filter_calendar_from(
+            Transaction.objects.without_adjustments().filter(
+                user=user,
+                type=TransactionType.EXPENSE,
+            ),
+            month_start,
+        ).aggregate(total=Sum('amount'))['total']
         or 0
     )
     current_month_income = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user=user,
-            type=TransactionType.INCOME,
-            date__gte=month_start,
-        )
-        .aggregate(total=Sum('amount'))['total']
+        filter_calendar_from(
+            Transaction.objects.without_adjustments().filter(
+                user=user,
+                type=TransactionType.INCOME,
+            ),
+            month_start,
+        ).aggregate(total=Sum('amount'))['total']
         or 0
     )
     if current_month_expenses > current_month_income:

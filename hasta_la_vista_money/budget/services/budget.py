@@ -13,7 +13,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
@@ -21,6 +20,10 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.repositories import (
     BudgetRepository,
     PlanningRepository,
+)
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_month,
+    filter_calendar_range,
 )
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.transactions.repositories import TransactionRepository
@@ -267,15 +270,17 @@ class BudgetService:
         start_date, end_date = _month_range(months)
         scope_users = _scope_users(user, users)
         rows = (
-            self.transaction_repository.filter_analytical(
-                user__in=scope_users,
-                type=type_value,
-                account__currency=currency,
-                category_id__in=category_ids,
-                date__gte=start_date,
-                date__lte=end_date,
+            filter_calendar_range(
+                self.transaction_repository.filter_analytical(
+                    user__in=scope_users,
+                    type=type_value,
+                    account__currency=currency,
+                    category_id__in=category_ids,
+                ),
+                start_date,
+                end_date,
             )
-            .annotate(month=TruncMonth('date'))
+            .annotate(month=calendar_month())
             .values('category_id', 'month')
             .annotate(total=Sum('amount'))
         )

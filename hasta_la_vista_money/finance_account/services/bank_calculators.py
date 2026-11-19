@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
+from hasta_la_vista_money.core.calendar_days import filter_calendar_range
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
     BANK_SBERBANK,
@@ -107,10 +108,13 @@ class RaiffeisenbankCalculator:
         )
 
         first_expense = (
-            self.transaction_repository.filter(
-                account=account,
-                type=TransactionType.EXPENSE,
-                date__range=(month_start, month_end),
+            filter_calendar_range(
+                self.transaction_repository.filter(
+                    account=account,
+                    type=TransactionType.EXPENSE,
+                ),
+                month_start,
+                month_end,
             )
             .order_by('date')
             .first()

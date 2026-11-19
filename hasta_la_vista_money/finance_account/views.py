@@ -54,6 +54,11 @@ from hasta_la_vista_money.constants import (
     RECEIPT_CATEGORY_NAME,
     RECEIPT_OPERATION_PURCHASE,
 )
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_day,
+    filter_calendar_range,
+    movement_calendar_date,
+)
 from hasta_la_vista_money.deposits.models import (
     DepositCapitalizationEvent,
     InterestPayoutDestination,
@@ -984,11 +989,15 @@ def _apply_date_filter[ModelType: Model](
     queryset: QuerySet[ModelType],
     field: str,
     f: FinancesFilter,
+    *,
+    bank_calendar_field: bool = False,
 ) -> QuerySet[ModelType]:
     date_range = f.date_range()
     if date_range is None:
         return queryset
     start, end = date_range
+    if bank_calendar_field:
+        return filter_calendar_range(queryset, start, end, field=field)
     return queryset.filter(
         **{
             f'{field}__date__gte': start,
@@ -1007,6 +1016,14 @@ class _DbSource:
     magnitude: Any
     related: tuple[str, ...]
     build: Callable[[Any], FinancesTransaction]
+    bank_calendar_day: bool = False
+
+
+def _source_day(source: _DbSource) -> Any:
+    """Return the grouping day of a source, honouring a bank day."""
+    if source.bank_calendar_day:
+        return calendar_day(source.date_field)
+    return TruncDate(source.date_field)
 
 
 @dataclass
@@ -1079,16 +1096,24 @@ class _FinancesFeed(Sequence[FinancesTransaction]):
 
         buckets = {day: {'pos': Decimal(), 'neg': Decimal()} for day in days}
         for source in self.sources:
-            rows = (
-                _annotate_source(source)
-                .filter(
+            annotated = _annotate_source(source)
+            if source.bank_calendar_day:
+                annotated = filter_calendar_range(
+                    annotated,
+                    days[0],
+                    days[-1],
+                    field=source.date_field,
+                )
+            else:
+                annotated = annotated.filter(
                     **{
                         f'{source.date_field}__date__gte': days[0],
                         f'{source.date_field}__date__lte': days[-1],
                     },
                 )
-                .order_by()
-                .annotate(day=TruncDate(source.date_field))
+            rows = (
+                annotated.order_by()
+                .annotate(day=_source_day(source))
                 .values('day')
                 .annotate(
                     pos=models.Sum(
@@ -1139,22 +1164,46 @@ class _FinancesFeed(Sequence[FinancesTransaction]):
             return []
         # Entries are collected in source order so that the stable sort
         # keeps ties ordered by source, then by position inside a source.
-        entries: list[tuple[Any, int, Any]] = []
+        entries: list[tuple[date, Any, int, Any]] = []
         for index, source in enumerate(self.sources):
-            light = source.queryset.order_by(
-                f'-{source.date_field}',
-                '-pk',
-            ).values_list('pk', source.date_field)[:stop]
-            entries.extend((date_, index, pk) for pk, date_ in light)
+            light_queryset = source.queryset
+            if source.bank_calendar_day:
+                light_queryset = light_queryset.annotate(
+                    _calendar_day=calendar_day(source.date_field),
+                ).order_by(
+                    '-_calendar_day',
+                    f'-{source.date_field}',
+                    '-pk',
+                )
+                light = light_queryset.values_list(
+                    'pk',
+                    source.date_field,
+                    '_calendar_day',
+                )[:stop]
+                entries.extend(
+                    (day, moment, index, pk) for pk, moment, day in light
+                )
+            else:
+                light = light_queryset.order_by(
+                    f'-{source.date_field}',
+                    '-pk',
+                ).values_list('pk', source.date_field)[:stop]
+                entries.extend(
+                    (_to_date(moment), moment, index, pk)
+                    for pk, moment in light
+                )
         entries.extend(
-            (row.date, len(self.sources), row) for row in self.interest_rows
+            (_to_date(row.date), row.date, len(self.sources), row)
+            for row in self.interest_rows
         )
-        page = sorted(entries, key=lambda entry: entry[0], reverse=True)[
-            start:stop
-        ]
+        page = sorted(
+            entries,
+            key=lambda entry: (entry[0], entry[1]),
+            reverse=True,
+        )[start:stop]
 
         pks_by_source: dict[int, list[int]] = {}
-        for _date, index, ref in page:
+        for _day, _moment, index, ref in page:
             if index < len(self.sources):
                 pks_by_source.setdefault(index, []).append(ref)
         built: dict[tuple[int, int], FinancesTransaction] = {}
@@ -1168,7 +1217,7 @@ class _FinancesFeed(Sequence[FinancesTransaction]):
             )
         return [
             ref if index == len(self.sources) else built[(index, ref)]
-            for _date, index, ref in page
+            for _day, _moment, index, ref in page
         ]
 
 
@@ -1262,7 +1311,12 @@ def _typed_sources(
         user__in=users,
         type=type_value,
     )
-    queryset = _apply_date_filter(queryset, 'date', finances_filter)
+    queryset = _apply_date_filter(
+        queryset,
+        'date',
+        finances_filter,
+        bank_calendar_field=True,
+    )
     if finances_filter.account_ids:
         queryset = queryset.filter(account_id__in=finances_filter.account_ids)
     category_ids = _category_ids(
@@ -1301,6 +1355,7 @@ def _typed_sources(
             magnitude=Abs('amount'),
             related=('account', 'category', 'user'),
             build=lambda obj: _build_transaction_row(obj, current_user),
+            bank_calendar_day=True,
         ),
     ]
 
@@ -1381,7 +1436,12 @@ def _transfer_sources(
     queryset: QuerySet[TransferMoneyLog] = TransferMoneyLog.objects.filter(
         user__in=users,
     )
-    queryset = _apply_date_filter(queryset, 'exchange_date', finances_filter)
+    queryset = _apply_date_filter(
+        queryset,
+        'exchange_date',
+        finances_filter,
+        bank_calendar_field=True,
+    )
     if finances_filter.account_ids:
         queryset = queryset.filter(
             models.Q(from_account_id__in=finances_filter.account_ids)
@@ -1418,6 +1478,7 @@ def _transfer_sources(
             magnitude=models.F('amount'),
             related=('from_account', 'to_account', 'user'),
             build=lambda obj: _build_transfer_row(obj, current_user),
+            bank_calendar_day=True,
         ),
     ]
 
@@ -1723,12 +1784,14 @@ def _recent_transactions(
     transaction_qs = (
         Transaction.objects.filter(user__in=user_list)
         .select_related('account', 'category', 'user')
-        .order_by('-date')[:limit]
+        .annotate(_calendar_day=calendar_day())
+        .order_by('-_calendar_day', '-date')[:limit]
     )
     transfer_qs = (
         TransferMoneyLog.objects.filter(user__in=user_list)
         .select_related('from_account', 'to_account', 'user')
-        .order_by('-exchange_date')[:limit]
+        .annotate(_calendar_day=calendar_day('exchange_date'))
+        .order_by('-_calendar_day', '-exchange_date')[:limit]
     )
     interest_qs = (
         DepositCapitalizationEvent.objects.filter(
@@ -1750,7 +1813,13 @@ def _recent_transactions(
         _build_transfer_row(transfer, current_user) for transfer in transfer_qs
     )
     transactions.extend(_build_interest_row(event) for event in interest_qs)
-    transactions.sort(key=lambda item: item.date, reverse=True)
+    transactions.sort(
+        key=lambda item: (
+            movement_calendar_date(item.date, item.bank_calendar_date),
+            item.date,
+        ),
+        reverse=True,
+    )
     return _group_finances_by_day(transactions[:limit])
 
 

@@ -16,6 +16,10 @@ from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import Budget, Planning
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_month,
+    filter_calendar_range,
+)
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -520,7 +524,7 @@ def _aggregate_amounts_by_month(
             start=start,
             end=end,
         )
-        .annotate(month=TruncMonth('date'))
+        .annotate(month=calendar_month())
         .values('month')
         .annotate(total=Sum('amount'))
         .order_by('month')
@@ -695,18 +699,16 @@ def _budgets_data(
         last_month = period_end.replace(day=1)
         last_day = monthrange(last_month.year, last_month.month)[1]
         rows = (
-            Transaction.objects.without_adjustments()
-            .filter(
-                user__in=users_list,
-                account__currency=currency,
-                type=TransactionType.EXPENSE,
-                date__gte=_date_to_aware(period_start.replace(day=1)),
-                date__lte=_date_to_aware(
-                    last_month.replace(day=last_day),
-                    end_of_day=True,
+            filter_calendar_range(
+                Transaction.objects.without_adjustments().filter(
+                    user__in=users_list,
+                    account__currency=currency,
+                    type=TransactionType.EXPENSE,
                 ),
+                period_start.replace(day=1),
+                last_month.replace(day=last_day),
             )
-            .annotate(month=TruncMonth('date'))
+            .annotate(month=calendar_month())
             .values('month', 'category_id')
             .annotate(total=Sum('amount'))
         )
@@ -767,7 +769,6 @@ def _plan_fact_summary(
 ) -> PlanFactSummaryDict:
     """Aggregate Planning vs actual totals for the period, by type."""
     users_list = list(users)
-    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
 
     plan_totals = (
         Planning.objects.filter(
@@ -783,13 +784,14 @@ def _plan_fact_summary(
     }
 
     fact_totals = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=users_list,
-            account__currency=currency,
-            type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
-            date__gte=start_dt,
-            date__lte=end_dt,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=users_list,
+                account__currency=currency,
+                type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
+            ),
+            period_start,
+            period_end,
         )
         .values('type')
         .annotate(total=Sum('amount'))
@@ -819,7 +821,6 @@ def _plan_fact_top_deviations(
 ) -> list[PlanFactDeviationDict]:
     """Top categories by absolute |fact - plan| deviation in the period."""
     users_list = list(users)
-    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
 
     plan_rows = (
         Planning.objects.filter(
@@ -839,14 +840,15 @@ def _plan_fact_top_deviations(
     }
 
     fact_rows = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=users_list,
-            account__currency=currency,
-            type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
-            category_id__in=[key[0] for key in plan_by_category],
-            date__gte=start_dt,
-            date__lte=end_dt,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=users_list,
+                account__currency=currency,
+                type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
+                category_id__in=[key[0] for key in plan_by_category],
+            ),
+            period_start,
+            period_end,
         )
         .values('category_id', 'type')
         .annotate(total=Sum('amount'))
@@ -888,7 +890,6 @@ def _plan_fact_engagement(
 ) -> PlanFactEngagementDict:
     """Motivating feedback: how many expense categories stayed within plan."""
     users_list = list(users)
-    start_dt, end_dt = _aware_period_bounds(period_start, period_end)
 
     plan_rows = (
         Planning.objects.filter(
@@ -905,14 +906,15 @@ def _plan_fact_engagement(
     }
 
     fact_rows = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=users_list,
-            account__currency=currency,
-            type=TransactionType.EXPENSE,
-            category_id__in=plan_by_category,
-            date__gte=start_dt,
-            date__lte=end_dt,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=users_list,
+                account__currency=currency,
+                type=TransactionType.EXPENSE,
+                category_id__in=plan_by_category,
+            ),
+            period_start,
+            period_end,
         )
         .values('category_id')
         .annotate(total=Sum('amount'))
@@ -955,8 +957,6 @@ def _suggested_plan_categories(
     """
     users_list = list(users)
     window_start = today.replace(day=1) - relativedelta(months=2)
-    window_start_dt = _date_to_aware(window_start)
-    window_end_dt = _date_to_aware(today, end_of_day=True)
 
     planned_category_ids = set(
         Planning.objects.filter(
@@ -968,14 +968,15 @@ def _suggested_plan_categories(
     )
 
     fact_rows = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=users_list,
-            account__currency=currency,
-            type=TransactionType.EXPENSE,
-            category_id__isnull=False,
-            date__gte=window_start_dt,
-            date__lte=window_end_dt,
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=users_list,
+                account__currency=currency,
+                type=TransactionType.EXPENSE,
+                category_id__isnull=False,
+            ),
+            window_start,
+            today,
         )
         .exclude(category_id__in=planned_category_ids)
         .values('category_id', 'category__name')

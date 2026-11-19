@@ -16,6 +16,7 @@ from django.db.models import (
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import movement_calendar_date
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -27,7 +28,6 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
 )
 from hasta_la_vista_money.users.repositories.transfer_matching import (
-    local_row_date,
     mirroring_transfer_q,
 )
 
@@ -311,7 +311,10 @@ class StatementRowRepository:
                 user_id=row.upload.user_id,
                 transaction_type=BankStatementRow.TransactionType.INCOME,
                 amount=row.amount,
-                row_date=local_row_date(row.transaction_date),
+                row_date=movement_calendar_date(
+                    row.transaction_date,
+                    row.bank_calendar_date,
+                ),
             )
             for row in rows
             if row.amount is not None and row.transaction_date is not None

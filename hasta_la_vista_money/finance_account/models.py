@@ -11,6 +11,7 @@ from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import filter_calendar_range
 from hasta_la_vista_money.finance_account.currencies import (
     currency_choices,
     get_default_currency,
@@ -368,11 +369,8 @@ class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
         start: date,
         end: date,
     ) -> 'TransferMoneyLogQuerySet':
-        """Return transfer logs within the specified date range (inclusive)."""
-        return self.filter(
-            exchange_date__date__gte=start,
-            exchange_date__date__lte=end,
-        )
+        """Return transfer logs within the inclusive calendar-day range."""
+        return filter_calendar_range(self, start, end, field='exchange_date')
 
 
 class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):

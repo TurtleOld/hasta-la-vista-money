@@ -28,6 +28,7 @@ from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
+from hasta_la_vista_money.core.calendar_days import calendar_day
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -131,7 +132,8 @@ class TransactionByGroupAPIView(APIView):
             transactions = (
                 Transaction.objects.filter(user__in=users_in_group)
                 .select_related('user', 'category', 'account')
-                .order_by('-date')
+                .annotate(_calendar_day=calendar_day())
+                .order_by('-_calendar_day', '-date')
             )
             transactions = _filter_by_type(transactions, request)
         else:
@@ -200,7 +202,8 @@ class TransactionDataAPIView(APIView):
             transactions = (
                 Transaction.objects.filter(user__in=users_in_group)
                 .select_related('category', 'account', 'user')
-                .order_by('-date')
+                .annotate(_calendar_day=calendar_day())
+                .order_by('-_calendar_day', '-date')
             )
             transactions = _filter_by_type(transactions, request)
             date_after = parse_date(request.query_params.get('date_after', ''))
@@ -208,9 +211,13 @@ class TransactionDataAPIView(APIView):
                 request.query_params.get('date_before', ''),
             )
             if date_after is not None:
-                transactions = transactions.filter(date__date__gte=date_after)
+                transactions = transactions.filter(
+                    _calendar_day__gte=date_after,
+                )
             if date_before is not None:
-                transactions = transactions.filter(date__date__lte=date_before)
+                transactions = transactions.filter(
+                    _calendar_day__lte=date_before,
+                )
         else:
             transactions = Transaction.objects.none()
 

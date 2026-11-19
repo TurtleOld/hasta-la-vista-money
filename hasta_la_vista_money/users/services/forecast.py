@@ -1,15 +1,18 @@
 from collections.abc import Iterable, Mapping
-from datetime import date, datetime, time
+from datetime import date
 from decimal import Decimal
 from statistics import pstdev
 from typing import Any
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
-from django.utils import timezone
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.calendar_days import (
+    calendar_month,
+    filter_calendar_range,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import PaymentSchedule
 from hasta_la_vista_money.transactions.models import (
@@ -26,11 +29,6 @@ class CashflowForecastDict(TypedDict):
     forecast_upper: list[float]
 
 
-def _aware_day(day: date, *, end_of_day: bool = False) -> datetime:
-    time_value = time.max if end_of_day else time.min
-    return timezone.make_aware(datetime.combine(day, time_value))
-
-
 def _monthly_net_flows(
     users: Iterable[User],
     currency: str,
@@ -38,19 +36,21 @@ def _monthly_net_flows(
     end: date,
 ) -> list[Decimal]:
     rows = (
-        Transaction.objects.without_adjustments()
-        .filter(
-            user__in=users,
-            account__currency=currency,
-            date__gte=_aware_day(start),
-            date__lte=_aware_day(end, end_of_day=True),
+        filter_calendar_range(
+            Transaction.objects.without_adjustments().filter(
+                user__in=users,
+                account__currency=currency,
+            ),
+            start,
+            end,
         )
-        .values('type', 'date__year', 'date__month')
+        .annotate(month=calendar_month())
+        .values('type', 'month')
         .annotate(total=Sum('amount'))
     )
     monthly: dict[tuple[int, int], Decimal] = {}
     for row in rows:
-        key = (row['date__year'], row['date__month'])
+        key = (row['month'].year, row['month'].month)
         amount = Decimal(row['total'] or 0)
         if row['type'] == TransactionType.INCOME:
             monthly[key] = monthly.get(key, Decimal(0)) + amount
