@@ -2,6 +2,7 @@ import contextlib
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -63,11 +64,19 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
 from hasta_la_vista_money.users.services.groups import readable_users
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
+    )
 
 
 @dataclass(frozen=True)
@@ -83,11 +92,13 @@ class DepositService:
         deposit_repository: DepositRepository,
         account_repository: AccountRepository,
         transfer_money_log_repository: TransferMoneyLogRepository,
+        coverage_service: 'AccountCoverageServiceProtocol',
         calendar: ProductionCalendar | None = None,
     ) -> None:
         self.deposit_repository = deposit_repository
         self.account_repository = account_repository
         self.transfer_money_log_repository = transfer_money_log_repository
+        self.coverage_service = coverage_service
         self.calendar: ProductionCalendar = calendar or WeekendOnlyCalendar()
         self.balance_service = BalanceService()
 
@@ -198,6 +209,14 @@ class DepositService:
             amount=command.amount,
             effective_on=command.opened_on,
             source_account=locked_accounts[source_account.pk],
+        )
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[
+                (locked_accounts[source_account.pk], command.opened_on),
+                (locked_accounts[deposit.account.pk], command.opened_on),
+            ],
+            moments=[command.opened_on],
         )
         return deposit
 
@@ -894,6 +913,14 @@ class DepositService:
                 event,
                 locked_accounts,
             )
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (account, command.reversed_on)
+                    for account in locked_accounts.values()
+                ],
+                moments=[command.reversed_on],
+            )
 
         reversal = self.deposit_repository.create_principal_event(
             deposit=event.deposit,
@@ -986,7 +1013,17 @@ class DepositService:
             account_deltas[event.destination_account_id] = -(
                 event.amount + interest_event.net
             )
-        self.balance_service.apply_account_deltas(account_deltas)
+        reversed_accounts = self.balance_service.apply_account_deltas(
+            account_deltas,
+        )
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[
+                (account, command.reversed_on)
+                for account in reversed_accounts.values()
+            ],
+            moments=[command.reversed_on],
+        )
         principal_reversal = self.deposit_repository.create_principal_event(
             deposit=deposit,
             type=event.type,
@@ -1051,8 +1088,16 @@ class DepositService:
         elif event.destination_account_id is not None:
             account_id = event.destination_account_id
         if account_id is not None and event.net:
-            self.balance_service.apply_account_deltas(
+            reversed_interest = self.balance_service.apply_account_deltas(
                 {account_id: -event.net},
+            )
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (account, command.reversed_on)
+                    for account in reversed_interest.values()
+                ],
+                moments=[command.reversed_on],
             )
 
         reversal = self.deposit_repository.create_capitalization_event(
@@ -1169,6 +1214,26 @@ class DepositService:
             notes=_('Аннулирование события тела вклада.'),
         )
 
+    def _note_closure_change(
+        self,
+        *,
+        deposit_account: Account,
+        destination_account: Account | None,
+        days: tuple[date, date],
+    ) -> None:
+        """Recheck both closure accounts for the value and posting days."""
+        accounts = [deposit_account]
+        if destination_account is not None:
+            accounts.append(destination_account)
+        unique_days = tuple(dict.fromkeys(days))
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[
+                (account, day) for account in accounts for day in unique_days
+            ],
+            moments=list(unique_days),
+        )
+
     @staticmethod
     def _signed_principal_amount(event: DepositPrincipalEvent) -> Decimal:
         is_outflow = event.type in (
@@ -1276,6 +1341,14 @@ class DepositService:
                 event_type=DepositAuditEvent.Type.EXCLUSION,
                 description=exception_reason,
             )
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[
+                (source, command.effective_on),
+                (locked_accounts[destination.pk], command.effective_on),
+            ],
+            moments=[command.effective_on],
+        )
         return event
 
     @transaction.atomic
@@ -1363,6 +1436,14 @@ class DepositService:
                 event_type=DepositAuditEvent.Type.EXCLUSION,
                 description=exception_reason,
             )
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[
+                (locked_accounts[source.pk], command.effective_on),
+                (locked_accounts[deposit.account.pk], command.effective_on),
+            ],
+            moments=[command.effective_on],
+        )
         return event
 
     def capitalize_interest(
@@ -1423,7 +1504,17 @@ class DepositService:
         elif destination_account is not None:
             account_deltas[destination_account.pk] = command.net
         if account_deltas:
-            self.balance_service.apply_account_deltas(account_deltas)
+            locked_interest = self.balance_service.apply_account_deltas(
+                account_deltas,
+            )
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (account, command.posting_on)
+                    for account in locked_interest.values()
+                ],
+                moments=[command.posting_on],
+            )
         event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,
             forecast=forecast,
@@ -1629,6 +1720,11 @@ class DepositService:
                 ).format(reason=command.closure_reason.strip())
             ),
         )
+        self._note_closure_change(
+            deposit_account=closed_account,
+            destination_account=destination_account,
+            days=(command.value_on, command.posting_on),
+        )
         return CloseMaturedDepositResult(
             principal_event=principal_event,
             interest_event=interest_event,
@@ -1770,6 +1866,11 @@ class DepositService:
             deposit=deposit,
             event_type=DepositAuditEvent.Type.CLOSURE,
             description=str(_('Плановое закрытие вклада.')),
+        )
+        self._note_closure_change(
+            deposit_account=closed_account,
+            destination_account=destination_account,
+            days=(command.value_on, command.posting_on),
         )
         return CloseMaturedDepositResult(
             principal_event=principal_event,

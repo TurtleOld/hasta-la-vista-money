@@ -24,6 +24,9 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.finance_account.services.protocols import (
     AccountCoverageServiceProtocol,
 )
@@ -662,6 +665,11 @@ class StatementMarkupService:
             account,
             delta,
             check_funds=False,
+        )
+        note_financial_change(
+            coverage_service=self._coverage_service,
+            changes=[(account, bank_calendar_date or moment)],
+            moments=[bank_calendar_date or moment],
         )
         return created
 

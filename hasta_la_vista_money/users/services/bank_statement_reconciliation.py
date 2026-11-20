@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import DatabaseError, transaction
 from django.db.models import (
@@ -22,6 +22,9 @@ from hasta_la_vista_money.core.calendar_days import (
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
+)
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -50,6 +53,11 @@ from hasta_la_vista_money.users.services.statement_date_policy import (
 from hasta_la_vista_money.users.services.statement_retention_policy import (
     row_has_bank_data,
 )
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
+    )
 
 
 class InvalidReconciliationDecisionError(ValueError):
@@ -116,8 +124,10 @@ class BankStatementReconciliationService:
     def __init__(
         self,
         statement_row_repository: StatementRowRepository,
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         self.statement_row_repository = statement_row_repository
+        self.coverage_service = coverage_service
 
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
@@ -724,6 +734,11 @@ class BankStatementReconciliationService:
             delta = -delta
         account.balance += Decimal(delta)
         account.save(update_fields=['balance', 'updated_at'])
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[(account, bank_calendar_date or moment)],
+            moments=[bank_calendar_date or moment],
+        )
         return created
 
     def pending_transfer_rows(

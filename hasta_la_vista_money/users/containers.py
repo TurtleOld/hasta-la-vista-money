@@ -159,6 +159,7 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         BankStatementReconciliationService,
         statement_row_repository=statement_row_repository,
+        coverage_service=finance_account.account_coverage_service,
     )
 
     statement_row_link_service: providers.Factory[

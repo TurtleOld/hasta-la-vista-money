@@ -11,8 +11,6 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from django.utils import timezone
-
 from hasta_la_vista_money.users.services.statement_balance_staleness import (
     mark_balance_checks_stale,
 )
@@ -28,12 +26,16 @@ REASON_MOVEMENT_CHANGED = 'movement_changed'
 
 
 def exact_bank_day(value: datetime | date | None) -> date | None:
-    """Return an exact stored calendar day, never a viewer-timezone day."""
-    if value is None or not isinstance(value, datetime):
-        return value
-    if timezone.is_naive(value):
+    """Return only a proven bank calendar day, never a datetime date part.
+
+    A stored datetime (including a technical UTC anchor) is not proof of the
+    bank calendar day. Coverage then rechecks the whole corresponding period;
+    the actual datetime still goes to ``moments`` for balance staleness,
+    which converts it with the upload's explicit timezone.
+    """
+    if isinstance(value, datetime):
         return None
-    return value.date()
+    return value
 
 
 def note_financial_change(

@@ -13,7 +13,17 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.deposits.commands import (
+    CapitalizeInterestCommand,
+    FundDepositCommand,
+    WithdrawDepositCommand,
+)
+from hasta_la_vista_money.deposits.models import (
+    Deposit,
+    DepositCapitalizationEvent,
+    DepositPrincipalEvent,
+    DepositTerm,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     AccountCoverageConfirmation,
@@ -115,9 +125,11 @@ class StatementBalanceVerificationTestCase(TestCase):
         self,
         amount: str,
         moment: datetime,
+        *,
         transaction_type: str = TransactionType.INCOME,
         category: Category | None = None,
         account: Account | None = None,
+        bank_calendar_date: date | None = None,
     ) -> Transaction:
         if category is None:
             category = Category.objects.create(
@@ -132,6 +144,7 @@ class StatementBalanceVerificationTestCase(TestCase):
             type=transaction_type,
             amount=Decimal(amount),
             date=moment,
+            bank_calendar_date=bank_calendar_date,
         )
 
     def _later_income(self) -> Transaction:
@@ -605,6 +618,7 @@ class StalenessDirectionTests(StatementBalanceVerificationTestCase):
         transaction = self._transaction(
             '70.00',
             datetime(day.year, day.month, day.day, 12, tzinfo=UTC),
+            bank_calendar_date=day,
         )
         upload = self._verified_check(
             statement_closing_balance=Decimal('800.00'),
@@ -712,6 +726,7 @@ class StalenessDirectionTests(StatementBalanceVerificationTestCase):
         target = self._transaction(
             '70.00',
             datetime(2026, 4, 9, 12, tzinfo=UTC),
+            bank_calendar_date=date(2026, 4, 9),
         )
         self._transaction_service().update_transaction(
             UpdateTransactionCommand(
@@ -727,6 +742,35 @@ class StalenessDirectionTests(StatementBalanceVerificationTestCase):
         self.assertEqual(
             self._coverage_gaps(coverage),
             [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+    def test_cross_midnight_datetime_does_not_guess_coverage_day(self) -> None:
+        coverage = self._coverage()
+        later = self._transaction(
+            '70.00',
+            datetime(2026, 4, 10, 23, 30, tzinfo=UTC),
+        )
+        upload = self._upload(
+            statement_closing_balance=Decimal('930.00'),
+        )
+        verified = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(verified.status, STATUS_VERIFIED)
+        self._transaction_service().update_transaction(
+            UpdateTransactionCommand(
+                user=self.user,
+                transaction_obj=later,
+                account=self.account,
+                category=later.category,
+                amount=Decimal('80.00'),
+                transaction_date=later.date,
+                type_value=later.type,
+            ),
+        )
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._coverage_gaps(coverage),
+            [(date(2026, 4, 1), date(2026, 4, 30))],
         )
 
     def test_movement_change_rechecks_coverage_and_balance_check(self) -> None:
@@ -986,6 +1030,248 @@ class ExactBalanceTrustTests(StatementBalanceVerificationTestCase):
             user=self.user,
             name=f'Категория {uuid4().hex}',
             type=TransactionType.EXPENSE,
+        )
+
+
+class DirectStatementWriterInvalidationTests(
+    StatementBalanceVerificationTestCase,
+):
+    def _row(
+        self,
+        upload: BankStatementUpload,
+        decision: str,
+        *,
+        suggested_category: str = '',
+        position: int = 1,
+    ) -> BankStatementRow:
+        return BankStatementRow.objects.create(
+            upload=upload,
+            decision=decision,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            amount=Decimal('50.00'),
+            transaction_date=datetime(2026, 4, 9, 0, 0, tzinfo=UTC),
+            bank_calendar_date=date(2026, 4, 9),
+            date_precision=BankStatementRow.DatePrecision.DAY,
+            suggested_category=suggested_category,
+            source_row_position=position,
+        )
+
+    def _coverage(self) -> AccountCoverageService:
+        coverage = AccountCoverageService(
+            repository=AccountCoverageRepository(),
+        )
+        coverage.confirm(
+            owner=self.user,
+            account=self.account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+        return coverage
+
+    def _gaps(
+        self,
+        coverage: AccountCoverageService,
+    ) -> list[tuple[date, date]]:
+        summary = coverage.summary(
+            account=self.account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+        )
+        return [(gap.start, gap.end) for gap in summary.gaps]
+
+    def _verified_upload(self, **kwargs: object) -> BankStatementUpload:
+        upload = self._upload(
+            statement_closing_balance=Decimal('1000.00'),
+            **kwargs,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_VERIFIED)
+        return upload
+
+    def test_markup_new_create_rechecks_coverage(self) -> None:
+        coverage = self._coverage()
+        upload = self._verified_upload()
+        row = self._row(upload, BankStatementRow.Decision.AWAITING_MARKUP)
+        category = Category.objects.create(
+            user=self.user,
+            name='Доход',
+            type=TransactionType.INCOME,
+        )
+        markup = ApplicationContainer().users.statement_markup_service()
+
+        markup.post(row.pk, self.user.pk, category.pk)
+
+        self.assertEqual(
+            self._gaps(coverage),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+    def test_reconciliation_new_create_stales_check_and_coverage(self) -> None:
+        coverage = self._coverage()
+        upload = self._verified_upload()
+        row = self._row(
+            upload,
+            BankStatementRow.Decision.PENDING,
+            suggested_category='Доход',
+        )
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+
+        service.decide(row.pk, BankStatementRow.Decision.NEW, self.user.pk)
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._gaps(coverage),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+
+class DepositWriterInvalidationTests(StatementBalanceVerificationTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.deposit_service = ApplicationContainer().deposits.deposit_service()
+        self.bank, _ = Bank.objects.get_or_create(
+            code='TEST',
+            defaults={'name': 'Тест', 'is_system': True},
+        )
+        self.destination = Account.objects.create(
+            user=self.user,
+            name_account='Назначение',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+
+    def _coverage(self, account: Account) -> AccountCoverageService:
+        coverage = AccountCoverageService(
+            repository=AccountCoverageRepository(),
+        )
+        coverage.confirm(
+            owner=self.user,
+            account=account,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 4, 30),
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+        return coverage
+
+    def _gaps(
+        self,
+        coverage: AccountCoverageService,
+        account: Account,
+    ) -> list[tuple[date, date]]:
+        summary = coverage.summary(
+            account=account,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 4, 30),
+        )
+        return [(gap.start, gap.end) for gap in summary.gaps]
+
+    def _verified(
+        self,
+        account: Account,
+        balance: str,
+    ) -> BankStatementUpload:
+        upload = self._upload(
+            account=account,
+            statement_closing_balance=Decimal(balance),
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_VERIFIED)
+        return upload
+
+    def _fund(self, opened_on: date = date(2026, 1, 1)) -> Deposit:
+        return self.deposit_service.create_funded_term_deposit(
+            FundDepositCommand(
+                user=self.user,
+                name='Вклад',
+                bank=self.bank,
+                currency='RUB',
+                amount=Decimal('200.00'),
+                source_account_id=self.account.pk,
+                opened_on=opened_on,
+                matures_on=date(2027, 1, 1),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+    def test_backdated_funding_stales_snapshot_and_coverage(self) -> None:
+        coverage = self._coverage(self.account)
+        upload = self._verified(self.account, '1000.00')
+
+        self._fund()
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._gaps(coverage, self.account),
+            [(date(2026, 1, 1), date(2026, 1, 1))],
+        )
+
+    def test_backdated_withdraw_stales_snapshot_and_coverage(self) -> None:
+        deposit = self._fund()
+        coverage = self._coverage(deposit.account)
+        upload = self._verified(deposit.account, '200.00')
+
+        self.deposit_service.withdraw_deposit_principal(
+            WithdrawDepositCommand(
+                user=self.user,
+                deposit_id=deposit.pk,
+                destination_account_id=self.destination.pk,
+                amount=Decimal('50.00'),
+                effective_on=date(2026, 2, 1),
+                exception_reason='тест',
+            ),
+        )
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._gaps(coverage, deposit.account),
+            [(date(2026, 2, 1), date(2026, 2, 1))],
+        )
+
+    def test_backdated_capitalization_stales_snapshot_and_coverage(
+        self,
+    ) -> None:
+        deposit = self._fund()
+        coverage = self._coverage(deposit.account)
+        upload = self._verified(deposit.account, '200.00')
+
+        self.deposit_service.confirm_interest_payment(
+            CapitalizeInterestCommand(
+                user=self.user,
+                deposit_id=deposit.pk,
+                gross=Decimal('10.00'),
+                withholding=Decimal('0.00'),
+                net=Decimal('10.00'),
+                posting_on=date(2026, 3, 1),
+                value_on=date(2026, 3, 1),
+                reason='Фактическая выплата.',
+                destination=(
+                    DepositCapitalizationEvent.Destination.CAPITALIZATION
+                ),
+            ),
+        )
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._gaps(coverage, deposit.account),
+            [(date(2026, 3, 1), date(2026, 3, 1))],
+        )
+
+    def test_funding_rechecks_coverage_without_verified_upload(self) -> None:
+        coverage = self._coverage(self.account)
+
+        self._fund()
+
+        self.assertEqual(
+            self._gaps(coverage, self.account),
+            [(date(2026, 1, 1), date(2026, 1, 1))],
         )
 
 

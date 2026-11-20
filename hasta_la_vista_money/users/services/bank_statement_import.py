@@ -29,6 +29,9 @@ from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.system.services.audit_statement_import import (
@@ -1383,6 +1386,14 @@ class BankStatementImportService:
                             upload.account,
                             balance_change,
                             check_funds=False,
+                        )
+                        changed_at = (
+                            trans.get('bank_calendar_date') or trans_date
+                        )
+                        note_financial_change(
+                            coverage_service=self.coverage_service,
+                            changes=[(upload.account, changed_at)],
+                            moments=[changed_at],
                         )
                         if type_value == TransactionType.INCOME:
                             income_count += 1

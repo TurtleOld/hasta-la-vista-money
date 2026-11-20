@@ -20,6 +20,7 @@ class DepositContainer(containers.DeclarativeContainer):
             transfer_money_log_repository=(
                 finance_account.transfer_money_log_repository
             ),
+            coverage_service=finance_account.account_coverage_service,
             calendar=production_calendar,
         )
     )
