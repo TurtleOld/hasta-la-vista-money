@@ -14,6 +14,11 @@ from typing import Any
 from django.db import transaction
 
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+    current_operation_id,
+    current_operation_kind,
+)
 
 STATEMENT_SOURCE_REF_SCRUBBED_LABEL = '[банковский идентификатор удалён]'
 STATEMENT_SCRUB_FACT_OBJECT = 'statement-audit-scrub-v1'
@@ -61,11 +66,26 @@ def scrub_transaction_source_ref_audit(
     """Scrub raw source refs in the audit of the given transactions.
 
     Returns the number of audit entries actually changed, so a repeated
-    run reports zero and leaves the stored diffs untouched.
+    run reports zero and leaves the stored diffs untouched. The
+    anonymisation fact belongs to the current audit operation when one is
+    active; a standalone run mints its own resolution operation instead of
+    writing an entry with a null ``operation_id``.
     """
     wanted = {str(pk) for pk in transaction_ids}
     if not wanted:
         return 0
+    if current_operation_id() is None:
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        ):
+            return _scrub_source_refs_and_record(wanted)
+    return _scrub_source_refs_and_record(wanted)
+
+
+def _scrub_source_refs_and_record(wanted: set[str]) -> int:
+    """Rewrite the diffs and record the anonymisation fact."""
+    operation_id = current_operation_id()
+    operation_kind = current_operation_kind()
     changed_by_user: Counter[int | None] = Counter()
     with transaction.atomic():
         logs = AuditLog.objects.filter(
@@ -85,7 +105,8 @@ def scrub_transaction_source_ref_audit(
                 model_name='users.BankStatementUpload',
                 object_pk=STATEMENT_SCRUB_FACT_OBJECT,
                 action=AuditLog.Action.UPDATE,
-                kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+                kind=operation_kind,
+                operation_id=operation_id,
                 diff={
                     'bank_identifiers_anonymized': {
                         'old': False,

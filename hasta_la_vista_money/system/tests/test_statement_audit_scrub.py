@@ -7,6 +7,9 @@ from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+)
 from hasta_la_vista_money.system.services.statement_audit_scrub import (
     STATEMENT_SCRUB_FACT_OBJECT,
     STATEMENT_SOURCE_REF_SCRUBBED_LABEL,
@@ -199,3 +202,42 @@ class StatementAuditScrubTest(TestCase):
             0,
         )
         self.assertEqual(len(self._facts()), 1)
+
+    def test_fact_inherits_the_current_operation_context(self) -> None:
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        ) as operation_id:
+            scrub_transaction_source_ref_audit([self.transaction.pk])
+
+        fact = self._facts()[0]
+        self.assertEqual(fact.operation_id, operation_id)
+        self.assertEqual(
+            fact.kind,
+            AuditOperationKind.STATEMENT_IMPORT,
+        )
+
+    def test_standalone_scrub_mints_one_resolution_operation(self) -> None:
+        scrub_transaction_source_ref_audit([self.transaction.pk])
+
+        fact = self._facts()[0]
+        self.assertIsNotNone(fact.operation_id)
+        self.assertEqual(
+            fact.kind,
+            AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
+        )
+
+    def test_repeat_inside_a_new_context_keeps_the_stored_fact(self) -> None:
+        scrub_transaction_source_ref_audit([self.transaction.pk])
+        fact = self._facts()[0]
+        stored_operation_id = fact.operation_id
+
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            self.assertEqual(
+                scrub_transaction_source_ref_audit([self.transaction.pk]),
+                0,
+            )
+
+        facts = self._facts()
+        self.assertEqual(len(facts), 1)
+        self.assertEqual(facts[0].pk, fact.pk)
+        self.assertEqual(facts[0].operation_id, stored_operation_id)
