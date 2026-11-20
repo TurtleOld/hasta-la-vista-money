@@ -1,5 +1,6 @@
 """Independent completeness assessment for selected accounts and dates."""
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -27,6 +28,7 @@ from hasta_la_vista_money.users.repositories.accounting_completeness_repository 
     AccountingCompletenessRepository,
 )
 from hasta_la_vista_money.users.services.accounting_completeness import (
+    AccountingCompletenessResult,
     AccountingCompletenessService,
 )
 from hasta_la_vista_money.users.services.statement_balance_verification import (
@@ -144,14 +146,80 @@ class AccountingCompletenessTest(TestCase):
             statement_upload=upload,
         )
 
-    def _assess(self, **kwargs: Any) -> Any:
+    def _assess(
+        self,
+        *,
+        account_ids: Sequence[int] | None = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
+        balance_provider: Any | None = None,
+    ) -> AccountingCompletenessResult:
         return self.service.assess(
             owner=self.user,
-            account_ids=kwargs.get('account_ids'),
-            period_start=kwargs.get('period_start', self.period_start),
-            period_end=kwargs.get('period_end', self.period_end),
-            balance_provider=kwargs.get('balance_provider'),
+            account_ids=account_ids,
+            period_start=period_start or self.period_start,
+            period_end=period_end or self.period_end,
+            balance_provider=balance_provider,
         )
+
+    def test_legacy_utc_moment_uses_local_period_day(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='legacy-period.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        legacy = BankStatementRow.objects.create(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            bank_calendar_date=None,
+            transaction_date=datetime(
+                2026,
+                2,
+                28,
+                21,
+                30,
+                tzinfo=UTC,
+            ),
+            date_precision=BankStatementRow.DatePrecision.DATETIME,
+        )
+        explicit = BankStatementRow.objects.create(
+            upload=upload,
+            decision=BankStatementRow.Decision.DEFERRED,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            amount=Decimal('20.00'),
+            bank_calendar_date=date(2026, 2, 28),
+            transaction_date=datetime(
+                2026,
+                2,
+                28,
+                21,
+                30,
+                tzinfo=UTC,
+            ),
+            date_precision=BankStatementRow.DatePrecision.DAY,
+        )
+
+        with timezone.override('Europe/Moscow'):
+            march = self.service.assess(
+                owner=self.user,
+                account_ids=[self.account.pk],
+                period_start=date(2026, 3, 1),
+                period_end=date(2026, 3, 1),
+            )
+            february = self.service.assess(
+                owner=self.user,
+                account_ids=[self.account.pk],
+                period_start=date(2026, 2, 28),
+                period_end=date(2026, 2, 28),
+            )
+
+        self.assertEqual(march.accounts[0].unresolved_count, 1)
+        self.assertEqual(february.accounts[0].unresolved_count, 1)
+        self.assertTrue(legacy.pk)
+        self.assertTrue(explicit.pk)
 
     def test_legacy_completed_without_rows_is_not_processing_proof(self):
         self._upload(status=BankStatementUpload.Status.COMPLETED)

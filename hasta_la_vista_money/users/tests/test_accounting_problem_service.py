@@ -1,7 +1,7 @@
 """Unified accounting problems service: owner scope, kinds, counts, filters."""
 
 from dataclasses import FrozenInstanceError
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -550,6 +550,79 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertNotIn(ProblemKind.REPAYMENT, kinds)
         self.assertIn(ProblemKind.RECOVERY, kinds)
         self.assertEqual(result.counts.total_items, 5)
+
+    def test_legacy_utc_moment_uses_local_calendar_day(self) -> None:
+        legacy = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type='expense',
+            transaction_date=datetime(
+                2026,
+                2,
+                28,
+                21,
+                30,
+                tzinfo=UTC,
+            ),
+            bank_calendar_date=None,
+            amount=Decimal('10.00'),
+            source_row_position=10,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        explicit = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type='expense',
+            transaction_date=datetime(
+                2026,
+                2,
+                28,
+                21,
+                30,
+                tzinfo=UTC,
+            ),
+            bank_calendar_date=date(2026, 2, 28),
+            amount=Decimal('20.00'),
+            source_row_position=11,
+            decision=BankStatementRow.Decision.DEFERRED,
+        )
+        unknown = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type='expense',
+            transaction_date=None,
+            bank_calendar_date=None,
+            amount=Decimal('30.00'),
+            source_row_position=12,
+            decision=BankStatementRow.Decision.PARSE_ERROR,
+        )
+
+        with timezone.override('Europe/Moscow'):
+            march = self.service.problems(
+                self.user,
+                start=date(2026, 3, 1),
+                end=date(2026, 3, 1),
+            )
+            february = self.service.problems(
+                self.user,
+                start=date(2026, 2, 28),
+                end=date(2026, 2, 28),
+            )
+
+        march_ids = {item.row_id for item in march.items}
+        february_ids = {item.row_id for item in february.items}
+        legacy_item = next(
+            item for item in march.items if item.row_id == legacy.pk
+        )
+
+        self.assertIn(legacy.pk, march_ids)
+        self.assertNotIn(explicit.pk, march_ids)
+        self.assertEqual(legacy_item.transaction_date, date(2026, 3, 1))
+        self.assertIn(explicit.pk, february_ids)
+        self.assertNotIn(legacy.pk, february_ids)
+        self.assertIn(unknown.pk, march_ids)
+        unknown_item = next(
+            item for item in march.items if item.row_id == unknown.pk
+        )
+        self.assertIsNone(unknown_item.transaction_date)
+        self.assertFalse(unknown_item.date_known)
 
     def test_invalid_period_is_rejected(self) -> None:
         with self.assertRaises(ValidationError):

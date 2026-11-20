@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, cast
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money.core.calendar_days import local_calendar_date
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -176,9 +177,10 @@ class AccountingCompletenessResult:
 def _row_day(row: BankStatementRow) -> date | None:
     if row.bank_calendar_date is not None:
         return row.bank_calendar_date
-    if row.transaction_date is not None:
-        return row.transaction_date.date()
-    return None
+    moment = row.transaction_date
+    if moment is None:
+        return None
+    return local_calendar_date(moment)
 
 
 def _row_in_period(

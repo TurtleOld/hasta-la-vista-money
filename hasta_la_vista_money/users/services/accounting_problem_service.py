@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
+from hasta_la_vista_money.core.calendar_days import local_calendar_date
 from hasta_la_vista_money.users.accounting_types import (
     AccountingAccountOption,
     AccountingKnownTotal,
@@ -241,7 +242,7 @@ class AccountingProblemService:
         moment = row.transaction_date
         if moment is None:
             return None
-        return moment.date()
+        return local_calendar_date(moment)
 
     def _append_row_item(
         self,
