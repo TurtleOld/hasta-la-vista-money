@@ -415,6 +415,13 @@ class StatementMarkupService:
         as_transfer: bool = False,
         finalize: bool = True,
     ) -> BankStatementRow:
+        if as_transfer:
+            return self._decide_transfer(
+                row_id,
+                user_id,
+                transfer_account_id,
+                finalize=finalize,
+            )
         upload, row = self._statement_row_repository.lock_owned_upload_and_row(
             row_id,
             user_id,
@@ -434,15 +441,6 @@ class StatementMarkupService:
                 '',
                 user_id,
             )
-        elif as_transfer:
-            if row.duplicate_of_id is not None:
-                raise StatementMarkupConflictError('duplicate')
-            row.transfer = self._create_transfer(
-                row,
-                upload,
-                transfer_account_id,
-            )
-            row.decision = BankStatementRow.Decision.TRANSFERRED
         else:
             self._post_transaction_decision(row, upload, category_id)
         if not skip:
@@ -461,6 +459,85 @@ class StatementMarkupService:
                 decision=row.decision,
                 transaction=row.transaction,
             )
+        if finalize:
+            self._finalize(upload)
+        return row
+
+    def _decide_transfer(
+        self,
+        row_id: int,
+        user_id: int,
+        account_id: int | None,
+        *,
+        finalize: bool,
+    ) -> BankStatementRow:
+        """Post an own transfer after locking both accounts in pk order.
+
+        The counterparty pair is resolved read-only before any lock so the
+        account locks follow the shared Accounts(sorted) -> upload -> row
+        order. Values are then re-read under the locks; a changed number,
+        account owner or row representation fails closed.
+        """
+        context = self._statement_row_repository.get_owned_row_context(
+            row_id,
+            user_id,
+        )
+        if context is None:
+            raise BankStatementRow.DoesNotExist
+        self._require_markup_row(context)
+        counterparty, number_was_bound = self._counterparty_candidate(
+            context,
+            account_id,
+        )
+        account_ids = {context.upload.account_id, counterparty.pk}
+        locked_accounts = self._account_repository.get_by_ids_for_update(
+            account_ids,
+        )
+        if set(locked_accounts) != account_ids:
+            raise StatementMarkupConflictError('account')
+
+        upload, row = self._statement_row_repository.lock_owned_upload_and_row(
+            row_id,
+            user_id,
+        )
+        own = locked_accounts.get(upload.account_id)
+        if own is None or own.user_id != user_id:
+            raise StatementMarkupConflictError('account')
+        if (
+            row.kind != context.kind
+            or row.counterparty_account != context.counterparty_account
+            or upload.account_id != context.upload.account_id
+        ):
+            raise StatementMarkupConflictError('row')
+        self._require_markup_row(row)
+        if row.duplicate_of_id is not None:
+            raise StatementMarkupConflictError('duplicate')
+
+        other = self._counterparty_under_locks(
+            row=row,
+            upload=upload,
+            account_id=account_id,
+            expected_pk=counterparty.pk,
+            number_was_bound=number_was_bound,
+            locked_accounts=locked_accounts,
+        )
+        row.transfer = self._create_transfer(row, upload, own, other)
+        row.decision = BankStatementRow.Decision.TRANSFERRED
+        row.decided_at = timezone.now()
+        row.save(
+            update_fields=[
+                'transaction',
+                'transfer',
+                'decision',
+                'decided_at',
+            ],
+        )
+        BankStatementDecisionAudit.objects.create(
+            row=row,
+            actor_id=user_id,
+            decision=row.decision,
+            transaction=row.transaction,
+        )
         if finalize:
             self._finalize(upload)
         return row
@@ -598,7 +675,8 @@ class StatementMarkupService:
         self,
         row: BankStatementRow,
         upload: BankStatementUpload,
-        account_id: int | None,
+        own: Account,
+        other: Account,
     ) -> TransferMoneyLog:
         if (
             row.kind
@@ -608,11 +686,11 @@ class StatementMarkupService:
             or row.transaction_date is None
         ):
             raise StatementMarkupConflictError('row')
-        own = upload.account
-        other = self._counterparty(row, upload, account_id)
         if other.pk == own.pk:
             raise StatementMarkupConflictError('account')
         if own.is_deposit or other.is_deposit:
+            raise StatementMarkupConflictError('account')
+        if own.user_id != upload.user_id or other.user_id != upload.user_id:
             raise StatementMarkupConflictError('account')
         validate_same_currency(own, other)
         source, target = (
@@ -636,13 +714,61 @@ class StatementMarkupService:
             notes=row.description,
         )
 
-    def _counterparty(
+    @staticmethod
+    def _require_markup_row(row: BankStatementRow) -> None:
+        """Fail closed unless the row may still be decided."""
+        if row.decision != BankStatementRow.Decision.AWAITING_MARKUP:
+            raise StatementMarkupConflictError(row.decision)
+        if not row_has_bank_data(row):
+            raise StatementMarkupConflictError('expired')
+
+    def _counterparty_candidate(
         self,
+        row: BankStatementRow,
+        account_id: int | None,
+    ) -> tuple[Account, bool]:
+        """Resolve the counterparty pair read-only, before any lock."""
+        number = (
+            row.counterparty_account
+            if row.kind == RosDorBankRowKind.OWN_C2C
+            else ''
+        )
+        if number:
+            found = self._account_repository.get_by_user_and_account_number(
+                row.upload.user,
+                number,
+            )
+            if found is not None:
+                return found, True
+        chosen = (
+            Account.objects.filter(
+                pk=account_id,
+                user_id=row.upload.user_id,
+            ).first()
+            if account_id is not None
+            else None
+        )
+        if chosen is None:
+            raise StatementMarkupConflictError('account')
+        return chosen, False
+
+    def _counterparty_under_locks(
+        self,
+        *,
         row: BankStatementRow,
         upload: BankStatementUpload,
         account_id: int | None,
+        expected_pk: int,
+        number_was_bound: bool,
+        locked_accounts: dict[int, Account],
     ) -> Account:
-        """Own account of the transfer: by number, else the chosen one."""
+        """Re-read the counterparty after both accounts are locked.
+
+        A number bound to another account is a changed counterparty and
+        fails closed. An unbound number is attached to the chosen account
+        only now, under its lock, so no write happens before the shared
+        account lock order is established.
+        """
         number = (
             row.counterparty_account
             if row.kind == RosDorBankRowKind.OWN_C2C
@@ -653,29 +779,30 @@ class StatementMarkupService:
                 upload.user,
                 number,
             )
-            if found is not None:
-                return found
-        chosen = (
-            Account.objects.filter(
-                pk=account_id,
-                user_id=upload.user_id,
-            ).first()
-            if account_id is not None
-            else None
-        )
-        if chosen is None:
+            if number_was_bound:
+                if found is None or found.pk != expected_pk:
+                    raise StatementMarkupConflictError('account')
+            elif found is not None and found.pk != expected_pk:
+                raise StatementMarkupConflictError('account')
+            other = locked_accounts.get(expected_pk)
+            if other is None:
+                raise StatementMarkupConflictError('account')
+            if found is None:
+                if other.account_number:
+                    raise StatementMarkupConflictError('account_number')
+                other.account_number = number
+                try:
+                    with transaction.atomic():
+                        other.save(update_fields=['account_number'])
+                except IntegrityError as error:
+                    raise StatementMarkupConflictError(
+                        'account_number',
+                    ) from error
+        else:
+            other = locked_accounts.get(expected_pk)
+        if other is None or other.user_id != upload.user_id:
             raise StatementMarkupConflictError('account')
-        if number:
-            if chosen.account_number:
-                raise StatementMarkupConflictError('account_number')
-            chosen.account_number = number
-            try:
-                # The unique index rejects a number another account holds.
-                with transaction.atomic():
-                    chosen.save(update_fields=['account_number'])
-            except IntegrityError as error:
-                raise StatementMarkupConflictError('account_number') from error
-        return chosen
+        return other
 
     @staticmethod
     def _category(

@@ -205,6 +205,10 @@ class StatementRowRepository:
         The upload and account are resolved without a lock first so the
         ``FOR UPDATE`` queries lock plain rows: a nullable join cannot be
         locked. Raises ``BankStatementRow.DoesNotExist`` for a foreign row.
+
+        A transfer decision locks the counterparty account before this call,
+        so here the account lock is already held by the same transaction;
+        the remaining order upload then row stays unchanged.
         """
         owner = (
             BankStatementRow.objects.filter(
@@ -230,6 +234,27 @@ class StatementRowRepository:
         )
         row.upload = upload
         return upload, row
+
+    def get_owned_row_context(
+        self,
+        row_id: int,
+        user_id: int,
+    ) -> BankStatementRow | None:
+        """Read one owned row with upload and account, without locking.
+
+        Transfer decisions use this to resolve the counterparty pair before
+        taking locks. The returned values are re-read under locks and never
+        trusted for the decision itself.
+        """
+        return (
+            BankStatementRow.objects.filter(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+            .select_related('upload__account', 'upload__user')
+            .first()
+        )
 
     def lock_duplicate_root(
         self,
