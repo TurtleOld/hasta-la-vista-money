@@ -226,6 +226,15 @@ class AccountingProblemService:
         return active
 
     @staticmethod
+    def _has_duplicate_evidence(row: BankStatementRow) -> bool:
+        """Only a stored candidate or exact-duplicate link is evidence."""
+        return bool(
+            row.candidate_id is not None
+            or row.duplicate_of_id is not None
+            or getattr(row, 'has_candidate', False),
+        )
+
+    @staticmethod
     def _row_date(row: BankStatementRow) -> date | None:
         if row.bank_calendar_date is not None:
             return row.bank_calendar_date
@@ -240,7 +249,19 @@ class AccountingProblemService:
         row: BankStatementRow,
         decision: str,
     ) -> None:
-        kind, action, reason = _ROW_PROBLEMS[decision]
+        kind: str
+        action: str
+        reason: str
+        if decision == BankStatementRow.Decision.PENDING and not (
+            self._has_duplicate_evidence(row)
+        ):
+            kind, action, reason = (
+                ProblemKind.UNRESOLVED,
+                ProblemAction.RECONCILE,
+                'Строка ожидает решения',
+            )
+        else:
+            kind, action, reason = _ROW_PROBLEMS[decision]
         items.append(
             self._item(
                 kind=kind,

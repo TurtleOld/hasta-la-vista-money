@@ -20,6 +20,7 @@ from hasta_la_vista_money.users.accounting_types import (
     ProblemKind,
 )
 from hasta_la_vista_money.users.models import (
+    BankStatementCandidate,
     BankStatementRow,
     BankStatementUpload,
     FamilyGroupMembership,
@@ -85,6 +86,11 @@ class AccountingProblemServiceFixture(TestCase):
             amount=Decimal('200.00'),
             transaction_type='income',
         )
+        BankStatementCandidate.objects.create(
+            row=self.pending_row,
+            description='Совпадение с движением',
+            rank=0,
+        )
         self.repayment_row = self._row(
             self.upload,
             3,
@@ -109,6 +115,14 @@ class AccountingProblemServiceFixture(TestCase):
             amount=None,
             transaction_type=None,
             parse_error_code=BankStatementRow.ParseError.MISSING_AMOUNT,
+        )
+        self.plain_pending_row = self._row(
+            self.upload,
+            6,
+            BankStatementRow.Decision.PENDING,
+            day=date(2026, 3, 4),
+            amount=Decimal('400.00'),
+            transaction_type='expense',
         )
         self.cleaned_upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -246,6 +260,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         counts = self._kind_counts()
 
         self.assertEqual(counts[ProblemKind.INCOMPLETE_MARKUP], 1)
+        self.assertEqual(counts[ProblemKind.UNRESOLVED], 1)
         self.assertEqual(counts[ProblemKind.PROBABLE_DUPLICATE], 1)
         self.assertEqual(counts[ProblemKind.REPAYMENT], 1)
         self.assertEqual(counts[ProblemKind.DEFERRED], 1)
@@ -253,7 +268,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertEqual(counts[ProblemKind.RECOVERY], 1)
         self.assertEqual(counts[ProblemKind.UPLOAD_FAILED], 1)
         self.assertEqual(counts[ProblemKind.BALANCE_ATTENTION], 0)
-        self.assertEqual(result.counts.total_items, 7)
+        self.assertEqual(result.counts.total_items, 8)
 
         deferred = next(
             item for item in result.items if item.kind == ProblemKind.DEFERRED
@@ -271,6 +286,37 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertIsNone(parse_error.transaction_date)
         self.assertIsNone(parse_error.amount)
 
+    def test_plain_pending_is_unresolved_not_a_probable_duplicate(
+        self,
+    ) -> None:
+        result = self.service.problems(self.user)
+        plain = next(
+            item
+            for item in result.items
+            if item.row_id == self.plain_pending_row.pk
+        )
+        probable = next(
+            item for item in result.items if item.row_id == self.pending_row.pk
+        )
+
+        self.assertEqual(plain.kind, ProblemKind.UNRESOLVED)
+        self.assertEqual(plain.action, 'reconcile')
+        self.assertEqual(probable.kind, ProblemKind.PROBABLE_DUPLICATE)
+        self.assertEqual(probable.action, 'reconcile')
+
+    def test_duplicate_of_metadata_is_duplicate_evidence(self) -> None:
+        self.plain_pending_row.duplicate_of = self.pending_row
+        self.plain_pending_row.save(update_fields=['duplicate_of'])
+
+        result = self.service.problems(self.user)
+        plain = next(
+            item
+            for item in result.items
+            if item.row_id == self.plain_pending_row.pk
+        )
+
+        self.assertEqual(plain.kind, ProblemKind.PROBABLE_DUPLICATE)
+
     def test_cleaned_and_expired_rows_aggregate_once_per_upload(self) -> None:
         result = self.service.problems(self.user)
         recovery = [
@@ -283,7 +329,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertIsNone(recovery[0].row_id)
         self.assertFalse(recovery[0].data_available)
         self.assertEqual(result.counts.recovery_row_count, 2)
-        self.assertEqual(result.counts.total_items, 7)
+        self.assertEqual(result.counts.total_items, 8)
 
         self.cleaned_row.refresh_from_db()
         self.expired_row.refresh_from_db()
@@ -307,7 +353,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertFalse(
             any(item.row_id == self.excluded_row.pk for item in result.items),
         )
-        self.assertEqual(result.counts.total_items, 7)
+        self.assertEqual(result.counts.total_items, 8)
 
     def test_legacy_discrepancy_alone_is_inert(self) -> None:
         result = self.service.problems(self.user)
@@ -352,7 +398,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
             'balance_verification_not_integrated',
             result.incomplete_reasons,
         )
-        self.assertEqual(result.counts.total_items, 8)
+        self.assertEqual(result.counts.total_items, 9)
 
     def test_container_wires_09_retained_mismatch_into_07_and_08(self) -> None:
         self.balance_upload.balance_unexplained_mismatch = True
@@ -417,7 +463,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
 
         self.assertEqual(
             totals[('RUB', 'expense')],
-            Decimal('400.00'),
+            Decimal('800.00'),
         )
         self.assertEqual(
             totals[('RUB', 'income')],
@@ -457,7 +503,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
                 self.user,
                 account_ids=[self.account.pk],
             ).counts.total_items,
-            6,
+            7,
         )
         self.assertEqual(
             self.service.problems(
@@ -497,6 +543,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         kinds = [item.kind for item in result.items]
 
         self.assertIn(ProblemKind.PROBABLE_DUPLICATE, kinds)
+        self.assertNotIn(ProblemKind.UNRESOLVED, kinds)
         self.assertIn(ProblemKind.DEFERRED, kinds)
         self.assertIn(ProblemKind.PARSE_ERROR, kinds)
         self.assertNotIn(ProblemKind.INCOMPLETE_MARKUP, kinds)
@@ -573,7 +620,7 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
 
         self.assertEqual(len(base_queries), len(grown_queries))
         self.assertLessEqual(len(base_queries), 6)
-        self.assertEqual(result.counts.total_items, 10)
+        self.assertEqual(result.counts.total_items, 11)
 
     def test_service_never_moves_money(self) -> None:
         before = Transaction.objects.count()

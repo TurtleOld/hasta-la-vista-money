@@ -4015,3 +4015,6 @@ msgstr "Invalid start date in the filter."
 
 msgid "Некорректная дата конца в фильтре."
 msgstr "Invalid end date in the filter."
+
+msgid "Ожидает решения"
+msgstr "Awaiting decision"

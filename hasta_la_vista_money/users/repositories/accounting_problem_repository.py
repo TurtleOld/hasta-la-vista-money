@@ -2,10 +2,11 @@
 
 from collections.abc import Sequence
 
-from django.db.models import QuerySet
+from django.db.models import Exists, OuterRef, QuerySet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import (
+    BankStatementCandidate,
     BankStatementRow,
     BankStatementUpload,
 )
@@ -54,7 +55,13 @@ class AccountingProblemRepository:
             rows = rows.filter(upload__account__bank__code=bank_code)
         if currency:
             rows = rows.filter(upload__account__currency=currency)
-        return rows.order_by('upload_id', 'source_row_position', 'pk')
+        return rows.annotate(
+            has_candidate=Exists(
+                BankStatementCandidate.objects.filter(
+                    row_id=OuterRef('pk'),
+                ),
+            ),
+        ).order_by('upload_id', 'source_row_position', 'pk')
 
     @staticmethod
     def uploads(
