@@ -64,6 +64,9 @@ class TransactionAuditOperationKindTests(TestCase):
             account_service=container.core.account_service(),
             transaction_repository=TransactionRepository(),
             statement_row_links=container.users.statement_row_link_service(),
+            coverage_service=(
+                container.finance_account.account_coverage_service()
+            ),
         )
 
     def test_add_income_gives_one_income_operation(self) -> None:

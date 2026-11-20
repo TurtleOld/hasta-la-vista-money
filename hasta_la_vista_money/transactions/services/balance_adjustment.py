@@ -1,6 +1,7 @@
 """Aligns an account balance with the actual one via a system movement."""
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction as db_transaction
@@ -11,6 +12,9 @@ from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
     AccountRepository,
+)
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -25,6 +29,11 @@ from hasta_la_vista_money.transactions.repositories import (
 )
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
+    )
+
 
 class BalanceAdjustmentService:
     """Posts the difference to the actual balance as a system movement."""
@@ -35,11 +44,13 @@ class BalanceAdjustmentService:
         account_repository: AccountRepository,
         transaction_repository: TransactionRepository,
         category_repository: CategoryRepository,
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         self.account_service = account_service
         self.account_repository = account_repository
         self.transaction_repository = transaction_repository
         self.category_repository = category_repository
+        self.coverage_service = coverage_service
 
     def adjust_balance(
         self,
@@ -96,5 +107,10 @@ class BalanceAdjustmentService:
                 )
                 self.account_service.apply_account_deltas(
                     {account.pk: difference},
+                )
+                note_financial_change(
+                    coverage_service=self.coverage_service,
+                    changes=[(account, movement.date)],
+                    moments=[movement.date],
                 )
             return movement

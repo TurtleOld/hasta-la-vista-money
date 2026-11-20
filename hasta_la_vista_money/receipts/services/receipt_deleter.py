@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from django.db import transaction
 
 from core.protocols.services import AccountServiceProtocol
@@ -8,16 +10,26 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_balance_staleness import (
-    mark_balance_checks_stale,
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
+    )
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
 )
 
 
 class ReceiptDeleterService:
     """Service for deleting receipts and refunding account balance."""
 
-    def __init__(self, account_service: AccountServiceProtocol) -> None:
+    def __init__(
+        self,
+        account_service: AccountServiceProtocol,
+        coverage_service: 'AccountCoverageServiceProtocol',
+    ) -> None:
         self.account_service = account_service
+        self.coverage_service = coverage_service
 
     @audit_operation(kind=AuditOperationKind.RECEIPT_DELETE)
     @transaction.atomic
@@ -35,8 +47,12 @@ class ReceiptDeleterService:
             },
         )
 
-        receipt.product.all().delete()
-        account_id = receipt.account_id
+        account = receipt.account
         receipt_date = receipt.receipt_date
+        receipt.product.all().delete()
         receipt.delete()
-        mark_balance_checks_stale({account_id}, [receipt_date])
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[(account, receipt_date)],
+            moments=[receipt_date],
+        )

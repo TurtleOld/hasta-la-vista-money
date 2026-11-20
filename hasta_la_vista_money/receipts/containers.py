@@ -147,6 +147,7 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         product_repository=product_repository,
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
+        coverage_service=finance_account.account_coverage_service,
     )
     product_category_service = providers.Factory(
         ProductCategoryService,
@@ -162,12 +163,14 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
         category_correction_service=product_category_correction_service,
+        coverage_service=finance_account.account_coverage_service,
     )
     receipt_deleter_service: providers.Factory[
         ReceiptDeleterServiceProtocol
     ] = providers.Factory(
         ReceiptDeleterService,
         account_service=core.account_service,
+        coverage_service=finance_account.account_coverage_service,
     )
     receipt_processing_service: providers.Factory[
         ReceiptProcessingServiceProtocol

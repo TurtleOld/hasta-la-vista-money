@@ -38,6 +38,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
         TransactionContainer,
         core=core,
         users=providers.DependenciesContainer(),
+        finance_account=providers.DependenciesContainer(),
     )
 
     finance_account = providers.Container(
@@ -59,6 +60,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     )
 
     finance_account.deposits.override(deposits)
+    transactions.finance_account.override(finance_account)
 
     budget = providers.Container(
         BudgetContainer,

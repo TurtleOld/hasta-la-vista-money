@@ -17,6 +17,9 @@ from django.utils.translation import gettext_lazy as _
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.commands import (
@@ -29,11 +32,11 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_balance_staleness import (
-    mark_balance_checks_stale,
-)
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
+    )
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
         TransactionRepository,
     )
@@ -50,10 +53,12 @@ class TransactionService:
         account_service: AccountServiceProtocol,
         transaction_repository: 'TransactionRepository',
         statement_row_links: 'StatementRowLinkServiceProtocol',
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         self.account_service = account_service
         self.transaction_repository = transaction_repository
         self.statement_row_links = statement_row_links
+        self.coverage_service = coverage_service
 
     @staticmethod
     def _validate_account_owner(user: User, account: Account) -> None:
@@ -176,9 +181,10 @@ class TransactionService:
                 command.amount,
                 command.type_value,
             )
-            mark_balance_checks_stale(
-                {command.account.pk},
-                [command.transaction_date],
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[(command.account, command.transaction_date)],
+                moments=[command.transaction_date],
             )
         return new_transaction
 
@@ -287,9 +293,13 @@ class TransactionService:
                 or command.type_value != old_type
                 or date_value != old_date
             ):
-                mark_balance_checks_stale(
-                    {old_account.pk, command.account.pk},
-                    [
+                note_financial_change(
+                    coverage_service=self.coverage_service,
+                    changes=[
+                        (old_account, old_bank_day or old_date),
+                        (command.account, bank_day or date_value),
+                    ],
+                    moments=[
                         old_bank_day or old_date,
                         bank_day or date_value,
                     ],
@@ -318,12 +328,16 @@ class TransactionService:
                 transaction_obj.type,
             )
             self.statement_row_links.release_linked_rows(transaction_obj)
-            account_id = transaction_obj.account_id
+            account = transaction_obj.account
             transaction_date = (
                 transaction_obj.bank_calendar_date or transaction_obj.date
             )
             transaction_obj.delete()
-            mark_balance_checks_stale({account_id}, [transaction_date])
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[(account, transaction_date)],
+                moments=[transaction_date],
+            )
 
     def copy_transaction(
         self,
@@ -356,8 +370,9 @@ class TransactionService:
                     new_transaction.amount,
                     new_transaction.type,
                 )
-                mark_balance_checks_stale(
-                    {new_transaction.account_id},
-                    [new_transaction.date],
+                note_financial_change(
+                    coverage_service=self.coverage_service,
+                    changes=[(new_transaction.account, new_transaction.date)],
+                    moments=[new_transaction.date],
                 )
         return new_transaction

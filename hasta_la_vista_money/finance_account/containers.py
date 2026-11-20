@@ -67,6 +67,7 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
         transfer_money_log_repository=transfer_money_log_repository,
         account_repository=account_repository,
         statement_row_links=users.statement_row_link_service,
+        coverage_service=account_coverage_service,
     )
     balance_trend_service: providers.Factory[BalanceTrendServiceProtocol] = (
         providers.Factory(

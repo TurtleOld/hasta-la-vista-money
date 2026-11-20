@@ -16,6 +16,7 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountCoverageConfirmation,
     Bank,
     TransferMoneyLog,
 )
@@ -23,8 +24,14 @@ from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
 )
+from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
+    AccountCoverageRepository,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
+)
+from hasta_la_vista_money.finance_account.services.coverage_service import (
+    AccountCoverageService,
 )
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.commands import (
@@ -673,6 +680,83 @@ class StalenessDirectionTests(StatementBalanceVerificationTestCase):
         )
         upload.refresh_from_db()
         self.assertFalse(upload.balance_needs_recheck)
+
+    def _coverage(self) -> AccountCoverageService:
+        coverage = AccountCoverageService(
+            repository=AccountCoverageRepository(),
+        )
+        coverage.confirm(
+            owner=self.user,
+            account=self.account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+        return coverage
+
+    def _coverage_gaps(
+        self,
+        coverage: AccountCoverageService,
+    ) -> list[tuple[date, date]]:
+        summary = coverage.summary(
+            account=self.account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+        )
+        return [(gap.start, gap.end) for gap in summary.gaps]
+
+    def test_movement_change_rechecks_coverage_without_verified_upload(
+        self,
+    ) -> None:
+        coverage = self._coverage()
+        target = self._transaction(
+            '70.00',
+            datetime(2026, 4, 9, 12, tzinfo=UTC),
+        )
+        self._transaction_service().update_transaction(
+            UpdateTransactionCommand(
+                user=self.user,
+                transaction_obj=target,
+                account=self.account,
+                category=target.category,
+                amount=Decimal('80.00'),
+                transaction_date=date(2026, 4, 9),
+                type_value=target.type,
+            ),
+        )
+        self.assertEqual(
+            self._coverage_gaps(coverage),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+    def test_movement_change_rechecks_coverage_and_balance_check(self) -> None:
+        coverage = self._coverage()
+        upload = self._update_target(date(2026, 4, 9))
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertEqual(
+            self._coverage_gaps(coverage),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+    def test_category_only_edit_does_not_recheck_coverage(self) -> None:
+        coverage = self._coverage()
+        upload = self._verified_check()
+        later = self._last_later
+        self._transaction_service().update_transaction(
+            UpdateTransactionCommand(
+                user=self.user,
+                transaction_obj=later,
+                account=self.account,
+                category=self._category(),
+                amount=later.amount,
+                transaction_date=later.date,
+                type_value=later.type,
+            ),
+        )
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+        self.assertEqual(self._coverage_gaps(coverage), [])
 
     def test_category_only_edit_does_not_invalidate(self) -> None:
         upload = self._verified_check()

@@ -18,6 +18,9 @@ from core.repositories.protocols import (
     SellerRepositoryProtocol,
 )
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import (
     Product,
@@ -32,14 +35,14 @@ from hasta_la_vista_money.receipts.validators.product_line import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_balance_staleness import (
-    mark_balance_checks_stale,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
         AccountRepository,
+    )
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
     )
     from hasta_la_vista_money.receipts.models import ProductCategory
 
@@ -106,6 +109,8 @@ class ReceiptCreatorService:
         product_repository: ProductRepositoryProtocol,
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
+        *,
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         """Initialize ReceiptCreatorService.
 
@@ -122,6 +127,7 @@ class ReceiptCreatorService:
         self.product_repository = product_repository
         self.receipt_repository = receipt_repository
         self.seller_repository = seller_repository
+        self.coverage_service = coverage_service
 
     @audit_operation(kind=AuditOperationKind.RECEIPT_PURCHASE)
     @transaction.atomic
@@ -219,7 +225,11 @@ class ReceiptCreatorService:
             if not manual:
                 self._enqueue_external_category_tasks(created_products)
 
-        mark_balance_checks_stale({receipt.account_id}, [receipt.receipt_date])
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[(receipt.account, receipt.receipt_date)],
+            moments=[receipt.receipt_date],
+        )
         return receipt
 
     @staticmethod
@@ -310,7 +320,11 @@ class ReceiptCreatorService:
                         product,
                     )
 
-        mark_balance_checks_stale({receipt.account_id}, [receipt.receipt_date])
+        note_financial_change(
+            coverage_service=self.coverage_service,
+            changes=[(receipt.account, receipt.receipt_date)],
+            moments=[receipt.receipt_date],
+        )
         return receipt
 
     def _create_or_update_seller(

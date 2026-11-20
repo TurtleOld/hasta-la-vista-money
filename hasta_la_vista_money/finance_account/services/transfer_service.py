@@ -13,6 +13,9 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.finance_account.validators import (
     validate_different_accounts,
     validate_positive_amount,
@@ -21,9 +24,6 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_balance_staleness import (
-    mark_balance_checks_stale,
-)
 from hasta_la_vista_money.users.services.statement_date_policy import (
     statement_row_movement_date,
 )
@@ -32,6 +32,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
         TransferMoneyLogRepository,
+    )
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
     )
     from hasta_la_vista_money.users.protocols.services import (
         StatementRowLinkServiceProtocol,
@@ -50,6 +53,7 @@ class TransferService:
         transfer_money_log_repository: 'TransferMoneyLogRepository',
         account_repository: 'AccountRepository',
         statement_row_links: 'StatementRowLinkServiceProtocol',
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         """Initialize TransferService.
 
@@ -62,6 +66,7 @@ class TransferService:
         self.transfer_money_log_repository = transfer_money_log_repository
         self.account_repository = account_repository
         self.statement_row_links = statement_row_links
+        self.coverage_service = coverage_service
         self._balance_service = BalanceService()
 
     @transaction.atomic
@@ -150,9 +155,14 @@ class TransferService:
             )
             if row is not None:
                 self.statement_row_links.close_repayment_row(row, transfer)
-            mark_balance_checks_stale(
-                {from_account.pk, to_account.pk},
-                [transfer.bank_calendar_date or transfer.exchange_date],
+            changed_at = transfer.bank_calendar_date or transfer.exchange_date
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (from_account, changed_at),
+                    (to_account, changed_at),
+                ],
+                moments=[changed_at],
             )
             return transfer
 
@@ -226,7 +236,11 @@ class TransferService:
                 transfer_log.bank_calendar_date or transfer_log.exchange_date
             )
             self.transfer_money_log_repository.delete_log(transfer_log)
-            mark_balance_checks_stale(
-                {from_account.pk, to_account.pk},
-                [exchange_date],
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (from_account, exchange_date),
+                    (to_account, exchange_date),
+                ],
+                moments=[exchange_date],
             )

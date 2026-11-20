@@ -29,6 +29,7 @@ class TransactionContainer(containers.DeclarativeContainer):
 
     core = providers.DependenciesContainer()
     users = providers.DependenciesContainer()
+    finance_account = providers.DependenciesContainer()
 
     transaction_repository = providers.Singleton(TransactionRepository)
     category_repository = providers.Singleton(CategoryRepository)
@@ -44,6 +45,7 @@ class TransactionContainer(containers.DeclarativeContainer):
             account_service=core.account_service,
             transaction_repository=transaction_repository,
             statement_row_links=users.statement_row_link_service,
+            coverage_service=finance_account.account_coverage_service,
         )
     )
 
@@ -55,4 +57,5 @@ class TransactionContainer(containers.DeclarativeContainer):
         account_repository=providers.Singleton(AccountRepository),
         transaction_repository=transaction_repository,
         category_repository=category_repository,
+        coverage_service=finance_account.account_coverage_service,
     )

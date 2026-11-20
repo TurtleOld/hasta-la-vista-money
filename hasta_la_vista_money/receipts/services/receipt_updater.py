@@ -12,6 +12,9 @@ from core.repositories.protocols import (
     SellerRepositoryProtocol,
 )
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.services.financial_change_hooks import (  # noqa: E501
+    note_financial_change,
+)
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import (
     ProductCategory,
@@ -30,13 +33,13 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statement_balance_staleness import (
-    mark_balance_checks_stale,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
         AccountRepository,
+    )
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
     )
 
 
@@ -63,6 +66,8 @@ class ReceiptUpdaterService:
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
         category_correction_service: ProductCategoryCorrectionServiceProtocol,
+        *,
+        coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         """Initialize ReceiptUpdaterService.
 
@@ -81,6 +86,7 @@ class ReceiptUpdaterService:
         self.receipt_repository = receipt_repository
         self.seller_repository = seller_repository
         self.category_correction_service = category_correction_service
+        self.coverage_service = coverage_service
 
     @audit_operation(kind=AuditOperationKind.RECEIPT_EDIT)
     @transaction.atomic
@@ -198,9 +204,18 @@ class ReceiptUpdaterService:
             or old_operation_type != receipt.operation_type
             or old_receipt_date != receipt.receipt_date
         ):
-            mark_balance_checks_stale(
-                {old_account_id, receipt.account_id},
-                [old_receipt_date, receipt.receipt_date],
+            old_account = (
+                receipt.account
+                if old_account_id == receipt.account_id
+                else self.account_repository.get_by_id(old_account_id)
+            )
+            note_financial_change(
+                coverage_service=self.coverage_service,
+                changes=[
+                    (old_account, old_receipt_date),
+                    (receipt.account, receipt.receipt_date),
+                ],
+                moments=[old_receipt_date, receipt.receipt_date],
             )
         return receipt
 

@@ -66,6 +66,9 @@ class TransactionServiceTest(TestCase):
             account_service=container.core.account_service(),
             transaction_repository=TransactionRepository(),
             statement_row_links=container.users.statement_row_link_service(),
+            coverage_service=(
+                container.finance_account.account_coverage_service()
+            ),
         )
 
     def _create_command(
@@ -437,6 +440,9 @@ class CreditCardIncomeBanServiceTest(TestCase):
             account_service=container.core.account_service(),
             transaction_repository=TransactionRepository(),
             statement_row_links=container.users.statement_row_link_service(),
+            coverage_service=(
+                container.finance_account.account_coverage_service()
+            ),
         )
 
     def _create_command(
