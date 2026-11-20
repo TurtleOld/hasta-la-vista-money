@@ -17,11 +17,16 @@ from hasta_la_vista_money.deposits.reporting import (
     signed_adjustment_income,
     signed_interest,
 )
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class DashboardKpiDict(TypedDict):
@@ -59,7 +64,7 @@ def _sum_for_month(
     end: datetime,
 ) -> Decimal:
     total = filter_calendar_range(
-        Transaction.objects.without_adjustments().filter(
+        _transaction_manager.without_adjustments().filter(
             user__in=users,
             account__currency=currency,
             type=type_value,
@@ -167,7 +172,7 @@ def get_dashboard_month_kpis(
 
     top_category = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=selected_users,
                 account__currency=currency,
                 type=TransactionType.EXPENSE,

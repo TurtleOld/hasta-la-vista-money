@@ -6,8 +6,12 @@ including filtering and CRUD operations.
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.receipts.models import Seller
+from hasta_la_vista_money.receipts.models import Seller, SellerManager
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_seller_manager: SellerManager = getattr(Seller, _OBJECTS_ATTR)
 
 
 class SellerRepository:
@@ -63,7 +67,7 @@ class SellerRepository:
         Returns:
             QuerySet[Seller]: QuerySet of user's sellers.
         """
-        return Seller.objects.for_user(user)
+        return _seller_manager.for_user(user)
 
     def get_by_users(self, users: list[User]) -> QuerySet[Seller]:
         """Get all sellers for a list of users.
@@ -74,7 +78,7 @@ class SellerRepository:
         Returns:
             QuerySet[Seller]: QuerySet of sellers for specified users.
         """
-        return Seller.objects.for_users(users)
+        return _seller_manager.for_users(users)
 
     def unique_by_name_for_user(self, user: User) -> QuerySet[Seller]:
         """Get unique sellers by name for a user.
@@ -85,7 +89,7 @@ class SellerRepository:
         Returns:
             QuerySet[Seller]: QuerySet with unique sellers by name.
         """
-        return Seller.objects.unique_by_name_for_user(user)
+        return _seller_manager.unique_by_name_for_user(user)
 
     def unique_by_name_for_users(self, users: list[User]) -> QuerySet[Seller]:
         """Get unique sellers by name for multiple users.
@@ -96,7 +100,7 @@ class SellerRepository:
         Returns:
             QuerySet[Seller]: QuerySet with unique sellers by name.
         """
-        return Seller.objects.unique_by_name_for_users(users)
+        return _seller_manager.unique_by_name_for_users(users)
 
     def filter(self, **kwargs: object) -> QuerySet[Seller]:
         """Filter sellers by given criteria.

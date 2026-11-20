@@ -3,10 +3,9 @@ from datetime import timedelta
 import jwt
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from hasta_la_vista_money.api.throttling import LoginRateThrottle
@@ -20,10 +19,8 @@ TEST_PASSWORD = 'testpassword123'  # nosec B105
 WRONG_PASSWORD = 'wrongpassword'  # nosec B105
 
 
-class CookieTokenObtainPairViewTestCase(TestCase):
+class CookieTokenObtainPairViewTestCase(APITestCase):
     """Test cases for CookieTokenObtainPairView"""
-
-    client: APIClient
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -132,10 +129,8 @@ class CookieTokenObtainPairViewTestCase(TestCase):
         )
 
 
-class CookieTokenRefreshViewTestCase(TestCase):
+class CookieTokenRefreshViewTestCase(APITestCase):
     """Test cases for CookieTokenRefreshView"""
-
-    client: APIClient
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -304,10 +299,8 @@ class CookieTokenRefreshViewTestCase(TestCase):
         self.assertIn('error', response.data)
 
 
-class AuthorizationHeaderTestCase(TestCase):
+class AuthorizationHeaderTestCase(APITestCase):
     """Test cases for Authorization header support in API"""
-
-    client: APIClient
 
     def setUp(self) -> None:
         """Set up test data."""

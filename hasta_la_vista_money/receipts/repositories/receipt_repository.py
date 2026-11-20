@@ -11,8 +11,16 @@ from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Product, Receipt
+from hasta_la_vista_money.receipts.models import (
+    Product,
+    Receipt,
+    ReceiptManager,
+)
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
 
 
 class ReceiptRepository:
@@ -45,7 +53,7 @@ class ReceiptRepository:
         Returns:
             QuerySet[Receipt]: QuerySet of user's receipts.
         """
-        return Receipt.objects.for_user(user)
+        return _receipt_manager.for_user(user)
 
     def get_by_users(self, users: list[User]) -> QuerySet[Receipt]:
         """Get all receipts for a list of users.
@@ -56,7 +64,7 @@ class ReceiptRepository:
         Returns:
             QuerySet[Receipt]: QuerySet of receipts for specified users.
         """
-        return Receipt.objects.for_users(users)
+        return _receipt_manager.for_users(users)
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Receipt]:
         """Get all receipts for a user with related objects optimized.
@@ -68,7 +76,7 @@ class ReceiptRepository:
             QuerySet[Receipt]: QuerySet with select_related and prefetch_related
                 optimizations applied.
         """
-        return Receipt.objects.for_user(user).with_related()
+        return _receipt_manager.for_user(user).with_related()
 
     def get_by_users_with_related(
         self,
@@ -83,7 +91,7 @@ class ReceiptRepository:
             QuerySet[Receipt]: QuerySet with select_related and prefetch_related
                 optimizations applied.
         """
-        return Receipt.objects.for_users(users).with_related()
+        return _receipt_manager.for_users(users).with_related()
 
     def get_by_user_and_number(
         self,
@@ -99,7 +107,7 @@ class ReceiptRepository:
         Returns:
             QuerySet[Receipt]: Filtered QuerySet.
         """
-        return Receipt.objects.for_user_and_number(user, number_receipt)
+        return _receipt_manager.for_user_and_number(user, number_receipt)
 
     def add_product_to_receipt(
         self,

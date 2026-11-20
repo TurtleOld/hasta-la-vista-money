@@ -8,7 +8,6 @@ user's tracking, or falls outside the selected period, still counts.
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
@@ -18,6 +17,7 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -30,8 +30,14 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class CardDebtForBalanceTest(TestCase):
@@ -95,7 +101,7 @@ class CardDebtForBalanceTest(TestCase):
         )
 
         total = compute_total_credit_debt(
-            Account.objects.by_user(self.user),
+            _account_manager.by_user(self.user),
         )
 
         self.assertEqual(total, Decimal('18470.57'))
@@ -117,7 +123,7 @@ class CardDebtForBalanceTest(TestCase):
         )
 
         total = compute_total_credit_debt(
-            Account.objects.by_user(self.user),
+            _account_manager.by_user(self.user),
         )
 
         self.assertEqual(total, Decimal('10000.00'))
@@ -141,7 +147,7 @@ class CardDebtForBalanceTest(TestCase):
         card.save(update_fields=['balance'])
 
         total = compute_total_credit_debt(
-            Account.objects.by_user(self.user),
+            _account_manager.by_user(self.user),
         )
 
         self.assertEqual(total, Decimal(0))

@@ -12,16 +12,23 @@ from hasta_la_vista_money.deposits.models import (
     DepositRatePeriod,
     DepositTerm,
 )
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    Bank,
+)
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _make_deposit(user: 'User') -> Deposit:
     bank = Bank.objects.get(code='SBERBANK')
-    account = Account.objects.create_deposit(
+    account = _account_manager.create_deposit(
         user=user,
         name_account='Вклад для теста',
         bank=bank,
@@ -33,6 +40,9 @@ def _make_deposit(user: 'User') -> Deposit:
         name='Вклад',
         bank=bank,
     )
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class DepositTermRateKindTests(TestCase):

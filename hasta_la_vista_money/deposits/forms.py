@@ -20,10 +20,17 @@ from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_DEFAULT,
 )
 from hasta_la_vista_money.finance_account.currencies import currency_choices
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    Bank,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+_OBJECTS_ATTR = 'objects'
 
 
 def _deposit_date_widget() -> forms.DateInput:
@@ -53,6 +60,9 @@ def _parse_html5_date(token: str) -> date:
             continue
     message = _('Неверный формат даты: %(token)s') % {'token': token}
     raise ValidationError(message)
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class ReverseDepositEventForm(forms.Form):
@@ -276,7 +286,7 @@ class CreateDepositForm(forms.Form):
                 self.fields['source_account'],
             )
             source_account_field.queryset = (
-                Account.objects.available_for_operations()
+                _account_manager.available_for_operations()
                 .filter(user=user)
                 .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
             )
@@ -538,7 +548,7 @@ class TopUpDepositForm(forms.Form):
             self.fields['source_account'],
         )
         field.queryset = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=user, currency=currency)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
@@ -623,7 +633,7 @@ class CapitalizeInterestForm(forms.Form):
         )
         if user is not None:
             account_field.queryset = (
-                Account.objects.available_for_operations()
+                _account_manager.available_for_operations()
                 .filter(
                     user=user,
                     currency=term.deposit.account.currency,
@@ -749,7 +759,7 @@ class CloseMaturedDepositForm(forms.Form):
             self.fields['destination_account'],
         )
         account_field.queryset = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=user, currency=term.deposit.account.currency)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
@@ -1043,7 +1053,7 @@ class WithdrawDepositForm(forms.Form):
             self.fields['destination_account'],
         )
         field.queryset = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=user, currency=currency)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )

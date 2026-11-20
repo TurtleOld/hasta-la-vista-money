@@ -3,7 +3,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -17,6 +16,7 @@ from hasta_la_vista_money.users.services.notifications import (
     NotificationDict,
     get_user_notifications,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

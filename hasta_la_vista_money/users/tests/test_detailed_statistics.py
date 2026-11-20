@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from dateutil.relativedelta import relativedelta
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.paginator import Page
 from django.db import connection
@@ -44,6 +43,7 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     _apply_payments_to_months,
     get_user_detailed_statistics,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

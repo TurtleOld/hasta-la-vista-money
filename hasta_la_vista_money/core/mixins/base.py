@@ -15,6 +15,8 @@ from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from django_filters import FilterSet
 
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -66,7 +68,11 @@ class EntityListViewMixin:
             FilterSet: Applied filter.
         """
         request = self.get_request_with_container()
-        return filterset_class(  # type: ignore[call-arg]
+        filterset_factory = cast(
+            'Callable[..., FilterSet]',
+            filterset_class,
+        )
+        return filterset_factory(
             self.request.GET,
             queryset=base_queryset,
             user=request.user,

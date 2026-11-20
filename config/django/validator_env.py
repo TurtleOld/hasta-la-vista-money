@@ -1,4 +1,5 @@
 from os import environ
+from typing import cast
 
 import structlog
 from decouple import config
@@ -34,7 +35,7 @@ class EnvironmentValidator:
         database_url = config('DATABASE_URL', cast=str, default='')
         uses_postgres_env = bool(
             config('POSTGRES_PASSWORD', cast=str, default='')
-            or config('POSTGRES_USER', cast=str, default='')
+            or config('POSTGRES_USER', cast=str, default=''),
         )
         if uses_postgres_env and not database_url:
             valid = False
@@ -48,7 +49,10 @@ class EnvironmentValidator:
             )
 
         debug_mode = config('DEBUG', default=False, cast=bool)
-        allowed_hosts_str = config('ALLOWED_HOSTS', cast=str, default='')
+        allowed_hosts_str = cast(
+            'str',
+            config('ALLOWED_HOSTS', cast=str, default=''),
+        )
         allowed_hosts = [
             host.strip()
             for host in allowed_hosts_str.split(',')

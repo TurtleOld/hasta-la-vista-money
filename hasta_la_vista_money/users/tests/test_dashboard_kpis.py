@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -15,6 +14,7 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.services.dashboard_kpis import (
     get_dashboard_month_kpis,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

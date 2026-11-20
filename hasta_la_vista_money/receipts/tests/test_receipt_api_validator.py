@@ -4,11 +4,19 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    Bank,
+)
 from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestReceiptAPIValidatorAccountSelection(TestCase):
@@ -41,7 +49,7 @@ class TestReceiptAPIValidatorAccountSelection(TestCase):
         self.assertEqual(result.account, account)
 
     def test_deposit_account_is_rejected(self) -> None:
-        deposit = Account.objects.create_deposit(
+        deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Deposit',
             balance=Decimal('100.00'),

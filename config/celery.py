@@ -1,6 +1,7 @@
 """Celery configuration for async task processing."""
 
 import os
+from typing import Any
 
 import structlog
 from celery import Celery
@@ -39,7 +40,7 @@ app.conf.update(
 
 
 @app.task(bind=True, ignore_result=True)  # type: ignore[untyped-decorator]
-def debug_task(self: Celery) -> None:
+def debug_task(self: Any) -> None:
     """Debug task for testing Celery setup."""
     structlog.get_logger(__name__).info(
         'celery_debug_task',

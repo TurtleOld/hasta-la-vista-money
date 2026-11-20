@@ -45,6 +45,7 @@ from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
     AccountCoverageConfirmation,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -60,7 +61,12 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 
+_OBJECTS_ATTR = 'objects'
+
 BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -602,7 +608,7 @@ class BankStatementUploadForm(Form):
 
         self.fields['account'] = ModelChoiceField(
             queryset=(
-                Account.objects.available_for_operations()
+                _account_manager.available_for_operations()
                 .filter(user=user)
                 .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
             ),

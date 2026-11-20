@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -14,6 +13,7 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.forms import UpdateUserForm
 from hasta_la_vista_money.users.services.profile import update_user_profile
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

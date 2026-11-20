@@ -1,8 +1,8 @@
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 
 class ReceiptListMobileActionsTests(TestCase):

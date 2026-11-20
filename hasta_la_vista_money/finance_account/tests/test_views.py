@@ -23,6 +23,7 @@ from hasta_la_vista_money.constants import (
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -54,6 +55,11 @@ from hasta_la_vista_money.users.models import User
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.users.views import AuthRequest
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestAccountView(TestCase):
@@ -100,7 +106,7 @@ class TestAccountView(TestCase):
             type_account=ACCOUNT_TYPE_CREDIT_CARD,
             balance=Decimal('202.00'),
         )
-        Account.objects.create_deposit(
+        _account_manager.create_deposit(
             user=self.user,
             name_account='Test deposit',
             bank=Bank.objects.get(pk=1),
@@ -113,7 +119,7 @@ class TestAccountView(TestCase):
 
         request = cast('RequestWithContainer', response.wsgi_request)
         account_service = request.container.core.account_service()
-        accounts = Account.objects.by_user(self.user)
+        accounts = _account_manager.by_user(self.user)
         self.assertEqual(
             response.context['sum_all_accounts_in_group'],
             account_service.get_balances_by_currency(accounts.debit()),
@@ -502,7 +508,7 @@ class TestFinancesView(TestCase):
 
     def test_transfer_delete_view_rejects_deposit_side(self) -> None:
         """Deleting a deposit-backed transfer shows an error, not a 500."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Deposit',
             bank=self.account.bank,

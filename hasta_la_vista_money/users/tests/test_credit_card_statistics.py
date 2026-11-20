@@ -13,7 +13,6 @@ from decimal import Decimal
 from typing import Any, cast
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.test import TestCase
@@ -40,6 +39,7 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     StatisticsFilters,
     get_user_detailed_statistics,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

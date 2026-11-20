@@ -6,7 +6,7 @@ including relationships with users and accounts.
 
 from collections.abc import Iterable
 from datetime import datetime
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.contrib.postgres.search import SearchVector
@@ -223,6 +223,9 @@ class SellerQuerySet(models.QuerySet[Seller]):
 class ProductCategory(models.Model):
     """A flat product category directory belonging to one user."""
 
+    if TYPE_CHECKING:
+        user_id: int
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -302,6 +305,11 @@ class CategoryMergeProposalStatus(models.TextChoices):
 class CategoryMergeProposal(models.Model):
     """A pair of categories that may denote the same kind of purchase."""
 
+    if TYPE_CHECKING:
+        id: int
+
+        def get_status_display(self) -> str: ...
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -361,6 +369,9 @@ class Product(models.Model):
         nds_sum: VAT amount.
         created_at: Timestamp when the product was created.
     """
+
+    if TYPE_CHECKING:
+        category_id: int | None
 
     user = models.ForeignKey(
         User,
@@ -581,6 +592,11 @@ class Receipt(models.Model):
         product: Many-to-many relationship with Product.
     """
 
+    if TYPE_CHECKING:
+        id: int
+        user_id: int
+        account_id: int
+
     receipt_date = models.DateTimeField()
     number_receipt = models.BigIntegerField(default=None, null=True)
     nds10 = models.DecimalField(
@@ -722,6 +738,13 @@ class ReceiptProcessingErrorCode(models.TextChoices):
 class ReceiptProcessingLog(models.Model):
     """Audit log for a receipt processing attempt, without receipt payload."""
 
+    if TYPE_CHECKING:
+        user_id: int
+        account_id: int
+        receipt_id: int | None
+
+        def get_status_display(self) -> str: ...
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -804,6 +827,9 @@ class ReceiptImageHash(models.Model):
         image_hash: SHA-256 hex digest of the original uploaded image.
         created_at: Timestamp the record was stored.
     """
+
+    if TYPE_CHECKING:
+        receipt_id: int
 
     user = models.ForeignKey(
         User,

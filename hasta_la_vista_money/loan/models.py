@@ -1,12 +1,15 @@
 import decimal
 from decimal import Decimal
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from django_stubs_ext.db.models.manager import RelatedManager
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -18,6 +21,11 @@ class Loan(models.Model):
         ('Annuity', _('Аннуитетный')),
         ('Differentiated', _('Дифференцированный')),
     ]
+
+    if TYPE_CHECKING:
+        user_id: int
+        account_id: int
+        payment_schedule_loans: RelatedManager['PaymentSchedule']
 
     user = models.ForeignKey(
         User,
@@ -111,6 +119,11 @@ class PaymentMakeLoan(models.Model):
         amount: Amount of the payment.
     """
 
+    if TYPE_CHECKING:
+        user_id: int
+        account_id: int | None
+        loan_id: int
+
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -151,6 +164,10 @@ class PaymentSchedule(models.Model):
         interest: Interest portion of the payment.
         principal_payment: Principal portion of the payment.
     """
+
+    if TYPE_CHECKING:
+        user_id: int
+        loan_id: int
 
     user = models.ForeignKey(
         User,

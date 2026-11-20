@@ -1,7 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
@@ -19,6 +18,7 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import FamilyGroupMembership
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

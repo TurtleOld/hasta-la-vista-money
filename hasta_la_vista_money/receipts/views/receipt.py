@@ -6,6 +6,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import ProtectedError, QuerySet
 
 from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.finance_account.models import AccountManager
+from hasta_la_vista_money.receipts.models import SellerManager
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
@@ -17,6 +19,7 @@ from django.views.generic import (
     DeleteView,
     DetailView,
 )
+from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.mixins import UserAuthMixin
@@ -42,6 +45,13 @@ from hasta_la_vista_money.users.services.groups import (
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
+
+
+_OBJECTS_ATTR = 'objects'
+
+_seller_manager: SellerManager = getattr(Seller, _OBJECTS_ATTR)
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class ReceiptCreateView(
@@ -75,10 +85,10 @@ class ReceiptCreateView(
             form.fields['account'],
         )
         account_field.queryset = (
-            Account.objects.available_for_regular_operations()
+            _account_manager.available_for_regular_operations()
         ).by_user_with_related(current_user)
         seller_field = cast('ModelChoiceField[Seller]', form.fields['seller'])
-        seller_field.queryset = Seller.objects.for_user(current_user)
+        seller_field.queryset = _seller_manager.for_user(current_user)
         return form
 
     @staticmethod
@@ -191,9 +201,11 @@ class ReceiptUpdateView(
     UserAuthMixin,
 ):
     model = Receipt
-    form_class: type[ReceiptForm] = ReceiptForm
-    template_name: str = 'receipts/receipt_update.html'
-    success_message: str = str(constants.SUCCESS_MESSAGE_UPDATE_RECEIPT)
+    form_class: type[ReceiptForm] | None = ReceiptForm
+    template_name: str | None = 'receipts/receipt_update.html'
+    success_message: StrOrPromise = str(
+        constants.SUCCESS_MESSAGE_UPDATE_RECEIPT,
+    )
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
@@ -333,8 +345,8 @@ class ReceiptDetailView(
     UserAuthMixin,
 ):
     model = Receipt
-    template_name: str = 'receipts/receipt_view.html'
-    context_object_name: str = 'receipt'
+    template_name: str | None = 'receipts/receipt_view.html'
+    context_object_name: str | None = 'receipt'
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         request = cast('RequestWithContainer', self.request)

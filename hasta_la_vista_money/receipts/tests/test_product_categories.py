@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
@@ -26,6 +25,7 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.receipts.services.signals import (
     seed_product_categories_for_new_user,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

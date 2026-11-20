@@ -18,6 +18,7 @@ from hasta_la_vista_money.finance_account.factories import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.loan.models import Loan
@@ -31,7 +32,12 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 
+_OBJECTS_ATTR = 'objects'
+
 ACCOUNT_LABEL = 'finance_account.Account'
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class AccountArchiveDeleteBase(TestCase):
@@ -98,13 +104,13 @@ class ArchiveAccountTests(AccountArchiveDeleteBase):
             Transaction.objects.filter(account=self.account).exists(),
         )
         self.assertFalse(
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(pk=self.account.pk)
             .exists(),
         )
 
     def test_deposit_account_is_refused(self) -> None:
-        deposit = Account.objects.create_deposit(
+        deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             balance=Decimal('0.00'),
@@ -270,7 +276,7 @@ class DeleteAccountTests(AccountArchiveDeleteBase):
         self.assertTrue(Account.objects.filter(pk=foreign.pk).exists())
 
     def test_deposit_account_is_not_deleted(self) -> None:
-        deposit = Account.objects.create_deposit(
+        deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             balance=Decimal('0.00'),

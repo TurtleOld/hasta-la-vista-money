@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import dj_database_url
 import django_stubs_ext
@@ -586,50 +586,74 @@ PENDING_RECEIPT_EXPIRY_HOURS: int = config(
 )
 
 # FNS mobile API integration for official receipt data by QR code.
-FNS_BASE_URL: str = config(
-    'FNS_BASE_URL',
-    default='https://irkkt-mobile.nalog.ru:8888/v2',
+FNS_BASE_URL: str = cast(
+    'str',
+    config(
+        'FNS_BASE_URL',
+        default='https://irkkt-mobile.nalog.ru:8888/v2',
+    ),
 )
-FNS_CLIENT_SECRET: str = config('FNS_CLIENT_SECRET', default='')
-FNS_INN: str = config('FNS_INN', default='')
+FNS_CLIENT_SECRET: str = cast('str', config('FNS_CLIENT_SECRET', default=''))
+FNS_INN: str = cast('str', config('FNS_INN', default=''))
 
-RECEIPT_CATEGORY_MODEL_BASE_URL: str = config(
-    'RECEIPT_CATEGORY_MODEL_BASE_URL',
-    default='',
+RECEIPT_CATEGORY_MODEL_BASE_URL: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_MODEL_BASE_URL',
+        default='',
+    ),
 )
-RECEIPT_CATEGORY_MODEL_API_KEY: str = config(
-    'RECEIPT_CATEGORY_MODEL_API_KEY',
-    default='',
+RECEIPT_CATEGORY_MODEL_API_KEY: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_MODEL_API_KEY',
+        default='',
+    ),
 )
-RECEIPT_CATEGORY_MODEL_NAME: str = config(
-    'RECEIPT_CATEGORY_MODEL_NAME',
-    default='',
+RECEIPT_CATEGORY_MODEL_NAME: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_MODEL_NAME',
+        default='',
+    ),
 )
 RECEIPT_CATEGORY_MODEL_JSON_SCHEMA: bool = config(
     'RECEIPT_CATEGORY_MODEL_JSON_SCHEMA',
     default=True,
     cast=bool,
 )
-RECEIPT_CATEGORY_MODEL_REASONING_EFFORT: str = config(
-    'RECEIPT_CATEGORY_MODEL_REASONING_EFFORT',
-    default='',
+RECEIPT_CATEGORY_MODEL_REASONING_EFFORT: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_MODEL_REASONING_EFFORT',
+        default='',
+    ),
 )
 RECEIPT_CATEGORY_WRITING_SIMILARITY_THRESHOLD: float = config(
     'RECEIPT_CATEGORY_WRITING_SIMILARITY_THRESHOLD',
     default=0.4,
     cast=float,
 )
-RECEIPT_CATEGORY_EMBEDDING_BASE_URL: str = config(
-    'RECEIPT_CATEGORY_EMBEDDING_BASE_URL',
-    default='',
+RECEIPT_CATEGORY_EMBEDDING_BASE_URL: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_EMBEDDING_BASE_URL',
+        default='',
+    ),
 )
-RECEIPT_CATEGORY_EMBEDDING_API_KEY: str = config(
-    'RECEIPT_CATEGORY_EMBEDDING_API_KEY',
-    default='',
+RECEIPT_CATEGORY_EMBEDDING_API_KEY: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_EMBEDDING_API_KEY',
+        default='',
+    ),
 )
-RECEIPT_CATEGORY_EMBEDDING_MODEL: str = config(
-    'RECEIPT_CATEGORY_EMBEDDING_MODEL',
-    default='',
+RECEIPT_CATEGORY_EMBEDDING_MODEL: str = cast(
+    'str',
+    config(
+        'RECEIPT_CATEGORY_EMBEDDING_MODEL',
+        default='',
+    ),
 )
 RECEIPT_CATEGORY_SEMANTIC_SIMILARITY_THRESHOLD: float = config(
     'RECEIPT_CATEGORY_SEMANTIC_SIMILARITY_THRESHOLD',
@@ -641,19 +665,28 @@ RECEIPT_CATEGORY_NEW_CATEGORY_SIMILARITY_THRESHOLD: float = config(
     default=0.7,
     cast=float,
 )
-BANK_STATEMENT_CATEGORY_MODEL_BASE_URL: str = config(
-    'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
-    default=config('CATEGORY_CLASSIFIER_BASE_URL', default=''),
+BANK_STATEMENT_CATEGORY_MODEL_BASE_URL: str = cast(
+    'str',
+    config(
+        'BANK_STATEMENT_CATEGORY_MODEL_BASE_URL',
+        default=config('CATEGORY_CLASSIFIER_BASE_URL', default=''),
+    ),
 )
-BANK_STATEMENT_CATEGORY_MODEL_API_KEY: str = config(
-    'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
-    default=config('CATEGORY_CLASSIFIER_API_KEY', default=''),
+BANK_STATEMENT_CATEGORY_MODEL_API_KEY: str = cast(
+    'str',
+    config(
+        'BANK_STATEMENT_CATEGORY_MODEL_API_KEY',
+        default=config('CATEGORY_CLASSIFIER_API_KEY', default=''),
+    ),
 )
-BANK_STATEMENT_CATEGORY_MODEL_NAME: str = config(
-    'BANK_STATEMENT_CATEGORY_MODEL_NAME',
-    default=config('CATEGORY_CLASSIFIER_MODEL', default=''),
+BANK_STATEMENT_CATEGORY_MODEL_NAME: str = cast(
+    'str',
+    config(
+        'BANK_STATEMENT_CATEGORY_MODEL_NAME',
+        default=config('CATEGORY_CLASSIFIER_MODEL', default=''),
+    ),
 )
-FNS_PASSWORD: str = config('FNS_PASSWORD', default='')
+FNS_PASSWORD: str = cast('str', config('FNS_PASSWORD', default=''))
 FNS_TIMEOUT_SECONDS: float = config(
     'FNS_TIMEOUT_SECONDS',
     default=10.0,
@@ -678,20 +711,26 @@ FNS_SESSION_CACHE_TTL_SECONDS: int = config(
 # Отпечатки банковских идентификаторов выписок (ADR-0018).
 # STATEMENT_ID_HMAC_KEYS — JSON-объект key_id -> hex-ключ (>= 32 байт);
 # ключи независимы от SECRET_KEY и не хранятся в БД/репозитории.
-STATEMENT_ID_HMAC_ACTIVE_KEY_ID: str = config(
-    'STATEMENT_ID_HMAC_ACTIVE_KEY_ID',
-    default='',
+STATEMENT_ID_HMAC_ACTIVE_KEY_ID: str = cast(
+    'str',
+    config(
+        'STATEMENT_ID_HMAC_ACTIVE_KEY_ID',
+        default='',
+    ),
 )
-STATEMENT_ID_HMAC_KEYS: str = config(
-    'STATEMENT_ID_HMAC_KEYS',
-    default='',
+STATEMENT_ID_HMAC_KEYS: str = cast(
+    'str',
+    config(
+        'STATEMENT_ID_HMAC_KEYS',
+        default='',
+    ),
 )
 
 logs_dir = BASE_DIR / 'logs'
 if not logs_dir.exists():
     logs_dir.mkdir()
 
-LOG_LEVEL: str = config('LOG_LEVEL', default='INFO').upper()
+LOG_LEVEL: str = cast('str', config('LOG_LEVEL', default='INFO')).upper()
 
 LOGGING = {
     'version': 1,

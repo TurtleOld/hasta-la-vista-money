@@ -80,7 +80,8 @@ def _resolve_budget_scope(
     request_data = getattr(request, 'data', None)
     request_data_get = getattr(request_data, 'get', None)
     if raw_scope is None and callable(request_data_get):
-        raw_scope = request_data_get('scope')
+        request_scope = request_data_get('scope')
+        raw_scope = request_scope if isinstance(request_scope, str) else None
     scope = _normalize_budget_scope(raw_scope)
     if scope not in allowed_scopes:
         scope = 'my'
@@ -194,7 +195,7 @@ class ExpenseTableView(
     def get_template_names(self) -> list[str]:
         if self.request.headers.get('HX-Request'):
             return ['budget/partials/_budget_matrix.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -242,7 +243,7 @@ class IncomeTableView(
     def get_template_names(self) -> list[str]:
         if self.request.headers.get('HX-Request'):
             return ['budget/partials/_budget_matrix.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)

@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.loan.models import (
     Loan,
     PaymentMakeLoan,
@@ -19,6 +19,10 @@ from hasta_la_vista_money.loan.models import (
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class PostLoanPaymentTest(TestCase):
@@ -141,7 +145,7 @@ class PostLoanPaymentTest(TestCase):
         )
 
     def test_deposit_source_rejected(self) -> None:
-        deposit = Account.objects.create_deposit(
+        deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             balance=Decimal('1000.00'),

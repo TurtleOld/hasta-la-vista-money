@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -29,6 +28,7 @@ from hasta_la_vista_money.receipts.services.category_classifier import (
 from hasta_la_vista_money.receipts.services.product_category_correction import (
     ProductCategoryCorrectionService,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

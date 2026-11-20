@@ -5,6 +5,7 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
+import datetime as dt
 from collections.abc import Callable, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -75,6 +76,7 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Receipt
@@ -138,7 +140,7 @@ class FinancesTransaction:
     delete_url: str
     can_edit: bool
     is_receipt: bool = False
-    bank_calendar_date: date | None = None
+    bank_calendar_date: dt.date | None = None
     transfer_amount: Decimal | None = None
     transfer_from_account_name: str = ''
     transfer_to_account_name: str = ''
@@ -411,6 +413,9 @@ class FinancesFilter:
         return ranges.get(self.period)
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
@@ -460,6 +465,9 @@ def _previous_month_range(value: date) -> tuple[date, date]:
     return start, _end_of_month(start)
 
 
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+
+
 class FinancesView(LoginRequiredMixin, TemplateView):
     """Combined income and expense page."""
 
@@ -470,7 +478,7 @@ class FinancesView(LoginRequiredMixin, TemplateView):
 
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/partials/_finances_results.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build combined finances context."""
@@ -540,7 +548,7 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             system_kind='',
         )
         accounts = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=current_user)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
             .order_by('name_account')
@@ -626,7 +634,7 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             type=type_value,
         )
         accounts = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=request.user)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
@@ -744,7 +752,7 @@ class TransactionUpdateView(
                 data['type'] = category.type
             kwargs['data'] = data
         kwargs['account_queryset'] = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(user=self.request.user)
             .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
@@ -1854,7 +1862,7 @@ class AccountBaseView(BaseView):
         if not isinstance(request.user, User):
             msg = 'User must be authenticated'
             raise TypeError(msg)
-        return Account.objects.by_user(request.user)
+        return _account_manager.by_user(request.user)
 
 
 class AccountView(
@@ -1881,7 +1889,7 @@ class AccountView(
         """Return partial template for HTMX requests (group filter)."""
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/_account_dashboard_partial.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user or group.
@@ -1964,7 +1972,7 @@ class AccountView(
             limit=12,
         )
         context['drawer_accounts'] = (
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(
                 user=current_user,
                 type_account__in=constants.MANUALLY_CREATABLE_ACCOUNT_TYPES,

@@ -3,7 +3,6 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -28,6 +27,7 @@ from hasta_la_vista_money.users.services.dashboard_kpis import (
 from hasta_la_vista_money.users.services.forecast import (
     build_cashflow_forecast,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

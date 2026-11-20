@@ -56,7 +56,9 @@ from hasta_la_vista_money.users.services.statement_identity import (
     MANUAL_REASON_KEY_UNAVAILABLE,
     StatementIdentityService,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
     TEST_KEY_ONE_HEX,
     TEST_KEY_TWO_HEX,

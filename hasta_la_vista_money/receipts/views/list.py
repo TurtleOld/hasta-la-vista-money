@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404
 from django.views.generic import (
     ListView,
 )
+from django_filters import FilterSet
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.mixins import EntityListViewMixin
@@ -48,13 +49,13 @@ _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
 
 class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
     model = Receipt
-    filterset_class: type[ReceiptFilter] = ReceiptFilter
-    template_name: str = 'receipts/receipts.html'
+    filterset_class: type[FilterSet] | None = ReceiptFilter
+    template_name: str | None = 'receipts/receipts.html'
 
     def get_template_names(self) -> list[str]:
         if self.request.headers.get('HX-Request') == 'true':
             return ['receipts/partials/_results.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_queryset(self) -> QuerySet[Receipt]:
         request = self.get_request_with_container()

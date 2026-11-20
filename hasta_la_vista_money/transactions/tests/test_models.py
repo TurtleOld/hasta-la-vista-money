@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
@@ -15,6 +16,10 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class TransactionQuerySetTest(TestCase):
@@ -81,44 +86,47 @@ class TransactionQuerySetTest(TestCase):
 
     def test_incomes_filters_only_income(self) -> None:
         self.assertEqual(
-            list(Transaction.objects.incomes()),
+            list(_transaction_manager.incomes()),
             [self.income],
         )
 
     def test_expenses_filters_only_expense(self) -> None:
         self.assertEqual(
-            set(Transaction.objects.expenses()),
+            set(_transaction_manager.expenses()),
             {self.expense_a, self.expense_b},
         )
 
     def test_for_user_filters_by_user(self) -> None:
-        self.assertEqual(Transaction.objects.for_user(self.user).count(), 3)
+        self.assertEqual(
+            _transaction_manager.for_user(self.user).count(),
+            3,
+        )
 
     def test_for_period_includes_only_matching_dates(self) -> None:
-        result = Transaction.objects.for_period(
+        result = _transaction_manager.for_period(
             date(2026, 2, 1),
             date(2026, 2, 28),
         )
         self.assertEqual(set(result), {self.expense_a, self.expense_b})
 
     def test_for_category_includes_direct_children(self) -> None:
-        result = Transaction.objects.for_category(self.expense_root)
+        result = _transaction_manager.for_category(self.expense_root)
         self.assertEqual(set(result), {self.expense_a, self.expense_b})
 
     def test_total_amount_returns_sum(self) -> None:
         self.assertEqual(
-            Transaction.objects.for_user(self.user).total_amount(),
+            _transaction_manager.for_user(self.user).total_amount(),
             Decimal('1500.00'),
         )
 
     def test_total_amount_returns_zero_for_empty_queryset(self) -> None:
         Transaction.objects.all().delete()
-        self.assertEqual(Transaction.objects.total_amount(), 0)
+        self.assertEqual(_transaction_manager.total_amount(), 0)
 
     def test_by_month_groups_aggregated_totals(self) -> None:
         grouped = {
             row['month'].date(): row['total']
-            for row in Transaction.objects.for_user(self.user).by_month()
+            for row in _transaction_manager.for_user(self.user).by_month()
         }
         self.assertEqual(grouped[date(2026, 1, 1)], Decimal('1000.00'))
         self.assertEqual(grouped[date(2026, 2, 1)], Decimal('500.00'))
@@ -145,7 +153,7 @@ class TransactionQuerySetTest(TestCase):
 
         self.assertEqual(Transaction.objects.count(), 5)
         self.assertEqual(
-            set(Transaction.objects.without_adjustments()),
+            set(_transaction_manager.without_adjustments()),
             {self.income, self.expense_a, self.expense_b},
         )
 

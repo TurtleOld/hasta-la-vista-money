@@ -8,7 +8,6 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
@@ -19,6 +18,7 @@ from django.urls import reverse
 
 from core.test_helpers import setup_container_for_request
 from hasta_la_vista_money.users.models import DashboardWidget
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 from hasta_la_vista_money.users.views import (
     DashboardComparisonView,
     DashboardDataView,

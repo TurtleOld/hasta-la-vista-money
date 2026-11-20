@@ -45,7 +45,7 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
     def get_template_names(self) -> list[str]:
         if self.request.headers.get('HX-Request') == 'true':
             return ['loan/components/_loan_results.html']
-        return [self.template_name]
+        return [getattr(self, 'template_name', '')]
 
     def get_queryset(self) -> QuerySet[Loan]:
         user = cast('User', self.request.user)

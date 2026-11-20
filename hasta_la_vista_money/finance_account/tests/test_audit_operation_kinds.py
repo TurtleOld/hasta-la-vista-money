@@ -16,7 +16,7 @@ from hasta_la_vista_money.users.factories import UserFactory
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
 else:
-    from django.contrib.auth import get_user_model
+    from hasta_la_vista_money.users.typing_helpers import get_user_model
 
     UserType = get_user_model()
 

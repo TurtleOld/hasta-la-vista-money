@@ -5,7 +5,6 @@ from typing import Any
 from unittest import mock
 
 from dateutil.relativedelta import relativedelta
-from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -31,6 +30,7 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
 from hasta_la_vista_money.users.services.summary_statistics_service import (
     _build_single_card_month,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

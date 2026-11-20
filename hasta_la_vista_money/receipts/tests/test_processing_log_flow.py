@@ -12,6 +12,7 @@ from django.utils import timezone
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -32,6 +33,8 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
 
 _SEND_TASK = (
     'hasta_la_vista_money.receipts.services.receipt_processing_service.'
@@ -60,6 +63,9 @@ def _payload() -> dict[str, Any]:
             },
         ],
     }
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class ReceiptProcessingLogTaskTests(TestCase):
@@ -600,7 +606,7 @@ class ReceiptProcessingLogScanViewTests(TestCase):
             code='SBERBANK',
             defaults={'name': 'Сбербанк', 'is_system': True},
         )
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Deposit',
             currency='RUB',

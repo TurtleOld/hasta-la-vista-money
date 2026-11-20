@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, cast
+
 from django.test import RequestFactory, TestCase
 from rest_framework.request import Request
 from structlog.testing import capture_logs
@@ -5,6 +7,11 @@ from structlog.testing import capture_logs
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from django.http import HttpRequest
 
 
 class AuthorizationHeaderLoggingTest(TestCase):
@@ -15,7 +22,7 @@ class AuthorizationHeaderLoggingTest(TestCase):
         )
         with capture_logs() as logs:
             result = CookieJWTAuthentication()._authenticate_from_header(
-                Request(raw),
+                cast('Callable[[HttpRequest], Request]', Request)(raw),
             )
 
         self.assertIsNone(result)

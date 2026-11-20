@@ -71,7 +71,9 @@ from hasta_la_vista_money.users.services.statement_markup import (
 from hasta_la_vista_money.users.services.statement_retention_policy import (
     statement_retention_deadline,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer

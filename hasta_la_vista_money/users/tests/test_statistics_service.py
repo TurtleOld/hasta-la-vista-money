@@ -7,7 +7,6 @@ statistics retrieval and cache invalidation.
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
@@ -27,6 +26,7 @@ from hasta_la_vista_money.users.services.statistics import (
     UserStatistics,
     UserStatisticsService,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

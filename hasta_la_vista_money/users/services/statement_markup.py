@@ -39,6 +39,7 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -79,6 +80,11 @@ REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
     {RosDorBankRowKind.C2C, RosDorBankRowKind.OWN_C2C},
 )
+
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class StatementMarkupConflictError(ValueError):
@@ -174,7 +180,7 @@ class StatementMarkupService:
                 str(movement.category.name),
             )
             for movement in filter_calendar_range(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     account_id=account_id,
                     source_ref__isnull=True,
                     source_ref_hash__isnull=True,

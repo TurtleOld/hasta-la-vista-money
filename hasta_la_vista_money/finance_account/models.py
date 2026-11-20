@@ -1,5 +1,5 @@
 from datetime import date
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
@@ -190,6 +190,11 @@ class Account(TimeStampedModel):
     Stores balance, currency, type, and credit-related fields.
     Provides methods for money transfer and credit card debt calculations.
     """
+
+    if TYPE_CHECKING:
+        id: int
+        user_id: int
+        bank_id: int
 
     TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = list(
         constants.ACCOUNT_TYPE_CHOICES,
@@ -400,6 +405,11 @@ class TransferMoneyLog(TimeStampedModel):
     Used for auditing and tracking account movements.
     """
 
+    if TYPE_CHECKING:
+        user_id: int
+        from_account_id: int | None
+        to_account_id: int | None
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -467,6 +477,11 @@ class AccountCoverageConfirmation(models.Model):
     dates; a later known problem may invalidate the exact affected part (or
     the whole period when its scope is unknown) through ``needs_recheck``.
     """
+
+    if TYPE_CHECKING:
+        account_id: int
+        statement_upload_id: int | None
+        confirmed_by_id: int | None
 
     class Source(models.TextChoices):
         BANK = 'bank', _('Банковская выписка')

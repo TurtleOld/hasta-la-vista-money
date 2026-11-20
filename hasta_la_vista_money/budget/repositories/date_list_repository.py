@@ -8,8 +8,12 @@ from datetime import date
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.budget.models import DateList
+from hasta_la_vista_money.budget.models import DateList, DateListManager
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_datelist_manager: DateListManager = getattr(DateList, _OBJECTS_ATTR)
 
 
 class DateListRepository:
@@ -41,7 +45,7 @@ class DateListRepository:
         Returns:
             QuerySet[DateList]: QuerySet of user's date lists.
         """
-        return DateList.objects.for_user(user)
+        return _datelist_manager.for_user(user)
 
     def get_by_user_ordered(self, user: User) -> QuerySet[DateList]:
         """Get all date lists for a user ordered by date.
@@ -52,7 +56,7 @@ class DateListRepository:
         Returns:
             QuerySet[DateList]: QuerySet ordered by date ascending.
         """
-        return DateList.objects.for_user(user).order_by('date')
+        return _datelist_manager.for_user(user).order_by('date')
 
     def get_by_date(self, target_date: date) -> QuerySet[DateList]:
         """Get date lists by date.
@@ -63,7 +67,7 @@ class DateListRepository:
         Returns:
             QuerySet[DateList]: Filtered QuerySet.
         """
-        return DateList.objects.for_date(target_date)
+        return _datelist_manager.for_date(target_date)
 
     def get_by_user_and_date(
         self,
@@ -79,7 +83,7 @@ class DateListRepository:
         Returns:
             QuerySet[DateList]: Filtered QuerySet.
         """
-        return DateList.objects.for_user(user).for_date(target_date)
+        return _datelist_manager.for_user(user).for_date(target_date)
 
     def get_latest_by_user(self, user: User) -> DateList | None:
         """Get latest date list for a user.
@@ -90,7 +94,7 @@ class DateListRepository:
         Returns:
             DateList | None: Latest date list if exists, None otherwise.
         """
-        return DateList.objects.for_user(user).order_by('-date').first()
+        return _datelist_manager.for_user(user).order_by('-date').first()
 
     def create_date_list(self, **kwargs: object) -> DateList:
         """Create a new date list.

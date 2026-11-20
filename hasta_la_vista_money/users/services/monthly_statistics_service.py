@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Required
 from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
@@ -20,6 +20,7 @@ from hasta_la_vista_money.core.calendar_days import (
     calendar_month,
     filter_calendar_range,
 )
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -32,6 +33,10 @@ from hasta_la_vista_money.users.services.groups import (
     get_family_groups,
     readable_users,
 )
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class MonthDataDict(TypedDict, total=False):
@@ -49,10 +54,10 @@ class MonthDataDict(TypedDict, total=False):
         deviation: Actual savings minus planned savings.
     """
 
-    month: str
-    expenses: float
-    income: float
-    savings: float
+    month: Required[str]
+    expenses: Required[float]
+    income: Required[float]
+    savings: Required[float]
     savings_percent: float
     balance: float
     month_start: str
@@ -700,7 +705,7 @@ def _budgets_data(
         last_day = monthrange(last_month.year, last_month.month)[1]
         rows = (
             filter_calendar_range(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     user__in=users_list,
                     account__currency=currency,
                     type=TransactionType.EXPENSE,
@@ -785,7 +790,7 @@ def _plan_fact_summary(
 
     fact_totals = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=users_list,
                 account__currency=currency,
                 type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
@@ -841,7 +846,7 @@ def _plan_fact_top_deviations(
 
     fact_rows = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=users_list,
                 account__currency=currency,
                 type__in=(TransactionType.EXPENSE, TransactionType.INCOME),
@@ -907,7 +912,7 @@ def _plan_fact_engagement(
 
     fact_rows = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=users_list,
                 account__currency=currency,
                 type=TransactionType.EXPENSE,
@@ -969,7 +974,7 @@ def _suggested_plan_categories(
 
     fact_rows = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=users_list,
                 account__currency=currency,
                 type=TransactionType.EXPENSE,

@@ -2,14 +2,14 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.forms import ScanQRForm, UploadImageForm
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -18,7 +18,12 @@ if TYPE_CHECKING:
 else:
     UserType = get_user_model()
 
+_OBJECTS_ATTR = 'objects'
+
 FORMS = (ScanQRForm, UploadImageForm)
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class UploadFormsDefaultAccountTests(TestCase):
@@ -68,7 +73,7 @@ class UploadFormsDefaultAccountTests(TestCase):
         self._assert_initial(self.user, self.card)
 
     def test_skips_deposit_account_of_last_receipt(self) -> None:
-        deposit = Account.objects.create_deposit(
+        deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             currency='RUB',

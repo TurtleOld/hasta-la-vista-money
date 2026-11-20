@@ -21,7 +21,9 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupConflictError,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
     statement_identity_settings,
 )

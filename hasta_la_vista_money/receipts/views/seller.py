@@ -37,7 +37,7 @@ class SellerCreateView(
     UserAuthMixin,
 ):
     model = Seller
-    form_class: type[SellerForm] = SellerForm
+    form_class: type[SellerForm] | None = SellerForm
 
     def _wants_json_response(self) -> bool:
         requested_with = self.request.headers.get('x-requested-with', '')
@@ -86,7 +86,7 @@ class SellerUpdateView(
     UserAuthMixin,
 ):
     model = Seller
-    form_class: type[SellerForm] = SellerForm
+    form_class: type[SellerForm] | None = SellerForm
     template_name = 'receipts/seller_update.html'
 
     def get_queryset(self) -> QuerySet[Seller]:

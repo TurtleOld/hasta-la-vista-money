@@ -5,7 +5,7 @@ including dashboard widgets and admin configurations.
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractUser, Group
@@ -35,6 +35,19 @@ from django.db.models import (
 )
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from django_stubs_ext.db.models.manager import RelatedManager
+
+    from hasta_la_vista_money.budget.models import DateList
+    from hasta_la_vista_money.finance_account.models import Account
+    from hasta_la_vista_money.loan.models import (
+        Loan,
+        PaymentMakeLoan,
+        PaymentSchedule,
+    )
+    from hasta_la_vista_money.receipts.models import Receipt
+    from hasta_la_vista_money.transactions.models import Category
 
 from hasta_la_vista_money.constants import (
     DEFAULT_TIMEZONE_NAME,
@@ -78,6 +91,16 @@ class User(AbstractUser):
     Attributes:
         theme: User's preferred theme (default: 'auto').
     """
+
+    if TYPE_CHECKING:
+        id: int
+        categories: RelatedManager[Category]
+        budget_date_lists: RelatedManager[DateList]
+        loan_users: RelatedManager[Loan]
+        payment_make_loan_users: RelatedManager[PaymentMakeLoan]
+        payment_schedule_users: RelatedManager[PaymentSchedule]
+        receipt_users: RelatedManager[Receipt]
+        finance_account_users: RelatedManager[Account]
 
     theme: CharField[Any, Any] = CharField(max_length=10, default='auto')
     timezone_name: CharField[Any, Any] = CharField(
@@ -165,6 +188,13 @@ class BankStatementUpload(Model):
         created_at: Timestamp when the upload was created.
         updated_at: Timestamp when the upload was last updated.
     """
+
+    if TYPE_CHECKING:
+        id: int
+        user_id: int
+        account_id: int
+        balance_explained_by_id: int | None
+        statement_rows: RelatedManager['BankStatementRow']
 
     class Status(TextChoices):
         PENDING = 'pending', _('В очереди')
@@ -313,6 +343,18 @@ class BankStatementUpload(Model):
 
 class BankStatementRow(Model):
     """Parsed statement row awaiting a reconciliation decision."""
+
+    if TYPE_CHECKING:
+        upload_id: int
+        candidate_id: int | None
+        duplicate_of_id: int | None
+        transaction_id: int | None
+        transfer_id: int | None
+        actor_id: int | None
+        decision_audits: RelatedManager['BankStatementDecisionAudit']
+        candidates: RelatedManager['BankStatementCandidate']
+
+        def get_decision_display(self) -> str: ...
 
     class Decision(TextChoices):
         PENDING = 'pending', _('Ожидает решения')
@@ -517,6 +559,10 @@ class BankStatementCandidate(Model):
 class MerchantCategory(Model):
     """Category the user last chose for a statement merchant key."""
 
+    if TYPE_CHECKING:
+        user_id: int
+        category_id: int
+
     user = ForeignKey(
         User,
         on_delete=CASCADE,
@@ -560,6 +606,9 @@ class BankStatementDecisionAudit(Model):
         blank=True,
         null=True,
     )
+
+    if TYPE_CHECKING:
+        actor_id: int | None
     decision = CharField(
         max_length=20,
         choices=BankStatementRow.Decision.choices,
@@ -601,6 +650,10 @@ class BankStatementDecisionAudit(Model):
 
 class FamilyGroupMembership(Model):
     """User role inside a shared family finance group."""
+
+    if TYPE_CHECKING:
+        group_id: int
+        user_id: int
 
     class Role(TextChoices):
         OWNER = 'owner', _('Владелец')

@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -130,6 +130,10 @@ class Planning(models.Model):
     Stores a planned budget item (expense or income) for a user and category.
     """
 
+    if TYPE_CHECKING:
+        user_id: int
+        category_id: int
+
     user: User = models.ForeignKey(  # type: ignore[assignment]
         'users.User',
         on_delete=models.CASCADE,
@@ -225,6 +229,10 @@ class Budget(models.Model):
     """
     Stores a monthly expense limit for the whole budget or one category.
     """
+
+    if TYPE_CHECKING:
+        user_id: int
+        category_id: int | None
 
     user: User = models.ForeignKey(  # type: ignore[assignment]
         'users.User',

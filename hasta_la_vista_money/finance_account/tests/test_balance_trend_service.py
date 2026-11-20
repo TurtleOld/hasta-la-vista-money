@@ -18,6 +18,7 @@ from hasta_la_vista_money.deposits.commands import (
 from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -36,6 +37,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _noon(day: date) -> datetime:
     return timezone.make_aware(datetime.combine(day, time(12)))
 
@@ -49,6 +53,9 @@ def _points(trend: 'BalanceTrendData') -> dict[str, Decimal]:
         point['date']: Decimal(str(point['balance']))
         for point in trend['series']
     }
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class BalanceTrendServiceTests(TestCase):
@@ -254,7 +261,7 @@ class AccountListBalanceTrendCurrencyTests(TestCase):
             currency='RUB',
             balance=Decimal('300000.00'),
         )
-        Account.objects.create_deposit(
+        _account_manager.create_deposit(
             user=user,
             name_account='Вклад',
             bank=wallet.bank,
@@ -354,7 +361,7 @@ class AccountListBalanceTrendKindTests(TestCase):
             currency='RUB',
             balance=Decimal('100000.00'),
         )
-        self.deposit = Account.objects.create_deposit(
+        self.deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.debit.bank,
@@ -367,7 +374,7 @@ class AccountListBalanceTrendKindTests(TestCase):
             currency='USD',
             balance=Decimal('500.00'),
         )
-        self.usd_deposit = Account.objects.create_deposit(
+        self.usd_deposit = _account_manager.create_deposit(
             user=self.user,
             name_account='Долларовый вклад',
             bank=self.debit.bank,
@@ -585,7 +592,7 @@ class AccountListBalanceTrendKindTests(TestCase):
             code='SBERBANK',
             defaults={'name': 'Сбербанк', 'is_system': True},
         )[0]
-        Account.objects.create_deposit(
+        _account_manager.create_deposit(
             user=user,
             name_account='Пустой вклад',
             bank=bank,

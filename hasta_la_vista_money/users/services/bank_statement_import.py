@@ -89,6 +89,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.services.protocols import (
         AccountCoverageServiceProtocol,
     )
+    from hasta_la_vista_money.transactions.managers import (
+        TransactionQuerySet,
+    )
     from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
         StatementIdentityRepository,
     )
@@ -118,6 +121,11 @@ GENERATION_STARTED: Final = 'started'
 REUPLOAD_REQUIRED_MESSAGE: Final[Promise] = _(
     'Данные выписки истекли. Загрузите выписку повторно.',
 )
+
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class StatementGenerationExpiredError(Exception):
@@ -1596,7 +1604,7 @@ class BankStatementImportService:
     ) -> Transaction | None:
         """Return the proven movement this row repeats, if readable."""
         same_file = (
-            Transaction.objects.without_adjustments()
+            _transaction_manager.without_adjustments()
             .filter(
                 account_id=upload.account_id,
                 source_file_hash=upload.file_hash,
@@ -1608,7 +1616,7 @@ class BankStatementImportService:
             return same_file
         if identity.source_ref_hash:
             return (
-                Transaction.objects.without_adjustments()
+                _transaction_manager.without_adjustments()
                 .filter(
                     account_id=upload.account_id,
                     source_ref_hash=identity.source_ref_hash,
@@ -2196,7 +2204,7 @@ class BankStatementImportService:
         current_file_hash: str,
         bank_calendar_date: date | None = None,
     ) -> list[Transaction]:
-        queryset = Transaction.objects.without_adjustments().filter(
+        queryset = _transaction_manager.without_adjustments().filter(
             account=account,
             user=user,
             type=type_value,

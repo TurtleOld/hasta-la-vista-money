@@ -4,7 +4,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
@@ -25,6 +24,7 @@ from hasta_la_vista_money.users.services.dashboard_analytics import (
     get_drill_down_data,
     get_period_comparison,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

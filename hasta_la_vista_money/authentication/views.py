@@ -1,6 +1,6 @@
 from typing import Any, cast
 
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -51,7 +51,10 @@ class SessionTokenObtainView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
-    def _validate_user(self, user: User | AnonymousUser) -> None:
+    def _validate_user(
+        self,
+        user: AbstractBaseUser | AnonymousUser,
+    ) -> None:
         if not isinstance(user, User):
             raise TypeError(_('Пользователь не авторизован'))
 

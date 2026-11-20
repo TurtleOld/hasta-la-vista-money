@@ -1,17 +1,22 @@
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class ReceiptBalanceDeltaTest(TestCase):
@@ -348,7 +353,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def test_receipt_update_form_excludes_deposit_accounts(self) -> None:
         """Deposit accounts must not be selectable on receipt update."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.account1.bank,

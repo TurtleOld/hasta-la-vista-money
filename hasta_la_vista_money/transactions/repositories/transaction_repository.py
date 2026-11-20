@@ -19,8 +19,16 @@ from hasta_la_vista_money.core.calendar_days import (
     filter_calendar_to,
 )
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.models import Category, Transaction
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+)
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class TransactionRepository:
@@ -44,7 +52,7 @@ class TransactionRepository:
         type_value: str | None = None,
     ) -> QuerySet[Transaction]:
         """Return transactions for a user with related objects preloaded."""
-        qs = Transaction.objects.for_user(user).select_related(
+        qs = _transaction_manager.for_user(user).select_related(
             'user',
             'category',
             'account',
@@ -61,7 +69,7 @@ class TransactionRepository:
         type_value: str | None = None,
     ) -> QuerySet[Transaction]:
         """Return transactions for a user within a date period."""
-        qs = Transaction.objects.for_user(user).for_period(
+        qs = _transaction_manager.for_user(user).for_period(
             start_date,
             end_date,
         )
@@ -92,7 +100,7 @@ class TransactionRepository:
         category: Category,
     ) -> QuerySet[Transaction]:
         """Return transactions for the given category or its descendants."""
-        return Transaction.objects.for_user(user).for_category(category)
+        return _transaction_manager.for_user(user).for_category(category)
 
     def get_by_account(
         self,
@@ -101,7 +109,7 @@ class TransactionRepository:
         type_value: str | None = None,
     ) -> QuerySet[Transaction]:
         """Return transactions for a user filtered by account id."""
-        qs = Transaction.objects.for_user(user).filter(account_id=account_id)
+        qs = _transaction_manager.for_user(user).filter(account_id=account_id)
         if type_value is not None:
             qs = qs.filter(type=type_value)
         return qs
@@ -144,7 +152,7 @@ class TransactionRepository:
 
     def filter_analytical(self, **kwargs: object) -> QuerySet[Transaction]:
         """Filter transactions for analytics, without balance adjustments."""
-        return Transaction.objects.without_adjustments().filter(**kwargs)
+        return _transaction_manager.without_adjustments().filter(**kwargs)
 
     def filter_with_select_related(
         self,

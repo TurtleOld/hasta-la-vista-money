@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -28,7 +29,12 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
     _date_to_aware,
 )
 
+_OBJECTS_ATTR = 'objects'
+
 UNCATEGORIZED_CATEGORY_LABEL = 'Без категории'
+
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 def _category_ids(keys: list[str], prefix: str) -> list[int]:
@@ -71,7 +77,7 @@ def _filtered_transactions(
     start: date | None = None,
     end: date | None = None,
 ) -> QuerySet[Transaction]:
-    queryset = Transaction.objects.without_adjustments().filter(
+    queryset = _transaction_manager.without_adjustments().filter(
         user__in=users,
         type=type_value,
     )

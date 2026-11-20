@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
@@ -18,6 +18,11 @@ class ValidationResult:
     error: str | None = None
     user: 'User | None' = None
     account: 'Account | None' = None
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class ReceiptAPIValidator:
@@ -94,7 +99,7 @@ class ReceiptAPIValidator:
             )
 
         try:
-            account = Account.objects.available_for_regular_operations().get(
+            account = _account_manager.available_for_regular_operations().get(
                 id=account_id,
                 user=user,
             )

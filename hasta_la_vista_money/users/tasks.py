@@ -1,6 +1,6 @@
 """Celery tasks for user-related async operations."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import structlog
 from celery import shared_task
@@ -26,6 +26,22 @@ from hasta_la_vista_money.users.services.bank_statement_import import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+if TYPE_CHECKING:
+
+    class TaskProtocol(Protocol):
+        """Static surface of a bound Celery task used by callers."""
+
+        def apply(
+            self,
+            args: list[Any] | None = ...,
+            kwargs: dict[str, Any] | None = ...,
+            **options: Any,
+        ) -> Any: ...
+
+        def delay(self, *args: Any, **kwargs: Any) -> Any: ...
+
 
 RETRYABLE_ERRORS = (OperationalError, InterfaceError)
 
@@ -82,13 +98,17 @@ def process_bank_statement_task(
             'user',
             'account',
         ).get(id=upload_id)
-        service = ApplicationContainer().users.bank_statement_import_service()
+        service = cast(
+            'BankStatementImportServiceProtocol',
+            ApplicationContainer().users.bank_statement_import_service(),
+        )
         generation = service.capture_generation(upload)
+        captured_generation = generation
         _assert_account_importable(upload)
         state = _start_generation(
             service,
             upload,
-            generation,
+            captured_generation,
             self.request.id or '',
         )
         if state == GENERATION_BUSY:
@@ -109,7 +129,7 @@ def process_bank_statement_task(
         _finalize_generation(
             service,
             upload,
-            generation,
+            captured_generation,
             result,
             self.request.id or '',
         )
@@ -199,6 +219,12 @@ def process_bank_statement_task(
             f'{_("Непредвиденная ошибка")}: {e!s}',
         )
         raise
+
+
+process_bank_statement_typed = cast(
+    'TaskProtocol',
+    process_bank_statement_task,
+)
 
 
 def _assert_account_importable(upload: BankStatementUpload) -> None:

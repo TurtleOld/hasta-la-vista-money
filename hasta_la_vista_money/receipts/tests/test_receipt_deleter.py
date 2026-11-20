@@ -3,7 +3,6 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -13,6 +12,7 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

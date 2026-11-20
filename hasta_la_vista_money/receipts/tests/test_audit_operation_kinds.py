@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse_lazy
 
@@ -14,6 +13,7 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.repositories import ProductCategoryRepository
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

@@ -98,7 +98,7 @@ class TestGroupAccountMixin(TestCase):
 
     def test_get_accounts_with_group_id(self) -> None:
         mixin = GroupAccountMixin()
-        request = self.factory.get(f'/?group_id={self.group.id}')
+        request = self.factory.get(f'/?group_id={self.group.pk}')
         request.user = self.user1
         setup_container_for_request(request)
         mixin.request = cast('RequestWithContainer', request)

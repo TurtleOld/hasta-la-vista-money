@@ -13,11 +13,18 @@ from hasta_la_vista_money.deposits.models import (
     DepositPrincipalEvent,
 )
 from hasta_la_vista_money.deposits.movement_source import DepositMovementSource
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    Bank,
+)
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+_OBJECTS_ATTR = 'objects'
 
 
 def _sberbank() -> Bank:
@@ -26,6 +33,9 @@ def _sberbank() -> Bank:
         defaults={'name': 'Сбербанк', 'is_system': True},
     )
     return bank
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class DepositMovementSourceTests(TestCase):
@@ -37,7 +47,7 @@ class DepositMovementSourceTests(TestCase):
             currency='RUB',
             balance=Decimal('0.00'),
         )
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Deposit',
             currency='RUB',

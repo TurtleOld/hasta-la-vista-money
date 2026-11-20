@@ -2,7 +2,7 @@ import base64
 import json
 import unittest
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock, patch
 
 import jwt
@@ -24,6 +24,8 @@ from hasta_la_vista_money.users.factories import UserFactoryTyped
 from hasta_la_vista_money.users.models import User as UserModel
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from hasta_la_vista_money.users.models import User
 else:
     User = UserModel
@@ -420,7 +422,9 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
         header1 = self.auth.authenticate_header(django_request)  # type: ignore[arg-type]
         self.assertEqual(header1, 'Bearer realm="api"')
 
-        drf_request = Request(self.factory.get('/'))
+        drf_request = cast('Callable[[HttpRequest], Request]', Request)(
+            self.factory.get('/'),
+        )
         header2 = self.auth.authenticate_header(drf_request)
         self.assertEqual(header2, 'Bearer realm="api"')
 
@@ -471,7 +475,9 @@ class CookieUtilityFunctionsTestCase(TestCase):
 
     def test_get_token_from_cookie_with_drf_request(self) -> None:
         """Test get_token_from_cookie with DRF Request."""
-        request = Request(self.factory.get('/'))
+        request = cast('Callable[[HttpRequest], Request]', Request)(
+            self.factory.get('/'),
+        )
         request.COOKIES[self.auth_cookie_name] = TEST_TOKEN
 
         result = get_token_from_cookie(request)
@@ -487,7 +493,9 @@ class CookieUtilityFunctionsTestCase(TestCase):
 
     def test_get_refresh_token_from_cookie_with_drf_request(self) -> None:
         """Test get_refresh_token_from_cookie with DRF Request."""
-        request = Request(self.factory.get('/'))
+        request = cast('Callable[[HttpRequest], Request]', Request)(
+            self.factory.get('/'),
+        )
         request.COOKIES[self.refresh_cookie_name] = TEST_REFRESH_TOKEN
 
         result = get_refresh_token_from_cookie(request)

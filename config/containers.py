@@ -1,3 +1,5 @@
+from typing import cast
+
 from dependency_injector import containers, providers
 
 from core.protocols.services import AccountServiceProtocol
@@ -15,8 +17,9 @@ from hasta_la_vista_money.users.containers import UsersContainer
 class CoreContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
 
-    account_service: providers.Dependency[AccountServiceProtocol] = (
-        providers.Dependency()
+    account_service: providers.Dependency[AccountServiceProtocol] = cast(
+        'providers.Dependency[AccountServiceProtocol]',
+        providers.Dependency(),
     )
 
 

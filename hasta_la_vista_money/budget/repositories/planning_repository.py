@@ -8,9 +8,13 @@ from datetime import date
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.budget.models import Planning, PlanningManager
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_planning_manager: PlanningManager = getattr(Planning, _OBJECTS_ATTR)
 
 
 class PlanningRepository:
@@ -26,19 +30,19 @@ class PlanningRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Planning]:
         """Get all plannings for a user."""
-        return Planning.objects.for_user(user)
+        return _planning_manager.for_user(user)
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Planning]:
         """Get all plannings for a user with related objects optimized."""
-        return Planning.objects.for_user(user).with_related()
+        return _planning_manager.for_user(user).with_related()
 
     def get_expenses_by_user(self, user: User) -> QuerySet[Planning]:
         """Get all expense plannings for a user."""
-        return Planning.objects.for_user(user).expenses()
+        return _planning_manager.for_user(user).expenses()
 
     def get_incomes_by_user(self, user: User) -> QuerySet[Planning]:
         """Get all income plannings for a user."""
-        return Planning.objects.for_user(user).incomes()
+        return _planning_manager.for_user(user).incomes()
 
     def get_by_period(
         self,
@@ -47,7 +51,7 @@ class PlanningRepository:
         end: date,
     ) -> QuerySet[Planning]:
         """Get plannings for a user within a date period."""
-        return Planning.objects.for_user(user).for_period(start, end)
+        return _planning_manager.for_user(user).for_period(start, end)
 
     def get_or_create_planning(
         self,

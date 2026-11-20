@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 if TYPE_CHECKING:
     from datetime import date
 
+    from django_stubs_ext.db.models.manager import RelatedManager
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -29,6 +31,11 @@ class InterestPayoutDestination(models.TextChoices):
 class Deposit(models.Model):
     if TYPE_CHECKING:
         terms: models.Manager['DepositTerm']
+
+    if TYPE_CHECKING:
+        capitalization_events: RelatedManager['DepositCapitalizationEvent']
+        principal_events: RelatedManager['DepositPrincipalEvent']
+        audit_events: RelatedManager['DepositAuditEvent']
 
     account = models.OneToOneField(
         Account,
@@ -425,6 +432,13 @@ class DepositRenewalEvent(models.Model):
         on_delete=models.PROTECT,
         related_name='renewal_events',
     )
+
+    if TYPE_CHECKING:
+        deposit_id: int
+        previous_term_id: int
+        renewed_term_id: int
+        reversal_of_id: int | None
+        reversal: 'DepositRenewalEvent | None'
     previous_term = models.ForeignKey(
         DepositTerm,
         on_delete=models.PROTECT,
@@ -512,6 +526,15 @@ class DepositPrincipalEvent(models.Model):
     Each event represents either a funding transfer or an opening position
     and cannot be modified or deleted after creation.
     """
+
+    if TYPE_CHECKING:
+        deposit_id: int
+        source_account_id: int | None
+        destination_account_id: int | None
+        reversal_of_id: int | None
+        reversal: 'DepositPrincipalEvent | None'
+
+        def get_type_display(self) -> str: ...
 
     class Type(models.TextChoices):
         FUNDING = 'funding', _('Финансирование')
@@ -788,6 +811,13 @@ class DepositCapitalizationEventQuerySet(
 class DepositCapitalizationEvent(models.Model):
     Destination = InterestPayoutDestination
 
+    if TYPE_CHECKING:
+        deposit_id: int
+        forecast_id: int | None
+        destination_account_id: int | None
+        reversal_of_id: int | None
+        reversal: 'DepositCapitalizationEvent | None'
+
     deposit = models.ForeignKey(
         Deposit,
         on_delete=models.PROTECT,
@@ -951,6 +981,10 @@ class DepositAuditEvent(models.Model):
     cancellation, closure, and renewal without storing sensitive
     financial details (amounts, account numbers).
     """
+
+    if TYPE_CHECKING:
+
+        def get_event_type_display(self) -> str: ...
 
     class Type(models.TextChoices):
         CONVERSION = 'conversion', _('Преобразование счёта')

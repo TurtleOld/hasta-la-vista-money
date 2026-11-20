@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import django_filters
-from django.contrib.auth import get_user_model
 from django.contrib.postgres.search import SearchQuery, SearchVector
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
@@ -32,6 +31,8 @@ from django_filters import widgets
 from django_stubs_ext import StrOrPromise
 from PIL import Image, UnidentifiedImageError
 
+from hasta_la_vista_money.users.typing_helpers import get_user_model
+
 if TYPE_CHECKING:
     from django.forms.formsets import BaseFormSet as BaseFormSetType
 
@@ -40,12 +41,13 @@ else:
     User = get_user_model()
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
     Product,
     ProductCategory,
     Receipt,
+    ReceiptManager,
     Seller,
 )
 from hasta_la_vista_money.receipts.services.fns_qr import (
@@ -76,6 +78,8 @@ _PRODUCT_LINE_ERRORS: dict[ProductLineError, tuple[str, StrOrPromise]] = {
     ),
 }
 
+_OBJECTS_ATTR = 'objects'
+
 _INPUT_CLASSES = (
     'w-full rounded-xl border border-gray-300 dark:border-gray-600 '
     'bg-white dark:bg-gray-800 px-3 py-2 '
@@ -100,6 +104,10 @@ _READONLY_CLASSES = (
     'text-sm text-gray-700 dark:text-gray-300 '
     'shadow-sm cursor-not-allowed'
 )
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
 
 
 class ReceiptFilter(django_filters.FilterSet):
@@ -572,13 +580,13 @@ class MultipleImageField(FileField):
 
 def _set_receipt_account_choices(form: Form, user: User) -> None:
     field: Any = form.fields['account']
-    field.queryset = Account.objects.available_for_regular_operations().filter(
+    field.queryset = _account_manager.available_for_regular_operations().filter(
         user=user,
     )
     if form.is_bound:
         return
     last_account_id = Subquery(
-        Receipt.objects.for_user(user)
+        _receipt_manager.for_user(user)
         .order_by(F('created_at').desc(nulls_last=True), '-pk')
         .values('account_id')[:1],
     )

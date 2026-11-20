@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.factories import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
@@ -28,9 +29,14 @@ from hasta_la_vista_money.users.models import FamilyGroupMembership
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
 else:
-    from django.contrib.auth import get_user_model
+    from hasta_la_vista_money.users.typing_helpers import get_user_model
 
     UserType = get_user_model()
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestAccountServices(TestCase):
@@ -545,7 +551,7 @@ class TestTransferService(TestCase):
 
     def test_transfer_rejects_deposit_as_source(self) -> None:
         """Transferring from a deposit account bypasses the deposit domain."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.from_account.bank,
@@ -573,7 +579,7 @@ class TestTransferService(TestCase):
 
     def test_transfer_rejects_deposit_as_destination(self) -> None:
         """Transferring to a deposit account bypasses the deposit domain."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.from_account.bank,
@@ -634,7 +640,7 @@ class TestTransferService(TestCase):
 
     def test_delete_transfer_rejects_deposit_as_source(self) -> None:
         """Deposit withdrawals cannot be deleted as plain transfers."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.from_account.bank,
@@ -671,7 +677,7 @@ class TestTransferService(TestCase):
 
     def test_delete_transfer_rejects_deposit_as_destination(self) -> None:
         """Deposit funding cannot be deleted as a plain transfer."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.from_account.bank,

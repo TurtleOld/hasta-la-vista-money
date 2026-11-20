@@ -22,6 +22,7 @@ from hasta_la_vista_money.core.calendar_days import (
 from hasta_la_vista_money.deposits.reporting import (
     actual_interest_totals_for_periods,
 )
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -35,6 +36,10 @@ from hasta_la_vista_money.users.utils.date_utils import (
     get_month_start_end,
     get_period_dates,
 )
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 def calculate_linear_trend(
@@ -146,7 +151,7 @@ def get_period_comparison(
     previous_end_dt = period_dates['previous_end']
 
     transaction_totals = (
-        Transaction.objects.without_adjustments()
+        _transaction_manager.without_adjustments()
         .filter(user=user, account__currency=currency)
         .annotate(_calendar_day=calendar_day())
         .aggregate(
@@ -322,7 +327,7 @@ def get_drill_down_data(
     if category_id is None:
         top_categories = (
             filter_calendar_range(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     user=user,
                     account__currency=currency,
                     type=type_value,
@@ -366,7 +371,7 @@ def get_drill_down_data(
 
     subcategories = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=user,
                 account__currency=currency,
                 type=type_value,
@@ -392,7 +397,7 @@ def get_drill_down_data(
     if not data:
         transactions = list(
             filter_calendar_range(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     user=user,
                     account__currency=currency,
                     type=type_value,

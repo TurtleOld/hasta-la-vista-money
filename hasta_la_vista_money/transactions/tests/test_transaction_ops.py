@@ -9,7 +9,7 @@ from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
     UpdateTransactionCommand,
@@ -34,7 +34,12 @@ from hasta_la_vista_money.transactions.services.transaction_ops import (
 )
 from hasta_la_vista_money.users.models import User
 
+_OBJECTS_ATTR = 'objects'
+
 TEST_PASSWORD = 'pwd123456!'  # nosec B105
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TransactionServiceTest(TestCase):
@@ -283,7 +288,7 @@ class TransactionServiceTest(TestCase):
             )
 
     def test_add_rejects_deposit_account(self) -> None:
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.account.bank,
@@ -308,7 +313,7 @@ class TransactionServiceTest(TestCase):
                 type_value=TransactionType.INCOME,
             ),
         )
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Вклад',
             bank=self.account.bank,

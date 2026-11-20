@@ -14,7 +14,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
     fingerprint,
     statement_identity_settings,

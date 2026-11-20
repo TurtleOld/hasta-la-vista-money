@@ -5,11 +5,25 @@ including filtering by user and date ranges.
 """
 
 from datetime import date
+from typing import cast
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    TransferMoneyLog,
+    TransferMoneyLogQuerySet,
+)
 from hasta_la_vista_money.users.models import User
+
+_transfermoneylog_manager = cast(
+    'TransferMoneyLogQuerySet',
+    TransferMoneyLog.objects,
+)
+
+_transfermoneylog_manager = cast(
+    'TransferMoneyLogQuerySet',
+    TransferMoneyLog.objects,
+)
 
 
 class TransferMoneyLogRepository:
@@ -147,7 +161,7 @@ class TransferMoneyLogRepository:
         Returns:
             QuerySet[TransferMoneyLog]: Filtered QuerySet.
         """
-        return TransferMoneyLog.objects.by_user(user).by_date_range(start, end)
+        return _transfermoneylog_manager.by_user(user).by_date_range(start, end)
 
     def create_log(self, **kwargs: object) -> TransferMoneyLog:
         """Create a new transfer log.

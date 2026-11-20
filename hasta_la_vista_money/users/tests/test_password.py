@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -8,6 +7,7 @@ from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory, TestCase
 
 from hasta_la_vista_money.users.services.password import set_user_password
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

@@ -1,6 +1,5 @@
 from datetime import date
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import resolve, reverse
@@ -11,6 +10,7 @@ from hasta_la_vista_money.budget.models import Budget, DateList, Planning
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import FamilyGroupMembership
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

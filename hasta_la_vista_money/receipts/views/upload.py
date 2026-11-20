@@ -48,7 +48,7 @@ class UploadImageView(
     """
 
     template_name = 'receipts/upload_image.html'
-    form_class: type[UploadImageForm] = UploadImageForm
+    form_class: type[UploadImageForm] | None = UploadImageForm
     success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
 
     def get_form_kwargs(self) -> dict[str, Any]:

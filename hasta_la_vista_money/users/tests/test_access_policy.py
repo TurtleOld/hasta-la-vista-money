@@ -16,7 +16,11 @@ from rest_framework.test import APIClient
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
-from hasta_la_vista_money.finance_account.models import Account, Bank
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    Bank,
+)
 from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.audit_registry import ACCOUNT_LABEL
 from hasta_la_vista_money.system.models import AuditLog
@@ -188,6 +192,9 @@ OWN_ONLY_SURFACES = frozenset(
 )
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _project_url_names(
     patterns: list[URLPattern | URLResolver],
     namespace: str = '',
@@ -206,6 +213,9 @@ def _project_url_names(
         elif pattern.callback.__module__.startswith('hasta_la_vista_money'):
             names.add(f'{namespace}{pattern.name}')
     return names
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class AccessPolicyTest(TestCase):
@@ -331,7 +341,7 @@ class AccessPolicyTest(TestCase):
             operation_type=1,
             total_sum=Decimal('10.00'),
         )
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=owner,
             name_account='deposit',
             bank=Bank.objects.get(code='SBERBANK'),

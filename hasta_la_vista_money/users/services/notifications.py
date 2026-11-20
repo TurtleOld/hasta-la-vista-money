@@ -6,11 +6,16 @@ from django.utils import timezone
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.calendar_days import filter_calendar_from
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class NotificationDict(TypedDict):
@@ -64,7 +69,7 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
         )
     current_month_expenses = (
         filter_calendar_from(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=user,
                 type=TransactionType.EXPENSE,
             ),
@@ -74,7 +79,7 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
     )
     current_month_income = (
         filter_calendar_from(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=user,
                 type=TransactionType.INCOME,
             ),

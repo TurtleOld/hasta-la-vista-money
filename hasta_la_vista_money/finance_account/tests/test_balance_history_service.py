@@ -12,6 +12,7 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -28,6 +29,11 @@ from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class BalanceHistoryServiceTests(TestCase):
@@ -129,7 +135,7 @@ class BalanceHistoryServiceTests(TestCase):
             code='SBERBANK',
             defaults={'name': 'Сбербанк', 'is_system': True},
         )
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user,
             name_account='Deposit',
             currency='RUB',

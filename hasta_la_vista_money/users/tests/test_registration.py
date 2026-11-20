@@ -1,11 +1,11 @@
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money.users.forms import RegisterUserForm
 from hasta_la_vista_money.users.services.registration import register_user
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

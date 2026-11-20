@@ -1,11 +1,19 @@
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from django.db import transaction
-from django_stubs_ext.db.models import TypedModelMeta
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, ModelSerializer, Serializer
 
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+
+if TYPE_CHECKING:
+
+    class _MetaBase(ModelSerializer.Meta):
+        """Static-only Meta base matching DRF stubs."""
+
+else:
+    from django_stubs_ext.db.models import TypedModelMeta as _MetaBase
 
 
 class InvalidSellerDataError(ValidationError):
@@ -17,24 +25,24 @@ class InvalidProductDataError(ValidationError):
 
 
 class SellerSerializer(ModelSerializer[Seller]):
-    class Meta(TypedModelMeta):
-        model = Seller
-        fields = '__all__'
-        read_only_fields = ('user',)
+    class Meta(_MetaBase):
+        model: ClassVar[type[Any]] = Seller
+        fields: ClassVar[Sequence[str] | Literal['__all__']] = '__all__'
+        read_only_fields: ClassVar[Sequence[str] | None] = ('user',)
 
 
 class ProductSerializer(ModelSerializer[Product]):
-    class Meta(TypedModelMeta):
-        model = Product
-        fields = '__all__'
+    class Meta(_MetaBase):
+        model: ClassVar[type[Any]] = Product
+        fields: ClassVar[Sequence[str] | Literal['__all__']] = '__all__'
 
 
 class ReceiptSerializer(ModelSerializer[Receipt]):
     product = ProductSerializer(many=True)
 
-    class Meta(TypedModelMeta):
-        model = Receipt
-        fields = '__all__'
+    class Meta(_MetaBase):
+        model: ClassVar[type[Any]] = Receipt
+        fields: ClassVar[Sequence[str] | Literal['__all__']] = '__all__'
 
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> Receipt:

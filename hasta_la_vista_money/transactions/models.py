@@ -6,12 +6,15 @@ model replaces ``IncomeCategory`` and ``ExpenseCategory`` in the same way.
 """
 
 from decimal import Decimal
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from django_stubs_ext.db.models.manager import RelatedManager
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -42,6 +45,14 @@ class Category(models.Model):
     name, type)`` tuple is unique, allowing a user to reuse the same name
     across income and expense categories.
     """
+
+    if TYPE_CHECKING:
+        id: int
+        user_id: int
+        parent_category_id: int | None
+        subcategories: RelatedManager['Category']
+
+        def get_type_display(self) -> str: ...
 
     user = models.ForeignKey(
         User,
@@ -99,6 +110,11 @@ class Transaction(models.Model):
     this invariant is enforced by forms and services rather than by the
     database to keep migrations simple.
     """
+
+    if TYPE_CHECKING:
+        user_id: int
+        account_id: int
+        category_id: int
 
     type = models.CharField(
         max_length=10,

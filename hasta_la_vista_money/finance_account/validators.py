@@ -125,7 +125,7 @@ def validate_credit_fields_required(
         errors = []
         bank_code = ''
         if bank is not None:
-            bank_code = bank.code if hasattr(bank, 'code') else str(bank)
+            bank_code = str(getattr(bank, 'code', bank))
 
         if not bank_code or bank_code == '-':
             errors.append(_('Для кредитного счёта необходимо указать банк'))

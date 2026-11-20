@@ -4,7 +4,8 @@ This module provides Django REST Framework serializers for converting
 finance account models to and from JSON format for API communication.
 """
 
-from typing import Any, ClassVar
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -12,6 +13,14 @@ from rest_framework import serializers
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+
+if TYPE_CHECKING:
+
+    class _MetaBase(serializers.ModelSerializer.Meta):
+        """Static-only Meta base matching DRF stubs."""
+
+else:
+    from django_stubs_ext.db.models import TypedModelMeta as _MetaBase
 
 
 class AccountSerializer(serializers.ModelSerializer[Account]):
@@ -33,9 +42,9 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
     delete_url = serializers.SerializerMethodField()
     is_foreign = serializers.SerializerMethodField()
 
-    class Meta:
-        model = Account
-        fields: ClassVar[list[str]] = [
+    class Meta(_MetaBase):
+        model: ClassVar[type[Any]] = Account
+        fields: ClassVar[Sequence[str] | Literal['__all__']] = [
             'id',
             'name_account',
             'balance',
@@ -51,7 +60,7 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
             'delete_url',
             'is_foreign',
         ]
-        read_only_fields: ClassVar[list[str]] = ['id']
+        read_only_fields: ClassVar[Sequence[str] | None] = ['id']
 
     def get_url(self, obj: Account) -> str:
         """Get absolute URL for account edit."""

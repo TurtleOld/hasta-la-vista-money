@@ -2,7 +2,6 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -14,6 +13,7 @@ from hasta_la_vista_money.users.services.auth import (
     login_user,
     set_auth_cookies_in_response,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

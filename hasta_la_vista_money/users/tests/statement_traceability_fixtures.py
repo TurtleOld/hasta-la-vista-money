@@ -24,7 +24,9 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet

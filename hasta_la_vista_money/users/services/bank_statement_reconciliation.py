@@ -28,6 +28,7 @@ from hasta_la_vista_money.finance_account.services.financial_change_hooks import
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -58,6 +59,11 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.services.protocols import (
         AccountCoverageServiceProtocol,
     )
+
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class InvalidReconciliationDecisionError(ValueError):
@@ -183,7 +189,7 @@ class BankStatementReconciliationService:
         upload: BankStatementUpload,
         requested: str | None,
     ) -> str:
-        if requested in _OUTCOMES:
+        if requested is not None and requested in _OUTCOMES:
             return requested
         if requested:
             return BankStatementRow.Decision.PENDING
@@ -666,7 +672,7 @@ class BankStatementReconciliationService:
         if bounds is None:
             return Transaction.objects.none()
         transaction_type, amount, transaction_date = bounds
-        candidates = Transaction.objects.without_adjustments().filter(
+        candidates = _transaction_manager.without_adjustments().filter(
             account=row.upload.account,
             user=row.upload.user,
             type=transaction_type,

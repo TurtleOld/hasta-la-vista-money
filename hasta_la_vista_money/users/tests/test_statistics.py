@@ -1,12 +1,12 @@
 from typing import TYPE_CHECKING, ClassVar
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from hasta_la_vista_money.users.services.statistics import (
     UserStatistics,
     get_user_statistics,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

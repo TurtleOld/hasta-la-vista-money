@@ -12,11 +12,16 @@ from hasta_la_vista_money.core.calendar_days import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class StatisticsRepository:
@@ -45,7 +50,7 @@ class StatisticsRepository:
         end_date: datetime | None = None,
     ) -> Decimal:
         qs = filter_calendar_from(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=user,
                 account__currency=currency,
                 type=TransactionType.EXPENSE,
@@ -65,7 +70,7 @@ class StatisticsRepository:
         end_date: datetime | None = None,
     ) -> Decimal:
         qs = filter_calendar_from(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=user,
                 account__currency=currency,
                 type=TransactionType.INCOME,
@@ -113,7 +118,7 @@ class StatisticsRepository:
     ) -> QuerySet[Transaction, dict[str, str | Decimal]]:
         return (
             filter_calendar_from(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     user=user,
                     account__currency=currency,
                     type=TransactionType.EXPENSE,

@@ -49,6 +49,7 @@ class DepositServiceProtocol(Protocol):
         Returns:
             The created Deposit with an immutable opening-position event.
         """
+        raise NotImplementedError
 
     def create_funded_term_deposit(
         self,
@@ -65,6 +66,7 @@ class DepositServiceProtocol(Protocol):
         Raises:
             ValidationError: If the source account is invalid or insufficient.
         """
+        raise NotImplementedError
 
     def create_term_deposit(
         self,
@@ -78,6 +80,7 @@ class DepositServiceProtocol(Protocol):
         Returns:
             The created Deposit.
         """
+        raise NotImplementedError
 
     def correct_payout_schedule(
         self,
@@ -96,6 +99,7 @@ class DepositServiceProtocol(Protocol):
             ValidationError: If the term is invalid, not owned, or not
                 active.
         """
+        raise NotImplementedError
 
     def add_floating_rate_period(
         self,
@@ -114,6 +118,7 @@ class DepositServiceProtocol(Protocol):
             ValidationError: If the term is invalid, not floating, matured,
                 or the new period's parameters are invalid.
         """
+        raise NotImplementedError
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]: ...
 
@@ -121,7 +126,8 @@ class DepositServiceProtocol(Protocol):
 
     def get_user_deposit_overview(self, user: User) -> 'DepositOverview': ...
 
-    def get_user_deposit(self, deposit_id: int, user: User) -> Deposit: ...
+    def get_user_deposit(self, deposit_id: int, user: User) -> Deposit:
+        raise NotImplementedError
 
     def recalculate_forecast(
         self,
@@ -139,6 +145,7 @@ class DepositServiceProtocol(Protocol):
             ValidationError: If the term is invalid or not owned, or the
             custom payout schedule has no configured dates.
         """
+        raise NotImplementedError
 
     def renew_matured_deposit(
         self,

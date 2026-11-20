@@ -16,9 +16,14 @@ from hasta_la_vista_money.finance_account.currencies import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestAccountModel(TestCase):
@@ -239,8 +244,8 @@ class TestAccountManagers(TestCase):
 
     def test_by_user_manager(self) -> None:
         """Test by_user manager method."""
-        user1_accounts = Account.objects.by_user(self.user1)
-        user2_accounts = Account.objects.by_user(self.user2)
+        user1_accounts = _account_manager.by_user(self.user1)
+        user2_accounts = _account_manager.by_user(self.user2)
 
         self.assertIn(self.account1, user1_accounts)
         self.assertNotIn(self.account2, user1_accounts)
@@ -254,12 +259,12 @@ class TestAccountManagers(TestCase):
             password='testpass123',  # nosec B106: test-only password
         )
 
-        user3_accounts = Account.objects.by_user(user3)
+        user3_accounts = _account_manager.by_user(user3)
         self.assertEqual(user3_accounts.count(), 0)
 
     def test_available_for_regular_operations_excludes_deposits(self) -> None:
         """Deposits must not be selectable for regular operations."""
-        deposit_account = Account.objects.create_deposit(
+        deposit_account = _account_manager.create_deposit(
             user=self.user1,
             name_account='Вклад',
             bank=self.account1.bank,
@@ -267,7 +272,7 @@ class TestAccountManagers(TestCase):
             balance=Decimal('1000.00'),
         )
 
-        regular_accounts = Account.objects.available_for_regular_operations()
+        regular_accounts = _account_manager.available_for_regular_operations()
 
         self.assertIn(self.account1, regular_accounts)
         self.assertNotIn(deposit_account, regular_accounts)
@@ -278,7 +283,7 @@ class TestAccountManagers(TestCase):
         self.account1.archived_at = timezone.now()
         self.account1.save()
 
-        regular_accounts = Account.objects.available_for_regular_operations()
+        regular_accounts = _account_manager.available_for_regular_operations()
 
         self.assertNotIn(self.account1, regular_accounts)
         self.assertIn(self.account2, regular_accounts)

@@ -1,7 +1,6 @@
 from typing import cast
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -14,6 +13,7 @@ from hasta_la_vista_money.users.middleware import (
     CheckAdminMiddleware,
     UserTimezoneMiddleware,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

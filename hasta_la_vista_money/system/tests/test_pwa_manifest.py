@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.http import HttpResponse, StreamingHttpResponse
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -12,6 +11,7 @@ from django.urls import reverse
 from hasta_la_vista_money import __version__
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.system.views import ServiceWorkerView
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

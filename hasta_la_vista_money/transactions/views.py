@@ -77,7 +77,10 @@ class CategoryCreateView(
     model = Category
     form_class = CategoryForm
     template_name = 'transactions/category_form.html'
-    success_url = reverse_lazy('finances_categories')
+    success_url = cast(
+        'str',
+        reverse_lazy('finances_categories'),
+    )
 
     def get_category_type(self) -> str:
         return _category_type(
@@ -107,7 +110,7 @@ class CategoryCreateView(
         category.save()
         _clear_category_cache(user.pk, category.type)
         messages.success(self.request, _('Категория успешно добавлена.'))
-        return redirect(self.success_url)
+        return redirect(getattr(self, 'success_url', ''))
 
 
 class CategoryUpdateView(
@@ -119,7 +122,10 @@ class CategoryUpdateView(
     model = Category
     form_class = CategoryForm
     template_name = 'transactions/category_form.html'
-    success_url = reverse_lazy('finances_categories')
+    success_url = cast(
+        'str',
+        reverse_lazy('finances_categories'),
+    )
 
     def is_inline_request(self) -> bool:
         return (
@@ -259,7 +265,7 @@ class CategoryUpdateView(
         if self.is_inline_request():
             return self._render_inline_item(category=category)
         messages.success(self.request, _('Категория успешно обновлена.'))
-        return redirect(self.success_url)
+        return redirect(getattr(self, 'success_url', ''))
 
     def form_invalid(self, form: CategoryForm) -> HttpResponse:
         if self.is_inline_request():
@@ -271,7 +277,10 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
     """Delete a transaction category owned by the current user."""
 
     model = Category
-    success_url = reverse_lazy('finances_categories')
+    success_url = cast(
+        'str',
+        reverse_lazy('finances_categories'),
+    )
 
     def get_object(self, queryset: Any = None) -> Category:
         user = cast('User', self.request.user)
@@ -299,7 +308,7 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
                 self.request,
                 _('Категория используется и не может быть удалена.'),
             )
-            return redirect(self.success_url)
+            return redirect(getattr(self, 'success_url', ''))
         _clear_category_cache(user.pk, category_type)
         messages.success(self.request, _('Категория успешно удалена.'))
-        return redirect(self.success_url)
+        return redirect(getattr(self, 'success_url', ''))

@@ -15,11 +15,16 @@ from hasta_la_vista_money.core.calendar_days import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import PaymentSchedule
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class CashflowForecastDict(TypedDict):
@@ -37,7 +42,7 @@ def _monthly_net_flows(
 ) -> list[Decimal]:
     rows = (
         filter_calendar_range(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user__in=users,
                 account__currency=currency,
             ),

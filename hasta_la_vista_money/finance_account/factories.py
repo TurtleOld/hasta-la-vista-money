@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import factory as _factory
 
@@ -13,8 +13,17 @@ from hasta_la_vista_money.users.factories import UserFactory
 factory = cast('Any', _factory)
 
 
+if TYPE_CHECKING:
+
+    class _MetaBase(_factory.django.DjangoModelFactory.Meta):
+        """Static-only Meta base matching factory-boy stubs."""
+
+else:
+    _MetaBase = object
+
+
 class BankFactory(_factory.django.DjangoModelFactory[Bank]):
-    class Meta:
+    class Meta(_MetaBase):
         model = Bank
 
     code = factory.Sequence(lambda n: f'bank_{n}')
@@ -24,7 +33,7 @@ class BankFactory(_factory.django.DjangoModelFactory[Bank]):
 
 
 class AccountFactory(_factory.django.DjangoModelFactory[Account]):
-    class Meta:
+    class Meta(_MetaBase):
         model = Account
 
     user = factory.SubFactory(UserFactory)
@@ -37,7 +46,7 @@ class AccountFactory(_factory.django.DjangoModelFactory[Account]):
 class TransferMoneyLogFactory(
     _factory.django.DjangoModelFactory[TransferMoneyLog],
 ):
-    class Meta:
+    class Meta(_MetaBase):
         model = TransferMoneyLog
 
     user = factory.SubFactory(UserFactory)

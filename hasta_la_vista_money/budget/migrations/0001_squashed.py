@@ -5,7 +5,8 @@ Replaces 0001-0007 to drop historical dependencies on the removed
 recognised via ``replaces``.
 """
 
-import datetime
+import datetime as dt
+from collections.abc import Sequence
 from typing import ClassVar
 
 import django.db.models.deletion
@@ -16,12 +17,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    replaces: ClassVar[list[tuple[str, str]]] = [
+    replaces: ClassVar[Sequence[tuple[str, str]]] = [
         ('budget', '0001_initial'),
         ('budget', '0002_initial'),
         ('budget', '0003_planning_amount_planning_category_expense_and_more'),
-        ('budget', '0004_alter_datelist_options_alter_planning_options_and_more'),
-        ('budget', '0005_remove_planning_unique_planning_per_user_category_date_type_and_more'),
+        (
+            'budget',
+            '0004_alter_datelist_options_alter_planning_options_and_more',
+        ),
+        (
+            'budget',
+            '0005_remove_planning_unique_planning_per_user_category_date_type_and_more',
+        ),
         ('budget', '0006_planning_planning_category_matches_type'),
         ('budget', '0007_planning_unified_category'),
     ]
@@ -48,7 +55,7 @@ class Migration(migrations.Migration):
                     'date',
                     models.DateField(
                         db_index=True,
-                        default=datetime.date.today,
+                        default=dt.date.today,
                         help_text='Дата планирования',
                         verbose_name='Дата',
                     ),
@@ -105,7 +112,7 @@ class Migration(migrations.Migration):
                     'date',
                     models.DateField(
                         db_index=True,
-                        default=datetime.date.today,
+                        default=dt.date.today,
                         help_text='Дата планирования',
                         verbose_name='Дата',
                     ),

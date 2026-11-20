@@ -2,7 +2,6 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -41,6 +40,7 @@ from hasta_la_vista_money.users.services.groups import (
 from hasta_la_vista_money.users.services.registration import (
     register_invited_user,
 )
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType

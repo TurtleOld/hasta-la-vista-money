@@ -35,6 +35,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -65,6 +66,9 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
 
@@ -80,6 +84,9 @@ def _dashboard_currency(request: HttpRequest, user: User) -> str:
     The choice stays in the session for the wider family page scope.
     """
     return get_analytics_currency(request, [user], remember=False).currency
+
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
 
 
 class TransactionDict(TypedDict):
@@ -437,7 +444,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
         grouped_expenses = (
             filter_calendar_range(
-                Transaction.objects.without_adjustments().filter(
+                _transaction_manager.without_adjustments().filter(
                     user=user,
                     account__currency=currency,
                     type=TransactionType.EXPENSE,

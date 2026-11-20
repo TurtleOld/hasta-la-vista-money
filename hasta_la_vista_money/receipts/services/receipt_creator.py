@@ -1,9 +1,9 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from celery import current_app
 from django.db import transaction
@@ -246,7 +246,7 @@ class ReceiptCreatorService:
                 continue
             transaction.on_commit(
                 partial(
-                    current_app.send_task,
+                    cast('Callable[..., Any]', current_app.send_task),
                     constants.RECEIPT_EXTERNAL_CATEGORY_TASK_NAME,
                     args=[product.pk],
                 ),

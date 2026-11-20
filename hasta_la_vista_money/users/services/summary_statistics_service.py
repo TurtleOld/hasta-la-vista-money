@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, Required, cast
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
@@ -36,6 +36,7 @@ from hasta_la_vista_money.finance_account.bank_constants import (
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
+    TransferMoneyLogQuerySet,
 )
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
@@ -51,6 +52,7 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
 from hasta_la_vista_money.services.views import collect_info_receipt
+from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -103,6 +105,20 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
 # ---------------------------------------------------------------------------
 # TypedDicts (credit-card and output types)
 # ---------------------------------------------------------------------------
+
+
+_OBJECTS_ATTR = 'objects'
+
+_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transfermoneylog_manager = cast(
+    'TransferMoneyLogQuerySet',
+    TransferMoneyLog.objects,
+)
+
+_transfermoneylog_manager = cast(
+    'TransferMoneyLogQuerySet',
+    TransferMoneyLog.objects,
+)
 
 
 class ChartDataDict(TypedDict):
@@ -232,20 +248,20 @@ class CardGraceSummaryDict(TypedDict):
 class CreditCardDataDict(TypedDict, total=False):
     """Credit card data."""
 
-    name: str
+    name: Required[str]
     limit: Decimal | None
-    debt_now: Decimal | None
-    grace_summary: CardGraceSummaryDict
+    debt_now: Required[Decimal | None]
+    grace_summary: Required[CardGraceSummaryDict]
     history: list[CardHistoryDict]
     currency: str
     card_obj: Account
     card_obj_id: int
     limit_left: Decimal
-    payment_schedule: list[PaymentScheduleItemDict]
-    cash_withdrawals: list[CashWithdrawalItemDict]
-    schedule_debt: Decimal
-    schedule_mismatch: bool
-    utilization_chart: dict[str, list[float] | list[str]]
+    payment_schedule: Required[list[PaymentScheduleItemDict]]
+    cash_withdrawals: Required[list[CashWithdrawalItemDict]]
+    schedule_debt: Required[Decimal]
+    schedule_mismatch: Required[bool]
+    utilization_chart: Required[dict[str, list[float] | list[str]]]
     utilization_chart_id: str
     pending_transfers_count: int
 
@@ -818,7 +834,7 @@ def _card_months_block(
 
     expenses_by_month = (
         _filter_transaction_queryset(
-            Transaction.objects.without_adjustments().filter(
+            _transaction_manager.without_adjustments().filter(
                 user=card.user,
                 account=card,
                 type=TransactionType.EXPENSE,
@@ -852,7 +868,7 @@ def _card_months_block(
     )
 
     withdrawals_by_month = (
-        TransferMoneyLog.objects.by_date_range(period_start, period_end)
+        _transfermoneylog_manager.by_date_range(period_start, period_end)
         .filter(from_account=card)
         .annotate(month=calendar_month('exchange_date'))
         .values('month')

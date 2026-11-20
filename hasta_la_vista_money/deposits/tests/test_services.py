@@ -44,6 +44,7 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -60,12 +61,18 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
+_OBJECTS_ATTR = 'objects'
+
+
 def _sberbank() -> Bank:
     bank, _ = Bank.objects.get_or_create(
         code='SBERBANK',
         defaults={'name': 'Сбербанк', 'is_system': True},
     )
     return bank
+
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class DepositServiceIntegrationTests(TestCase):
@@ -2633,7 +2640,7 @@ class CloseMaturedDepositServiceTests(TestCase):
         self.assertEqual(deposit.account.balance, Decimal())
         self.assertIsNotNone(deposit.account.archived_at)
         self.assertFalse(
-            Account.objects.available_for_operations()
+            _account_manager.available_for_operations()
             .filter(pk=deposit.account.pk)
             .exists(),
         )

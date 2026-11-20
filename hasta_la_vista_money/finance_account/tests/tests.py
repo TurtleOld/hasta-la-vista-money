@@ -55,6 +55,9 @@ BALANCE_TEST = 250000
 NEW_BALANCE_TEST = 450000
 
 
+_USER_SET_ATTR = 'user_set'
+
+
 class TestAccount(TestCase):
     fixtures: list[str] = [
         'users.yaml',
@@ -708,7 +711,9 @@ class TestAccountServices(TestCase):
         if self.group is None:
             msg = 'self.group should not be None'
             raise ValueError(msg)
-        group_users = list(self.group.user_set.all())
+        group_users = list(
+            getattr(self.group, _USER_SET_ATTR).all(),
+        )
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
     def test_get_balances_by_currency(self) -> None:

@@ -1,13 +1,13 @@
 from typing import Final
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.users.typing_helpers import get_user_model
 
 User = get_user_model()
 

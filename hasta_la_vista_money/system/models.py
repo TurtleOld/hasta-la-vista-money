@@ -1,6 +1,6 @@
 """System-level operational models."""
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -43,6 +43,9 @@ class AuditOperationKind(models.TextChoices):
 
 class AuditLog(models.Model):
     """Immutable audit entry for financial model changes."""
+
+    if TYPE_CHECKING:
+        user_id: int | None
 
     class Action(models.TextChoices):
         CREATE = 'create', _('Создание')

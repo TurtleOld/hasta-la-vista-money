@@ -35,7 +35,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     InvalidReconciliationDecisionError,
 )
-from hasta_la_vista_money.users.tasks import process_bank_statement_task
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_typed as process_bank_statement_task,
+)
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
     fingerprint,
     statement_identity_settings,

@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
 from celery import current_app
@@ -39,6 +39,9 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = structlog.get_logger(__name__)
 _HASH_CHUNK_SIZE = 64 * 1024
@@ -192,7 +195,7 @@ class ReceiptProcessingService:
 
         task_id = str(uuid.uuid4())
         self.attach_task_id(log=log, task_id=task_id)
-        current_app.send_task(
+        cast('Callable[..., Any]', current_app.send_task)(
             constants.RECEIPT_PROCESSING_LOG_TASK_NAME,
             args=[log.pk],
             task_id=task_id,

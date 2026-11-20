@@ -10,8 +10,16 @@ from decimal import Decimal
 from django.db.models import Min, QuerySet
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import Account, AccountQuerySet
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    AccountManager,
+    AccountQuerySet,
+)
 from hasta_la_vista_money.users.models import User
+
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class AccountRepository:
@@ -113,7 +121,7 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet of user's accounts.
         """
-        return Account.objects.by_user(user)
+        return _account_manager.by_user(user)
 
     def get_by_user_with_related(self, user: User) -> AccountQuerySet:
         """Get all accounts for a user with user relation optimized.
@@ -125,13 +133,15 @@ class AccountRepository:
             AccountQuerySet: QuerySet with select_related('user')
                 optimization.
         """
-        return Account.objects.by_user_with_related(user)
+        return _account_manager.by_user_with_related(user)
 
     def get_by_users(self, users: Iterable[User]) -> AccountQuerySet:
         """Get accounts of the given users."""
         return (
-            Account.objects.get_queryset()
-            .filter(user__in=users)
+            _account_manager.get_queryset()
+            .filter(
+                user__in=users,
+            )
             .select_related('user')
         )
 
@@ -152,7 +162,7 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet filtered to credit accounts only.
         """
-        return Account.objects.credit()
+        return _account_manager.credit()
 
     def get_debit_accounts(self) -> QuerySet[Account]:
         """Get only debit accounts, debit cards, and cash.
@@ -160,7 +170,7 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet filtered to debit accounts only.
         """
-        return Account.objects.debit()
+        return _account_manager.debit()
 
     def get_by_currency(self, currency: str) -> QuerySet[Account]:
         """Get accounts by currency code.
@@ -171,7 +181,7 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet filtered by currency.
         """
-        return Account.objects.by_currency(currency)
+        return _account_manager.by_currency(currency)
 
     def get_by_type(self, type_account: str) -> QuerySet[Account]:
         """Get accounts by account type.
@@ -182,7 +192,7 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet filtered by account type.
         """
-        return Account.objects.by_type(type_account)
+        return _account_manager.by_type(type_account)
 
     def create_account(self, **kwargs: object) -> Account:
         """Create a new account.
@@ -198,7 +208,7 @@ class AccountRepository:
 
     def create_deposit_account(self, **kwargs: object) -> Account:
         """Create an account reserved for a deposit agreement."""
-        return Account.objects.create_deposit(**kwargs)
+        return _account_manager.create_deposit(**kwargs)
 
     def filter(self, **kwargs: object) -> QuerySet[Account]:
         """Filter accounts by given criteria.
