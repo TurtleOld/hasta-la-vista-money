@@ -371,6 +371,9 @@ REDIRECTS: Final = 302
 NOT_FOUND: Final = 404
 SERVER_ERROR: Final = 500
 
+# Largest value a PostgreSQL bigint / Django BigAutoField can store.
+DATABASE_BIGINT_MAX: Final = 2**63 - 1
+
 # ============================================================================
 # Dependency Injection
 # ============================================================================

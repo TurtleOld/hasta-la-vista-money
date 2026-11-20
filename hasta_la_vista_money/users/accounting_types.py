@@ -22,6 +22,7 @@ class ProblemKind(StrEnum):
 
     DEFERRED = 'deferred'
     INCOMPLETE_MARKUP = 'incomplete_markup'
+    UNRESOLVED = 'unresolved'
     PROBABLE_DUPLICATE = 'probable_duplicate'
     REPAYMENT = 'repayment'
     PARSE_ERROR = 'parse_error'
