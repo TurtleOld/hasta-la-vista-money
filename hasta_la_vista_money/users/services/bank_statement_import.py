@@ -55,6 +55,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
     RosDorBankRowKind,
+    StatementParseResult,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -248,6 +249,7 @@ class BankStatementImportService:
             generation,
             len(transactions),
         )
+        self._save_documented_period(upload, generation, parse_result)
 
         logger.info(
             'bank_statement_transactions_found',
@@ -966,6 +968,43 @@ class BankStatementImportService:
             period_from = min(period_from or row_date, row_date)
             period_to = max(period_to or row_date, row_date)
         return period_from, period_to
+
+    def _save_documented_period(
+        self,
+        upload: BankStatementUpload,
+        generation: StatementGeneration,
+        parse_result: StatementParseResult,
+    ) -> None:
+        """Persist only the period explicitly documented by the statement.
+
+        Unknown bounds stay unknown: operation dates, the upload time and
+        the active timezone never become a period. A known stored bound is
+        kept when a repeated same-file parse cannot document it again.
+        """
+        start = parse_result.period_start
+        end = parse_result.period_end
+        if start is None and end is None:
+            return
+        with transaction.atomic():
+            self.account_repository.get_by_ids_for_update({upload.account_id})
+            locked = self.identity_repository.lock_upload(upload.pk)
+            if locked is None:
+                return
+            self._assert_generation(locked, generation)
+            fields: list[str] = []
+            if start is not None and locked.statement_period_start is None:
+                locked.statement_period_start = start
+                fields.append('statement_period_start')
+            if end is not None and locked.statement_period_end is None:
+                locked.statement_period_end = end
+                fields.append('statement_period_end')
+            if fields:
+                self.identity_repository.save_upload_fields(
+                    locked,
+                    [*fields, 'updated_at'],
+                )
+            upload.statement_period_start = locked.statement_period_start
+            upload.statement_period_end = locked.statement_period_end
 
     def _mark_traceability(
         self,

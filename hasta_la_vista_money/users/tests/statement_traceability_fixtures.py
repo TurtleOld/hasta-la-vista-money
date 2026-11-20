@@ -6,7 +6,7 @@ in memory.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -108,6 +108,8 @@ class StatementTraceabilityTestCase(TestCase):
         *,
         upload: BankStatementUpload | None = None,
         traceability_complete: bool = True,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> tuple[BankStatementUpload, dict[str, Any]]:
         upload = upload or self.upload()
         parser = MagicMock()
@@ -115,6 +117,8 @@ class StatementTraceabilityTestCase(TestCase):
             transactions=rows,
             bank_code=self.bank_code,
             traceability_complete=traceability_complete,
+            period_start=period_start,
+            period_end=period_end,
         )
         with patch(PARSER_PATH, return_value=parser):
             result: dict[str, Any] = process_bank_statement_task.apply(

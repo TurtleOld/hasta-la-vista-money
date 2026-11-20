@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pandas as pd
@@ -148,3 +149,41 @@ class GenericImportTraceabilityTest(StatementTraceabilityTestCase):
 
         self.assertEqual(complete.processing_traceability_version, 1)
         self.assertEqual(incomplete.processing_traceability_version, 0)
+
+    def test_documented_period_is_persisted_on_empty_document(self) -> None:
+        upload, _ = self.import_rows(
+            [],
+            period_start=date(2026, 2, 1),
+            period_end=date(2026, 2, 28),
+        )
+
+        self.assertEqual(upload.statement_period_start, date(2026, 2, 1))
+        self.assertEqual(upload.statement_period_end, date(2026, 2, 28))
+        self.assertEqual(upload.processing_traceability_version, 1)
+
+    def test_operation_dates_do_not_invent_period_bounds(self) -> None:
+        upload, _ = self.import_rows(
+            [
+                row(
+                    amount='-10.00',
+                    when=datetime(2026, 2, 10, 12, tzinfo=UTC),
+                ),
+            ],
+        )
+
+        self.assertIsNone(upload.statement_period_start)
+        self.assertIsNone(upload.statement_period_end)
+
+    def test_unknown_period_keeps_documented_bounds(self) -> None:
+        first = self.upload('period.pdf')
+        self.import_rows(
+            [],
+            upload=first,
+            period_start=date(2026, 2, 1),
+            period_end=date(2026, 2, 28),
+        )
+
+        upload, _ = self.import_rows([], upload=first)
+
+        self.assertEqual(upload.statement_period_start, date(2026, 2, 1))
+        self.assertEqual(upload.statement_period_end, date(2026, 2, 28))
