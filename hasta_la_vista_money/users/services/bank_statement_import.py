@@ -387,7 +387,6 @@ class BankStatementImportService:
             if (
                 generation.retention_cleaned_at is None
                 and upload.retention_cleaned_at is not None
-                and not upload.pdf_file.name
             ):
                 return_state = GENERATION_EXPIRED
             else:

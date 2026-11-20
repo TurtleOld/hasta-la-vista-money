@@ -187,14 +187,12 @@ class BankStatementUploadView(
         reconciliation_only = bool(
             form.cleaned_data.get('reconciliation_only'),
         )
-        digest = sha256()
-        for chunk in pdf_file.chunks():
-            digest.update(chunk)
-        pdf_file.seek(0)
-        file_hash = digest.hexdigest()
+        file_hash = self._compute_pdf_hash(pdf_file)
 
         self.in_flight_upload = False
         try:
+            self._retry_retained_pdf_cleanup(user, account, file_hash)
+
             logger.info(
                 'bank_statement_upload_creating',
                 user_id=user.pk,
@@ -227,10 +225,20 @@ class BankStatementUploadView(
                     else:
                         old_pdf_name = upload.pdf_file.name
                         storage = upload.pdf_file.storage
-                        if upload.retention_cleaned_at is not None:
+                        retention_marker = upload.retention_cleaned_at
+                        if retention_marker is not None:
+                            if upload.pdf_file.name:
+                                form.add_error(
+                                    'pdf_file',
+                                    _(
+                                        'Не удалось удалить предыдущую '
+                                        'выписку. Повторите загрузку позже.',
+                                    ),
+                                )
+                                return self.form_invalid(form)
                             StatementRowRepository.stamp_legacy_cleaned_rows(
                                 upload.pk,
-                                upload.retention_cleaned_at,
+                                retention_marker,
                             )
                         upload.pdf_file = pdf_file
                         upload.expires_at = statement_retention_deadline(user)
@@ -309,6 +317,36 @@ class BankStatementUploadView(
             minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
         )
         return timezone.now() - upload.updated_at <= stale_after
+
+    def _retry_retained_pdf_cleanup(
+        self,
+        user: User,
+        account: Account,
+        file_hash: str,
+    ) -> None:
+        """Retry a retained PDF delete before replacing its pointer."""
+        has_pending_pdf = (
+            BankStatementUpload.objects.filter(
+                user=user,
+                account=account,
+                file_hash=file_hash,
+                retention_cleaned_at__isnull=False,
+            )
+            .exclude(pdf_file='')
+            .exists()
+        )
+        if has_pending_pdf:
+            typed_request = cast('RequestWithContainer', self.request)
+            typed_request.container.users.bank_statement_retention_service().cleanup_expired()
+
+    @staticmethod
+    def _compute_pdf_hash(pdf_file: Any) -> str:
+        """Hash an uploaded PDF while restoring its read position."""
+        digest = sha256()
+        for chunk in pdf_file.chunks():
+            digest.update(chunk)
+        pdf_file.seek(0)
+        return digest.hexdigest()
 
     def get_success_message(self, cleaned_data: dict[str, Any]) -> str:
         """Explain a repeat or reconciliation-only run honestly."""

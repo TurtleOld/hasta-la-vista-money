@@ -115,11 +115,6 @@ _transfermoneylog_manager = cast(
     TransferMoneyLog.objects,
 )
 
-_transfermoneylog_manager = cast(
-    'TransferMoneyLogQuerySet',
-    TransferMoneyLog.objects,
-)
-
 
 class ChartDataDict(TypedDict):
     """Chart data.

@@ -1185,6 +1185,26 @@ class StatementRetentionConcurrencyTest(TransactionTestCase):
         self.assertEqual(self.row.decision_audits.count(), 0)
         self.assertFalse(self.storage.exists(self.pdf_name))
 
+    def test_delete_failure_retries_after_a_committed_cleanup(self) -> None:
+        with patch.object(
+            self.storage,
+            'delete',
+            side_effect=OSError('storage unavailable'),
+        ):
+            self.assertEqual(self._service().cleanup_expired(), 1)
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.upload.pdf_file.name, self.pdf_name)
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+        self.assertEqual(self._service().cleanup_expired(), 0)
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertFalse(self.storage.exists(self.pdf_name))
+
 
 class StatementRetentionCommitSafetyTest(TestCase):
     """The PDF is deleted only after the cleanup transaction committed."""

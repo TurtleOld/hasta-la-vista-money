@@ -14,7 +14,7 @@ from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import OperationalError
-from django.test import Client, TestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
@@ -1178,6 +1178,69 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertIsNotNone(self.row.data_cleaned_at)
         self.assertEqual(Transaction.objects.count(), 1)
 
+    def test_failed_retention_delete_blocks_reupload_without_losing_pointer(
+        self,
+    ) -> None:
+        pdf_content = b'%PDF-1.4 retained statement'
+        self.upload.pdf_file.save(
+            'retry-before-reupload.pdf',
+            SimpleUploadedFile(
+                'retry-before-reupload.pdf',
+                pdf_content,
+                content_type='application/pdf',
+            ),
+        )
+        file_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        deadline = timezone.now()
+        self.upload.file_hash = sha256(pdf_content).hexdigest()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['file_hash', 'expires_at'])
+        retention_service = cast(
+            'BankStatementRetentionService',
+            ApplicationContainer().users.bank_statement_retention_service(),
+        )
+
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.assertEqual(retention_service.cleanup_expired(deadline), 1)
+
+        with (
+            patch(
+                'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+            ) as task,
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self.client.post(
+                reverse('finance_account:bank_statement_upload'),
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        'retry-before-reupload.pdf',
+                        pdf_content,
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        task.delay.assert_not_called()
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.upload.pdf_file.name, file_name)
+        self.assertTrue(storage.exists(file_name))
+
     def test_pending_decision_after_deadline_creates_no_transaction(
         self,
     ) -> None:
@@ -1621,6 +1684,81 @@ class TestBankStatementReconciliationView(TestCase):
 
 
 @statement_identity_settings
+class StatementRetentionReuploadCommitTest(TransactionTestCase):
+    """A repeat retries a failed retained-file delete before replacement."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Повторная выписка',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        content = b'%PDF-1.4 retry after retention'
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash=sha256(content).hexdigest(),
+            status=BankStatementUpload.Status.COMPLETED,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        self.upload.pdf_file.save(
+            'retry-after-retention.pdf',
+            SimpleUploadedFile(
+                'retry-after-retention.pdf',
+                content,
+                content_type='application/pdf',
+            ),
+        )
+        self.file_name = self.upload.pdf_file.name
+        self.storage = self.upload.pdf_file.storage
+        retention_service = cast(
+            'BankStatementRetentionService',
+            ApplicationContainer().users.bank_statement_retention_service(),
+        )
+
+        with patch.object(
+            self.storage,
+            'delete',
+            side_effect=OSError('storage unavailable'),
+        ):
+            self.assertEqual(retention_service.cleanup_expired(), 1)
+
+    def test_repeat_retries_delete_then_replaces_pdf(self) -> None:
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertTrue(self.storage.exists(self.file_name))
+
+        with patch(
+            'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+        ) as task:
+            task.delay.return_value = MagicMock(id='retry-task')
+            response = self.client.post(
+                reverse('finance_account:bank_statement_upload'),
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        'retry-after-retention.pdf',
+                        b'%PDF-1.4 retry after retention',
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        task.delay.assert_called_once_with(self.upload.pk)
+        self.upload.refresh_from_db()
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertNotEqual(self.upload.pdf_file.name, self.file_name)
+        self.assertFalse(self.storage.exists(self.file_name))
+        self.assertTrue(self.storage.exists(self.upload.pdf_file.name))
+
+
 class TestBankStatementUploadHistory(TestCase):
     fixtures: list[str] = ['users.yaml']
 

@@ -75,7 +75,7 @@ def validate_statement_retention_days(value: int) -> None:
             _('Слишком большое число дней хранения: колонка не вместит его.'),
         )
     try:
-        timezone.now() + timedelta(days=value)
+        _expiration = timezone.now() + timedelta(days=value)
     except OverflowError as error:
         raise ValidationError(
             _('Дата удаления выходит за допустимый диапазон дат.'),

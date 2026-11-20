@@ -564,6 +564,25 @@ class RepeatStatementUploadTestCase(TestCase):
             data_expires_at=None,
         )
 
+    @staticmethod
+    def _mark_legacy_upload_cleaned(
+        upload: BankStatementUpload,
+        marker: datetime,
+    ) -> None:
+        upload.retention_cleaned_at = marker
+        upload.expires_at = marker
+        upload.status = BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
+        upload.pdf_file.delete(save=False)
+        upload.pdf_file = ''
+        upload.save(
+            update_fields=[
+                'retention_cleaned_at',
+                'expires_at',
+                'status',
+                'pdf_file',
+            ],
+        )
+
     def test_public_repeat_stamps_legacy_rows_before_upload_reset(
         self,
     ) -> None:
@@ -571,16 +590,7 @@ class RepeatStatementUploadTestCase(TestCase):
         file_hash = sha256(content).hexdigest()
         upload = self._upload(file_hash=file_hash)
         old_marker = timezone.now() - timedelta(days=5)
-        upload.retention_cleaned_at = old_marker
-        upload.expires_at = old_marker
-        upload.status = BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
-        upload.save(
-            update_fields=[
-                'retention_cleaned_at',
-                'expires_at',
-                'status',
-            ],
-        )
+        self._mark_legacy_upload_cleaned(upload, old_marker)
         linked_movement = Transaction.objects.create(
             user=self.user,
             account=self.account,

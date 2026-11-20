@@ -1958,6 +1958,7 @@ class ImportFinalizationSafetyTest(StatementIdentityRuntimeFixture):
             return result
 
         with (
+            self.captureOnCommitCallbacks(execute=True),
             patch(
                 PARSER_PATH,
                 self._parser(
