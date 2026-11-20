@@ -212,6 +212,7 @@ class TransactionService:
             old_amount = transaction_obj.amount
             old_type = transaction_obj.type
             old_date = transaction_obj.date
+            old_bank_day = transaction_obj.bank_calendar_date
 
             if self.statement_row_links.has_linked_row(transaction_obj) and (
                 command.account.pk != old_account.pk
@@ -288,7 +289,10 @@ class TransactionService:
             ):
                 mark_balance_checks_stale(
                     {old_account.pk, command.account.pk},
-                    [old_date, date_value],
+                    [
+                        old_bank_day or old_date,
+                        bank_day or date_value,
+                    ],
                 )
         return transaction_obj
 
@@ -315,7 +319,9 @@ class TransactionService:
             )
             self.statement_row_links.release_linked_rows(transaction_obj)
             account_id = transaction_obj.account_id
-            transaction_date = transaction_obj.date
+            transaction_date = (
+                transaction_obj.bank_calendar_date or transaction_obj.date
+            )
             transaction_obj.delete()
             mark_balance_checks_stale({account_id}, [transaction_date])
 

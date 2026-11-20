@@ -152,7 +152,7 @@ class TransferService:
                 self.statement_row_links.close_repayment_row(row, transfer)
             mark_balance_checks_stale(
                 {from_account.pk, to_account.pk},
-                [transfer.exchange_date],
+                [transfer.bank_calendar_date or transfer.exchange_date],
             )
             return transfer
 
@@ -222,7 +222,9 @@ class TransferService:
                 },
             )
             self.statement_row_links.release_linked_rows(transfer_log)
-            exchange_date = transfer_log.exchange_date
+            exchange_date = (
+                transfer_log.bank_calendar_date or transfer_log.exchange_date
+            )
             self.transfer_money_log_repository.delete_log(transfer_log)
             mark_balance_checks_stale(
                 {from_account.pk, to_account.pk},

@@ -2,7 +2,8 @@
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ValidationError
@@ -12,7 +13,12 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -22,6 +28,7 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
 )
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.commands import (
+    CreateTransactionCommand,
     UpdateTransactionCommand,
 )
 from hasta_la_vista_money.transactions.models import (
@@ -49,6 +56,7 @@ from hasta_la_vista_money.users.services.statement_balance_verification import (
     REASON_KIND_UNKNOWN,
     REASON_MOVEMENT_CHANGED,
     REASON_NOT_CONFIGURED,
+    REASON_PRECISION_UNKNOWN,
     REASON_UNRESOLVED_ROWS,
     STATUS_MISMATCH,
     STATUS_STALE,
@@ -491,17 +499,34 @@ class FinalReconciliationGuardTests(StatementBalanceVerificationTestCase):
             self.service.verification(upload.pk, other.pk)
 
 
-class StalenessTests(StatementBalanceVerificationTestCase):
-    def test_influencing_change_after_moment_marks_stale(self) -> None:
-        self._later_income()
-        upload = self._upload()
-        self.service.verify(upload.pk, self.user.pk)
+class StalenessDirectionTests(StatementBalanceVerificationTestCase):
+    def _verified_check(self, **kwargs: object) -> BankStatementUpload:
+        self._last_later = self._later_income()
+        upload = self._upload(**kwargs)
+        service = self.service
+        result = service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_VERIFIED)
+        return upload
 
-        changed = mark_balance_checks_stale(
-            {self.account.pk},
-            [datetime(2026, 4, 11, 12, 0, tzinfo=UTC)],
+    def _transaction_service(self) -> Any:
+        return ApplicationContainer().transactions.transaction_service()
+
+    def _category(
+        self,
+        transaction_type: str = TransactionType.INCOME,
+    ) -> Category:
+        return Category.objects.create(
+            user=self.user,
+            name=f'Категория {uuid4().hex}',
+            type=transaction_type,
         )
 
+    def test_change_before_check_marks_stale(self) -> None:
+        upload = self._verified_check()
+        changed = mark_balance_checks_stale(
+            {self.account.pk},
+            [datetime(2026, 4, 9, 12, 0, tzinfo=UTC)],
+        )
         self.assertEqual(changed, 1)
         upload.refresh_from_db()
         self.assertTrue(upload.balance_needs_recheck)
@@ -510,85 +535,374 @@ class StalenessTests(StatementBalanceVerificationTestCase):
         self.assertEqual(result.reason, REASON_MOVEMENT_CHANGED)
         self.assertEqual(result.last_result, STATUS_VERIFIED)
 
-    def test_change_before_moment_does_not_mark_stale(self) -> None:
-        self._later_income()
-        upload = self._upload()
-        self.service.verify(upload.pk, self.user.pk)
-
+    def test_change_after_check_keeps_it_fresh(self) -> None:
+        upload = self._verified_check()
         changed = mark_balance_checks_stale(
             {self.account.pk},
-            [datetime(2026, 4, 9, 12, 0, tzinfo=UTC)],
+            [datetime(2026, 4, 11, 12, 0, tzinfo=UTC)],
         )
-
         self.assertEqual(changed, 0)
         upload.refresh_from_db()
         self.assertFalse(upload.balance_needs_recheck)
 
-    def test_category_only_edit_does_not_invalidate_in_service(
-        self,
-    ) -> None:
-        upload = self._upload()
-        self.service.verify(upload.pk, self.user.pk)
-        self._later_income()
-        self.service.verify(upload.pk, self.user.pk)
-        transaction = Transaction.objects.latest('pk')
-        other_category = Category.objects.create(
-            user=self.user,
-            name='Другая',
-            type=TransactionType.INCOME,
-        )
-        service = ApplicationContainer().transactions.transaction_service()
-
-        service.update_transaction(
-            UpdateTransactionCommand(
+    def test_public_create_before_check_marks_stale(self) -> None:
+        upload = self._verified_check()
+        self._transaction_service().add_transaction(
+            CreateTransactionCommand(
                 user=self.user,
-                transaction_obj=transaction,
                 account=self.account,
-                category=other_category,
-                amount=transaction.amount,
-                transaction_date=transaction.date,
-                type_value=transaction.type,
+                category=self._category(),
+                amount=Decimal('50.00'),
+                transaction_date=date(2026, 4, 9),
+                type_value=TransactionType.INCOME,
             ),
         )
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
 
+    def test_public_create_on_check_day_marks_stale(self) -> None:
+        upload = self._verified_check()
+        self._transaction_service().add_transaction(
+            CreateTransactionCommand(
+                user=self.user,
+                account=self.account,
+                category=self._category(),
+                amount=Decimal('50.00'),
+                transaction_date=BALANCE_DAY,
+                type_value=TransactionType.INCOME,
+            ),
+        )
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+
+    def test_public_create_after_check_keeps_it_fresh(self) -> None:
+        upload = self._verified_check()
+        self._transaction_service().add_transaction(
+            CreateTransactionCommand(
+                user=self.user,
+                account=self.account,
+                category=self._category(),
+                amount=Decimal('50.00'),
+                transaction_date=date(2026, 4, 12),
+                type_value=TransactionType.INCOME,
+            ),
+        )
         upload.refresh_from_db()
         self.assertFalse(upload.balance_needs_recheck)
+        self.assertEqual(
+            self.service.verification(upload.pk, self.user.pk).status,
+            STATUS_VERIFIED,
+        )
 
-    def test_money_edit_after_moment_marks_stale(self) -> None:
-        upload = self._upload()
-        self.service.verify(upload.pk, self.user.pk)
-        self._later_income()
-        self.service.verify(upload.pk, self.user.pk)
-        transaction = Transaction.objects.latest('pk')
-        service = ApplicationContainer().transactions.transaction_service()
-
-        service.update_transaction(
+    def _update_target(self, day: date) -> BankStatementUpload:
+        transaction = self._transaction(
+            '70.00',
+            datetime(day.year, day.month, day.day, 12, tzinfo=UTC),
+        )
+        upload = self._verified_check(
+            statement_closing_balance=Decimal('800.00'),
+        )
+        self._transaction_service().update_transaction(
             UpdateTransactionCommand(
                 user=self.user,
                 transaction_obj=transaction,
                 account=self.account,
                 category=transaction.category,
-                amount=Decimal('250.00'),
-                transaction_date=transaction.date,
+                amount=Decimal('80.00'),
+                transaction_date=day,
                 type_value=transaction.type,
             ),
         )
+        return upload
 
+    def test_public_update_before_check_marks_stale(self) -> None:
+        upload = self._update_target(date(2026, 4, 9))
         upload.refresh_from_db()
         self.assertTrue(upload.balance_needs_recheck)
-        self.assertEqual(upload.balance_stale_reason, REASON_MOVEMENT_CHANGED)
 
-    def test_money_delete_after_moment_marks_stale(self) -> None:
-        upload = self._upload()
-        self.service.verify(upload.pk, self.user.pk)
-        transaction = self._later_income()
-        self.service.verify(upload.pk, self.user.pk)
-        service = ApplicationContainer().transactions.transaction_service()
-
-        service.delete_transaction(user=self.user, transaction_obj=transaction)
-
+    def test_public_update_on_check_day_marks_stale(self) -> None:
+        upload = self._update_target(BALANCE_DAY)
         upload.refresh_from_db()
         self.assertTrue(upload.balance_needs_recheck)
+
+    def test_public_update_after_check_keeps_it_fresh(self) -> None:
+        upload = self._verified_check()
+        later = self._last_later
+        self._transaction_service().update_transaction(
+            UpdateTransactionCommand(
+                user=self.user,
+                transaction_obj=later,
+                account=self.account,
+                category=later.category,
+                amount=Decimal('250.00'),
+                transaction_date=later.date,
+                type_value=later.type,
+            ),
+        )
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+
+    def _delete_target(self, day: date) -> BankStatementUpload:
+        target = self._transaction(
+            '40.00',
+            datetime(day.year, day.month, day.day, 12, tzinfo=UTC),
+        )
+        upload = self._verified_check()
+        self._transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=target,
+        )
+        return upload
+
+    def test_public_delete_before_check_marks_stale(self) -> None:
+        upload = self._delete_target(date(2026, 4, 9))
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+
+    def test_public_delete_on_check_day_marks_stale(self) -> None:
+        upload = self._delete_target(BALANCE_DAY)
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+
+    def test_public_delete_after_check_keeps_it_fresh(self) -> None:
+        upload = self._verified_check()
+        later = self._last_later
+        self._transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=later,
+        )
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+
+    def test_category_only_edit_does_not_invalidate(self) -> None:
+        upload = self._verified_check()
+        later = self._last_later
+        self._transaction_service().update_transaction(
+            UpdateTransactionCommand(
+                user=self.user,
+                transaction_obj=later,
+                account=self.account,
+                category=self._category(),
+                amount=later.amount,
+                transaction_date=later.date,
+                type_value=later.type,
+            ),
+        )
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+
+    def test_cleaned_check_still_needs_recheck_and_keeps_flag(self) -> None:
+        upload = self._upload(statement_closing_balance=Decimal('900.00'))
+        self.service.verify(upload.pk, self.user.pk)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now() - timedelta(days=1),
+            retention_cleaned_at=timezone.now(),
+            statement_closing_balance=None,
+            account_balance_after=None,
+            balance_discrepancy=None,
+        )
+        changed = mark_balance_checks_stale(
+            {self.account.pk},
+            [BALANCE_DAY],
+        )
+        self.assertEqual(changed, 1)
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+        self.assertTrue(upload.balance_unexplained_mismatch)
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.balance_discrepancy)
+        result = self.service.verification(upload.pk, self.user.pk)
+        self.assertTrue(result.blocks_final_reconciliation)
+        self.assertIsNone(result.bank_balance)
+
+    def test_cleaned_check_ignores_change_after_check(self) -> None:
+        upload = self._upload(statement_closing_balance=Decimal('800.00'))
+        self._later_income()
+        self.service.verify(upload.pk, self.user.pk)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now() - timedelta(days=1),
+            retention_cleaned_at=timezone.now(),
+        )
+        changed = mark_balance_checks_stale(
+            {self.account.pk},
+            [date(2026, 4, 12)],
+        )
+        self.assertEqual(changed, 0)
+        upload.refresh_from_db()
+        self.assertFalse(upload.balance_needs_recheck)
+
+    def test_bank_day_uses_bank_calendar_date_not_default_timezone(
+        self,
+    ) -> None:
+        upload = self._upload(
+            statement_balance_date=BALANCE_DAY,
+            statement_balance_timezone='Asia/Vladivostok',
+            statement_closing_balance=Decimal('1000.00'),
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_VERIFIED)
+        transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self._category(),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=datetime(2026, 4, 10, 22, 0, tzinfo=UTC),
+            bank_calendar_date=BALANCE_DAY,
+        )
+        self._transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        upload.refresh_from_db()
+        self.assertTrue(upload.balance_needs_recheck)
+
+
+class ExactBalanceTrustTests(StatementBalanceVerificationTestCase):
+    def _exact_upload(self, **kwargs: object) -> BankStatementUpload:
+        values: dict[str, object] = {
+            'statement_balance_date': None,
+            'statement_balance_at': datetime(
+                2026,
+                4,
+                10,
+                12,
+                0,
+                tzinfo=MOSCOW,
+            ),
+        }
+        values.update(kwargs)
+        return self._upload(**values)
+
+    def test_exact_timestamp_credit_available_is_unknown(self) -> None:
+        credit = Account.objects.create(
+            user=self.user,
+            name_account='Кредитка',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+        )
+        upload = self._exact_upload(
+            account=credit,
+            statement_balance_kind=BankStatementUpload.BalanceKind.AVAILABLE,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_UNKNOWN)
+        self.assertEqual(result.reason, REASON_AVAILABLE_CREDIT_UNKNOWN)
+
+    def test_exact_timestamp_with_same_day_day_expense_is_unknown(self) -> None:
+        upload = self._exact_upload()
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self._category(),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=datetime(2026, 4, 10, 8, 0, tzinfo=MOSCOW),
+            bank_calendar_date=BALANCE_DAY,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_UNKNOWN)
+        self.assertEqual(result.reason, REASON_PRECISION_UNKNOWN)
+
+    def test_exact_timestamp_with_same_day_day_transfer_is_unknown(
+        self,
+    ) -> None:
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Другой',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        upload = self._exact_upload()
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('10.00'),
+            exchange_date=datetime(2026, 4, 10, 8, 0, tzinfo=MOSCOW),
+            bank_calendar_date=BALANCE_DAY,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_UNKNOWN)
+        self.assertEqual(result.reason, REASON_PRECISION_UNKNOWN)
+
+    def test_exact_timestamp_with_same_day_deposit_event_is_unknown(
+        self,
+    ) -> None:
+        bank, _ = Bank.objects.get_or_create(
+            code='TEST',
+            defaults={'name': 'Тест', 'is_system': True},
+        )
+        source = Account.objects.create(
+            user=self.user,
+            name_account='Источник',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        deposit = Deposit.objects.create(
+            account=self.account,
+            name='Вклад',
+            bank=bank,
+        )
+        upload = self._exact_upload()
+        DepositPrincipalEvent.objects.create(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.FUNDING,
+            amount=Decimal('100.00'),
+            effective_on=BALANCE_DAY,
+            source_account=source,
+            destination_account=self.account,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_UNKNOWN)
+        self.assertEqual(result.reason, REASON_PRECISION_UNKNOWN)
+
+    def test_exact_timestamp_with_datetime_precision_movement_verifies(
+        self,
+    ) -> None:
+        upload = self._exact_upload(
+            statement_closing_balance=Decimal('1000.00'),
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self._category(),
+            type=TransactionType.INCOME,
+            amount=Decimal('50.00'),
+            date=datetime(2026, 4, 10, 10, 0, tzinfo=MOSCOW),
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_VERIFIED)
+
+    def test_unknown_precision_does_not_clear_retained_mismatch(self) -> None:
+        upload = self._exact_upload(
+            statement_closing_balance=Decimal('900.00'),
+        )
+        first = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(first.status, STATUS_MISMATCH)
+        self.assertTrue(first.blocks_final_reconciliation)
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self._category(),
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=datetime(2026, 4, 10, 8, 0, tzinfo=MOSCOW),
+            bank_calendar_date=BALANCE_DAY,
+        )
+        result = self.service.verify(upload.pk, self.user.pk)
+        self.assertEqual(result.status, STATUS_STALE)
+        self.assertEqual(result.reason, REASON_PRECISION_UNKNOWN)
+        self.assertEqual(result.last_result, STATUS_MISMATCH)
+        self.assertTrue(result.blocks_final_reconciliation)
+
+    def _category(self) -> Category:
+        return Category.objects.create(
+            user=self.user,
+            name=f'Категория {uuid4().hex}',
+            type=TransactionType.EXPENSE,
+        )
 
 
 class MarkupClosingCheckTests(StatementBalanceVerificationTestCase):

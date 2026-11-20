@@ -18,11 +18,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.movement_source import DepositMovementSource
+from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
     BalanceHistoryService,
 )
@@ -32,6 +34,7 @@ from hasta_la_vista_money.system.services.audit_context import (
     current_operation_id,
     current_operation_kind,
 )
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
     StatementBalanceVerificationRepository,
@@ -63,6 +66,7 @@ REASON_AVAILABLE_SEMANTICS_UNKNOWN = 'available_balance_semantics_unknown'
 REASON_OPENING_BOUNDARY_UNKNOWN = 'opening_boundary_unknown'
 REASON_MOVEMENT_CHANGED = 'movement_changed'
 REASON_RECONFIGURED = 'balance_reconfigured'
+REASON_PRECISION_UNKNOWN = 'balance_precision_unknown'
 
 UPLOAD_AUDIT_LABEL = 'users.BankStatementUpload'
 
@@ -453,8 +457,24 @@ class StatementBalanceVerificationService:
         upload: BankStatementUpload,
         account: Account,
     ) -> tuple[datetime | None, str]:
+        """Return the bank moment, or a reason it cannot be trusted.
+
+        Semantics are checked before both branches: an exact timestamp does
+        not make an ``available`` credit balance comparable with the ledger,
+        and an intraday snapshot next to day-only movements has no proven
+        order.
+        """
+        kind = upload.statement_balance_kind
+        reason = self._semantics_reason(kind, account)
+        if reason:
+            return None, reason
         if upload.statement_balance_at is not None:
-            return upload.statement_balance_at, ''
+            moment = upload.statement_balance_at
+            if timezone.is_naive(moment):
+                return None, REASON_MOMENT_UNKNOWN
+            if self._has_same_day_unknown_precision(upload, account):
+                return None, REASON_PRECISION_UNKNOWN
+            return moment, ''
         return self._day_moment(upload, account)
 
     def _day_moment(
@@ -464,7 +484,7 @@ class StatementBalanceVerificationService:
     ) -> tuple[datetime | None, str]:
         balance_day = upload.statement_balance_date
         kind = upload.statement_balance_kind
-        reason = self._unusable_day_reason(kind, balance_day, account)
+        reason = self._semantics_reason(kind, account)
         if reason:
             return None, reason
         if balance_day is None:
@@ -478,6 +498,66 @@ class StatementBalanceVerificationService:
         return self._checked_moment(moment)
 
     @staticmethod
+    def _semantics_reason(kind: str, account: Account) -> str:
+        if kind == BankStatementUpload.BalanceKind.UNKNOWN:
+            return REASON_KIND_UNKNOWN
+        if kind == BankStatementUpload.BalanceKind.AVAILABLE:
+            if account.type_account in constants.CREDIT_ACCOUNT_TYPES:
+                return REASON_AVAILABLE_CREDIT_UNKNOWN
+            if account.type_account not in constants.LIQUID_ACCOUNT_TYPES:
+                return REASON_AVAILABLE_SEMANTICS_UNKNOWN
+        return ''
+
+    def _has_same_day_unknown_precision(
+        self,
+        upload: BankStatementUpload,
+        account: Account,
+    ) -> bool:
+        """Return whether a day-only movement shares the snapshot's day.
+
+        A technical UTC-midnight anchor cannot prove whether such a movement
+        happened before or after an intraday bank snapshot. Receipts always
+        carry a real timestamp; transactions, transfers and deposit events
+        can be day-only.
+        """
+        moment = upload.statement_balance_at
+        if moment is None:
+            return False
+        bank_day = self._instant_bank_day(upload, moment)
+        if Transaction.objects.filter(
+            account=account,
+            bank_calendar_date=bank_day,
+        ).exists():
+            return True
+        if TransferMoneyLog.objects.filter(
+            Q(from_account=account) | Q(to_account=account),
+            bank_calendar_date=bank_day,
+        ).exists():
+            return True
+        for source in self.balance_history_service.movement_sources:
+            for movement in source.list_financial_movements(
+                [account],
+                since=bank_day,
+            ):
+                if movement.effective_on == bank_day:
+                    return True
+        return False
+
+    @staticmethod
+    def _instant_bank_day(
+        upload: BankStatementUpload,
+        moment: datetime,
+    ) -> date:
+        if upload.statement_balance_date is not None:
+            return upload.statement_balance_date
+        zone = StatementBalanceVerificationService._zone(
+            upload.statement_balance_timezone,
+        )
+        if zone is not None:
+            return moment.astimezone(zone).date()
+        return moment.date()
+
+    @staticmethod
     def _checked_moment(moment: datetime) -> tuple[datetime | None, str]:
         offset = moment.utcoffset()
         if offset is not None and offset < timedelta(0):
@@ -486,23 +566,6 @@ class StatementBalanceVerificationService:
             # an instant cannot be derived without guessing.
             return None, REASON_DAY_BOUNDARY_AMBIGUOUS
         return moment, ''
-
-    @staticmethod
-    def _unusable_day_reason(
-        kind: str,
-        balance_day: date | None,
-        account: Account,
-    ) -> str:
-        if kind == BankStatementUpload.BalanceKind.UNKNOWN:
-            return REASON_KIND_UNKNOWN
-        if balance_day is None:
-            return REASON_NOT_CONFIGURED
-        if kind == BankStatementUpload.BalanceKind.AVAILABLE:
-            if account.type_account in constants.CREDIT_ACCOUNT_TYPES:
-                return REASON_AVAILABLE_CREDIT_UNKNOWN
-            if account.type_account not in constants.LIQUID_ACCOUNT_TYPES:
-                return REASON_AVAILABLE_SEMANTICS_UNKNOWN
-        return ''
 
     @staticmethod
     def _day_boundary(
