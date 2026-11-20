@@ -1,8 +1,10 @@
 """Clean up bank statement details once their retention period ends."""
 
 from datetime import datetime
+from functools import partial
 
 import structlog
+from django.core.files.storage import Storage
 from django.db import transaction
 from django.utils import timezone
 
@@ -54,6 +56,15 @@ class BankStatementRetentionService:
                 StatementRowRepository.bank_data_due_q(deadline),
             ).values_list('upload_id', flat=True),
         )
+        # A cleaned generation whose PDF deletion failed keeps its pointer:
+        # the next run retries the irreversible storage delete.
+        upload_ids.update(
+            BankStatementUpload.objects.filter(
+                retention_cleaned_at__isnull=False,
+            )
+            .exclude(pdf_file='')
+            .values_list('pk', flat=True),
+        )
         cleaned = 0
         for upload_id in sorted(upload_ids):
             if self._cleanup_upload(upload_id, deadline):
@@ -89,6 +100,12 @@ class BankStatementRetentionService:
                 ),
             )
             upload_due = upload_generation_due(upload, now)
+            pending_file_name = (
+                upload.pdf_file.name
+                if upload.retention_cleaned_at is not None
+                and upload.pdf_file.name
+                else ''
+            )
             due_rows = [
                 row
                 for row in rows
@@ -102,7 +119,7 @@ class BankStatementRetentionService:
                     upload_id=upload_id,
                 )
                 return False
-            if not due_rows and not upload_due:
+            if not due_rows and not upload_due and not pending_file_name:
                 return False
 
             related_transaction_ids = {
@@ -139,10 +156,6 @@ class BankStatementRetentionService:
                     data_cleaned_at=now,
                 )
             if upload_due:
-                file_name = upload.pdf_file.name
-                if file_name:
-                    upload.pdf_file.storage.delete(file_name)
-                upload.pdf_file = ''
                 upload.retention_cleaned_at = now
                 upload.statement_closing_balance = None
                 upload.account_balance_after = None
@@ -151,7 +164,6 @@ class BankStatementRetentionService:
                 upload.celery_task_id = ''
                 upload.save(
                     update_fields=[
-                        'pdf_file',
                         'retention_cleaned_at',
                         'statement_closing_balance',
                         'account_balance_after',
@@ -160,6 +172,69 @@ class BankStatementRetentionService:
                         'celery_task_id',
                     ],
                 )
+                pending_file_name = upload.pdf_file.name
             scrub_transaction_source_ref_audit(related_transaction_ids)
             self.reconciliation_service.refresh_outcome_counts(upload)
-        return True
+            if pending_file_name:
+                # The delete is irreversible: it runs only after the DB work
+                # above commits, and the pointer stays until it succeeds.
+                transaction.on_commit(
+                    partial(
+                        self._delete_pending_file,
+                        upload.pk,
+                        pending_file_name,
+                        upload.pdf_file.storage,
+                    ),
+                )
+        return bool(due_rows or upload_due)
+
+    @staticmethod
+    def _delete_pending_file(
+        upload_id: int,
+        file_name: str,
+        storage: Storage,
+    ) -> None:
+        """Delete the committed file and only then clear its pointer.
+
+        A storage failure leaves the cleaned pointer in place, so the next
+        cleanup retries it. The pointer is cleared only when it still names
+        this file and the generation is still cleaned: a reupload that
+        replaced it was never touched by this callback.
+        """
+        try:
+            storage.delete(file_name)
+        except Exception:
+            logger.warning(
+                'statement_retention_pdf_delete_failed',
+                upload_id=upload_id,
+            )
+            return
+        try:
+            with transaction.atomic():
+                account_id = (
+                    BankStatementUpload.objects.filter(pk=upload_id)
+                    .values_list('account_id', flat=True)
+                    .first()
+                )
+                if account_id is None:
+                    return
+                Account.objects.select_for_update().get(pk=account_id)
+                upload = (
+                    BankStatementUpload.objects.select_for_update()
+                    .filter(pk=upload_id)
+                    .first()
+                )
+                if (
+                    upload is None
+                    or upload.retention_cleaned_at is None
+                    or upload.pdf_file.name != file_name
+                ):
+                    return
+                upload.pdf_file = ''
+                upload.save(update_fields=['pdf_file', 'updated_at'])
+        except Exception:
+            # The file is gone and the pointer stays for the next retry.
+            logger.warning(
+                'statement_retention_pdf_pointer_clear_failed',
+                upload_id=upload_id,
+            )

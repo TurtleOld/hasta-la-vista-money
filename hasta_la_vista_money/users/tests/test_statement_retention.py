@@ -309,7 +309,8 @@ class StatementRetentionCleanupTest(TestCase):
     def _cleanup(self) -> int:
         container = ApplicationContainer()
         service = container.users.bank_statement_retention_service()
-        return int(service.cleanup_expired(self.upload.expires_at))
+        with self.captureOnCommitCallbacks(execute=True):
+            return int(service.cleanup_expired(self.upload.expires_at))
 
     def _scrubbed(self, row: BankStatementRow) -> None:
         self.assertIsNone(row.transaction_type)
@@ -660,16 +661,6 @@ class StatementRetentionCleanupTest(TestCase):
         upload = self._other_upload(BankStatementUpload.Status.COMPLETED)
         upload.retention_cleaned_at = moment - timedelta(days=1)
         upload.save(update_fields=['retention_cleaned_at'])
-        upload.pdf_file.save(
-            'generation.pdf',
-            SimpleUploadedFile(
-                'generation.pdf',
-                b'%PDF-1.4 generation',
-                content_type='application/pdf',
-            ),
-        )
-        pdf_name = upload.pdf_file.name
-        storage = upload.pdf_file.storage
         row = self._other_row(
             upload,
             1,
@@ -688,7 +679,7 @@ class StatementRetentionCleanupTest(TestCase):
             upload.retention_cleaned_at,
             moment - timedelta(days=1),
         )
-        self.assertTrue(storage.exists(pdf_name))
+        self.assertFalse(bool(upload.pdf_file))
         self.assertEqual(row.amount, None)
         self.assertEqual(row.description, '')
         self.assertIsNotNone(row.data_cleaned_at)
@@ -1193,3 +1184,159 @@ class StatementRetentionConcurrencyTest(TransactionTestCase):
         self.assertIsNotNone(self.row.data_cleaned_at)
         self.assertEqual(self.row.decision_audits.count(), 0)
         self.assertFalse(self.storage.exists(self.pdf_name))
+
+
+class StatementRetentionCommitSafetyTest(TestCase):
+    """The PDF is deleted only after the cleanup transaction committed."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Банк',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            expires_at=timezone.now() - timedelta(seconds=1),
+            file_hash='commit-safety-hash',
+        )
+        self.upload.pdf_file.save(
+            'commit-safety.pdf',
+            SimpleUploadedFile(
+                'commit-safety.pdf',
+                b'%PDF-1.4 commit safety',
+                content_type='application/pdf',
+            ),
+        )
+        self.pdf_name = self.upload.pdf_file.name
+        self.storage = self.upload.pdf_file.storage
+        self.row = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('10.00'),
+            description='Секретная строка',
+            source_ref='raw-commit-ref',
+            source_ref_hash='c' * 64,
+            source_row_position=1,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+
+    def _service(self) -> BankStatementRetentionService:
+        return cast(
+            'BankStatementRetentionService',
+            ApplicationContainer().users.bank_statement_retention_service(),
+        )
+
+    def test_late_scrub_failure_keeps_pdf_and_rolls_back(self) -> None:
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.'
+                'bank_statement_retention.'
+                'scrub_transaction_source_ref_audit',
+                side_effect=RuntimeError('scrub failed'),
+            ),
+            self.assertRaises(RuntimeError),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self._service().cleanup_expired()
+
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertIsNone(self.row.data_cleaned_at)
+        self.assertTrue(bool(self.upload.pdf_file))
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+    def test_late_database_failure_keeps_pdf_and_rolls_back(self) -> None:
+        service = self._service()
+        with (
+            patch.object(
+                service.reconciliation_service,
+                'refresh_outcome_counts',
+                side_effect=RuntimeError('database failed'),
+            ),
+            self.assertRaises(RuntimeError),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            service.cleanup_expired()
+
+        self.upload.refresh_from_db()
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertTrue(bool(self.upload.pdf_file))
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+    def test_pdf_is_deleted_only_after_commit(self) -> None:
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.assertEqual(self._service().cleanup_expired(), 1)
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertTrue(bool(self.upload.pdf_file))
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+        for callback in callbacks:
+            callback()
+
+        self.upload.refresh_from_db()
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertFalse(self.storage.exists(self.pdf_name))
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+
+    def test_delete_failure_is_retryable(self) -> None:
+        with (
+            patch.object(
+                self.storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.assertEqual(self._service().cleanup_expired(), 1)
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.upload.pdf_file.name, self.pdf_name)
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self._service().cleanup_expired()
+
+        self.upload.refresh_from_db()
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertFalse(self.storage.exists(self.pdf_name))
+
+    def test_replaced_generation_is_not_deleted(self) -> None:
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self._service().cleanup_expired()
+
+        self.assertTrue(self.storage.exists(self.pdf_name))
+
+        self.upload.pdf_file.save(
+            'new-generation.pdf',
+            SimpleUploadedFile(
+                'new-generation.pdf',
+                b'%PDF-1.4 new generation',
+                content_type='application/pdf',
+            ),
+        )
+        new_name = self.upload.pdf_file.name
+        self.upload.expires_at = timezone.now() + timedelta(days=7)
+        self.upload.retention_cleaned_at = None
+        self.upload.save(
+            update_fields=['expires_at', 'retention_cleaned_at'],
+        )
+
+        for callback in callbacks:
+            callback()
+
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.pdf_file.name, new_name)
+        self.assertTrue(self.storage.exists(new_name))
+        self.assertIsNone(self.upload.retention_cleaned_at)

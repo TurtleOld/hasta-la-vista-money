@@ -15,12 +15,6 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
-    AccountCoverageRepository,
-)
-from hasta_la_vista_money.finance_account.services.coverage_service import (
-    AccountCoverageService,
-)
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -39,11 +33,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
-)
-from hasta_la_vista_money.users.services.bank_statement_retention import (
-    BankStatementRetentionService,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
@@ -530,18 +520,14 @@ class RepeatStatementUploadTestCase(TestCase):
         row.refresh_from_db()
         upload.refresh_from_db()
         deadline = cast('datetime', row.data_expires_at)
-        service = BankStatementRetentionService(
-            BankStatementReconciliationService(
-                StatementRowRepository(),
-                coverage_service=AccountCoverageService(
-                    AccountCoverageRepository(),
-                ),
-            ),
+        service = (
+            ApplicationContainer().users.bank_statement_retention_service()
         )
-        self.assertEqual(
-            service.cleanup_expired(deadline + timedelta(seconds=1)),
-            1,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(
+                service.cleanup_expired(deadline + timedelta(seconds=1)),
+                1,
+            )
 
         row.refresh_from_db()
         upload.refresh_from_db()

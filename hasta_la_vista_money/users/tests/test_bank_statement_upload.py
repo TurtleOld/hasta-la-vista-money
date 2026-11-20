@@ -23,12 +23,6 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
-    AccountCoverageRepository,
-)
-from hasta_la_vista_money.finance_account.services.coverage_service import (
-    AccountCoverageService,
-)
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import (
@@ -44,9 +38,6 @@ from hasta_la_vista_money.users.models import (
     FamilyGroupMembership,
     User,
 )
-from hasta_la_vista_money.users.repositories.statement_row_repository import (
-    StatementRowRepository,
-)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
@@ -59,12 +50,6 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _RaiffeisenBankParser,
     _SberbankParser,
 )
-from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
-    BankStatementReconciliationService,
-)
-from hasta_la_vista_money.users.services.bank_statement_retention import (
-    BankStatementRetentionService,
-)
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
     fingerprint,
@@ -73,6 +58,10 @@ from hasta_la_vista_money.users.tests.statement_identity_fixtures import (
 
 if TYPE_CHECKING:
     from django.http import HttpResponseRedirect
+
+    from hasta_la_vista_money.users.services.bank_statement_retention import (
+        BankStatementRetentionService,
+    )
 
 
 @statement_identity_settings
@@ -1070,21 +1059,20 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.expires_at = deadline
         self.upload.save(update_fields=['file_hash', 'expires_at'])
 
-        retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(
-                StatementRowRepository(),
-                coverage_service=AccountCoverageService(
-                    AccountCoverageRepository(),
-                ),
+        retention_service = cast(
+            'BankStatementRetentionService',
+            ApplicationContainer().users.bank_statement_retention_service(),
+        )
+        self.assertEqual(
+            retention_service.cleanup_expired(
+                deadline - timedelta(microseconds=1),
             ),
+            0,
         )
-        before_count = retention_service.cleanup_expired(
-            deadline - timedelta(microseconds=1),
-        )
-        self.assertEqual(before_count, 0)
         self.assertTrue(storage.exists(file_name))
-        first_count = retention_service.cleanup_expired(deadline)
-        second_count = retention_service.cleanup_expired(deadline)
+        with self.captureOnCommitCallbacks(execute=True):
+            first_count = retention_service.cleanup_expired(deadline)
+            second_count = retention_service.cleanup_expired(deadline)
 
         self.assertEqual(first_count, 1)
         self.assertEqual(second_count, 0)
@@ -1150,13 +1138,9 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.expires_at = deadline
         self.upload.save(update_fields=['expires_at'])
         storage = self.upload.pdf_file.storage
-        retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(
-                StatementRowRepository(),
-                coverage_service=AccountCoverageService(
-                    AccountCoverageRepository(),
-                ),
-            ),
+        retention_service = cast(
+            'BankStatementRetentionService',
+            ApplicationContainer().users.bank_statement_retention_service(),
         )
 
         with (
@@ -1165,20 +1149,29 @@ class TestBankStatementReconciliationView(TestCase):
                 'delete',
                 side_effect=OSError('storage unavailable'),
             ),
-            self.assertRaises(OSError),
+            self.captureOnCommitCallbacks(execute=True),
         ):
-            retention_service.cleanup_expired(deadline)
+            self.assertEqual(
+                retention_service.cleanup_expired(deadline),
+                1,
+            )
 
         self.upload.refresh_from_db()
         self.row.refresh_from_db()
-        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertTrue(storage.exists(self.upload.pdf_file.name))
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
         self.assertEqual(Transaction.objects.count(), 1)
 
-        cleaned = retention_service.cleanup_expired(deadline)
+        pending_pdf_name = self.upload.pdf_file.name
+        with self.captureOnCommitCallbacks(execute=True):
+            cleaned = retention_service.cleanup_expired(deadline)
 
-        self.assertEqual(cleaned, 1)
+        self.assertEqual(cleaned, 0)
+        self.upload.refresh_from_db()
         self.row.refresh_from_db()
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertFalse(storage.exists(pending_pdf_name))
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
         self.assertIsNotNone(self.row.data_cleaned_at)
         self.assertEqual(Transaction.objects.count(), 1)
@@ -1581,11 +1574,8 @@ class TestBankStatementReconciliationView(TestCase):
             date=self.candidate.date,
         )
 
-        service = BankStatementReconciliationService(
-            StatementRowRepository(),
-            coverage_service=AccountCoverageService(
-                AccountCoverageRepository(),
-            ),
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
         )
         candidates = service.current_candidates(
             self.row,
