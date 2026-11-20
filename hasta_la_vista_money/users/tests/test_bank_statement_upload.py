@@ -23,6 +23,12 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
+    AccountCoverageRepository,
+)
+from hasta_la_vista_money.finance_account.services.coverage_service import (
+    AccountCoverageService,
+)
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import (
@@ -1065,7 +1071,12 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.save(update_fields=['file_hash', 'expires_at'])
 
         retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(StatementRowRepository()),
+            BankStatementReconciliationService(
+                StatementRowRepository(),
+                coverage_service=AccountCoverageService(
+                    AccountCoverageRepository(),
+                ),
+            ),
         )
         before_count = retention_service.cleanup_expired(
             deadline - timedelta(microseconds=1),
@@ -1140,7 +1151,12 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.save(update_fields=['expires_at'])
         storage = self.upload.pdf_file.storage
         retention_service = BankStatementRetentionService(
-            BankStatementReconciliationService(StatementRowRepository()),
+            BankStatementReconciliationService(
+                StatementRowRepository(),
+                coverage_service=AccountCoverageService(
+                    AccountCoverageRepository(),
+                ),
+            ),
         )
 
         with (
@@ -1565,7 +1581,12 @@ class TestBankStatementReconciliationView(TestCase):
             date=self.candidate.date,
         )
 
-        service = BankStatementReconciliationService(StatementRowRepository())
+        service = BankStatementReconciliationService(
+            StatementRowRepository(),
+            coverage_service=AccountCoverageService(
+                AccountCoverageRepository(),
+            ),
+        )
         candidates = service.current_candidates(
             self.row,
         )

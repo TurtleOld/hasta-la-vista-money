@@ -1338,18 +1338,21 @@ class DepositWriterInvalidationTests(StatementBalanceVerificationTestCase):
         return upload
 
     def _fund(self, opened_on: date = date(2026, 1, 1)) -> Deposit:
-        return self.deposit_service.create_funded_term_deposit(
-            FundDepositCommand(
-                user=self.user,
-                name='Вклад',
-                bank=self.bank,
-                currency='RUB',
-                amount=Decimal('200.00'),
-                source_account_id=self.account.pk,
-                opened_on=opened_on,
-                matures_on=date(2027, 1, 1),
-                annual_rate=Decimal('10.00'),
-                rate_kind=DepositTerm.RateKind.FIXED,
+        return cast(
+            'Deposit',
+            self.deposit_service.create_funded_term_deposit(
+                FundDepositCommand(
+                    user=self.user,
+                    name='Вклад',
+                    bank=self.bank,
+                    currency='RUB',
+                    amount=Decimal('200.00'),
+                    source_account_id=self.account.pk,
+                    opened_on=opened_on,
+                    matures_on=date(2027, 1, 1),
+                    annual_rate=Decimal('10.00'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
+                ),
             ),
         )
 

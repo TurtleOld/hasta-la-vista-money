@@ -1064,6 +1064,9 @@ class TestUploadImageView(TestCase):
                 product_repository=self.container.receipts.product_repository,
                 receipt_repository=self.container.receipts.receipt_repository,
                 seller_repository=self.container.receipts.seller_repository,
+                coverage_service=(
+                    self.container.finance_account.account_coverage_service
+                ),
             ),
         )
 
@@ -1221,6 +1224,9 @@ class TestReviewPendingReceiptView(TestCase):
                 product_repository=self.container.receipts.product_repository,
                 receipt_repository=self.container.receipts.receipt_repository,
                 seller_repository=self.container.receipts.seller_repository,
+                coverage_service=(
+                    self.container.finance_account.account_coverage_service
+                ),
             ),
         )
 

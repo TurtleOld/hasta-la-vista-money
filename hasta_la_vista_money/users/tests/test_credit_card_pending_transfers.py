@@ -23,6 +23,12 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
+    AccountCoverageRepository,
+)
+from hasta_la_vista_money.finance_account.services.coverage_service import (
+    AccountCoverageService,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -83,6 +89,9 @@ class CreditCardStatementBaseTest(TestCase):
         )
         self.service = BankStatementReconciliationService(
             StatementRowRepository(),
+            coverage_service=AccountCoverageService(
+                AccountCoverageRepository(),
+            ),
         )
         self.link_service = (
             ApplicationContainer().users.statement_row_link_service()

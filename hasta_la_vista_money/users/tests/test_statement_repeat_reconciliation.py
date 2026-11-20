@@ -15,6 +15,12 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
+    AccountCoverageRepository,
+)
+from hasta_la_vista_money.finance_account.services.coverage_service import (
+    AccountCoverageService,
+)
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -525,7 +531,12 @@ class RepeatStatementUploadTestCase(TestCase):
         upload.refresh_from_db()
         deadline = cast('datetime', row.data_expires_at)
         service = BankStatementRetentionService(
-            BankStatementReconciliationService(StatementRowRepository()),
+            BankStatementReconciliationService(
+                StatementRowRepository(),
+                coverage_service=AccountCoverageService(
+                    AccountCoverageRepository(),
+                ),
+            ),
         )
         self.assertEqual(
             service.cleanup_expired(deadline + timedelta(seconds=1)),
