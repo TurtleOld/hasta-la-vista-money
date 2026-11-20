@@ -770,6 +770,7 @@ class BankStatementImportService:
             trans,
             requires_markup=requires_markup,
             is_credit_account=is_credit_account,
+            has_category=bool(values['suggested_category']),
         )
         values.pop('decision', None)
         values['decision'] = base_decision
@@ -841,17 +842,26 @@ class BankStatementImportService:
                 fields['source_ref_version'] = identity.version
                 fields['source_identity_trusted'] = identity.trusted
         error_code = values['parse_error_code']
+        base_decision = self._reconciliation_decision(
+            trans,
+            requires_markup=requires_markup,
+            is_credit_account=is_credit_account,
+            has_category=bool(values['suggested_category']),
+        )
         if row.decision in RESUMABLE_DECISIONS:
             fields['parse_error_code'] = error_code
             if error_code:
                 fields['decision'] = BankStatementRow.Decision.PARSE_ERROR
                 fields['resume_decision'] = ''
             elif row.decision == BankStatementRow.Decision.PARSE_ERROR:
-                fields['decision'] = self._reconciliation_decision(
-                    trans,
-                    requires_markup=requires_markup,
-                    is_credit_account=is_credit_account,
-                )
+                fields['decision'] = base_decision
+                fields['resume_decision'] = ''
+            elif (
+                row.decision == BankStatementRow.Decision.PENDING
+                and base_decision == BankStatementRow.Decision.AWAITING_MARKUP
+            ):
+                # Unknown category needs the existing markup selector.
+                fields['decision'] = BankStatementRow.Decision.AWAITING_MARKUP
                 fields['resume_decision'] = ''
         if (
             row.duplicate_of_id is None
@@ -918,6 +928,7 @@ class BankStatementImportService:
         *,
         requires_markup: bool,
         is_credit_account: bool,
+        has_category: bool,
     ) -> str:
         """A new row is always manual; money is never inferred here."""
         if trans.get('parse_error_code'):
@@ -932,7 +943,7 @@ class BankStatementImportService:
             incoming = amount is not None and amount > 0
         if is_credit_account and incoming:
             return BankStatementRow.Decision.NEEDS_TRANSFER
-        if requires_markup:
+        if requires_markup or not has_category:
             return BankStatementRow.Decision.AWAITING_MARKUP
         return BankStatementRow.Decision.PENDING
 
@@ -1808,6 +1819,9 @@ class BankStatementImportService:
             'bank_calendar_date': trans.get('bank_calendar_date'),
             'amount': abs(amount) if amount is not None else None,
             'description': strip_pii(str(trans.get('description') or ''))[
+                : constants.TWO_HUNDRED_FIFTY
+            ],
+            'suggested_category': str(trans.get('category_name') or '')[
                 : constants.TWO_HUNDRED_FIFTY
             ],
             'candidate_description': (

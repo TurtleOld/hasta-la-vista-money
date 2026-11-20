@@ -683,6 +683,8 @@ class BankStatementReconciliationService:
         ):
             raise InvalidReconciliationDecisionError('expired_row')
         moment, bank_calendar_date = statement_row_movement_date(row)
+        if not row.suggested_category:
+            raise InvalidReconciliationDecisionError('category')
         category, _ = Category.objects.get_or_create(
             user=row.upload.user,
             name=row.suggested_category,

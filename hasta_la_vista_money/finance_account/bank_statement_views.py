@@ -225,6 +225,11 @@ class BankStatementUploadView(
                     else:
                         old_pdf_name = upload.pdf_file.name
                         storage = upload.pdf_file.storage
+                        if upload.retention_cleaned_at is not None:
+                            StatementRowRepository.stamp_legacy_cleaned_rows(
+                                upload.pk,
+                                upload.retention_cleaned_at,
+                            )
                         upload.pdf_file = pdf_file
                         upload.expires_at = statement_retention_deadline(user)
                         upload.retention_cleaned_at = None
@@ -900,12 +905,15 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
                 self._candidate_id(request),
             )
         except InvalidReconciliationDecisionError as error:
-            if str(error) != 'candidate':
+            if str(error) == 'candidate':
+                messages.error(
+                    request,
+                    _('Выберите учтённую операцию перед подтверждением.'),
+                )
+            elif str(error) == 'category':
+                messages.error(request, _markup_message('category'))
+            else:
                 return HttpResponse(status=400)
-            messages.error(
-                request,
-                _('Выберите учтённую операцию перед подтверждением.'),
-            )
             return redirect(
                 reverse(
                     'finance_account:bank_statement_reconciliation',

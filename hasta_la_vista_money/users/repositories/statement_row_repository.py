@@ -81,6 +81,34 @@ class StatementRowRepository:
         )
 
     @staticmethod
+    def stamp_legacy_cleaned_rows(
+        upload_id: int,
+        marker: datetime,
+    ) -> int:
+        """Keep legacy rows cleaned before an upload marker is reset.
+
+        Rows without their own deadline were only unavailable because the
+        upload generation was cleaned. Stamp that old marker on them under
+        row locks first, so a renewed generation cannot make their empty
+        details look available. A later restore clears the marker only for
+        rows the new parse actually matches.
+        """
+        row_ids = list(
+            BankStatementRow.objects.select_for_update()
+            .filter(
+                upload_id=upload_id,
+                data_cleaned_at__isnull=True,
+                data_expires_at__isnull=True,
+            )
+            .values_list('pk', flat=True),
+        )
+        if not row_ids:
+            return 0
+        return BankStatementRow.objects.filter(pk__in=row_ids).update(
+            data_cleaned_at=marker,
+        )
+
+    @staticmethod
     def locked_rows_by_position(
         upload_id: int,
     ) -> dict[int, BankStatementRow]:
@@ -166,7 +194,17 @@ class StatementRowRepository:
                 pk__in=rows.values('upload_id'),
             ),
         )
-        reopened = {'transaction': None, 'transfer': None, 'decided_at': None}
+        reopened: dict[str, object] = {
+            'transaction': None,
+            'transfer': None,
+            'decided_at': None,
+        }
+        if isinstance(movement, Transaction) and movement.category_id:
+            # The owner already confirmed this category; keep it for the
+            # reopened row instead of guessing a blank one.
+            reopened['suggested_category'] = str(movement.category.name)[
+                : constants.TWO_HUNDRED_FIFTY
+            ]
         rows.filter(_REPAYMENT_ROW).update(
             decision=BankStatementRow.Decision.NEEDS_TRANSFER,
             **reopened,

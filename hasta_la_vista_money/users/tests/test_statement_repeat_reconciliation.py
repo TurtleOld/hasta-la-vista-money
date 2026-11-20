@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from hashlib import sha256
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -14,6 +15,7 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -32,6 +34,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
+    InvalidReconciliationDecisionError,
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
     BankStatementRetentionService,
@@ -49,8 +52,9 @@ def _transaction(
     amount: str = '-100.00',
     description: str = 'Покупка',
     transaction_type: str = 'expense',
+    category_name: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    transaction = {
         'date': timezone.now(),
         'amount': Decimal(amount),
         'description': description,
@@ -58,6 +62,9 @@ def _transaction(
         'row_position': position,
         'transaction_type': transaction_type,
     }
+    if category_name is not None:
+        transaction['category_name'] = category_name
+    return transaction
 
 
 def _parser_patch(
@@ -262,7 +269,10 @@ class RepeatStatementUploadTestCase(TestCase):
         linked.refresh_from_db()
         deferred.refresh_from_db()
         unrestored.refresh_from_db()
-        self.assertEqual(pending.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(
+            pending.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
         self.assertEqual(pending.amount, Decimal('100.00'))
         self.assertEqual(pending.description, 'Восстановленная покупка')
         self.assertIsNone(pending.data_cleaned_at)
@@ -291,7 +301,7 @@ class RepeatStatementUploadTestCase(TestCase):
             BankStatementRow.objects.filter(
                 upload=upload,
                 source_row_position=5,
-                decision=BankStatementRow.Decision.PENDING,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
             ).exists(),
         )
 
@@ -329,8 +339,17 @@ class RepeatStatementUploadTestCase(TestCase):
 
         with _parser_patch(
             [
-                _transaction(1, description='Кофе'),
-                _transaction(2, amount='250.00', transaction_type='income'),
+                _transaction(
+                    1,
+                    description='Кофе',
+                    category_name='Продукты',
+                ),
+                _transaction(
+                    2,
+                    amount='250.00',
+                    transaction_type='income',
+                    category_name='Доход',
+                ),
             ],
         ):
             process_bank_statement_task.apply(args=[upload.pk]).get()
@@ -462,7 +481,7 @@ class RepeatStatementUploadTestCase(TestCase):
         row.refresh_from_db()
         self.assertEqual(
             row.decision,
-            BankStatementRow.Decision.PENDING,
+            BankStatementRow.Decision.AWAITING_MARKUP,
         )
         self.assertEqual(row.parse_error_code, '')
         self.assertEqual(row.amount, Decimal('100.00'))
@@ -487,7 +506,10 @@ class RepeatStatementUploadTestCase(TestCase):
             upload=upload,
             source_row_position=1,
         )
-        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
         self.assertIsNone(row.transaction_id)
         self.assertFalse(row.candidates.exists())
 
@@ -513,10 +535,152 @@ class RepeatStatementUploadTestCase(TestCase):
         row.refresh_from_db()
         upload.refresh_from_db()
         self.assertIsNone(row.amount)
-        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
         self.assertIsNotNone(row.data_cleaned_at)
         self.assertFalse(bool(upload.pdf_file))
         self.assertFalse(Transaction.objects.exists())
+
+    def _legacy_cleaned_row(
+        self,
+        upload: BankStatementUpload,
+        *,
+        position: int | None = None,
+        decision: str = BankStatementRow.Decision.PENDING,
+        transaction: Transaction | None = None,
+    ) -> BankStatementRow:
+        """A row cleaned only through the old upload marker."""
+        return BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=position,
+            transaction_type=None,
+            transaction_date=None,
+            amount=None,
+            description='',
+            decision=decision,
+            transaction=transaction,
+            data_cleaned_at=None,
+            data_expires_at=None,
+        )
+
+    def test_public_repeat_stamps_legacy_rows_before_upload_reset(
+        self,
+    ) -> None:
+        content = b'%PDF-1.4 legacy repeat'
+        file_hash = sha256(content).hexdigest()
+        upload = self._upload(file_hash=file_hash)
+        old_marker = timezone.now() - timedelta(days=5)
+        upload.retention_cleaned_at = old_marker
+        upload.expires_at = old_marker
+        upload.status = BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
+        upload.save(
+            update_fields=[
+                'retention_cleaned_at',
+                'expires_at',
+                'status',
+            ],
+        )
+        linked_movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=timezone.now(),
+            description='Связанное движение',
+        )
+        unmatched = self._legacy_cleaned_row(upload)
+        matched = self._legacy_cleaned_row(upload, position=1)
+        linked = self._legacy_cleaned_row(
+            upload,
+            decision=BankStatementRow.Decision.LINKED,
+            transaction=linked_movement,
+        )
+
+        with (
+            patch(
+                'hasta_la_vista_money.finance_account.bank_statement_views.'
+                'process_bank_statement_task',
+            ) as task,
+            _parser_patch([_transaction(1, description='Восстановлено')]),
+        ):
+            task.delay.return_value = MagicMock(id='repeat')
+            self.client.force_login(self.user)
+            response = self.client.post(
+                self.upload_url,
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        'legacy.pdf',
+                        content,
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+            self.assertEqual(response.status_code, 302)
+            task.delay.assert_called_once_with(upload.pk)
+
+            upload.refresh_from_db()
+            self.assertTrue(upload.reconciliation_only)
+            self.assertIsNone(upload.retention_cleaned_at)
+            self.assertGreater(upload.expires_at, old_marker)
+            for row in (unmatched, matched, linked):
+                row.refresh_from_db()
+                self.assertEqual(row.data_cleaned_at, old_marker)
+
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        matched.refresh_from_db()
+        unmatched.refresh_from_db()
+        linked.refresh_from_db()
+        upload.refresh_from_db()
+        self.assertIsNone(matched.data_cleaned_at)
+        self.assertGreater(matched.data_expires_at, timezone.now())
+        self.assertEqual(matched.amount, Decimal('100.00'))
+        self.assertEqual(matched.description, 'Восстановлено')
+        self.assertEqual(matched.source_row_position, 1)
+        self.assertEqual(
+            matched.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            unmatched.data_cleaned_at,
+            old_marker,
+        )
+        self.assertIsNone(unmatched.data_expires_at)
+        self.assertIsNone(unmatched.source_row_position)
+        self.assertIsNone(unmatched.source_ref_hash)
+        self.assertIsNone(unmatched.amount)
+        self.assertEqual(unmatched.description, '')
+        self.assertEqual(
+            unmatched.decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertFalse(
+            BankStatementRow.objects.filter(
+                StatementRowRepository.bank_data_available_q(),
+                pk=unmatched.pk,
+            ).exists(),
+        )
+        self.assertTrue(
+            BankStatementRow.objects.filter(
+                StatementRowRepository.bank_data_available_q(),
+                pk=matched.pk,
+            ).exists(),
+        )
+        self.assertEqual(linked.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(linked.transaction_id, linked_movement.pk)
+        self.assertEqual(
+            BankStatementUpload.objects.filter(pk=upload.pk).count(),
+            1,
+        )
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('1000.00'),
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
 
     def test_repeat_never_compares_bank_balance_with_current_balance(
         self,
@@ -541,6 +705,108 @@ class RepeatStatementUploadTestCase(TestCase):
             Decimal('1000.00'),
         )
         self.assertFalse(Transaction.objects.exists())
+
+    def test_unknown_category_routes_to_markup_then_posts(self) -> None:
+        upload = self._upload(reconciliation_only=True)
+        transaction = _transaction(1, description='Неизвестный магазин')
+
+        with _parser_patch([transaction]):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        row = BankStatementRow.objects.get(
+            upload=upload,
+            source_row_position=1,
+        )
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(row.suggested_category, '')
+        self.assertFalse(Category.objects.filter(name='').exists())
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('1000.00'),
+        )
+
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        markup_service = ApplicationContainer().users.statement_markup_service()
+        markup_service.post(row.pk, self.user.pk, category.pk)
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction_id)
+        movement = row.transaction
+        if movement is None:
+            self.fail('posted row has no movement')
+        self.assertEqual(movement.category_id, category.pk)
+        self.assertEqual(movement.amount, Decimal('100.00'))
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('900.00'),
+        )
+        self.assertTrue(
+            row.decision_audits.filter(
+                decision=BankStatementRow.Decision.NEW,
+            ).exists(),
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                model_name='transactions.Transaction',
+                object_pk=str(movement.pk),
+            ).exists(),
+        )
+
+        with _parser_patch([transaction]):
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.transaction_id, movement.pk)
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('900.00'),
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertFalse(Category.objects.filter(name='').exists())
+
+    def test_new_decision_rejects_missing_category_without_money(self) -> None:
+        upload = self._upload(reconciliation_only=True)
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=1,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Без категории',
+            suggested_category='',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+
+        with self.assertRaises(InvalidReconciliationDecisionError) as raised:
+            service.decide(
+                row.pk,
+                BankStatementRow.Decision.NEW,
+                self.user.pk,
+            )
+
+        self.assertEqual(str(raised.exception), 'category')
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(Category.objects.filter(name='').exists())
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+        self.assertEqual(
+            Account.objects.get(pk=self.account.pk).balance,
+            Decimal('1000.00'),
+        )
 
     def test_upload_form_selects_reconciliation_only_for_new_file(self) -> None:
         with patch(
