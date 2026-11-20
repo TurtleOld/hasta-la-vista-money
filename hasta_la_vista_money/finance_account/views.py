@@ -77,9 +77,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
-    invalidate_coverage_for_account_life_change,
-)
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.system.models import AuditOperationKind
@@ -2209,8 +2206,11 @@ class ChangeAccountView(
             with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
                 # Only form fields: a concurrent balance change must survive.
                 account.save(update_fields=[*form.fields, 'updated_at'])
-            invalidate_coverage_for_account_life_change(
-                account,
+            coverage_service = (
+                request.container.finance_account.account_coverage_service()
+            )
+            coverage_service.invalidate_for_account_life_change(
+                account=account,
                 previous_opened_on=previous_life.opened_on,
                 previous_closed_on=previous_life.closed_on,
             )

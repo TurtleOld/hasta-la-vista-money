@@ -24,8 +24,8 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
-from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
-    invalidate_coverage_for_row_problem,
+from hasta_la_vista_money.finance_account.services.protocols import (
+    AccountCoverageServiceProtocol,
 )
 from hasta_la_vista_money.finance_account.validators import (
     validate_same_currency,
@@ -91,6 +91,8 @@ class StatementMarkupService:
         account_repository: AccountRepository,
         transfer_log_repository: TransferMoneyLogRepository,
         statement_row_repository: StatementRowRepository,
+        *,
+        coverage_service: AccountCoverageServiceProtocol,
         balance_verification: (
             StatementBalanceVerificationServiceProtocol | None
         ) = None,
@@ -99,6 +101,7 @@ class StatementMarkupService:
         self._account_repository = account_repository
         self._transfer_log_repository = transfer_log_repository
         self._statement_row_repository = statement_row_repository
+        self._coverage_service = coverage_service
         self._balance_verification = balance_verification
 
     @staticmethod
@@ -444,8 +447,8 @@ class StatementMarkupService:
                 '',
                 user_id,
             )
-            invalidate_coverage_for_row_problem(
-                row,
+            self._coverage_service.invalidate_for_row_problem(
+                row=row,
                 reason='row_deferred',
             )
         else:

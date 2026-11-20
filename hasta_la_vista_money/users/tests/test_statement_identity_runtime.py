@@ -136,6 +136,9 @@ def import_service_with_keyring(
         AccountRepository(),
         identity_service,
         repository,
+        coverage_service=(
+            ApplicationContainer().finance_account.account_coverage_service()
+        ),
     )
 
 

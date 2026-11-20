@@ -29,9 +29,6 @@ from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
-from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
-    invalidate_coverage_for_upload_problem,
-)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.system.services.audit_statement_import import (
@@ -85,6 +82,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
+    )
+    from hasta_la_vista_money.finance_account.services.protocols import (
+        AccountCoverageServiceProtocol,
     )
     from hasta_la_vista_money.users.repositories.statement_identity_repository import (  # noqa: E501
         StatementIdentityRepository,
@@ -172,12 +172,14 @@ class BankStatementImportService:
         account_repository: AccountRepository,
         identity_service: StatementIdentityService,
         identity_repository: StatementIdentityRepository,
+        coverage_service: AccountCoverageServiceProtocol,
     ) -> None:
         """Инициализировать сервис категоризатором и репозиторием счетов."""
         self.classifier = classifier
         self.account_repository = account_repository
         self.identity_service = identity_service
         self.identity_repository = identity_repository
+        self.coverage_service = coverage_service
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -604,8 +606,8 @@ class BankStatementImportService:
                 or has_parse_error
                 or has_repayment
             ):
-                invalidate_coverage_for_upload_problem(
-                    locked,
+                self.coverage_service.invalidate_for_upload_problem(
+                    upload=locked,
                     reason='import_problem',
                 )
             return GENERATION_CURRENT

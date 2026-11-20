@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         CoverageSummary,
     )
     from hasta_la_vista_money.users.models import (
+        BankStatementRow,
         BankStatementUpload,
         User,
     )
@@ -263,4 +264,43 @@ class AccountCoverageServiceProtocol(Protocol):
         reason: str,
     ) -> 'list[AccountCoverageConfirmation]':
         """Recheck an exact affected interval, or the whole period."""
+        ...
+
+    def invalidate_for_row_problem(
+        self,
+        *,
+        row: 'BankStatementRow',
+        reason: str,
+    ) -> int:
+        """Recheck a row's exact bank day, or its whole period."""
+        ...
+
+    def invalidate_for_upload_problem(
+        self,
+        *,
+        upload: 'BankStatementUpload',
+        reason: str,
+    ) -> int:
+        """Recheck an imported document period, or the whole period."""
+        ...
+
+    def invalidate_for_movement_change(
+        self,
+        *,
+        account: Account,
+        changed_on: date | None,
+        reason: str = 'movement_changed',
+    ) -> int:
+        """Recheck one changed bank day, or the whole period if unknown."""
+        ...
+
+    def invalidate_for_account_life_change(
+        self,
+        *,
+        account: Account,
+        previous_opened_on: date | None,
+        previous_closed_on: date | None,
+        reason: str = 'account_life_changed',
+    ) -> int:
+        """Recheck moved account life boundaries."""
         ...

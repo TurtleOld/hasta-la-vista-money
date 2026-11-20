@@ -12,15 +12,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     AccountCoverageConfirmation,
 )
-from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
-    AccountCoverageRepository,
-)
-from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
-    invalidate_coverage_for_movement_change,
-)
-from hasta_la_vista_money.finance_account.services.coverage_service import (
-    AccountCoverageService,
-)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -55,8 +46,8 @@ class CoverageInvalidationLifecycleTest(TestCase):
             statement_period_start=date(2026, 1, 1),
             statement_period_end=date(2026, 1, 31),
         )
-        self.coverage = AccountCoverageService(
-            repository=AccountCoverageRepository(),
+        self.coverage = (
+            ApplicationContainer().finance_account.account_coverage_service()
         )
         self.coverage.confirm(
             owner=self.user,
@@ -251,8 +242,8 @@ class CoverageInvalidationLifecycleTest(TestCase):
             amount=Decimal('250.00'),
         )
 
-        affected = invalidate_coverage_for_movement_change(
-            self.account.pk,
+        affected = self.coverage.invalidate_for_movement_change(
+            account=self.account,
             changed_on=date(2026, 1, 15),
         )
         summary = self._summary()
@@ -277,6 +268,25 @@ class CoverageInvalidationLifecycleTest(TestCase):
 
         self.assertTrue(summary.fully_covered)
         self.assertEqual(summary.invalidated, ())
+
+    def test_container_override_is_used_by_row_link_service(self):
+        calls: list[tuple[int, str]] = []
+
+        class _Recorder:
+            def invalidate_for_row_problem(self, *, row, reason):
+                calls.append((row.pk, reason))
+                return 1
+
+        container = ApplicationContainer()
+        container.finance_account.account_coverage_service.override(
+            _Recorder(),
+        )
+        row = self._row()
+        link_service = container.users.statement_row_link_service()
+
+        link_service.defer(row.pk, self.user.pk)
+
+        self.assertEqual(calls, [(row.pk, 'row_deferred')])
 
     def test_retention_and_plain_overlap_do_not_invalidate(self):
         self.upload.retention_cleaned_at = timezone.now()

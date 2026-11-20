@@ -607,6 +607,9 @@ class MarkupClosingCheckTests(StatementBalanceVerificationTestCase):
             account_repository=AccountRepository(),
             transfer_log_repository=TransferMoneyLogRepository(),
             statement_row_repository=StatementRowRepository(),
+            coverage_service=(
+                ApplicationContainer().finance_account.account_coverage_service()
+            ),
             balance_verification=_Recorder(),  # type: ignore[arg-type]
         )
 

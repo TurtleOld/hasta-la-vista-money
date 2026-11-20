@@ -167,6 +167,7 @@ class UsersContainer(containers.DeclarativeContainer):
         StatementRowLinkService,
         statement_row_repository=statement_row_repository,
         reconciliation_service=bank_statement_reconciliation_service,
+        coverage_service=finance_account.account_coverage_service,
     )
 
     bank_statement_retention_service: providers.Factory[
@@ -186,6 +187,7 @@ class UsersContainer(containers.DeclarativeContainer):
             TransferMoneyLogRepository,
         ),
         statement_row_repository=statement_row_repository,
+        coverage_service=finance_account.account_coverage_service,
         balance_verification=statement_balance_verification_service,
     )
 
@@ -197,4 +199,5 @@ class UsersContainer(containers.DeclarativeContainer):
         account_repository=providers.Singleton(AccountRepository),
         identity_service=statement_identity_service,
         identity_repository=statement_identity_repository,
+        coverage_service=finance_account.account_coverage_service,
     )

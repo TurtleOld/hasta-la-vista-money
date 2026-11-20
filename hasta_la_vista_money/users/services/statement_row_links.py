@@ -12,8 +12,8 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
-    invalidate_coverage_for_row_problem,
+from hasta_la_vista_money.finance_account.services.protocols import (
+    AccountCoverageServiceProtocol,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
@@ -51,9 +51,11 @@ class StatementRowLinkService:
         self,
         statement_row_repository: StatementRowRepository,
         reconciliation_service: BankStatementReconciliationServiceProtocol,
+        coverage_service: AccountCoverageServiceProtocol,
     ) -> None:
         self.statement_row_repository = statement_row_repository
         self.reconciliation_service = reconciliation_service
+        self.coverage_service = coverage_service
 
     def has_linked_row(self, movement: Transaction | TransferMoneyLog) -> bool:
         """Return whether a statement row is closed by this movement."""
@@ -70,8 +72,8 @@ class StatementRowLinkService:
         ):
             self.reconciliation_service.refresh_outcome_counts(upload)
         for row in reopened_rows:
-            invalidate_coverage_for_row_problem(
-                row,
+            self.coverage_service.invalidate_for_row_problem(
+                row=row,
                 reason='movement_reopened',
             )
 
@@ -261,8 +263,8 @@ class StatementRowLinkService:
             )
             self.statement_row_repository.record_decision(row, user_id)
             self.reconciliation_service.refresh_outcome_counts(upload)
-            invalidate_coverage_for_row_problem(
-                row,
+            self.coverage_service.invalidate_for_row_problem(
+                row=row,
                 reason='row_problem_resumed',
             )
             return row
@@ -319,8 +321,8 @@ class StatementRowLinkService:
                 user_id,
             )
             self.reconciliation_service.refresh_outcome_counts(upload)
-            invalidate_coverage_for_row_problem(
-                row,
+            self.coverage_service.invalidate_for_row_problem(
+                row=row,
                 reason=(
                     'row_excluded'
                     if decision == BankStatementRow.Decision.EXCLUDED
