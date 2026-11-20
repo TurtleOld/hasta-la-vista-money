@@ -179,6 +179,17 @@ class StatementRowRepository:
     def has_linked_row(self, movement: Transaction | TransferMoneyLog) -> bool:
         return self._linked_rows(movement).exists()
 
+    def linked_rows(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> list[BankStatementRow]:
+        """Return rows currently closed by this movement.
+
+        Callers snapshot them before reopening, so coverage invalidation can
+        use each row's stored bank day after the bulk update.
+        """
+        return list(self._linked_rows(movement))
+
     def release_linked_rows(
         self,
         movement: Transaction | TransferMoneyLog,

@@ -29,6 +29,9 @@ from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
+    invalidate_coverage_for_upload_problem,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.system.services.audit_statement_import import (
@@ -568,6 +571,10 @@ class BankStatementImportService:
                 locked.pk,
                 [BankStatementRow.Decision.PARSE_ERROR],
             )
+            has_repayment = self.identity_repository.has_upload_rows(
+                locked.pk,
+                [BankStatementRow.Decision.NEEDS_TRANSFER],
+            )
             fields = ['progress', 'status', 'updated_at']
             if closing_balance is not None:
                 locked.statement_closing_balance = closing_balance
@@ -578,7 +585,12 @@ class BankStatementImportService:
             # StatementBalanceVerificationService, never against the current
             # account balance.
             locked.progress = 100
-            if awaiting_markup or has_pending or has_parse_error:
+            if (
+                awaiting_markup
+                or has_pending
+                or has_parse_error
+                or has_repayment
+            ):
                 locked.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
             else:
                 locked.status = BankStatementUpload.Status.COMPLETED
@@ -586,6 +598,16 @@ class BankStatementImportService:
                 locked,
                 list(dict.fromkeys(fields)),
             )
+            if (
+                awaiting_markup
+                or has_pending
+                or has_parse_error
+                or has_repayment
+            ):
+                invalidate_coverage_for_upload_problem(
+                    locked,
+                    reason='import_problem',
+                )
             return GENERATION_CURRENT
 
     def _assert_row_generation(

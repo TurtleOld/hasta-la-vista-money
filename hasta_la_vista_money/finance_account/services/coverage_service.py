@@ -16,7 +16,6 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
     AccountCoverageConfirmation,
 )
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
         AccountCoverageRepository,
     )
     from hasta_la_vista_money.users.models import (
+        BankStatementRow,
         BankStatementUpload,
         User,
     )
@@ -125,6 +125,51 @@ def _gap_windows(
     return tuple(gaps)
 
 
+def _boundary_window(
+    before: date | None,
+    after: date | None,
+    *,
+    opening: bool,
+) -> DateWindow | None:
+    if before == after:
+        return None
+    if before is None or after is None:
+        raise ValueError('unknown boundary cannot be expressed exactly')
+    low, high = sorted((before, after))
+    if opening:
+        return DateWindow(start=low, end=high - ONE_DAY)
+    return DateWindow(start=low + ONE_DAY, end=high)
+
+
+def _life_change_windows(
+    *,
+    previous_opened_on: date | None,
+    previous_closed_on: date | None,
+    opened_on: date | None,
+    closed_on: date | None,
+) -> list[DateWindow] | None:
+    """Return exact moved windows, or ``None`` when a side was unknown."""
+    windows: list[DateWindow] = []
+    try:
+        opening = _boundary_window(
+            previous_opened_on,
+            opened_on,
+            opening=True,
+        )
+        closing = _boundary_window(
+            previous_closed_on,
+            closed_on,
+            opening=False,
+        )
+    except ValueError:
+        return None
+    if opening is not None and opening.start <= opening.end:
+        windows.append(opening)
+    if closing is not None and closing.start <= closing.end:
+        windows.append(closing)
+    return windows
+
+
 class AccountCoverageService:
     """Confirm, merge and invalidate coverage for an owner's accounts."""
 
@@ -148,13 +193,6 @@ class AccountCoverageService:
             raise PermissionDenied(_('Счёт принадлежит другому пользователю'))
         if source not in AccountCoverageConfirmation.Source.values:
             raise ValidationError(_('Неизвестный источник покрытия'))
-        if (
-            source == AccountCoverageConfirmation.Source.MANUAL
-            and account.type_account != constants.ACCOUNT_TYPE_CASH
-        ):
-            raise ValidationError(
-                _('Ручное покрытие доступно только для наличных'),
-            )
         if period_start > period_end:
             raise ValidationError(
                 _('Начало периода не может быть позже конца'),
@@ -327,6 +365,112 @@ class AccountCoverageService:
                     reason=cleaned_reason,
                 )
             ]
+
+    def invalidate_for_row_problem(
+        self,
+        *,
+        row: BankStatementRow,
+        reason: str,
+    ) -> int:
+        """Recheck the exact known bank day of a row, else its whole period.
+
+        Only an explicit bank calendar day is exact. A datetime moment is not
+        converted to a day with the active timezone; the caller gets the
+        conservative whole-period recheck instead.
+        """
+        own = row.upload.account
+        if row.upload.user_id != own.user_id:
+            return 0
+        exact_day = (
+            row.bank_calendar_date if row.date_precision != 'datetime' else None
+        )
+        affected = self.invalidate(
+            owner=own.user,
+            account=own,
+            affected_start=exact_day,
+            affected_end=exact_day,
+            reason=reason,
+        )
+        return len(affected)
+
+    def invalidate_for_upload_problem(
+        self,
+        *,
+        upload: BankStatementUpload,
+        reason: str,
+    ) -> int:
+        """Recheck the document's period when known, else the whole period."""
+        own = upload.account
+        if upload.user_id != own.user_id:
+            return 0
+        start = upload.statement_period_start
+        end = upload.statement_period_end
+        if start is None or end is None:
+            start = None
+            end = None
+        affected = self.invalidate(
+            owner=own.user,
+            account=own,
+            affected_start=start,
+            affected_end=end,
+            reason=reason,
+        )
+        return len(affected)
+
+    def invalidate_for_movement_change(
+        self,
+        *,
+        account: Account,
+        changed_on: date | None,
+        reason: str = 'movement_changed',
+    ) -> int:
+        """Recheck one exact bank day, or the whole period if it is unknown."""
+        affected = self.invalidate(
+            owner=account.user,
+            account=account,
+            affected_start=changed_on,
+            affected_end=changed_on,
+            reason=reason,
+        )
+        return len(affected)
+
+    def invalidate_for_account_life_change(
+        self,
+        *,
+        account: Account,
+        previous_opened_on: date | None,
+        previous_closed_on: date | None,
+        reason: str = 'account_life_changed',
+    ) -> int:
+        """Recheck the exact moved boundary; unknown boundaries mean all."""
+        windows = _life_change_windows(
+            previous_opened_on=previous_opened_on,
+            previous_closed_on=previous_closed_on,
+            opened_on=account.opened_on,
+            closed_on=account.closed_on,
+        )
+        if windows is None:
+            return len(
+                self.invalidate(
+                    owner=account.user,
+                    account=account,
+                    affected_start=None,
+                    affected_end=None,
+                    reason=reason,
+                ),
+            )
+        affected_count = 0
+        for window in _merge_windows(windows):
+            affected_count += len(
+                self.invalidate(
+                    owner=account.user,
+                    account=account,
+                    affected_start=window.start,
+                    affected_end=window.end,
+                    reason=reason,
+                ),
+            )
+        return affected_count
 
     def _invalidate_one(
         self,

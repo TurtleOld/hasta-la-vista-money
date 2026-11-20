@@ -12,6 +12,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
+    invalidate_coverage_for_row_problem,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.models import Transaction
@@ -61,10 +64,16 @@ class StatementRowLinkService:
         movement: Transaction | TransferMoneyLog,
     ) -> None:
         """Reopen rows closed by the movement and recount their uploads."""
+        reopened_rows = self.statement_row_repository.linked_rows(movement)
         for upload in self.statement_row_repository.release_linked_rows(
             movement,
         ):
             self.reconciliation_service.refresh_outcome_counts(upload)
+        for row in reopened_rows:
+            invalidate_coverage_for_row_problem(
+                row,
+                reason='movement_reopened',
+            )
 
     def lock_repayment_row(
         self,
@@ -252,6 +261,10 @@ class StatementRowLinkService:
             )
             self.statement_row_repository.record_decision(row, user_id)
             self.reconciliation_service.refresh_outcome_counts(upload)
+            invalidate_coverage_for_row_problem(
+                row,
+                reason='row_problem_resumed',
+            )
             return row
 
     @staticmethod
@@ -306,6 +319,14 @@ class StatementRowLinkService:
                 user_id,
             )
             self.reconciliation_service.refresh_outcome_counts(upload)
+            invalidate_coverage_for_row_problem(
+                row,
+                reason=(
+                    'row_excluded'
+                    if decision == BankStatementRow.Decision.EXCLUDED
+                    else 'row_deferred'
+                ),
+            )
             return row
 
     @staticmethod

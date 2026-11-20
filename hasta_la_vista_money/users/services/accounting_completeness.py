@@ -528,12 +528,18 @@ class AccountingCompletenessService:
             ),
         )
         latest_upload = processing[-1] if processing else None
+        account_block = self._block_for_account(
+            balance_block=balance_block,
+            uploads=uploads,
+            period_start=period_start,
+            period_end=period_end,
+        )
         balance = BalanceAttention(
             checked=balance_checked,
-            blocked=balance_block is not None,
+            blocked=account_block is not None,
             reason=(
-                self._balance_reason(balance_block)
-                if balance_block is not None
+                self._balance_reason(account_block)
+                if account_block is not None
                 else (
                     'no_unexplained_mismatch'
                     if balance_checked
@@ -670,9 +676,34 @@ class AccountingCompletenessService:
         )
 
     @staticmethod
+    def _block_for_account(
+        *,
+        balance_block: object | None,
+        uploads: list[BankStatementUpload],
+        period_start: date,
+        period_end: date,
+    ) -> object | None:
+        """Project the global retained block onto this account's uploads."""
+        if balance_block is None:
+            return None
+        upload_ids = getattr(balance_block, 'upload_ids', None)
+        if upload_ids is None:
+            # A provider without upload identifiers cannot be narrowed.
+            return balance_block
+        relevant = {
+            upload.pk
+            for upload in uploads
+            if _upload_in_period(upload, period_start, period_end)
+        }
+        return balance_block if relevant.intersection(upload_ids) else None
+
+    @staticmethod
     def _balance_reason(balance_block: object) -> str:
         reason = getattr(balance_block, 'reason', '')
-        return reason or 'balance_unexplained_mismatch'
+        if reason:
+            return str(reason)
+        reasons = getattr(balance_block, 'reasons', ())
+        return str(next(iter(reasons), 'balance_unexplained_mismatch'))
 
     def _balance_block(
         self,

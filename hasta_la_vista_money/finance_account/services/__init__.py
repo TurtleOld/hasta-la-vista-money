@@ -34,6 +34,12 @@ from hasta_la_vista_money.finance_account.services.bank_calculators import (
 from hasta_la_vista_money.finance_account.services.bank_service import (
     BankService,
 )
+from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
+    invalidate_coverage_for_account_life_change,
+    invalidate_coverage_for_movement_change,
+    invalidate_coverage_for_row_problem,
+    invalidate_coverage_for_upload_problem,
+)
 from hasta_la_vista_money.finance_account.services.coverage_service import (
     AccountCoverageService,
     CoverageInterval,
@@ -108,4 +114,8 @@ __all__ = [
     'card_debt_for_balance',
     'compute_total_credit_debt',
     'create_bank_calculator',
+    'invalidate_coverage_for_account_life_change',
+    'invalidate_coverage_for_movement_change',
+    'invalidate_coverage_for_row_problem',
+    'invalidate_coverage_for_upload_problem',
 ]

@@ -62,6 +62,18 @@ class AccountCoverageViewTest(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('100.00'))
 
+    def test_manual_coverage_is_allowed_for_bank_debit(self):
+        response = self._post(
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        confirmation = AccountCoverageConfirmation.objects.get()
+        self.assertEqual(
+            confirmation.source,
+            AccountCoverageConfirmation.Source.MANUAL,
+        )
+
     def test_foreign_account_is_not_confirmed(self):
         response = self._post(account=self.foreign.pk)
 

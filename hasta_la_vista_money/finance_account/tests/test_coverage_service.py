@@ -328,10 +328,15 @@ class CoverageServiceTest(TestCase):
         )
         self.assertIsNone(confirmation.statement_upload)
 
-    def test_manual_source_rejected_for_bank_account(self) -> None:
-        with self.assertRaises(ValidationError):
-            self._confirm(
-                date(2026, 1, 1),
-                date(2026, 1, 31),
-                source=AccountCoverageConfirmation.Source.MANUAL,
-            )
+    def test_manual_source_allowed_for_bank_debit_account(self) -> None:
+        confirmation = self._confirm(
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+
+        self.assertEqual(
+            confirmation.source,
+            AccountCoverageConfirmation.Source.MANUAL,
+        )
+        self.assertIsNone(confirmation.statement_upload)

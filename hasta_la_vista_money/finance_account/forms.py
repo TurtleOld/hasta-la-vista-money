@@ -711,15 +711,6 @@ class AccountCoverageForm(TailwindFormMixin, Form):
                     _('Ручное покрытие не ссылается на выписку'),
                 )
             if (
-                source == AccountCoverageConfirmation.Source.MANUAL
-                and account is not None
-                and account.type_account != constants.ACCOUNT_TYPE_CASH
-            ):
-                self.add_error(
-                    'source',
-                    _('Ручное покрытие доступно только для наличных'),
-                )
-            if (
                 upload is not None
                 and account is not None
                 and upload.account_id != account.pk

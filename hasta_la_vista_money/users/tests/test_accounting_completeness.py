@@ -28,9 +28,15 @@ from hasta_la_vista_money.users.repositories.accounting_completeness_repository 
 from hasta_la_vista_money.users.services.accounting_completeness import (
     AccountingCompletenessService,
 )
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    FinalReconciliationBlock,
+)
 
 
 class _UnexplainedDiscrepancyProvider:
+    def __init__(self, upload_id: int) -> None:
+        self.upload_id = upload_id
+
     def final_reconciliation_block(
         self,
         *,
@@ -38,13 +44,12 @@ class _UnexplainedDiscrepancyProvider:
         account_ids: list[int],
         period_start: date,
         period_end: date,
-    ) -> object:
+    ) -> FinalReconciliationBlock:
         del user_id, account_ids, period_start, period_end
-        return type(
-            'Block',
-            (),
-            {'reason': 'balance_unexplained_mismatch'},
-        )()
+        return FinalReconciliationBlock(
+            upload_ids=(self.upload_id,),
+            reasons=('balance_unexplained_mismatch',),
+        )
 
 
 class AccountingCompletenessTest(TestCase):
@@ -375,22 +380,84 @@ class AccountingCompletenessTest(TestCase):
         self.assertTrue(result.can_finalize)
 
     def test_unexplained_discrepancy_blocks_despite_manual_coverage(self):
-        self._upload(
+        upload = self._upload(
             traceability_version=1,
             verified_at=timezone.now(),
         )
-        self._confirm()
+        self._confirm(
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
 
         result = self._assess(
-            balance_provider=_UnexplainedDiscrepancyProvider(),
+            balance_provider=_UnexplainedDiscrepancyProvider(upload.pk),
         )
 
         self.assertFalse(result.can_finalize)
+        self.assertTrue(result.accounts[0].balance.blocked)
         self.assertIn('balance_discrepancy', result.blockers)
         self.assertIn(
             'balance_discrepancy',
             [warning.code for warning in result.warnings],
         )
+
+    def test_only_the_account_with_the_blocking_upload_is_blocked(self):
+        blocked_upload = self._upload(
+            traceability_version=1,
+            verified_at=timezone.now(),
+        )
+        second = Account.objects.create(
+            user=self.user,
+            name_account='Чистый счёт',
+            currency='RUB',
+        )
+        clean_upload = self._upload(
+            account=second,
+            traceability_version=1,
+            verified_at=timezone.now(),
+        )
+        self._confirm()
+        self._confirm(account=second)
+
+        result = self._assess(
+            balance_provider=_UnexplainedDiscrepancyProvider(
+                blocked_upload.pk,
+            ),
+        )
+        blocked, clean = result.accounts
+
+        self.assertFalse(result.can_finalize)
+        self.assertTrue(blocked.balance.blocked)
+        self.assertFalse(blocked.can_finalize)
+        self.assertFalse(clean.balance.blocked)
+        self.assertTrue(clean.can_finalize)
+        self.assertNotEqual(clean_upload.pk, blocked_upload.pk)
+        self.assertNotIn(
+            'balance_discrepancy',
+            [
+                warning.code
+                for warning in result.warnings
+                if warning.account_id == clean.account_id
+            ],
+        )
+
+    def test_manual_bank_debit_coverage_is_allowed(self):
+        upload = self._upload(
+            traceability_version=1,
+            verified_at=timezone.now(),
+        )
+        confirmation = self._confirm(
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+
+        result = self._assess(balance_provider=None)
+
+        self.assertEqual(
+            confirmation.source,
+            AccountCoverageConfirmation.Source.MANUAL,
+        )
+        self.assertTrue(result.accounts[0].coverage.fully_covered)
+        self.assertTrue(result.accounts[0].can_finalize)
+        self.assertIsNotNone(upload.pk)
 
     def test_owner_only_accounts(self):
         foreign = Account.objects.create(

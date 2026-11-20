@@ -24,6 +24,9 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
+    invalidate_coverage_for_row_problem,
+)
 from hasta_la_vista_money.finance_account.validators import (
     validate_same_currency,
 )
@@ -440,6 +443,10 @@ class StatementMarkupService:
                 BankStatementRow.Decision.AWAITING_MARKUP,
                 '',
                 user_id,
+            )
+            invalidate_coverage_for_row_problem(
+                row,
+                reason='row_deferred',
             )
         else:
             self._post_transaction_decision(row, upload, category_id)

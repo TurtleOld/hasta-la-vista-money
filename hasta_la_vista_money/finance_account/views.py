@@ -77,6 +77,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.coverage_invalidation import (  # noqa: E501
+    invalidate_coverage_for_account_life_change,
+)
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.system.models import AuditOperationKind
@@ -2199,9 +2202,18 @@ class ChangeAccountView(
             if not isinstance(request.user, User):
                 raise TypeError('User must be authenticated')
             account.user = request.user
+            previous_life = Account.objects.only(
+                'opened_on',
+                'closed_on',
+            ).get(pk=account.pk)
             with audit_operation(kind=AuditOperationKind.ACCOUNT_EDIT):
                 # Only form fields: a concurrent balance change must survive.
                 account.save(update_fields=[*form.fields, 'updated_at'])
+            invalidate_coverage_for_account_life_change(
+                account,
+                previous_opened_on=previous_life.opened_on,
+                previous_closed_on=previous_life.closed_on,
+            )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(str(self.get_success_url()))
         except ValidationError as e:
