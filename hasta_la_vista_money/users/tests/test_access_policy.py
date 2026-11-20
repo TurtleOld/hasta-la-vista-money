@@ -92,6 +92,8 @@ OWN_ONLY_SURFACES = frozenset(
         'finance_account:api_list',
         'finance_account:archive',
         'finance_account:change',
+        'finance_account:accounting_control',
+        'finance_account:coverage_confirm',
         'finance_account:create',
         'finance_account:delete_account',
         'finance_account:quick_bank',

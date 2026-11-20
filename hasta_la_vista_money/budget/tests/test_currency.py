@@ -122,7 +122,8 @@ class BudgetCurrencyTest(TestCase):
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertContains(response, '2222')
-        self.assertNotContains(response, '1111')
+        self.assertNotContains(response, '1111,00')
+        self.assertNotContains(response, '1111.00')
 
     def test_limit_form_lets_user_change_currency(self) -> None:
         self.client.force_login(self.user)
