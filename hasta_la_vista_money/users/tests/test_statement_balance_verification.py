@@ -1033,6 +1033,159 @@ class ExactBalanceTrustTests(StatementBalanceVerificationTestCase):
         )
 
 
+class MarkupTransferInvalidationTests(StatementBalanceVerificationTestCase):
+    OTHER_NUMBER = '40817810000000000002'
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            currency='RUB',
+            balance=Decimal('500.00'),
+            account_number=self.OTHER_NUMBER,
+        )
+
+    def _coverage(self, account: Account) -> AccountCoverageService:
+        coverage = AccountCoverageService(
+            repository=AccountCoverageRepository(),
+        )
+        coverage.confirm(
+            owner=self.user,
+            account=account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+            source=AccountCoverageConfirmation.Source.MANUAL,
+        )
+        return coverage
+
+    def _gaps(
+        self,
+        coverage: AccountCoverageService,
+        account: Account,
+    ) -> list[tuple[date, date]]:
+        summary = coverage.summary(
+            account=account,
+            period_start=date(2026, 4, 1),
+            period_end=date(2026, 4, 30),
+        )
+        return [(gap.start, gap.end) for gap in summary.gaps]
+
+    def _retained_check(
+        self,
+        account: Account,
+        *,
+        status: str = BankStatementUpload.BalanceVerificationStatus.VERIFIED,
+        mismatch: bool = False,
+    ) -> BankStatementUpload:
+        upload = self._upload(
+            account=account,
+            statement_closing_balance=Decimal('1000.00'),
+        )
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            balance_verification_status=status,
+            balance_verified_at=timezone.now(),
+            balance_needs_recheck=False,
+            balance_unexplained_mismatch=mismatch,
+        )
+        return upload
+
+    def _transfer_row(
+        self,
+        day: date,
+        upload: BankStatementUpload,
+    ) -> BankStatementRow:
+        return BankStatementRow.objects.create(
+            upload=upload,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            kind='own_c2c',
+            counterparty_account=self.OTHER_NUMBER,
+            amount=Decimal('100.00'),
+            transaction_date=datetime(day.year, day.month, day.day, tzinfo=UTC),
+            bank_calendar_date=day,
+            date_precision=BankStatementRow.DatePrecision.DAY,
+            description='Перевод себе',
+            source_row_position=1,
+        )
+
+    def test_post_transfer_stales_both_checks_and_coverage(self) -> None:
+        own_coverage = self._coverage(self.account)
+        other_coverage = self._coverage(self.other)
+        own_check = self._retained_check(self.account)
+        other_check = self._retained_check(self.other)
+        row = self._transfer_row(date(2026, 4, 9), self._upload())
+        service = ApplicationContainer().users.statement_markup_service()
+
+        decided = service.post_transfer(row.pk, self.user.pk, None)
+
+        own_check.refresh_from_db()
+        other_check.refresh_from_db()
+        self.assertTrue(own_check.balance_needs_recheck)
+        self.assertTrue(other_check.balance_needs_recheck)
+        self.assertEqual(
+            self._gaps(own_coverage, self.account),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+        self.assertEqual(
+            self._gaps(other_coverage, self.other),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+        self.assertIsNotNone(decided.transfer_id)
+        self.assertIsNotNone(decided.decided_at)
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=decided.transfer_id).exists(),
+        )
+
+    def test_post_transfer_coverage_without_verified_uploads(self) -> None:
+        own_coverage = self._coverage(self.account)
+        other_coverage = self._coverage(self.other)
+        upload = self._upload()
+        row = self._transfer_row(date(2026, 4, 9), upload)
+        service = ApplicationContainer().users.statement_markup_service()
+
+        service.post_transfer(row.pk, self.user.pk, None)
+
+        self.assertEqual(
+            self._gaps(own_coverage, self.account),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+        self.assertEqual(
+            self._gaps(other_coverage, self.other),
+            [(date(2026, 4, 9), date(2026, 4, 9))],
+        )
+
+    def test_post_transfer_after_check_keeps_checks_fresh_and_keeps_blocker(
+        self,
+    ) -> None:
+        own_coverage = self._coverage(self.account)
+        other_coverage = self._coverage(self.other)
+        own_check = self._retained_check(self.account)
+        other_check = self._retained_check(
+            self.other,
+            status=BankStatementUpload.BalanceVerificationStatus.MISMATCH,
+            mismatch=True,
+        )
+        row = self._transfer_row(date(2026, 4, 11), self._upload())
+        service = ApplicationContainer().users.statement_markup_service()
+
+        service.post_transfer(row.pk, self.user.pk, None)
+
+        own_check.refresh_from_db()
+        other_check.refresh_from_db()
+        self.assertFalse(own_check.balance_needs_recheck)
+        self.assertFalse(other_check.balance_needs_recheck)
+        self.assertTrue(other_check.balance_unexplained_mismatch)
+        self.assertEqual(
+            self._gaps(own_coverage, self.account),
+            [(date(2026, 4, 11), date(2026, 4, 11))],
+        )
+        self.assertEqual(
+            self._gaps(other_coverage, self.other),
+            [(date(2026, 4, 11), date(2026, 4, 11))],
+        )
+
+
 class DirectStatementWriterInvalidationTests(
     StatementBalanceVerificationTestCase,
 ):

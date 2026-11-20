@@ -722,7 +722,7 @@ class StatementMarkupService:
             check_funds=False,
         )
         moment, bank_calendar_date = statement_row_movement_date(row)
-        return self._transfer_log_repository.create_log(
+        transfer = self._transfer_log_repository.create_log(
             user=upload.user,
             from_account=locked[source.pk],
             to_account=locked[target.pk],
@@ -731,6 +731,16 @@ class StatementMarkupService:
             bank_calendar_date=bank_calendar_date,
             notes=row.description,
         )
+        changed_at = bank_calendar_date or moment
+        note_financial_change(
+            coverage_service=self._coverage_service,
+            changes=[
+                (locked[source.pk], changed_at),
+                (locked[target.pk], changed_at),
+            ],
+            moments=[changed_at],
+        )
+        return transfer
 
     @staticmethod
     def _require_markup_row(row: BankStatementRow) -> None:
