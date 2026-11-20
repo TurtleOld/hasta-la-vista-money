@@ -165,6 +165,7 @@ def get_cached_category_tree(
 
 def collect_info_receipt(
     user: User,
+    *,
     users: Iterable[User] | None = None,
     start: datetime | None = None,
     end: datetime | None = None,

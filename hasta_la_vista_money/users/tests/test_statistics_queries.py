@@ -149,9 +149,9 @@ class RaiffeisenScheduleCallsTest(TestCase):
             month,
             {month: Decimal('100.00')},
             defaultdict(lambda: defaultdict(Decimal)),
-            card,
-            account_service,
-            datetime(2026, 4, 1, tzinfo=UTC),
+            card=card,
+            account_service=account_service,
+            now=datetime(2026, 4, 1, tzinfo=UTC),
         )
 
         self.assertEqual(schedule_mock.call_count, 1)
@@ -198,10 +198,10 @@ class CategoryDrilldownTest(TestCase):
         return _category_drilldown_transactions(
             TransactionType.EXPENSE,
             [self.user],
-            StatisticsFilters(),
-            date(2026, 1, 1),
-            date(2026, 1, 31),
-            ids,
+            stats_filter=StatisticsFilters(),
+            start=date(2026, 1, 1),
+            end=date(2026, 1, 31),
+            category_ids=ids,
         )
 
     def test_children_are_included_and_limited_to_page_size(self) -> None:

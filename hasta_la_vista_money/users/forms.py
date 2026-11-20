@@ -158,8 +158,8 @@ class UpdateUserForm(ModelForm[User]):
         """Keep the current value when an older form omits the field."""
         value = self.cleaned_data.get('statement_retention_days')
         if value is None:
-            return self.instance.statement_retention_days
-        return value
+            return int(self.instance.statement_retention_days)
+        return int(value)
 
     def clean_timezone_name(self) -> str:
         """Reject any value outside the canonical IANA timezone list."""

@@ -63,6 +63,7 @@ class ExpenseInfoDict(TypedDict):
 
 def collect_info_income(
     user: User,
+    *,
     users: Iterable[User] | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
@@ -109,6 +110,7 @@ def collect_info_income(
 
 def collect_info_expense(
     user: User,
+    *,
     users: Iterable[User] | None = None,
     start: datetime | None = None,
     end: datetime | None = None,

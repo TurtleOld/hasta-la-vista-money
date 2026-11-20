@@ -203,6 +203,7 @@ def _build_budget_progress(
     category_id: int | None,
     fact: Decimal,
     limit: Decimal,
+    *,
     alert_threshold: int,
 ) -> BudgetProgressDict:
     percent = float(

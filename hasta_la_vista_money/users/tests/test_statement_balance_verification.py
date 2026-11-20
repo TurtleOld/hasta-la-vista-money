@@ -65,6 +65,9 @@ from hasta_la_vista_money.users.repositories.statement_balance_verification_repo
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
 )
+from hasta_la_vista_money.users.services.statement_balance_staleness import (
+    mark_balance_checks_stale,
+)
 from hasta_la_vista_money.users.services.statement_balance_verification import (
     REASON_AVAILABLE_CREDIT_UNKNOWN,
     REASON_BANK_BALANCE_MISSING,
@@ -80,7 +83,6 @@ from hasta_la_vista_money.users.services.statement_balance_verification import (
     STATUS_UNKNOWN,
     STATUS_VERIFIED,
     StatementBalanceVerificationService,
-    mark_balance_checks_stale,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupService,

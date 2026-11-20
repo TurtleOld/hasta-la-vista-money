@@ -108,8 +108,8 @@ class ReceiptCreatorService:
         product_category_repository: ProductCategoryRepositoryProtocol,
         product_repository: ProductRepositoryProtocol,
         receipt_repository: ReceiptRepositoryProtocol,
-        seller_repository: SellerRepositoryProtocol,
         *,
+        seller_repository: SellerRepositoryProtocol,
         coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         """Initialize ReceiptCreatorService.

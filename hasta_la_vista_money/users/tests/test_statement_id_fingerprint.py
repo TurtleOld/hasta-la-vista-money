@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, override_settings
@@ -307,6 +308,6 @@ class StatementIdFingerprintKeyringGuardTest(SimpleTestCase):
     def test_non_string_key_id_rejected(self) -> None:
         with self.assertRaises(ImproperlyConfigured):
             StatementIdFingerprintService(
-                keys={1: KEY_ONE},
+                keys=cast('dict[str, bytes]', {1: KEY_ONE}),
                 active_key_id='test-key-1',
             )

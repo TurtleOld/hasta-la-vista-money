@@ -4196,8 +4196,10 @@ class TestSberbankParser(TestCase):
                     '12 851,05',
                 ],
                 [
-                    '03.04.2026\n311925\n'
-                    'Moscow Aliexpress. Операция по карте ****1234',
+                    (
+                        '03.04.2026\n311925\n'
+                        'Moscow Aliexpress. Операция по карте ****1234'
+                    ),
                     '',
                     '',
                 ],
@@ -4214,8 +4216,10 @@ class TestSberbankParser(TestCase):
         parser = self._make_parser()
         row = pd.Series(
             [
-                '03.04.2026\n311925\n'
-                'Moscow Aliexpress. Операция по карте ****1234',
+                (
+                    '03.04.2026\n311925\n'
+                    'Moscow Aliexpress. Операция по карте ****1234'
+                ),
                 '',
                 '',
             ],

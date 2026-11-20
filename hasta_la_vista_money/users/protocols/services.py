@@ -79,6 +79,7 @@ class UserDetailedStatisticsServiceProtocol(Protocol):
         self,
         user: User,
         container: ApplicationContainer,
+        *,
         stats_filter: StatisticsFilters | None = None,
         page_number: int = 1,
         income_expense_page_number: int = 1,

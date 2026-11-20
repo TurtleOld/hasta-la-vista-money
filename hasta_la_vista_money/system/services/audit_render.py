@@ -477,7 +477,7 @@ def _render_change(
             attname,
             audit_field,
             old_raw,
-            context,
+            context=context,
             old_side=True,
         ),
         new=_render_side(
@@ -486,7 +486,7 @@ def _render_change(
             attname,
             audit_field,
             new_raw,
-            context,
+            context=context,
             old_side=False,
         ),
     )
@@ -498,8 +498,8 @@ def _render_side(
     attname: str,
     audit_field: AuditField,
     value: Any,
-    context: _ReadContext,
     *,
+    context: _ReadContext,
     old_side: bool,
 ) -> str | None:
     if isinstance(value, _Absent):
@@ -512,7 +512,7 @@ def _render_side(
         attname,
         audit_field,
         value,
-        context,
+        context=context,
         old_side=old_side,
     )
 
@@ -523,8 +523,8 @@ def _format_value(
     attname: str,
     audit_field: AuditField,
     value: Any,
-    context: _ReadContext,
     *,
+    context: _ReadContext,
     old_side: bool,
 ) -> str:
     value_format = audit_field.format

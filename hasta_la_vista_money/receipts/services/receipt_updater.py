@@ -65,8 +65,8 @@ class ReceiptUpdaterService:
         product_repository: ProductRepositoryProtocol,
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
-        category_correction_service: ProductCategoryCorrectionServiceProtocol,
         *,
+        category_correction_service: ProductCategoryCorrectionServiceProtocol,
         coverage_service: 'AccountCoverageServiceProtocol',
     ) -> None:
         """Initialize ReceiptUpdaterService.

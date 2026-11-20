@@ -76,9 +76,9 @@ class TransferService:
         to_account: Account,
         amount: Decimal,
         user: User,
+        *,
         exchange_date: datetime | None = None,
         notes: str | None = None,
-        *,
         statement_row_id: int | None = None,
     ) -> TransferMoneyLog:
         """Transfer money between accounts with validation and logging.

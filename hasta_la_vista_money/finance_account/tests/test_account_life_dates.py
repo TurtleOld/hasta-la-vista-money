@@ -45,6 +45,8 @@ class AccountLifeDatesModelTest(TestCase):
             name_account='Создан сейчас',
             currency='RUB',
         )
+        if account.created_at is None:
+            self.fail('created_at is missing')
         self.assertEqual(account.created_at.date(), timezone.now().date())
         self.assertIsNone(account.opened_on)
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -276,10 +276,11 @@ class RepeatStatementUploadTestCase(TestCase):
         self.assertEqual(pending.amount, Decimal('100.00'))
         self.assertEqual(pending.description, 'Восстановленная покупка')
         self.assertIsNone(pending.data_cleaned_at)
-        self.assertGreater(pending.data_expires_at, timezone.now())
+        pending_expires_at = cast('datetime', pending.data_expires_at)
+        self.assertGreater(pending_expires_at, timezone.now())
         self.assertLess(
             abs(
-                pending.data_expires_at - (timezone.now() + timedelta(days=7)),
+                pending_expires_at - (timezone.now() + timedelta(days=7)),
             ),
             timedelta(minutes=1),
         )
@@ -522,8 +523,7 @@ class RepeatStatementUploadTestCase(TestCase):
 
         row.refresh_from_db()
         upload.refresh_from_db()
-        deadline = row.data_expires_at
-        self.assertIsNotNone(deadline)
+        deadline = cast('datetime', row.data_expires_at)
         service = BankStatementRetentionService(
             BankStatementReconciliationService(StatementRowRepository()),
         )
@@ -637,7 +637,10 @@ class RepeatStatementUploadTestCase(TestCase):
         linked.refresh_from_db()
         upload.refresh_from_db()
         self.assertIsNone(matched.data_cleaned_at)
-        self.assertGreater(matched.data_expires_at, timezone.now())
+        self.assertGreater(
+            cast('datetime', matched.data_expires_at),
+            timezone.now(),
+        )
         self.assertEqual(matched.amount, Decimal('100.00'))
         self.assertEqual(matched.description, 'Восстановлено')
         self.assertEqual(matched.source_row_position, 1)

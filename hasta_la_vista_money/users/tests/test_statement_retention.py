@@ -309,7 +309,7 @@ class StatementRetentionCleanupTest(TestCase):
     def _cleanup(self) -> int:
         container = ApplicationContainer()
         service = container.users.bank_statement_retention_service()
-        return service.cleanup_expired(self.upload.expires_at)
+        return int(service.cleanup_expired(self.upload.expires_at))
 
     def _scrubbed(self, row: BankStatementRow) -> None:
         self.assertIsNone(row.transaction_type)
@@ -1121,6 +1121,8 @@ class StatementRetentionConcurrencyTest(TransactionTestCase):
         self.assertEqual(self.row.amount, Decimal('100.00'))
         self.assertEqual(self.row.description, 'ПЯТЁРОЧКА')
         self.assertIsNone(self.row.data_cleaned_at)
+        if self.row.data_expires_at is None:
+            self.fail('data_expires_at is missing')
         self.assertGreater(self.row.data_expires_at, moment)
         self.assertTrue(row_has_bank_data(self.row))
         self.assertIsNone(self.upload.retention_cleaned_at)

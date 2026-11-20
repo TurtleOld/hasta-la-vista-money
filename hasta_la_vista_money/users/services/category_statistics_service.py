@@ -211,18 +211,18 @@ def _top_categories_with_comparison(
     children = _category_children_totals(
         type_value,
         users,
-        stats_filter,
-        start,
-        end,
-        category_ids,
+        stats_filter=stats_filter,
+        start=start,
+        end=end,
+        category_ids=category_ids,
     )
     transactions = _category_drilldown_transactions(
         type_value,
         users,
-        stats_filter,
-        start,
-        end,
-        category_ids,
+        stats_filter=stats_filter,
+        start=start,
+        end=end,
+        category_ids=category_ids,
     )
     for item in current:
         total = float(item['total'] or 0)
@@ -243,6 +243,7 @@ def _top_categories_with_comparison(
 def _category_children_totals(
     type_value: str,
     users: Iterable[User],
+    *,
     stats_filter: StatisticsFilters,
     start: date,
     end: date,
@@ -278,6 +279,7 @@ def _category_children_totals(
 def _category_drilldown_transactions(
     type_value: str,
     users: Iterable[User],
+    *,
     stats_filter: StatisticsFilters,
     start: date,
     end: date,

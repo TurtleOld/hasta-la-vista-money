@@ -1,7 +1,8 @@
 """Independent completeness assessment for selected accounts and dates."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from django.core.exceptions import PermissionDenied
 from django.test import TestCase
@@ -143,7 +144,7 @@ class AccountingCompletenessTest(TestCase):
             statement_upload=upload,
         )
 
-    def _assess(self, **kwargs: object):
+    def _assess(self, **kwargs: Any) -> Any:
         return self.service.assess(
             owner=self.user,
             account_ids=kwargs.get('account_ids'),
@@ -534,6 +535,3 @@ class AccountingCompletenessTest(TestCase):
 
         self.assertFalse(account.coverage_required)
         self.assertTrue(account.can_finalize)
-
-
-UTC = timezone.UTC

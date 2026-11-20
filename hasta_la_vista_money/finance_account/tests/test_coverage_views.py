@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -36,7 +37,7 @@ class AccountCoverageViewTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def _post(self, **overrides: object):
+    def _post(self, **overrides: object) -> Any:
         data: dict[str, object] = {
             'account': self.account.pk,
             'period_start': '2026-01-01',

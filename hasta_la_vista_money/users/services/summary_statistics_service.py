@@ -359,6 +359,7 @@ def _expense_moving_average_by_month(
 def _build_chart(
     users: Iterable[User],
     stats_filter: StatisticsFilters,
+    *,
     start: date,
     end: date,
     forecast: CashflowForecastDict | None = None,
@@ -711,6 +712,7 @@ def _build_single_card_month(
     month_date: date,
     expenses_dict: dict[date, Decimal],
     receipts_dict: dict[date, dict[int, Decimal]],
+    *,
     card: Account,
     account_service: AccountServiceProtocol,
     now: datetime,
@@ -877,9 +879,9 @@ def _card_months_block(
             month_date,
             expenses_dict,
             receipts_dict,
-            card,
-            account_service,
-            now,
+            card=card,
+            account_service=account_service,
+            now=now,
         )
         month_data['cash_debt'] = cash_by_month.get(month_date, Decimal(0))
         months.append(month_data)
@@ -1636,8 +1638,8 @@ def _build_statistics_aggregates(
     chart_combined = _build_chart(
         users,
         stats_filter,
-        period_start,
-        period_end,
+        start=period_start,
+        end=period_end,
         forecast=cashflow_forecast,
         months_data=months_data,
     )

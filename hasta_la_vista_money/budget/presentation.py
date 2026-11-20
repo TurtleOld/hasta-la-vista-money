@@ -19,6 +19,7 @@ def build_budget_matrix_context(
     rows: list[ExpenseDataRowDict] | list[IncomeDataRowDict],
     total_fact: list[int] | list[Decimal],
     total_plan: list[int] | list[Decimal],
+    *,
     current_date: date | None = None,
     selected_range: str = '6',
 ) -> dict[str, Any]:

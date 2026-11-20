@@ -35,6 +35,7 @@ def _aware_datetime(
     day: int,
     hour: int,
     minute: int,
+    *,
     second: int,
 ) -> datetime:
     return datetime(
@@ -64,8 +65,8 @@ class TestSberbankCalculator(TestCase):
             ),
         )
         self.calculator = SberbankCalculator()
-        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
-        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, second=0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, second=59)
 
     def test_calculate_grace_period(self) -> None:
         """Test grace period calculation for Sberbank."""
@@ -126,12 +127,12 @@ class TestRaiffeisenbankCalculator(TestCase):
             transaction_repository=self.transaction_repository,
             receipt_repository=self.receipt_repository,
         )
-        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
-        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, second=0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, second=59)
 
     def test_calculate_grace_period_with_first_purchase(self) -> None:
         """Test grace period calculation with first purchase."""
-        first_purchase = _aware_datetime(2024, 1, 5, 12, 0, 0)
+        first_purchase = _aware_datetime(2024, 1, 5, 12, 0, second=0)
 
         mock_expense = MagicMock()
         mock_expense.date = first_purchase
@@ -201,8 +202,8 @@ class TestDefaultBankCalculator(TestCase):
             AccountFactory(user=self.user, bank=bank),
         )
         self.calculator = DefaultBankCalculator()
-        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
-        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, second=0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, second=59)
 
     def test_calculate_grace_period(self) -> None:
         """Test default grace period calculation."""
