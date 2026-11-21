@@ -4554,6 +4554,58 @@ class TestSberbankParser(TestCase):
         self.assertEqual(len(transactions), 1)
         self.assertIsNone(transactions[0]['source_ref'])
 
+    def test_parse_table_keeps_missing_date_operation(self) -> None:
+        """A potential operation with a broken bank date stays visible.
+
+        The row before the first readable date is not skipped: its readable
+        amount and auth hint become a parse fragment, and the following
+        valid operation is still parsed.
+        """
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['', 'Покупка', '1 200,00 ₽', '10 000,00 ₽'],
+                ['19.02.2026 / 222222', 'MAGNIT', '', ''],
+                ['20.02.2026 10:00', 'Транспорт', '73,00 ₽', '9 927,00 ₽'],
+                ['20.02.2026 / 333333', 'MOSCOW STRELKA', '', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 2)
+        broken = transactions[0]
+        self.assertIsNone(broken['date'])
+        self.assertEqual(broken['amount'], Decimal('-1200.00'))
+        self.assertEqual(broken['source_ref'], '222222')
+        self.assertTrue(broken['parse_issue'])
+        self.assertEqual(transactions[1]['amount'], Decimal('-73.00'))
+
+    def test_parse_table_broken_pair_does_not_swallow_next_operation(
+        self,
+    ) -> None:
+        """A row A without its row B does not consume the next row A."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '01.04.2026\n16:51\nПрочие расходы',
+                    '2 958,00',
+                    '12 851,05',
+                ],
+                ['02.04.2026\n10:00\nТранспорт', '73,00', '12 778,05'],
+                ['02.04.2026\n555555\nMOSCOW STRELKA', '', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(
+            [t['amount'] for t in transactions],
+            [Decimal('-2958.00'), Decimal('-73.00')],
+        )
+
     def test_authcode_without_date_is_not_an_identity(self) -> None:
         """A bare auth code without bank date/context is not a reference."""
         parser = self._make_parser()
