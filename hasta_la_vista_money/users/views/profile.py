@@ -20,7 +20,6 @@ from django.http import (
 from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import TemplateView, UpdateView
 
@@ -232,39 +231,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                     request=self.request,
                 ).items(),
             )
-            today = timezone.now().date()
-            period_start, period_end = statistics_filter.date_range(today)
-            own_accounts = [
-                account
-                for account in context.get('accounts', ())
-                if account.user_id == user.pk
-            ]
-            if own_accounts:
-                completeness = (
-                    request_with_container.container.users.accounting_completeness_service()
-                ).assess(
-                    owner=user,
-                    account_ids=[account.pk for account in own_accounts],
-                    period_start=period_start,
-                    period_end=period_end,
-                )
-                alerts = list(context.get('statistics_alerts', ()))
-                alerts.extend(
-                    {
-                        'type': 'warning',
-                        'title': _('Контроль учёта'),
-                        'message': warning.message,
-                    }
-                    for warning in completeness.warnings
-                    if warning.code
-                    in {
-                        'coverage_gap',
-                        'processing_not_proven',
-                        'unresolved_problems',
-                        'balance_discrepancy',
-                    }
-                )
-                context['statistics_alerts'] = alerts[: constants.TEN]
         return context
 
 

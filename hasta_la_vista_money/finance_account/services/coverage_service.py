@@ -9,19 +9,24 @@ than in a separate interval engine.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
     AccountCoverageConfirmation,
 )
 from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_bank_day,
+)
 
 if TYPE_CHECKING:
+    from datetime import date, datetime
+
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories.account_coverage_repository import (  # noqa: E501
         AccountCoverageRepository,
@@ -31,8 +36,6 @@ if TYPE_CHECKING:
         BankStatementUpload,
         User,
     )
-
-ONE_DAY = timedelta(days=1)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,7 +55,7 @@ class CoverageInterval:
     source: str
     confirmation_id: int | None = None
     statement_upload_id: int | None = None
-    confirmed_at: object | None = None
+    confirmed_at: datetime | None = None
     recheck_reason: str = ''
 
 
@@ -94,7 +97,7 @@ def _merge_windows(
     merged = [ordered[0]]
     for window in ordered[1:]:
         current = merged[-1]
-        if window.start <= current.end + ONE_DAY:
+        if window.start <= current.end + constants.ONE_DAY_TIMEDELTA:
             merged[-1] = DateWindow(
                 start=current.start,
                 end=max(current.end, window.end),
@@ -116,10 +119,10 @@ def _gap_windows(
             gaps.append(
                 DateWindow(
                     start=cursor,
-                    end=window.start - ONE_DAY,
+                    end=window.start - constants.ONE_DAY_TIMEDELTA,
                 ),
             )
-        cursor = max(cursor, window.end + ONE_DAY)
+        cursor = max(cursor, window.end + constants.ONE_DAY_TIMEDELTA)
     if cursor <= period_end:
         gaps.append(DateWindow(start=cursor, end=period_end))
     return tuple(gaps)
@@ -137,8 +140,8 @@ def _boundary_window(
         raise ValueError('unknown boundary cannot be expressed exactly')
     low, high = sorted((before, after))
     if opening:
-        return DateWindow(start=low, end=high - ONE_DAY)
-    return DateWindow(start=low + ONE_DAY, end=high)
+        return DateWindow(start=low, end=high - constants.ONE_DAY_TIMEDELTA)
+    return DateWindow(start=low + constants.ONE_DAY_TIMEDELTA, end=high)
 
 
 def _life_change_windows(
@@ -278,7 +281,7 @@ class AccountCoverageService:
             )
 
         windows = [
-            window
+            (item, window)
             for item in active
             if (
                 window := _clip(
@@ -290,13 +293,12 @@ class AccountCoverageService:
             )
             is not None
         ]
-        merged = _merge_windows(windows)
+        merged = _merge_windows([window for _, window in windows])
         gaps = _gap_windows(applicable.start, applicable.end, merged)
         intervals = tuple(
             self._interval_for_window(
                 window,
-                active=active,
-                windows=windows,
+                covered=windows,
             )
             for window in merged
         )
@@ -381,14 +383,20 @@ class AccountCoverageService:
         own = row.upload.account
         if row.upload.user_id != own.user_id:
             return 0
-        exact_day = (
-            row.bank_calendar_date if row.date_precision != 'datetime' else None
-        )
+        exact_day = statement_row_bank_day(row)
+        if exact_day is not None:
+            affected_start: date | None = exact_day
+            affected_end: date | None = exact_day
+        else:
+            # An exact day is not proved: recheck the statement's own period,
+            # never the account's whole history.
+            affected_start = row.upload.statement_period_start
+            affected_end = row.upload.statement_period_end
         affected = self.invalidate(
             owner=own.user,
             account=own,
-            affected_start=exact_day,
-            affected_end=exact_day,
+            affected_start=affected_start,
+            affected_end=affected_end,
             reason=reason,
         )
         return len(affected)
@@ -422,7 +430,7 @@ class AccountCoverageService:
         *,
         account: Account,
         changed_on: date | None,
-        reason: str = 'movement_changed',
+        reason: str = constants.STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED,
     ) -> int:
         """Recheck one exact bank day, or the whole period if it is unknown."""
         affected = self.invalidate(
@@ -518,7 +526,7 @@ class AccountCoverageService:
             self.repository.create(
                 account=account,
                 period_start=confirmation.period_start,
-                period_end=overlap_start - ONE_DAY,
+                period_end=overlap_start - constants.ONE_DAY_TIMEDELTA,
                 source=confirmation.source,
                 statement_upload=confirmation.statement_upload,
                 confirmed_by=confirmation.confirmed_by,
@@ -526,7 +534,7 @@ class AccountCoverageService:
         if overlap_end < confirmation.period_end:
             self.repository.create(
                 account=account,
-                period_start=overlap_end + ONE_DAY,
+                period_start=overlap_end + constants.ONE_DAY_TIMEDELTA,
                 period_end=confirmation.period_end,
                 source=confirmation.source,
                 statement_upload=confirmation.statement_upload,
@@ -540,10 +548,10 @@ class AccountCoverageService:
     def _interval_for_window(
         merged: DateWindow,
         *,
-        active: list[AccountCoverageConfirmation],
-        windows: list[DateWindow],
+        covered: list[tuple[AccountCoverageConfirmation, DateWindow]],
     ) -> CoverageInterval:
-        for confirmation, window in zip(active, windows, strict=False):
+        """Return the interval with its own confirmation, never a neighbour."""
+        for confirmation, window in covered:
             if window.start <= merged.end and window.end >= merged.start:
                 return CoverageInterval(
                     start=merged.start,

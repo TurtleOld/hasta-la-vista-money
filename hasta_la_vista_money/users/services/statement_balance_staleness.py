@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
     StatementBalanceVerificationRepository,
@@ -15,8 +16,6 @@ from hasta_la_vista_money.users.repositories.statement_balance_verification_repo
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
-
-REASON_MOVEMENT_CHANGED = 'movement_changed'
 
 
 def mark_balance_checks_stale(
@@ -50,7 +49,9 @@ def mark_balance_checks_stale(
         return 0
     BankStatementUpload.objects.filter(pk__in=stale_ids).update(
         balance_needs_recheck=True,
-        balance_stale_reason=REASON_MOVEMENT_CHANGED,
+        balance_stale_reason=(
+            constants.STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED
+        ),
     )
     return len(stale_ids)
 

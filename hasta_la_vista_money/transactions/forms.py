@@ -42,7 +42,6 @@ FORM_CONTROL_CLASS = (
     'focus:ring-0 dark:border-gray-600 '
     'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400'
 )
-BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
 
 
 class TransactionForm(
@@ -113,7 +112,7 @@ class TransactionForm(
             self.fields['date'] = DateTimeField(
                 label=_('Дата операции'),
                 widget=DateInput(
-                    format=BANK_DAY_INPUT_FORMAT,
+                    format=constants.HTML5_DATE_WIRE_FORMAT,
                     attrs={
                         'type': 'date',
                         'class': FORM_CONTROL_CLASS,
@@ -122,7 +121,7 @@ class TransactionForm(
                         'placeholder': 'ДД.ММ.ГГГГ',
                     },
                 ),
-                input_formats=[BANK_DAY_INPUT_FORMAT],
+                input_formats=[constants.HTML5_DATE_WIRE_FORMAT],
                 help_text=_('Укажите банковский день операции'),
             )
             self.initial['date'] = self.instance.bank_calendar_date

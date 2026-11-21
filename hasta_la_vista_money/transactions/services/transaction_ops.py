@@ -184,7 +184,6 @@ class TransactionService:
             note_financial_change(
                 coverage_service=self.coverage_service,
                 changes=[(command.account, command.transaction_date)],
-                moments=[command.transaction_date],
             )
         return new_transaction
 
@@ -299,10 +298,6 @@ class TransactionService:
                         (old_account, old_bank_day or old_date),
                         (command.account, bank_day or date_value),
                     ],
-                    moments=[
-                        old_bank_day or old_date,
-                        bank_day or date_value,
-                    ],
                 )
         return transaction_obj
 
@@ -336,7 +331,6 @@ class TransactionService:
             note_financial_change(
                 coverage_service=self.coverage_service,
                 changes=[(account, transaction_date)],
-                moments=[transaction_date],
             )
 
     def copy_transaction(
@@ -373,6 +367,5 @@ class TransactionService:
                 note_financial_change(
                     coverage_service=self.coverage_service,
                     changes=[(new_transaction.account, new_transaction.date)],
-                    moments=[new_transaction.date],
                 )
         return new_transaction

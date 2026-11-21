@@ -216,7 +216,6 @@ class DepositService:
                 (locked_accounts[source_account.pk], command.opened_on),
                 (locked_accounts[deposit.account.pk], command.opened_on),
             ],
-            moments=[command.opened_on],
         )
         return deposit
 
@@ -919,7 +918,6 @@ class DepositService:
                     (account, command.reversed_on)
                     for account in locked_accounts.values()
                 ],
-                moments=[command.reversed_on],
             )
 
         reversal = self.deposit_repository.create_principal_event(
@@ -1022,7 +1020,6 @@ class DepositService:
                 (account, command.reversed_on)
                 for account in reversed_accounts.values()
             ],
-            moments=[command.reversed_on],
         )
         principal_reversal = self.deposit_repository.create_principal_event(
             deposit=deposit,
@@ -1097,7 +1094,6 @@ class DepositService:
                     (account, command.reversed_on)
                     for account in reversed_interest.values()
                 ],
-                moments=[command.reversed_on],
             )
 
         reversal = self.deposit_repository.create_capitalization_event(
@@ -1231,7 +1227,6 @@ class DepositService:
             changes=[
                 (account, day) for account in accounts for day in unique_days
             ],
-            moments=list(unique_days),
         )
 
     @staticmethod
@@ -1347,7 +1342,6 @@ class DepositService:
                 (source, command.effective_on),
                 (locked_accounts[destination.pk], command.effective_on),
             ],
-            moments=[command.effective_on],
         )
         return event
 
@@ -1442,7 +1436,6 @@ class DepositService:
                 (locked_accounts[source.pk], command.effective_on),
                 (locked_accounts[deposit.account.pk], command.effective_on),
             ],
-            moments=[command.effective_on],
         )
         return event
 
@@ -1513,7 +1506,6 @@ class DepositService:
                     (account, command.posting_on)
                     for account in locked_interest.values()
                 ],
-                moments=[command.posting_on],
             )
         event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,

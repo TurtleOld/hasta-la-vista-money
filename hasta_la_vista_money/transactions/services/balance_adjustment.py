@@ -111,6 +111,5 @@ class BalanceAdjustmentService:
                 note_financial_change(
                     coverage_service=self.coverage_service,
                     changes=[(account, movement.date)],
-                    moments=[movement.date],
                 )
             return movement

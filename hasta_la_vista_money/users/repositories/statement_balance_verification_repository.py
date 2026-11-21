@@ -7,16 +7,9 @@ from django.db.models import Q, QuerySet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import (
+    UNRESOLVED_STATEMENT_DECISIONS,
     BankStatementRow,
     BankStatementUpload,
-)
-
-UNRESOLVED_DECISIONS = (
-    BankStatementRow.Decision.PENDING,
-    BankStatementRow.Decision.NEEDS_TRANSFER,
-    BankStatementRow.Decision.AWAITING_MARKUP,
-    BankStatementRow.Decision.DEFERRED,
-    BankStatementRow.Decision.PARSE_ERROR,
 )
 
 
@@ -73,7 +66,7 @@ class StatementBalanceVerificationRepository:
         """Return unresolved rows of the account from any upload."""
         return BankStatementRow.objects.filter(
             upload__account_id=account_id,
-            decision__in=UNRESOLVED_DECISIONS,
+            decision__in=UNRESOLVED_STATEMENT_DECISIONS,
         ).only(
             'transaction_date',
             'bank_calendar_date',

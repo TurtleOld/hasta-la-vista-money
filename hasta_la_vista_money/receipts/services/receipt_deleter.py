@@ -54,5 +54,4 @@ class ReceiptDeleterService:
         note_financial_change(
             coverage_service=self.coverage_service,
             changes=[(account, receipt_date)],
-            moments=[receipt_date],
         )

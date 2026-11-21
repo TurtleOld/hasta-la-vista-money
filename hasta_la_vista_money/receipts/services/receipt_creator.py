@@ -228,7 +228,6 @@ class ReceiptCreatorService:
         note_financial_change(
             coverage_service=self.coverage_service,
             changes=[(receipt.account, receipt.receipt_date)],
-            moments=[receipt.receipt_date],
         )
         return receipt
 
@@ -323,7 +322,6 @@ class ReceiptCreatorService:
         note_financial_change(
             coverage_service=self.coverage_service,
             changes=[(receipt.account, receipt.receipt_date)],
-            moments=[receipt.receipt_date],
         )
         return receipt
 

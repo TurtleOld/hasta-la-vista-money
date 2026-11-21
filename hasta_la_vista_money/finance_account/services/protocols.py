@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
@@ -289,7 +290,7 @@ class AccountCoverageServiceProtocol(Protocol):
         *,
         account: Account,
         changed_on: date | None,
-        reason: str = 'movement_changed',
+        reason: str = constants.STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED,
     ) -> int:
         """Recheck one changed bank day, or the whole period if unknown."""
         ...

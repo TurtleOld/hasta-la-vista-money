@@ -23,11 +23,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.deposits.movement_source import DepositMovementSource
 from hasta_la_vista_money.finance_account.models import TransferMoneyLog
-from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
-    BalanceHistoryService,
-)
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import (
     audit_operation,
@@ -36,9 +32,6 @@ from hasta_la_vista_money.system.services.audit_context import (
 )
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import BankStatementUpload
-from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
-    StatementBalanceVerificationRepository,
-)
 from hasta_la_vista_money.users.services.statement_balance_staleness import (
     mark_balance_checks_stale,
 )
@@ -47,6 +40,12 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
     from hasta_la_vista_money.finance_account.models import Account
+    from hasta_la_vista_money.finance_account.services.balance_history_service import (  # noqa: E501
+        BalanceHistoryService,
+    )
+    from hasta_la_vista_money.users.repositories.statement_balance_verification_repository import (  # noqa: E501
+        StatementBalanceVerificationRepository,
+    )
 
 STATUS_UNKNOWN = 'unknown'
 STATUS_VERIFIED = 'verified'
@@ -64,7 +63,10 @@ REASON_UNRESOLVED_ROWS = 'unresolved_rows'
 REASON_AVAILABLE_CREDIT_UNKNOWN = 'available_credit_limit_unknown'
 REASON_AVAILABLE_SEMANTICS_UNKNOWN = 'available_balance_semantics_unknown'
 REASON_OPENING_BOUNDARY_UNKNOWN = 'opening_boundary_unknown'
-REASON_MOVEMENT_CHANGED = 'movement_changed'
+# Shared with the coverage invalidation path; one definition in constants.
+REASON_MOVEMENT_CHANGED = (
+    constants.STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED
+)
 REASON_RECONFIGURED = 'balance_reconfigured'
 REASON_PRECISION_UNKNOWN = 'balance_precision_unknown'
 
@@ -109,15 +111,14 @@ class StatementBalanceVerificationService:
 
     def __init__(
         self,
-        repository: StatementBalanceVerificationRepository | None = None,
-        balance_history_service: BalanceHistoryService | None = None,
+        repository: StatementBalanceVerificationRepository,
+        balance_history_service: BalanceHistoryService,
     ) -> None:
-        self.repository = repository or StatementBalanceVerificationRepository()
-        self.balance_history_service = balance_history_service or (
-            BalanceHistoryService(
-                movement_sources=[DepositMovementSource()],
-            )
-        )
+        # Dependencies are wired by the container, never built here: a service
+        # that constructs its own collaborators bypasses DI and duplicates the
+        # container's configuration.
+        self.repository = repository
+        self.balance_history_service = balance_history_service
 
     def verification(
         self,

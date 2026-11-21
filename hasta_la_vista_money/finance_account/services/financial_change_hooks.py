@@ -11,18 +11,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.services.statement_balance_staleness import (
     mark_balance_checks_stale,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.services.protocols import (
         AccountCoverageServiceProtocol,
     )
-REASON_MOVEMENT_CHANGED = 'movement_changed'
 
 
 def exact_bank_day(value: datetime | date | None) -> date | None:
@@ -42,12 +42,13 @@ def note_financial_change(
     *,
     coverage_service: AccountCoverageServiceProtocol,
     changes: Sequence[tuple[Account, datetime | date | None]],
-    moments: Iterable[datetime | date],
 ) -> None:
     """Recheck coverage per changed account and day, and stale balance checks.
 
     Coverage invalidation runs regardless of whether any verified balance
-    upload exists; ``mark_balance_checks_stale`` simply finds none.
+    upload exists; ``mark_balance_checks_stale`` simply finds none. The
+    influenced moments are exactly the changed ones, never a second argument
+    that can drift from them.
     """
     seen: set[tuple[int, date | None]] = set()
     for account, changed_at in changes:
@@ -59,9 +60,9 @@ def note_financial_change(
         coverage_service.invalidate_for_movement_change(
             account=account,
             changed_on=changed_on,
-            reason=REASON_MOVEMENT_CHANGED,
+            reason=constants.STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED,
         )
     mark_balance_checks_stale(
         {account.pk for account, _ in changes},
-        list(moments),
+        [changed_at for _, changed_at in changes if changed_at is not None],
     )

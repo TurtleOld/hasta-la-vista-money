@@ -275,6 +275,8 @@ UNSUCCESSFULLY_MESSAGE_LOAN_DELETE_POSTED: Final = _(
 # Family groups
 
 FAMILY_INVITE_TTL: Final = timedelta(days=7)
+# One inclusive calendar day, used by interval arithmetic.
+ONE_DAY_TIMEDELTA: Final = timedelta(days=1)
 FAMILY_SCOPE: Final = 'family'
 
 # ============================================================================
@@ -368,11 +370,16 @@ BALANCE_TREND_KINDS: Final = (
 
 SUCCESS_CODE: Final = 200
 REDIRECTS: Final = 302
+FORBIDDEN: Final = 403
 NOT_FOUND: Final = 404
+CONFLICT: Final = 409
+GONE: Final = 410
 SERVER_ERROR: Final = 500
 
 # Largest value a PostgreSQL bigint / Django BigAutoField can store.
 DATABASE_BIGINT_MAX: Final = 2**63 - 1
+# Largest value a PostgreSQL integer (int4) column can store.
+DATABASE_INTEGER_MAX: Final = 2_147_483_647
 
 # ============================================================================
 # Dependency Injection
@@ -570,6 +577,8 @@ DIFF_LAST_PAYMENT_100K_12M: Final = 8416.67
 # Format strings for date and time input/output
 
 HTML5_DATE_INPUT_FORMAT: Final = '%d/%m/%Y'
+# Wire format required by an HTML ``input type="date"`` element.
+HTML5_DATE_WIRE_FORMAT: Final = '%Y-%m-%d'
 HTML5_DATE_INPUT_FORMATS: Final[tuple[str, ...]] = (
     '%d/%m/%Y',
     '%Y-%m-%d',
@@ -689,6 +698,9 @@ PDF_SIGNATURE: Final = b'%PDF-'
 STATEMENT_ID_FINGERPRINT_VERSION: Final = 1
 STATEMENT_ID_HMAC_MIN_KEY_BYTES: Final = 32
 STATEMENT_ID_HMAC_KEY_ID_MAX_LENGTH: Final = 64
+# Reason recorded when a money or date change makes a retained balance check
+# need a new verification.
+STATEMENT_BALANCE_STALE_REASON_MOVEMENT_CHANGED: Final = 'movement_changed'
 # Bank namespace of historical references whose bank is not recoverable.
 STATEMENT_ID_LEGACY_BANK_CODE: Final = 'legacy-unverified'
 

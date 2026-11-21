@@ -215,7 +215,6 @@ class ReceiptUpdaterService:
                     (old_account, old_receipt_date),
                     (receipt.account, receipt.receipt_date),
                 ],
-                moments=[old_receipt_date, receipt.receipt_date],
             )
         return receipt
 

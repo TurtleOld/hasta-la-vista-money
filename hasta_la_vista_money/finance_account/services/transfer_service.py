@@ -162,7 +162,6 @@ class TransferService:
                     (from_account, changed_at),
                     (to_account, changed_at),
                 ],
-                moments=[changed_at],
             )
             return transfer
 
@@ -242,5 +241,4 @@ class TransferService:
                     (from_account, exchange_date),
                     (to_account, exchange_date),
                 ],
-                moments=[exchange_date],
             )
