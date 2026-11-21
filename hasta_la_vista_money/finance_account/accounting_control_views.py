@@ -1,0 +1,179 @@
+"""The unified accounting control entry with account and period selection."""
+
+from datetime import date
+from typing import TYPE_CHECKING, cast
+from urllib.parse import urlencode
+
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+from django.views.generic import TemplateView
+
+from hasta_la_vista_money.finance_account.forms import ManualCoverageForm
+from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.users.protocols.services import (
+    AccountingControlServiceProtocol,
+    StatementCoverageServiceProtocol,
+)
+from hasta_la_vista_money.users.services.groups import can_write
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.users.models import User
+
+
+def _parse_date(value: str | None, default: date) -> date:
+    """Parse an ISO date, falling back to the default."""
+    if not value:
+        return default
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return default
+
+
+def _parse_account_id(value: str | None) -> int | None:
+    """Parse a numeric account id, rejecting malformed values."""
+    if not value or not value.isdigit():
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _accounting_control_service(
+    request: HttpRequest,
+) -> AccountingControlServiceProtocol:
+    """Resolve accounting control through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'AccountingControlServiceProtocol',
+        request_with_container.container.users.accounting_control_service(),
+    )
+
+
+def _coverage_service(
+    request: HttpRequest,
+) -> StatementCoverageServiceProtocol:
+    """Resolve period coverage through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'StatementCoverageServiceProtocol',
+        request_with_container.container.users.statement_coverage_service(),
+    )
+
+
+class AccountingControlView(
+    LoginRequiredMixin,
+    GroupAccountMixin,
+    TemplateView,
+):
+    """Show five separate measurements for one account and period."""
+
+    template_name = 'finance_account/accounting_control.html'
+
+    def _period(self) -> tuple[date, date]:
+        """Return the selected period, defaulting to the current month."""
+        today = timezone.localdate()
+        period_start = _parse_date(
+            self.request.GET.get('period_start'),
+            today.replace(day=1),
+        )
+        period_end = _parse_date(self.request.GET.get('period_end'), today)
+        if period_end < period_start:
+            return today.replace(day=1), today
+        return period_start, period_end
+
+    def get_context_data(self, **kwargs: object) -> dict[str, object]:
+        """Build the control entry context."""
+        context = super().get_context_data(**kwargs)
+        user = cast('User', self.request.user)
+        accounts = self.get_accounts(user)
+        account_id = _parse_account_id(self.request.GET.get('account'))
+        selected = (
+            accounts.filter(pk=account_id).first()
+            if account_id is not None
+            else None
+        )
+        period_start, period_end = self._period()
+        control = (
+            _accounting_control_service(self.request).build(
+                selected,
+                period_start,
+                period_end,
+            )
+            if selected is not None
+            else None
+        )
+        writable = selected is not None and can_write(user, selected)
+        context.update(
+            {
+                'accounts': accounts,
+                'selected_account': selected,
+                'period_start': period_start,
+                'period_end': period_end,
+                'control': control,
+                'can_write': writable,
+                'coverage_form': (
+                    ManualCoverageForm(
+                        initial={
+                            'period_start': period_start,
+                            'period_end': period_end,
+                        },
+                    )
+                    if writable
+                    else None
+                ),
+            },
+        )
+        return context
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Confirm a manual coverage period for an owned account."""
+        user = cast('User', request.user)
+        account_id = _parse_account_id(request.POST.get('account'))
+        if account_id is None:
+            raise Http404
+        account = get_object_or_404(Account, pk=account_id, user=user)
+        form = ManualCoverageForm(request.POST)
+        if form.is_valid():
+            start = form.cleaned_data['period_start']
+            end = form.cleaned_data['period_end']
+            _coverage_service(request).confirm_manual(
+                user,
+                account,
+                start,
+                end,
+            )
+            messages.success(request, _('Период покрытия подтверждён.'))
+        else:
+            messages.error(
+                request,
+                _('Не удалось подтвердить период: проверьте даты.'),
+            )
+            start = _parse_date(
+                request.POST.get('period_start'),
+                timezone.localdate().replace(day=1),
+            )
+            end = _parse_date(
+                request.POST.get('period_end'),
+                timezone.localdate(),
+            )
+        params = {
+            'account': account.pk,
+            'period_start': start.isoformat(),
+            'period_end': end.isoformat(),
+        }
+        group_id = request.POST.get('group_id')
+        if group_id:
+            params['group_id'] = group_id
+        query = urlencode(params)
+        return redirect(
+            f'{reverse("finance_account:accounting_control")}?{query}',
+        )
