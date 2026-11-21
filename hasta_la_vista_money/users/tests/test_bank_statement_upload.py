@@ -1613,8 +1613,15 @@ class TestBankStatementReconciliationView(TestCase):
         today = timezone.localdate()
         self.upload.statement_closing_balance = Decimal('880.00')
         self.upload.balance_moment = timezone.now()
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
         self.upload.save(
-            update_fields=['statement_closing_balance', 'balance_moment'],
+            update_fields=[
+                'statement_closing_balance',
+                'balance_moment',
+                'balance_currency',
+                'balance_type',
+            ],
         )
         self.row.decision = BankStatementRow.Decision.LINKED
         self.row.decided_at = timezone.now()
@@ -4598,6 +4605,8 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             transactions=[],
             closing_balance=Decimal('9000.00'),
             closing_balance_date=timezone.localdate(),
+            closing_balance_currency='RUB',
+            closing_balance_semantics='closing_day',
         )
         mock_parser_cls.return_value = mock_parser
 

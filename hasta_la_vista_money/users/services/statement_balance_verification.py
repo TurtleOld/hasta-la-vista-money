@@ -1,14 +1,15 @@
 """Verify a bank statement balance against the shared balance history.
 
 The check compares the statement closing balance with
-``BalanceHistoryService.balance_at`` at the same moment and in one
-currency. Missing data is never replaced with zero or with the current
-balance. Explanations are controlled codes with an actor and an audit
-entry; they never change money or make the balances equal.
+``BalanceHistoryService.balance_at`` only when the parser supplied a
+confirmed currency and a confirmed moment semantics. A bank date without
+confirmed closing semantics stays a date; no exact moment, currency or
+zero is inferred. Explanations are controlled codes with an actor and an
+audit entry; they never change money or make the balances equal.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.protocols import (
     BalanceHistoryServiceProtocol,
 )
@@ -44,6 +46,11 @@ EXPLANATION_COMPLETENESS: dict[str, str] = {
     ),
 }
 
+_CONFIRMED_SEMANTICS = {
+    BankStatementUpload.BalanceType.EXACT_MOMENT,
+    BankStatementUpload.BalanceType.CLOSING_DAY,
+}
+
 
 @dataclass(frozen=True)
 class BalanceVerificationState:
@@ -57,6 +64,7 @@ class BalanceVerificationState:
     label: str
     detail: str
     moment: datetime | None
+    bank_date: date | None
     type_label: str
     currency: str
     bank_balance: Decimal | None
@@ -86,11 +94,33 @@ class StatementBalanceVerificationService:
         """
         self._balance_history_service = balance_history_service
 
+    @staticmethod
+    def _comparison_moment(
+        upload: BankStatementUpload,
+    ) -> datetime | None:
+        """Return a comparison moment only from confirmed bank metadata.
+
+        ``closing_day`` uses the bank's calendar day at end-of-day because
+        the parser confirmed that meaning; the moment itself is not stored
+        and is not invented for unknown semantics.
+        """
+        if upload.balance_type == BankStatementUpload.BalanceType.EXACT_MOMENT:
+            return upload.balance_moment
+        if (
+            upload.balance_type == BankStatementUpload.BalanceType.CLOSING_DAY
+            and upload.balance_bank_date is not None
+        ):
+            return timezone.make_aware(
+                datetime.combine(upload.balance_bank_date, time.max),
+            )
+        return None
+
     def verify(self, upload: BankStatementUpload) -> BankStatementUpload:
         """Recompute and store the balance result for one upload.
 
-        Missing closing balance, moment or currency produce
-        ``NOT_CHECKED`` with no amounts; none of them is substituted.
+        Missing confirmed currency, bank semantics, balance or moment
+        produce ``NOT_CHECKED`` with no amounts. The account currency is
+        never copied into the statement currency.
 
         Args:
             upload: Statement upload whose closing balance is checked.
@@ -107,7 +137,9 @@ class StatementBalanceVerificationService:
         account.refresh_from_db(fields=['balance', 'currency'])
         now = timezone.now()
         closing = upload.statement_closing_balance
-        moment = upload.balance_moment
+        currency = upload.balance_currency
+        kind = upload.balance_type
+        moment = self._comparison_moment(upload)
         unresolved = BankStatementRow.objects.filter(
             upload=upload,
             decision__in=(
@@ -116,31 +148,28 @@ class StatementBalanceVerificationService:
                 BankStatementRow.Decision.NEEDS_TRANSFER,
             ),
         ).exists()
-        stored_currency = upload.balance_currency
-        currency_changed = bool(stored_currency) and (
-            stored_currency != account.currency
-        )
         reason = ''
         if unresolved:
             reason = BankStatementUpload.BalanceReason.UNRESOLVED_ROWS
-        elif currency_changed:
-            reason = BankStatementUpload.BalanceReason.CURRENCY_CHANGED
         elif closing is None:
             reason = BankStatementUpload.BalanceReason.MISSING_BALANCE
+        elif not currency:
+            reason = BankStatementUpload.BalanceReason.MISSING_CURRENCY
+        elif currency != account.currency:
+            reason = BankStatementUpload.BalanceReason.CURRENCY_MISMATCH
+        elif kind not in _CONFIRMED_SEMANTICS:
+            reason = BankStatementUpload.BalanceReason.MISSING_SEMANTICS
         elif moment is None:
             reason = BankStatementUpload.BalanceReason.MISSING_MOMENT
-        elif not account.currency:
-            reason = BankStatementUpload.BalanceReason.MISSING_CURRENCY
 
         explanation_code = upload.balance_explanation_code
         explained_at = upload.balance_explained_at
         explained_by = upload.balance_explained_by
         if (
-            not unresolved
-            and not currency_changed
+            not reason
             and closing is not None
+            and currency
             and moment is not None
-            and account.currency
         ):
             ledger = self._balance_history_service.balance_at(
                 account,
@@ -168,8 +197,6 @@ class StatementBalanceVerificationService:
             explained_by = None
 
         BankStatementUpload.objects.filter(pk=upload.pk).update(
-            balance_type=BankStatementUpload.BalanceType.CLOSING,
-            balance_currency=stored_currency or account.currency,
             balance_result=result,
             balance_checked_at=now,
             balance_is_actual=(
@@ -205,27 +232,11 @@ class StatementBalanceVerificationService:
         upload = BankStatementUpload.objects.select_related('account').get(
             pk=upload.pk,
         )
-        if (
-            not upload.balance_is_actual
-            or upload.balance_result
-            == BankStatementUpload.BalanceResult.NOT_CHECKED
-            or upload.balance_moment is None
-            or not upload.balance_currency
-            or upload.account_balance_after is None
-        ):
+        if not upload.balance_is_actual:
             return upload
         account = upload.account
         account.refresh_from_db(fields=['balance', 'currency'])
-        reason = ''
-        if upload.balance_currency != account.currency:
-            reason = BankStatementUpload.BalanceReason.CURRENCY_CHANGED
-        else:
-            ledger = self._balance_history_service.balance_at(
-                account,
-                upload.balance_moment,
-            )
-            if ledger != upload.account_balance_after:
-                reason = BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED
+        reason = self._stale_reason(upload, account)
         if reason:
             BankStatementUpload.objects.filter(pk=upload.pk).update(
                 balance_is_actual=False,
@@ -234,6 +245,30 @@ class StatementBalanceVerificationService:
             upload.balance_is_actual = False
             upload.balance_reason = reason
         return upload
+
+    def _stale_reason(
+        self,
+        upload: BankStatementUpload,
+        account: Account,
+    ) -> str:
+        """Return why a stored actual result is no longer current."""
+        if (
+            upload.balance_result
+            == BankStatementUpload.BalanceResult.NOT_CHECKED
+            or not upload.balance_currency
+            or upload.balance_type not in _CONFIRMED_SEMANTICS
+            or upload.account_balance_after is None
+        ):
+            return ''
+        moment = self._comparison_moment(upload)
+        if moment is None:
+            return ''
+        if upload.balance_currency != account.currency:
+            return BankStatementUpload.BalanceReason.CURRENCY_CHANGED
+        ledger = self._balance_history_service.balance_at(account, moment)
+        if ledger != upload.account_balance_after:
+            return BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED
+        return ''
 
     def explain(
         self,
@@ -244,7 +279,9 @@ class StatementBalanceVerificationService:
         """Explain an actual discrepancy with an approved code.
 
         The explanation keeps its actor and time, writes an audit entry and
-        never changes the balances or creates a movement.
+        never changes the balances or creates a movement. The upload and
+        account are locked in the same order as statement markup so a
+        concurrent movement edit cannot make an old snapshot actual.
 
         Args:
             upload: Statement upload with the unexplained discrepancy.
@@ -263,66 +300,111 @@ class StatementBalanceVerificationService:
             raise ValidationError(
                 _('Объяснение допускается только утверждённым кодом.'),
             )
-        upload = BankStatementUpload.objects.select_related('account').get(
-            pk=upload.pk,
-        )
-        if upload.account.user_id != user.pk:
-            raise PermissionDenied(
-                _('Расхождение объясняет только владелец счёта.'),
+        with transaction.atomic():
+            upload = (
+                BankStatementUpload.objects.select_for_update()
+                .select_related('account')
+                .get(pk=upload.pk)
             )
-        if upload.retention_cleaned_at is not None:
-            raise ValidationError(
-                _('Банковские данные очищены: объяснение недоступно.'),
+            account = Account.objects.select_for_update().get(
+                pk=upload.account_id,
             )
-        if upload.status == BankStatementUpload.Status.FAILED or (
-            upload.error_message
-        ):
-            raise ValidationError(
-                _('Неразрешённая структурная ошибка файла не объясняется.'),
-            )
-        upload = self.refresh_actuality(upload)
-        if not upload.balance_is_actual:
-            raise ValidationError(
-                _('Результат проверки устарел: перепроверьте остаток.'),
-            )
-        if (
-            upload.balance_result
-            != BankStatementUpload.BalanceResult.DISCREPANCY
-        ):
-            raise ValidationError(
-                _('Объяснение допускается только для расхождения остатка.'),
-            )
+            upload.account = account
+            if account.user_id != user.pk:
+                raise PermissionDenied(
+                    _('Расхождение объясняет только владелец счёта.'),
+                )
+            if upload.retention_cleaned_at is not None:
+                raise ValidationError(
+                    _('Банковские данные очищены: объяснение недоступно.'),
+                )
+            if upload.status == BankStatementUpload.Status.FAILED or (
+                upload.error_message
+            ):
+                raise ValidationError(
+                    _('Неразрешённая структурная ошибка файла не объясняется.'),
+                )
+            reason = self._stale_reason(upload, account)
+            if reason:
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    balance_is_actual=False,
+                    balance_reason=reason,
+                )
+                upload.balance_is_actual = False
+                upload.balance_reason = reason
+            if not upload.balance_is_actual:
+                raise ValidationError(
+                    _('Результат проверки устарел: перепроверьте остаток.'),
+                )
+            if (
+                upload.balance_result
+                != BankStatementUpload.BalanceResult.DISCREPANCY
+            ):
+                raise ValidationError(
+                    _('Объяснение допускается только для расхождения остатка.'),
+                )
 
-        now = timezone.now()
-        completeness = EXPLANATION_COMPLETENESS[code]
-        with (
-            transaction.atomic(),
-            audit_operation(
+            now = timezone.now()
+            completeness = EXPLANATION_COMPLETENESS[code]
+            with audit_operation(
                 kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
-            ),
-        ):
-            BankStatementUpload.objects.filter(pk=upload.pk).update(
-                balance_explanation_code=code,
-                balance_explained_at=now,
-                balance_explained_by=user,
-            )
-            AuditLog.objects.create(
-                user=user,
-                model_name='users.BankStatementUpload',
-                object_pk=str(upload.pk),
-                object_name=upload.account.name_account,
-                action=AuditLog.Action.UPDATE,
-                diff={
-                    'explanation_code': code,
-                    'completeness': completeness,
-                },
-                operation_id=current_operation_id(),
-                kind=current_operation_kind(),
-            )
+            ):
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    balance_explanation_code=code,
+                    balance_explained_at=now,
+                    balance_explained_by=user,
+                )
+                AuditLog.objects.create(
+                    user=user,
+                    model_name='users.BankStatementUpload',
+                    object_pk=str(upload.pk),
+                    object_name=account.name_account,
+                    action=AuditLog.Action.UPDATE,
+                    diff={
+                        'explanation_code': code,
+                        'completeness': completeness,
+                    },
+                    operation_id=current_operation_id(),
+                    kind=current_operation_kind(),
+                )
         return BankStatementUpload.objects.select_related(
             'account',
             'balance_explained_by',
         ).get(pk=upload.pk)
+
+    @staticmethod
+    def _detail_parts(upload: BankStatementUpload) -> list[str]:
+        """Return confirmed moment/currency/date details for display."""
+        parts: list[str] = []
+        if upload.balance_bank_date is not None:
+            parts.append(
+                _('Дата остатка: %(date)s')
+                % {'date': upload.balance_bank_date.strftime('%d.%m.%Y')},
+            )
+        if upload.balance_moment is not None:
+            parts.append(
+                _('Момент: %(moment)s')
+                % {
+                    'moment': timezone.localtime(
+                        upload.balance_moment,
+                    ).strftime('%d.%m.%Y %H:%M'),
+                },
+            )
+        if upload.balance_currency:
+            parts.append(
+                _('Валюта: %(currency)s')
+                % {'currency': upload.balance_currency},
+            )
+        if upload.balance_checked_at is not None:
+            parts.append(
+                _('Последняя проверка: %(checked)s')
+                % {
+                    'checked': timezone.localtime(
+                        upload.balance_checked_at,
+                    ).strftime('%d.%m.%Y %H:%M'),
+                },
+            )
+        return parts
 
     def describe(
         self,
@@ -364,30 +446,7 @@ class StatementBalanceVerificationService:
             if upload.balance_reason
             else ''
         )
-        detail_parts = []
-        if upload.balance_moment is not None:
-            detail_parts.append(
-                _('Момент: %(moment)s')
-                % {
-                    'moment': timezone.localtime(
-                        upload.balance_moment,
-                    ).strftime('%d.%m.%Y %H:%M'),
-                },
-            )
-        if upload.balance_currency:
-            detail_parts.append(
-                _('Валюта: %(currency)s')
-                % {'currency': upload.balance_currency},
-            )
-        if upload.balance_checked_at is not None:
-            detail_parts.append(
-                _('Последняя проверка: %(checked)s')
-                % {
-                    'checked': timezone.localtime(
-                        upload.balance_checked_at,
-                    ).strftime('%d.%m.%Y %H:%M'),
-                },
-            )
+        detail_parts = self._detail_parts(upload)
         if reason_label:
             detail_parts.append(reason_label)
         if explanation_label:
@@ -404,6 +463,7 @@ class StatementBalanceVerificationService:
             label=str(label),
             detail=' · '.join(str(part) for part in detail_parts),
             moment=upload.balance_moment,
+            bank_date=upload.balance_bank_date,
             type_label=str(upload.get_balance_type_display()),
             currency=upload.balance_currency,
             bank_balance=upload.statement_closing_balance,

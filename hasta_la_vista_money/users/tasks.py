@@ -1,12 +1,10 @@
 """Celery tasks for user-related async operations."""
 
-from datetime import datetime, time
 from typing import Any
 
 import structlog
 from celery import shared_task
 from django.db import InterfaceError, OperationalError
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
@@ -17,7 +15,9 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
-    StatementParseResult,
+)
+from hasta_la_vista_money.users.services.bank_statement_import import (
+    StatementImportResult,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -36,19 +36,24 @@ def _cleanup_expired_bank_statements() -> dict[str, int]:
 
 def _store_statement_balance(
     upload: BankStatementUpload,
-    result: StatementParseResult,
+    result: StatementImportResult,
 ) -> None:
-    """Store the parsed closing balance and its bank day moment.
+    """Store only balance metadata the parser actually confirmed.
 
-    Only values the parser actually provided are stored; a missing date is
-    not replaced with the import time.
+    A date without confirmed closing semantics stays a bank date; no exact
+    moment or currency is inferred from the account.
     """
-    if result.closing_balance is not None:
-        upload.statement_closing_balance = result.closing_balance
-    if result.closing_balance_date is not None:
-        upload.balance_moment = timezone.make_aware(
-            datetime.combine(result.closing_balance_date, time.max),
-        )
+    upload.statement_closing_balance = result.closing_balance
+    upload.balance_currency = result.closing_balance_currency or ''
+    upload.balance_moment = result.closing_balance_moment
+    upload.balance_bank_date = result.closing_balance_date
+    semantics = result.closing_balance_semantics
+    if semantics == BankStatementUpload.BalanceType.EXACT_MOMENT:
+        upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+    elif semantics == BankStatementUpload.BalanceType.CLOSING_DAY:
+        upload.balance_type = BankStatementUpload.BalanceType.CLOSING_DAY
+    else:
+        upload.balance_type = BankStatementUpload.BalanceType.UNKNOWN
 
 
 cleanup_expired_bank_statements = shared_task(
@@ -130,7 +135,10 @@ def process_bank_statement_task(
                 'progress',
                 'updated_at',
                 'statement_closing_balance',
+                'balance_currency',
                 'balance_moment',
+                'balance_bank_date',
+                'balance_type',
             ],
         )
         if result.closing_balance is not None and not unresolved:

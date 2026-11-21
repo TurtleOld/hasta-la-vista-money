@@ -14,6 +14,7 @@ from django.db.models import (
     SET_NULL,
     BooleanField,
     CharField,
+    DateField,
     DateTimeField,
     DecimalField,
     FileField,
@@ -150,12 +151,22 @@ class BankStatementUpload(Model):
         DISCREPANCY = 'discrepancy', _('Расхождение')
 
     class BalanceType(TextChoices):
-        CLOSING = 'closing', _('Исходящий остаток')
+        UNKNOWN = 'unknown', _('Тип остатка не подтверждён')
+        EXACT_MOMENT = 'exact_moment', _('Остаток на точный момент')
+        CLOSING_DAY = 'closing_day', _('Исходящий остаток на конец дня')
 
     class BalanceReason(TextChoices):
         MISSING_BALANCE = 'missing_balance', _('Остаток не указан')
         MISSING_MOMENT = 'missing_moment', _('Момент остатка не указан')
+        MISSING_SEMANTICS = (
+            'missing_semantics',
+            _('Банковская семантика остатка не подтверждена'),
+        )
         MISSING_CURRENCY = 'missing_currency', _('Валюта не указана')
+        CURRENCY_MISMATCH = (
+            'currency_mismatch',
+            _('Валюта выписки не совпадает с валютой счёта'),
+        )
         MONEY_OR_DATE_CHANGED = (
             'money_or_date_changed',
             _('Изменились сумма или дата движения'),
@@ -233,12 +244,17 @@ class BankStatementUpload(Model):
     balance_type = CharField(
         max_length=20,
         choices=BalanceType.choices,
-        default=BalanceType.CLOSING,
+        default=BalanceType.UNKNOWN,
     )
     balance_moment = DateTimeField(
         blank=True,
         null=True,
         verbose_name=_('Момент остатка по выписке'),
+    )
+    balance_bank_date = DateField(
+        blank=True,
+        null=True,
+        verbose_name=_('Дата остатка по выписке'),
     )
     balance_currency = CharField(max_length=3, blank=True, default='')
     balance_result = CharField(

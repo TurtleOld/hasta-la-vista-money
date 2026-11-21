@@ -1114,6 +1114,8 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         super().setUp()
         self.upload.statement_closing_balance = Decimal('880.00')
         self.upload.balance_moment = timezone.now()
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
         self.upload.save()
 
     def test_discrepancy_appears_when_no_rows_await_markup(self) -> None:
@@ -1561,6 +1563,8 @@ class StatementRowExclusionTest(StatementMarkupFixture):
     def test_undo_exclusion_returns_the_row_without_money(self) -> None:
         self.upload.statement_closing_balance = Decimal('1000.00')
         self.upload.balance_moment = timezone.now()
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
         self.upload.save()
         row = self._row(1)
         self._exclude(row)
