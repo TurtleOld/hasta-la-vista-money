@@ -133,7 +133,26 @@ class StatementBalanceVerificationService:
         )
         if upload.retention_cleaned_at is not None:
             return upload
-        account = upload.account
+        with transaction.atomic():
+            upload = (
+                BankStatementUpload.objects.select_for_update()
+                .select_related('account')
+                .get(pk=upload.pk)
+            )
+            if upload.retention_cleaned_at is not None:
+                return upload
+            account = Account.objects.select_for_update().get(
+                pk=upload.account_id,
+            )
+            upload.account = account
+            return self._verify_locked(upload, account)
+
+    def _verify_locked(
+        self,
+        upload: BankStatementUpload,
+        account: Account,
+    ) -> BankStatementUpload:
+        """Compute and store a result while upload and account are locked."""
         account.refresh_from_db(fields=['balance', 'currency'])
         now = timezone.now()
         closing = upload.statement_closing_balance
@@ -234,17 +253,27 @@ class StatementBalanceVerificationService:
         )
         if not upload.balance_is_actual:
             return upload
-        account = upload.account
-        account.refresh_from_db(fields=['balance', 'currency'])
-        reason = self._stale_reason(upload, account)
-        if reason:
-            BankStatementUpload.objects.filter(pk=upload.pk).update(
-                balance_is_actual=False,
-                balance_reason=reason,
+        with transaction.atomic():
+            upload = (
+                BankStatementUpload.objects.select_for_update()
+                .select_related('account')
+                .get(pk=upload.pk)
             )
-            upload.balance_is_actual = False
-            upload.balance_reason = reason
-        return upload
+            if not upload.balance_is_actual:
+                return upload
+            account = Account.objects.select_for_update().get(
+                pk=upload.account_id,
+            )
+            upload.account = account
+            reason = self._stale_reason(upload, account)
+            if reason:
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    balance_is_actual=False,
+                    balance_reason=reason,
+                )
+                upload.balance_is_actual = False
+                upload.balance_reason = reason
+            return upload
 
     def _stale_reason(
         self,
@@ -325,14 +354,7 @@ class StatementBalanceVerificationService:
                     _('Неразрешённая структурная ошибка файла не объясняется.'),
                 )
             reason = self._stale_reason(upload, account)
-            if reason:
-                BankStatementUpload.objects.filter(pk=upload.pk).update(
-                    balance_is_actual=False,
-                    balance_reason=reason,
-                )
-                upload.balance_is_actual = False
-                upload.balance_reason = reason
-            if not upload.balance_is_actual:
+            if reason or not upload.balance_is_actual:
                 raise ValidationError(
                     _('Результат проверки устарел: перепроверьте остаток.'),
                 )
@@ -452,7 +474,12 @@ class StatementBalanceVerificationService:
         if explanation_label:
             detail_parts.append(explanation_label)
         blocks = result == BankStatementUpload.BalanceResult.DISCREPANCY and (
-            not actual or not explanation_code
+            not explanation_code
+            or (
+                not actual
+                and upload.balance_reason
+                != BankStatementUpload.BalanceReason.BANK_DATA_CLEANED
+            )
         )
         return BalanceVerificationState(
             upload=upload,
