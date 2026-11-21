@@ -68,6 +68,9 @@ RAIFFEISEN_REAL_FIXTURE = (
 )
 
 
+SBERBANK_FIXTURE = Path(__file__).parent / 'fixtures' / 'sberbank_statement.pdf'
+
+
 class TestBankStatementUploadView(TestCase):
     """Test cases for bank statement upload view."""
 
@@ -4677,6 +4680,68 @@ class TestSberbankParser(TestCase):
         with self.assertRaises(BankStatementParseError):
             parser.parse()
 
+    def test_parse_real_anonymized_statement(self) -> None:
+        """Parse the real anonymized Sberbank credit-card statement.
+
+        Expected values are read from the PDF table itself: six operations,
+        two top-ups and four expenses, with their bank auth codes. Summary
+        rows ("Остаток на ...") are not operations.
+        """
+        result = _SberbankParser(SBERBANK_FIXTURE).parse()
+
+        self.assertEqual(result.bank, 'sberbank')
+        self.assertEqual(result.format_version, 2)
+        self.assertEqual(len(result.transactions), 6)
+        self.assertEqual(
+            [t['amount'] for t in result.transactions],
+            [
+                Decimal('18470.57'),
+                Decimal('-85.13'),
+                Decimal('-7450.86'),
+                Decimal('-10934.58'),
+                Decimal('199.00'),
+                Decimal('-199.00'),
+            ],
+        )
+        self.assertEqual(
+            [t['source_ref'] for t in result.transactions],
+            ['676887', '188529', '360456', '356063', '700037', '588469'],
+        )
+        self.assertEqual(
+            [t['date'].strftime('%d.%m.%Y %H:%M') for t in result.transactions],
+            [
+                '27.09.2026 11:37',
+                '01.09.2026 01:15',
+                '02.08.2026 18:14',
+                '02.08.2026 18:13',
+                '01.08.2026 12:05',
+                '09.07.2026 10:06',
+            ],
+        )
+        self.assertEqual(
+            [t['description'] for t in result.transactions],
+            [
+                'Перевод на карту',
+                'Прочие расходы',
+                'Коммунальные платежи, связь, интернет.',
+                'Коммунальные платежи, связь, интернет.',
+                'Перевод на карту',
+                'Прочие расходы',
+            ],
+        )
+        self.assertEqual(
+            [t.get('category_name') for t in result.transactions],
+            [
+                None,
+                'Прочие расходы',
+                'Коммунальные платежи, связь, интернет',
+                'Коммунальные платежи, связь, интернет',
+                None,
+                'Прочие расходы',
+            ],
+        )
+        self.assertFalse(any(t.get('parse_issue') for t in result.transactions))
+
 
 class TestStatementParseResult(TestCase):
     """Тест структуры результата парсинга."""
@@ -6090,6 +6155,69 @@ class TestBankStatementImportReliability(TestCase):
             )
             process_bank_statement_task.apply(args=[upload.pk])
         return upload
+
+    def test_sberbank_real_statement_imports_and_keeps_repayments(self) -> None:
+        """Import the real anonymized Sberbank statement without AI guesses."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        credit_account = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта Сбербанка',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=credit_account,
+            pdf_file=SimpleUploadedFile(
+                'sberbank.pdf',
+                SBERBANK_FIXTURE.read_bytes(),
+                content_type='application/pdf',
+            ),
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(upload.total_transactions, 6)
+        self.assertEqual(upload.failed_count, 0)
+        self.assertEqual(rows.count(), 6)
+        self.assertEqual(
+            rows.filter(
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            rows.filter(decision=BankStatementRow.Decision.NEW).count(),
+            4,
+        )
+        self.assertFalse(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).exists(),
+        )
+        self.assertEqual(
+            set(rows.values_list('source_ref', flat=True)),
+            {'676887', '188529', '360456', '356063', '700037', '588469'},
+        )
+        movements = Transaction.objects.filter(account=credit_account)
+        self.assertEqual(movements.count(), 4)
+        self.assertFalse(movements.filter(type=TransactionType.INCOME).exists())
+        self.assertEqual(
+            sum(movements.values_list('amount', flat=True)),
+            Decimal('18669.57'),
+        )
+        self.assertEqual(upload.income_count, 0)
+        self.assertEqual(upload.expense_count, 4)
+        self.assertEqual(upload.needs_transfer_count, 2)
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        classifier.classify.assert_not_called()
 
     def test_raiffeisen_known_category_posts_row_and_movement(self) -> None:
         """A known local category posts exactly one linked movement."""

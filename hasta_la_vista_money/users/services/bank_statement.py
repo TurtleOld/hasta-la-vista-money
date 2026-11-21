@@ -1294,11 +1294,14 @@ class _SberbankParser(BaseBankStatementParser):
                 )
             ):
                 return True
-        # Fallback: if col[0] contains a datetime pattern,
-        # treat as transaction table
+        # Fallback: a real transaction row A carries the bank time. A
+        # summary "Остаток на DD.MM.YYYY" row is not an operation.
         for _, row in df.iterrows():
             cell = str(row.iloc[0]) if len(row) > 0 else ''
-            if self._extract_date(cell) is not None:
+            if self._extract_date(cell) is not None and re.search(
+                r'\d{2}:\d{2}',
+                cell,
+            ):
                 return True
         return False
 
