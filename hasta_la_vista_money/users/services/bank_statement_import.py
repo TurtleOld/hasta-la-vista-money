@@ -81,6 +81,7 @@ class StatementImportResult:
         needs_transfer_count: Число зачислений на кредитный счёт,
             сохранённых как непроведённые погашения.
         closing_balance: Конечный остаток из выписки, если удалось извлечь.
+        closing_balance_date: Дата конечного остатка, если известна.
     """
 
     income_count: int
@@ -88,6 +89,7 @@ class StatementImportResult:
     skipped_count: int
     needs_transfer_count: int
     closing_balance: Decimal | None
+    closing_balance_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,7 @@ class BankStatementImportService:
                 skipped_count=upload.skipped_count,
                 needs_transfer_count=0,
                 closing_balance=parse_result.closing_balance,
+                closing_balance_date=parse_result.closing_balance_date,
             )
 
         existing_categories = list(
@@ -236,6 +239,7 @@ class BankStatementImportService:
             skipped_count=skipped_count,
             needs_transfer_count=needs_transfer_count,
             closing_balance=parse_result.closing_balance,
+            closing_balance_date=parse_result.closing_balance_date,
         )
 
     def _process_transactions(

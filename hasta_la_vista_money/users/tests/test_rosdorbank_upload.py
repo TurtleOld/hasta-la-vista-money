@@ -60,7 +60,11 @@ class RosDorBankUploadTest(TestCase):
             upload.status,
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
-        self.assertIsNone(upload.balance_discrepancy)
+        self.assertIsNotNone(upload.balance_discrepancy)
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
         rows = BankStatementRow.objects.filter(
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,

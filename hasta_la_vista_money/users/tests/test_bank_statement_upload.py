@@ -1609,6 +1609,45 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertFalse(control.balance.checked)
         self.assertContains(response, 'Не проверено')
 
+    def test_owner_explains_balance_discrepancy_without_money(self) -> None:
+        today = timezone.localdate()
+        self.upload.statement_closing_balance = Decimal('880.00')
+        self.upload.balance_moment = timezone.now()
+        self.upload.save(
+            update_fields=['statement_closing_balance', 'balance_moment'],
+        )
+        container = ApplicationContainer()
+        users = container.users
+        service = users.statement_balance_verification_service()
+        service.verify(self.upload)
+        before_balance = self.account.balance
+        before_transactions = Transaction.objects.count()
+
+        response = self.client.post(
+            reverse('finance_account:accounting_control'),
+            {
+                'action': 'explain_balance',
+                'account': self.account.pk,
+                'upload_id': self.upload.pk,
+                'code': (
+                    BankStatementUpload.ExplanationCode.CONSCIOUS_INCOMPLETE_ACCOUNTING
+                ),
+                'period_start': today.replace(day=1).isoformat(),
+                'period_end': today.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.balance_explanation_code,
+            BankStatementUpload.ExplanationCode.CONSCIOUS_INCOMPLETE_ACCOUNTING,
+        )
+        self.assertEqual(self.upload.balance_explained_by, self.user)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, before_balance)
+        self.assertEqual(Transaction.objects.count(), before_transactions)
+
 
 class TestBankStatementUploadHistory(TestCase):
     fixtures: list[str] = ['users.yaml']
@@ -4555,6 +4594,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         mock_parser.parse.return_value = StatementParseResult(
             transactions=[],
             closing_balance=Decimal('9000.00'),
+            closing_balance_date=timezone.localdate(),
         )
         mock_parser_cls.return_value = mock_parser
 
