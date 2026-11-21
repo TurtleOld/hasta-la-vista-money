@@ -13,7 +13,7 @@ from celery.exceptions import Retry
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import OperationalError
+from django.db import DatabaseError, OperationalError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -903,17 +903,30 @@ class TestBankStatementReconciliationView(TestCase):
             source_row_position=1,
         )
 
-        response = self.client.post(
-            reverse(
-                'finance_account:bank_statement_reconciliation_bulk',
-                args=[self.upload.pk],
-            ),
-            {
-                'decision': 'new',
-                'confirm_risk': 'true',
-                'rows': [self.row.pk, successful.pk],
-            },
-        )
+        original = BankStatementReconciliationService._create_transaction
+
+        def flaky(service, row):
+            if row.pk == self.row.pk:
+                raise DatabaseError('duplicate-source')
+            return original(service, row)
+
+        with patch.object(
+            BankStatementReconciliationService,
+            '_create_transaction',
+            autospec=True,
+            side_effect=flaky,
+        ):
+            response = self.client.post(
+                reverse(
+                    'finance_account:bank_statement_reconciliation_bulk',
+                    args=[self.upload.pk],
+                ),
+                {
+                    'decision': 'new',
+                    'confirm_risk': 'true',
+                    'rows': [self.row.pk, successful.pk],
+                },
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -1408,6 +1421,14 @@ class TestBankStatementReconciliationView(TestCase):
         linked.decision = BankStatementRow.Decision.LINKED
         linked.transaction = self.candidate
         linked.save(update_fields=['decision', 'transaction'])
+        new_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('20.00'),
+            date=timezone.now() + timedelta(minutes=1),
+        )
         new = BankStatementRow.objects.create(
             upload=self.upload,
             transaction_type=TransactionType.EXPENSE,
@@ -1418,7 +1439,7 @@ class TestBankStatementReconciliationView(TestCase):
             suggested_category='Прочее',
             source_row_position=1,
             candidate=self.candidate,
-            transaction=self.candidate,
+            transaction=new_transaction,
             decision=BankStatementRow.Decision.NEW,
         )
 
@@ -4823,6 +4844,15 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             name='Продукты',
             type=TransactionType.EXPENSE,
         )
+        fingerprint = (
+            ApplicationContainer()
+            .users.statement_identity_service()
+            .fingerprint(
+                bank='generic',
+                account_id=self.account.pk,
+                source_ref='same-ref',
+            )
+        )
         Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -4831,6 +4861,9 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             amount=Decimal('75.00'),
             date=transaction_date,
             source_ref='same-ref',
+            source_fingerprint=fingerprint.digest,
+            source_fingerprint_key_version=fingerprint.key_version,
+            source_fingerprint_format_version=fingerprint.format_version,
         )
         classifier = MagicMock()
         ApplicationContainer.users.category_classifier.override(classifier)
@@ -4844,6 +4877,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
                     'amount': Decimal('-75.00'),
                     'description': 'Магазин',
                     'source_ref': 'same-ref',
+                    'source_ref_strength': 'strong',
                 },
             ],
         )
@@ -4857,9 +4891,12 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
-        self.assertFalse(
-            BankStatementRow.objects.filter(upload=upload).exists(),
+        duplicate = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            duplicate.decision,
+            BankStatementRow.Decision.LINKED,
         )
+        self.assertIsNotNone(duplicate.transaction_id)
         classifier.classify.assert_not_called()
 
     @patch(

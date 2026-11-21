@@ -1,3 +1,4 @@
+import json
 import mimetypes
 import os
 import sys
@@ -653,6 +654,39 @@ BANK_STATEMENT_CATEGORY_MODEL_NAME: str = config(
     'BANK_STATEMENT_CATEGORY_MODEL_NAME',
     default=config('CATEGORY_CLASSIFIER_MODEL', default=''),
 )
+STATEMENT_FINGERPRINT_KEYS: dict[str, str] = {}
+_statement_fingerprint_keys = config(
+    'STATEMENT_FINGERPRINT_KEYS',
+    default='',
+)
+if _statement_fingerprint_keys:
+    try:
+        _parsed_keys = json.loads(_statement_fingerprint_keys)
+    except ValueError:
+        _parsed_keys = {}
+    if isinstance(_parsed_keys, dict):
+        STATEMENT_FINGERPRINT_KEYS = {
+            str(key): str(secret)
+            for key, secret in _parsed_keys.items()
+            if str(key) and str(secret)
+        }
+STATEMENT_FINGERPRINT_ACTIVE_KEY: str = config(
+    'STATEMENT_FINGERPRINT_ACTIVE_KEY',
+    default='',
+)
+STATEMENT_FINGERPRINT_FORMAT_VERSION: int = config(
+    'STATEMENT_FINGERPRINT_FORMAT_VERSION',
+    default=1,
+    cast=int,
+)
+if IS_TESTING and not STATEMENT_FINGERPRINT_KEYS:
+    # A test-only keyring keeps existing behaviour testable. Production
+    # configuration stays empty: without real keys, statement fingerprints
+    # are unavailable and imports must ask for manual resolution.
+    STATEMENT_FINGERPRINT_KEYS = {
+        'test': 'test-only-statement-fingerprint-key',
+    }
+    STATEMENT_FINGERPRINT_ACTIVE_KEY = 'test'
 FNS_PASSWORD: str = config('FNS_PASSWORD', default='')
 FNS_TIMEOUT_SECONDS: float = config(
     'FNS_TIMEOUT_SECONDS',

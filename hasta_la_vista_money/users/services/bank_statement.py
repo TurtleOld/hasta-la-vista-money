@@ -55,6 +55,8 @@ class StatementParseResult:
         period_start: Начало периода выписки, если известно.
         period_end: Конец периода выписки, если известно.
         requires_markup: Строки не проводятся до разметки пользователем.
+        bank: Код банка, задающий контекст технического отпечатка.
+        format_version: Версия сопоставления парсера и формата файла.
     """
 
     transactions: list[dict[str, Any]] = field(default_factory=list)
@@ -67,6 +69,8 @@ class StatementParseResult:
     period_start: date_type | None = None
     period_end: date_type | None = None
     requires_markup: bool = False
+    bank: str = 'generic'
+    format_version: int = 1
 
 
 # General parsing constants
@@ -171,6 +175,9 @@ def _dedup_transactions(
 
 class BaseBankStatementParser(ABC):
     """Abstract base class for bank statement parsers."""
+
+    bank_code = 'generic'
+    format_version = 1
 
     def __init__(self, pdf_path: str | Path) -> None:
         self.pdf_path = Path(pdf_path)
@@ -400,6 +407,8 @@ class _GenericBankParser(BaseBankStatementParser):
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                bank=self.bank_code,
+                format_version=self.format_version,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -550,6 +559,8 @@ class _RaiffeisenBankParser(_GenericBankParser):
     [6]=Номер карты
     """
 
+    bank_code = 'raiffeisen'
+
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Райффайзенбанка.
 
@@ -605,6 +616,8 @@ class _SberbankParser(BaseBankStatementParser):
 
     Columns: [0]=Дата | [1]=Категория | [2]=Сумма | [3]=Остаток
     """
+
+    bank_code = 'sberbank'
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Сбербанка (кредитная карта).
@@ -667,6 +680,8 @@ class _SberbankParser(BaseBankStatementParser):
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                bank=self.bank_code,
+                format_version=self.format_version,
             )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
@@ -1030,7 +1045,11 @@ class _OzonBankParser(BaseBankStatementParser):
         else:
             # Transfers are intentionally excluded, so closing-balance
             # reconciliation would report an expected false discrepancy.
-            return StatementParseResult(transactions=transactions)
+            return StatementParseResult(
+                transactions=transactions,
+                bank=self.bank_code,
+                format_version=self.format_version,
+            )
 
     def _parse_table(
         self,
@@ -1242,6 +1261,8 @@ class _RosDorBankParser(BaseBankStatementParser):
     header above it.
     """
 
+    bank_code = 'rosdorbank'
+
     _header_pattern = re.compile(
         r'Выписка по счету (\d{20}) с (\d{2}\.\d{2}\.\d{4}) '
         r'по (\d{2}\.\d{2}\.\d{4})',
@@ -1323,6 +1344,8 @@ class _RosDorBankParser(BaseBankStatementParser):
             period_start=self._parse_day(header.group(2)),
             period_end=self._parse_day(header.group(3)),
             requires_markup=True,
+            bank=self.bank_code,
+            format_version=self.format_version,
         )
 
     def _split_totals(

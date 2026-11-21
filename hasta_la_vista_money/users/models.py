@@ -326,6 +326,7 @@ class BankStatementRow(Model):
         AWAITING_MARKUP = 'awaiting_markup', _('Ждёт разметки')
         MUTUAL_CANCEL = 'mutual_cancel', _('Взаимная отмена')
         SKIPPED = 'skipped', _('Пропущена')
+        DUPLICATE = 'duplicate', _('Точный дубль')
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
@@ -363,7 +364,22 @@ class BankStatementRow(Model):
     candidate_description = CharField(max_length=250, blank=True, default='')
     suggested_category = CharField(max_length=250, blank=True, default='')
     source_ref = CharField(max_length=64, blank=True, null=True)
+    source_fingerprint = CharField(max_length=64, blank=True, default='')
+    source_fingerprint_key_version = CharField(
+        max_length=32,
+        blank=True,
+        default='',
+    )
+    source_fingerprint_format_version = PositiveIntegerField(default=0)
+    source_format_version = PositiveIntegerField(default=0)
     source_row_position = PositiveIntegerField(blank=True, null=True)
+    canonical_row = ForeignKey(
+        'self',
+        on_delete=SET_NULL,
+        related_name='repeat_observations',
+        blank=True,
+        null=True,
+    )
     match_calendar_date = BooleanField(default=False)
     # RosDorBankRowKind of a row awaiting markup.
     kind = CharField(max_length=10, blank=True, default='')
@@ -416,6 +432,11 @@ class BankStatementRow(Model):
                 condition=Q(transfer__isnull=False),
                 name='unique_statement_row_transfer',
             ),
+            UniqueConstraint(
+                fields=['transaction'],
+                condition=Q(transaction__isnull=False),
+                name='unique_statement_row_transaction',
+            ),
         ]
         indexes = [
             Index(
@@ -425,6 +446,10 @@ class BankStatementRow(Model):
             Index(
                 fields=['upload', 'decision', 'exclusion_code'],
                 name='users_statement_exclusion_idx',
+            ),
+            Index(
+                fields=['source_fingerprint'],
+                name='stmt_row_fp_idx',
             ),
         ]
 

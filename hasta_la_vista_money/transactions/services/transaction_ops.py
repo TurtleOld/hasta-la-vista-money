@@ -204,6 +204,7 @@ class TransactionService:
             old_account = transaction_obj.account
             old_amount = transaction_obj.amount
             old_type = transaction_obj.type
+            old_date = transaction_obj.date
 
             if self.statement_row_links.has_linked_row(transaction_obj) and (
                 command.account.pk != old_account.pk
@@ -240,6 +241,17 @@ class TransactionService:
                 date_value = timezone.make_aware(date_value)
             transaction_obj.date = date_value
             transaction_obj.save()
+            if (
+                transaction_obj.date != old_date
+                and self.statement_row_links.has_linked_row(
+                    transaction_obj,
+                )
+            ):
+                # A date change invalidates affected statement checks;
+                # a category-only change leaves them untouched.
+                self.statement_row_links.invalidate_linked_checks(
+                    transaction_obj,
+                )
         return transaction_obj
 
     def delete_transaction(

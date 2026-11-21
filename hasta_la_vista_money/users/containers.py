@@ -57,6 +57,9 @@ from hasta_la_vista_money.users.services.statement_balance_verification import (
 from hasta_la_vista_money.users.services.statement_coverage import (
     StatementCoverageService,
 )
+from hasta_la_vista_money.users.services.statement_identity import (
+    StatementIdentityService,
+)
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupService,
 )
@@ -121,9 +124,14 @@ class UsersContainer(containers.DeclarativeContainer):
 
     category_classifier = providers.Singleton(_build_classifier)
 
+    statement_identity_service = providers.Factory(StatementIdentityService)
+
     bank_statement_reconciliation_service: providers.Factory[
         BankStatementReconciliationServiceProtocol
-    ] = providers.Factory(BankStatementReconciliationService)
+    ] = providers.Factory(
+        BankStatementReconciliationService,
+        balance_service=providers.Factory(BalanceService),
+    )
 
     statement_row_repository = providers.Singleton(StatementRowRepository)
     statement_coverage_repository = providers.Singleton(
@@ -186,5 +194,7 @@ class UsersContainer(containers.DeclarativeContainer):
         BankStatementImportService,
         classifier=category_classifier,
         account_repository=providers.Singleton(AccountRepository),
+        statement_row_repository=statement_row_repository,
+        identity_service=statement_identity_service,
         coverage_service=statement_coverage_service,
     )

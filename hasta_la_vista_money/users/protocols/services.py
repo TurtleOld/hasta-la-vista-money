@@ -286,6 +286,18 @@ class StatementRowLinkServiceProtocol(Protocol):
         user_id: int,
     ) -> BankStatementRow: ...
 
+    def link_duplicate(
+        self,
+        row_id: int,
+        canonical_row_id: int,
+        user_id: int,
+    ) -> BankStatementRow: ...
+
+    def invalidate_linked_checks(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> None: ...
+
 
 @runtime_checkable
 class BankStatementRetentionServiceProtocol(Protocol):
