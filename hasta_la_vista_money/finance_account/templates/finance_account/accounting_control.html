@@ -197,7 +197,67 @@
                         <h2>{% translate 'Проверка остатка' %}</h2>
                     </div>
                     <p class="control-state">{{ control.balance.label }}</p>
-                    <p class="statement-help">{{ control.balance.detail }}</p>
+                    {% if control.balance.detail %}
+                        <p class="statement-help">{{ control.balance.detail }}</p>
+                    {% endif %}
+                    {% if control.balance.blocks_final_reconciliation %}
+                        <p class="statement-help">{% translate 'Итоговая финансовая сверка не завершена: есть необъяснённое расхождение остатка.' %}</p>
+                    {% endif %}
+                    {% for check in control.balance_checks %}
+                        <div class="control-row">
+                            <div>
+                                <p class="finances-row-title">{{ check.label }} · {{ check.type_label }}</p>
+                                {% if check.detail %}<p class="statement-help">{{ check.detail }}</p>{% endif %}
+                                {% if check.has_amounts %}
+                                    <p class="statement-help">
+                                        {% translate 'Остаток по выписке' %}: {{ check.bank_balance|floatformat:2 }} {{ check.currency }}
+                                        · {% translate 'Остаток по истории' %}: {{ check.ledger_balance|floatformat:2 }} {{ check.currency }}
+                                        · {% translate 'Расхождение' %}: {{ check.discrepancy|floatformat:2 }} {{ check.currency }}
+                                    </p>
+                                {% endif %}
+                                {% if check.explanation_label %}
+                                    <p class="statement-help">
+                                        {{ check.explanation_label }}
+                                        {% if check.explained_by %}· {{ check.explained_by.username }}{% endif %}
+                                        {% if check.explained_at %}· {{ check.explained_at|date:'d.m.Y H:i' }}{% endif %}
+                                    </p>
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if can_write and check.can_explain %}
+                                    <form method="post" class="statement-form control-coverage-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="{{ explain_action }}">
+                                        <input type="hidden" name="account" value="{{ selected_account.pk }}">
+                                        <input type="hidden" name="upload_id" value="{{ check.upload.pk }}">
+                                        <input type="hidden" name="period_start" value="{{ period_start|date:'Y-m-d' }}">
+                                        <input type="hidden" name="period_end" value="{{ period_end|date:'Y-m-d' }}">
+                                        <div class="statement-field">
+                                            <label for="explanation-{{ check.upload.pk }}">{% translate 'Объяснение расхождения' %}</label>
+                                            <select id="explanation-{{ check.upload.pk }}" name="code" class="statement-select">
+                                                {% for value, label in explanation_form.code.field.choices %}
+                                                    <option value="{{ value }}">{{ label }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="finances-button finances-button-secondary">{% translate 'Объяснить расхождение' %}</button>
+                                    </form>
+                                {% elif can_write and not check.actual and not check.upload.retention_cleaned_at %}
+                                    <form method="post" class="statement-form control-coverage-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="{{ recheck_action }}">
+                                        <input type="hidden" name="account" value="{{ selected_account.pk }}">
+                                        <input type="hidden" name="upload_id" value="{{ check.upload.pk }}">
+                                        <input type="hidden" name="period_start" value="{{ period_start|date:'Y-m-d' }}">
+                                        <input type="hidden" name="period_end" value="{{ period_end|date:'Y-m-d' }}">
+                                        <button type="submit" class="finances-button finances-button-secondary">{% translate 'Перепроверить остаток' %}</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <p class="statement-help">{% translate 'Остаток не проверялся: для сравнения нужны момент и валюта остатка. Недостаток данных не равен нулю.' %}</p>
+                    {% endfor %}
                 </section>
             </div>
         {% endif %}
