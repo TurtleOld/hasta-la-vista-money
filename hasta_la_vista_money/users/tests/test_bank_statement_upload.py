@@ -73,6 +73,10 @@ RAIFFEISEN_REAL_FIXTURE = (
 
 SBERBANK_FIXTURE = Path(__file__).parent / 'fixtures' / 'sberbank_statement.pdf'
 
+# Real user-provided Ozon statement, coordinator-anonymized: dates and
+# amounts preserved, bank identifiers replaced with synthetic values.
+OZON_FIXTURE = Path(__file__).parent / 'fixtures' / 'ozon_statement.pdf'
+
 
 class TestBankStatementUploadView(TestCase):
     """Test cases for bank statement upload view."""
@@ -5896,6 +5900,75 @@ class TestOzonBankStatement(TestCase):
         parser = _create_parser(self.pdf_path)
         self.assertIsInstance(parser, _OzonBankParser)
 
+    def test_real_anonymized_statement_matches_document_totals(self) -> None:
+        """Real PDF: 56 rows and totals equal the printed statement totals.
+
+        Expected values come from the document text: incoming
+        31 337.83 ₽, outgoing 31 431.03 ₽ and outgoing balance 50.50 ₽,
+        so the signed sum is -93.20 ₽. Category counts and sums were
+        verified against the table rows, not copied from the parser.
+        """
+        result = _OzonBankParser(OZON_FIXTURE).parse()
+
+        transactions = result.transactions
+        self.assertEqual(len(transactions), 56)
+        self.assertFalse(
+            [item for item in transactions if item.get('parse_issue')],
+        )
+        amounts = [cast('Decimal', item['amount']) for item in transactions]
+        self.assertEqual(
+            sum(amount for amount in amounts if amount > 0),
+            Decimal('31337.83'),
+        )
+        self.assertEqual(
+            sum(-amount for amount in amounts if amount < 0),
+            Decimal('31431.03'),
+        )
+        self.assertEqual(sum(amounts), Decimal('-93.20'))
+        self.assertIsNone(result.closing_balance)
+        self.assertIsNone(result.period_start)
+
+        by_category: dict[str | None, list[Decimal]] = {}
+        for item in transactions:
+            by_category.setdefault(item['category_name'], []).append(
+                cast('Decimal', item['amount']),
+            )
+        self.assertEqual(
+            {name: len(values) for name, values in by_category.items()},
+            {
+                'Покупки Ozon': 24,
+                'Возвраты Ozon': 9,
+                'Чаевые Ozon': 5,
+                None: 18,
+            },
+        )
+        self.assertEqual(
+            sum(by_category['Покупки Ozon']),
+            Decimal('-31035.03'),
+        )
+        self.assertEqual(
+            sum(by_category['Возвраты Ozon']),
+            Decimal('7000.83'),
+        )
+        self.assertEqual(sum(by_category['Чаевые Ozon']), Decimal('-396.00'))
+        self.assertEqual(sum(by_category[None]), Decimal('24337.00'))
+        self.assertTrue(
+            all(
+                item['description'].startswith('Перевод')
+                for item in transactions
+                if item['category_name'] is None
+            ),
+        )
+        self.assertEqual(
+            len({item['source_ref'] for item in transactions}),
+            56,
+        )
+
+        first = transactions[0]
+        self.assertEqual(first['amount'], Decimal('-50.00'))
+        self.assertEqual(first['category_name'], 'Чаевые Ozon')
+        self.assertEqual(first['source_ref'], '11721043560')
+
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_parses_known_operations_and_keeps_transfer_visible(
         self,
@@ -7969,3 +8042,74 @@ class TestBankStatementImportReliability(TestCase):
         self.assertTrue(upload.error_message)
         self.assertFalse(Transaction.objects.exists())
         self.assertFalse(BankStatementRow.objects.exists())
+
+    def test_ozon_real_statement_imports_known_and_keeps_transfers(
+        self,
+    ) -> None:
+        """Real PDF: known rows post, 4 real twins and 18 transfers wait.
+
+        Four same-day pairs share amount and purpose but have different
+        times and documents (two purchases, one tip, one refund), so the
+        policy leaves them unresolved instead of merging two real
+        operations. The printed totals are not used to force a post.
+        """
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'ozon-real.pdf',
+                OZON_FIXTURE.read_bytes(),
+                content_type='application/pdf',
+            ),
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(upload.total_transactions, 56)
+        self.assertEqual(upload.income_count, 8)
+        self.assertEqual(upload.expense_count, 26)
+        self.assertEqual(upload.skipped_count, 4)
+        self.assertEqual(Transaction.objects.count(), 34)
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 56)
+        self.assertEqual(
+            rows.filter(decision=BankStatementRow.Decision.NEW).count(),
+            34,
+        )
+        self.assertEqual(
+            rows.filter(decision=BankStatementRow.Decision.PENDING).count(),
+            4,
+        )
+        self.assertFalse(
+            rows.filter(
+                decision=BankStatementRow.Decision.PENDING,
+                candidate__isnull=True,
+            ).exists(),
+        )
+        self.assertEqual(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            18,
+        )
+        self.assertFalse(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            )
+            .exclude(description__startswith='Перевод')
+            .exists(),
+        )
+        self.assertEqual(self.account.balance, Decimal('-21025.20'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertIsNone(upload.statement_closing_balance)
+        classifier.classify.assert_not_called()

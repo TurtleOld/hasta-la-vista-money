@@ -1769,8 +1769,9 @@ class _OzonBankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF Ozon: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
-            # Ozon statements do not expose a closing balance or period
-            # to this parser, so none is invented for reconciliation.
+            # Ticket 05 does not read the closing balance or period even
+            # when the document prints them; coverage and balance
+            # verification belong to tickets 09-10 and none is invented.
             return StatementParseResult(
                 transactions=transactions,
                 bank=self.bank_code,
@@ -1818,7 +1819,10 @@ class _OzonBankParser(BaseBankStatementParser):
         processing-date continuation has no purpose or only a document
         fragment and stays part of the operation above.
         """
-        if self._cell(row, OZON_AMOUNT_COL):
+        if (
+            self._extract_ozon_amount(self._cell(row, OZON_AMOUNT_COL))
+            is not None
+        ):
             return True
         if not self._operation_start_pattern.match(
             self._cell(row, OZON_DATE_COL),
