@@ -15,6 +15,9 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import BankStatementUpload, User
+from hasta_la_vista_money.users.services.bank_statement import (
+    StatementParseResult,
+)
 
 
 class _RecordingClassifier:
@@ -94,6 +97,7 @@ class BankStatementImportClassifierTests(TestCase):
             upload=self.upload,
             transactions=self._rows(),
             existing_categories=[],
+            parse_result=StatementParseResult(bank='testbank'),
         )
 
     def test_classifier_called_outside_row_transaction(self) -> None:

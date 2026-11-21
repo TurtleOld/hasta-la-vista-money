@@ -140,6 +140,7 @@ class TransferDedupeBaseTest(TestCase):
                         'source_ref': 'statement-ref',
                     },
                 ],
+                bank='testbank',
             )
             result = process_bank_statement_task.apply(args=[upload.pk]).get()
         return upload, result

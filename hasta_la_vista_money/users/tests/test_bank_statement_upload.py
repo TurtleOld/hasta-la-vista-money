@@ -50,6 +50,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _OzonBankParser,
     _RaiffeisenBankParser,
     _SberbankParser,
+    generic_local_category,
     sberbank_local_category,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
@@ -3095,6 +3096,168 @@ class TestBankStatementParserAdvanced(TestCase):
         finally:
             pdf_path.unlink()
 
+    def _make_generic_parser(self) -> _GenericBankParser:
+        pdf_path = self._create_mock_pdf()
+        self.addCleanup(pdf_path.unlink)
+        return _GenericBankParser(pdf_path)
+
+    def _make_generic_df(self, rows: list[list[Any]]) -> pd.DataFrame:
+        return pd.DataFrame(
+            rows,
+            columns=[str(index) for index in range(7)],
+        )
+
+    def test_valid_table_keeps_rows_and_local_categories(self) -> None:
+        """A readable table yields rows with closed local categories."""
+        parser = self._make_generic_parser()
+        df = self._make_generic_df(
+            [
+                ['01.01.2024 10:00', '', '', '', '', '', ''],
+                ['1', '', '', '', '', 'Покупка в магазине', '-1 500,00 ₽'],
+                [
+                    '2',
+                    '',
+                    '',
+                    '',
+                    '',
+                    'Зачисление заработной платы',
+                    '+50 000,00 ₽',
+                ],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(transactions[0]['amount'], Decimal('-1500.00'))
+        self.assertEqual(transactions[0]['category_name'], 'Покупки')
+        self.assertEqual(transactions[1]['amount'], Decimal('50000.00'))
+        self.assertEqual(
+            transactions[1]['category_name'],
+            'Заработная плата',
+        )
+        self.assertIsNone(transactions[0]['source_ref'])
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_zero_amount_row_stays_visible_without_money(
+        self,
+        mock_camelot: MagicMock,
+        mock_extract_text: MagicMock,
+    ) -> None:
+        """A zero-amount row is a visible fragment, not a money movement."""
+        pdf_path = self._create_mock_pdf()
+        self.addCleanup(pdf_path.unlink)
+        parser = _GenericBankParser(pdf_path)
+        mock_table = MagicMock()
+        mock_table.df = self._make_generic_df(
+            [
+                ['', '01.01.2024 10:00', '', '', '', '', ''],
+                ['1', '', '', '', '', 'Комиссия банка', '0,00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        transactions = parser.parse().transactions
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['amount'], Decimal(0))
+        self.assertEqual(transactions[0]['parse_issue'], 'unsupported')
+
+    def test_category_ignores_continuation_text(self) -> None:
+        """A category comes from the operation row, not a neighbour."""
+        parser = self._make_generic_parser()
+        df = self._make_generic_df(
+            [
+                ['01.01.2024 10:00', '', '', '', '', '', ''],
+                ['1', '', '', '', '', '', '-100,00 ₽'],
+                ['', '', '', '', '', 'Покупка в магазине', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertIsNone(transactions[0]['category_name'])
+
+    def test_unsupported_row_is_kept_as_visible_fragment(self) -> None:
+        """A numbered row without amount or date is not dropped."""
+        parser = self._make_generic_parser()
+        df = self._make_generic_df(
+            [
+                ['1', '', '', '', '', 'Неизвестная операция', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['parse_issue'], 'unsupported')
+        self.assertIsNone(transactions[0]['amount'])
+        self.assertIsNone(transactions[0]['date'])
+        self.assertEqual(
+            transactions[0]['description'],
+            'Неизвестная операция',
+        )
+
+    def test_row_error_keeps_fragment_and_other_rows(self) -> None:
+        """A recoverable row error does not abort the whole table."""
+        parser = self._make_generic_parser()
+        df = self._make_generic_df(
+            [
+                ['01.01.2024 10:00', '', '', '', '', '', ''],
+                ['1', '', '', '', '', 'Комиссия банка', '-13,20 ₽'],
+                ['2', '', '', '', '', '', '-20,00 ₽'],
+            ],
+        )
+
+        with patch.object(
+            parser,
+            '_extract_amount_from_row',
+            side_effect=[ValueError('broken cell'), None, Decimal('-20.00')],
+        ):
+            transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(transactions[0]['parse_issue'], 'unsupported')
+        self.assertEqual(transactions[1]['amount'], Decimal('-20.00'))
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_empty_parse_has_no_invented_metadata(
+        self,
+        mock_camelot: MagicMock,
+        mock_extract_text: MagicMock,
+    ) -> None:
+        """An empty or unknown format proves no account, period or balance."""
+        parser = self._make_generic_parser()
+        mock_camelot.read_pdf.return_value = []
+
+        result = parser.parse()
+
+        self.assertEqual(result.transactions, [])
+        self.assertIsNone(result.account_number)
+        self.assertIsNone(result.period_start)
+        self.assertIsNone(result.closing_balance)
+        self.assertEqual(result.bank, 'generic')
+
+    def test_local_category_rules_are_closed_and_directional(self) -> None:
+        """Only a closed rule in its own direction is locally known."""
+        self.assertEqual(
+            generic_local_category('Зачисление заработной платы', 'income'),
+            'Заработная плата',
+        )
+        self.assertIsNone(
+            generic_local_category('Зачисление заработной платы', 'expense'),
+        )
+        self.assertIsNone(generic_local_category('Оплата в MAGNIT', 'expense'))
+
 
 class TestBankStatementProcessIntegration(TestCase):
     """Integration tests for the bank statement import seam.
@@ -3140,11 +3303,11 @@ class TestBankStatementProcessIntegration(TestCase):
             {
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
-                2: ['', '', 'Зарплата', 'Покупка'],
+                2: ['', '', '', ''],
                 3: ['', '', '', ''],
                 4: ['', '', '', ''],
-                5: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
-                6: ['', '', '', ''],
+                5: ['', '', 'Зарплата', 'Покупка'],
+                6: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
             },
         )
 
@@ -3198,7 +3361,7 @@ class TestBankStatementProcessIntegration(TestCase):
             {
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
-                2: ['', '', 'Зарплата Январь', 'Продукты Магнит'],
+                2: ['', '', 'Зарплата Январь', 'Покупка в магазине'],
                 3: ['', '', '', ''],
                 4: ['', '', '+50000,00 ₽', '-1500,00 ₽'],
             },
@@ -3215,14 +3378,14 @@ class TestBankStatementProcessIntegration(TestCase):
         self.assertTrue(
             Category.objects.filter(
                 user=self.user,
-                name='Зарплата Январь',
+                name='Заработная плата',
                 type=TransactionType.INCOME,
             ).exists(),
         )
         self.assertTrue(
             Category.objects.filter(
                 user=self.user,
-                name='Продукты Магнит',
+                name='Покупки',
                 type=TransactionType.EXPENSE,
             ).exists(),
         )
@@ -4818,6 +4981,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': timezone.now(),
@@ -4873,6 +5037,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         base_date = timezone.now()
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': base_date - timedelta(days=2 - i),
@@ -4933,6 +5098,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         )
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': existing.date,
@@ -4978,6 +5144,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 
         mock_parser = MagicMock()
         mock_parser.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[],
             closing_balance=Decimal('9000.00'),
         )
@@ -5037,6 +5204,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5107,6 +5275,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5155,6 +5324,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': timezone.now(),
@@ -5200,7 +5370,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer()
             .users.statement_identity_service()
             .fingerprint(
-                bank='generic',
+                bank='testbank',
                 account_id=self.account.pk,
                 source_ref='same-ref',
             )
@@ -5223,6 +5393,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5288,6 +5459,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5359,6 +5531,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5436,6 +5609,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5490,6 +5664,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': duplicate_date,
@@ -5550,6 +5725,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': transaction_date,
@@ -5601,6 +5777,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             ApplicationContainer.users.category_classifier.reset_override,
         )
         mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
             transactions=[
                 {
                     'date': timezone.now(),
@@ -6222,11 +6399,11 @@ class TestBankStatementImportReliability(TestCase):
             {
                 0: ['', '01.01.2024 10:00', '1', '2'],
                 1: ['', '', '', ''],
-                2: ['', '', 'Большая покупка', 'Зарплата'],
+                2: ['', '', '', ''],
                 3: ['', '', '', ''],
                 4: ['', '', '', ''],
-                5: ['', '', '-5000,00 ₽', '+50000,00 ₽'],
-                6: ['', '', '', ''],
+                5: ['', '', 'Большая покупка', 'Зарплата'],
+                6: ['', '', '-5000,00 ₽', '+50000,00 ₽'],
             },
         )
         mock_table = MagicMock()
@@ -6262,17 +6439,18 @@ class TestBankStatementImportReliability(TestCase):
         self._mock_table(mock_camelot)
         upload = self._create_upload()
         service = ApplicationContainer().users.bank_statement_import_service()
-        real = service._classify_category
-        outcomes: list[Any] = [None, RuntimeError('worker died')]
+        real = service._save_autopost_row
+        calls = 0
 
-        def flaky(*args: Any, **kwargs: Any) -> str:
-            outcome = outcomes.pop(0)
-            if outcome is not None:
-                raise outcome
-            return cast('str', real(*args, **kwargs))
+        def flaky(*args: Any, **kwargs: Any) -> BankStatementRow:
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise RuntimeError('worker died')
+            return cast('BankStatementRow', real(*args, **kwargs))
 
         with (
-            patch.object(service, '_classify_category', side_effect=flaky),
+            patch.object(service, '_save_autopost_row', side_effect=flaky),
             self.assertRaises(RuntimeError),
         ):
             service.import_statement(upload)
@@ -7838,6 +8016,7 @@ class TestBankStatementImportReliability(TestCase):
         self.assertFalse(Transaction.objects.exists())
         self.assertFalse(BankStatementRow.objects.exists())
 
+
     def test_ozon_real_statement_imports_known_and_keeps_transfers(
         self,
     ) -> None:
@@ -7908,3 +8087,250 @@ class TestBankStatementImportReliability(TestCase):
         )
         self.assertIsNone(upload.statement_closing_balance)
         classifier.classify.assert_not_called()
+
+    def _generic_upload(
+        self,
+        transactions: list[dict[str, Any]],
+        *,
+        file_hash: str = '',
+        format_version: int = 2,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/generic.pdf',
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=transactions,
+                bank='generic',
+                format_version=format_version,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+        return upload
+
+    def test_generic_known_category_posts_row_and_movement(self) -> None:
+        """A closed local category posts one linked movement without AI."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        upload = self._generic_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': None,
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        classifier.classify.assert_not_called()
+
+    def test_generic_malformed_reference_has_no_bank_fingerprint(self) -> None:
+        """A generic ref never becomes an HMAC identity or a strong hint."""
+        upload = self._generic_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'LEGACY-REF',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='generic-file',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        transaction = Transaction.objects.get()
+        self.assertEqual(row.source_fingerprint, '')
+        self.assertEqual(transaction.source_fingerprint, '')
+        self.assertEqual(row.source_ref, 'LEGACY-REF')
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_generic_unknown_category_awaits_markup(self) -> None:
+        """An unknown category stays unresolved and moves no money."""
+        upload = self._generic_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': None,
+                    'category_name': None,
+                    'row_position': 0,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_generic_row_error_does_not_block_other_rows(self) -> None:
+        """A recoverable row error stays visible; the known row still posts."""
+        upload = self._generic_upload(
+            [
+                {
+                    'date': None,
+                    'amount': None,
+                    'description': 'Неизвестная операция',
+                    'parse_issue': 'unsupported',
+                    'row_position': 0,
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': None,
+                    'category_name': 'Комиссия банка',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            1,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_generic_empty_parse_is_not_completed(self) -> None:
+        """An empty generic parse does not prove there were no operations."""
+        upload = self._generic_upload([])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
+    def test_generic_fatal_file_error_fails_visible_without_money(
+        self,
+        parser: MagicMock,
+    ) -> None:
+        """A broken generic file posts nothing and is not complete."""
+        parser.return_value.parse.side_effect = BankStatementParseError(
+            'broken file',
+        )
+        upload = self._create_upload()
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
+
+    def test_generic_same_file_position_is_exact_duplicate(self) -> None:
+        """File hash, stable format and position prove one repeat."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        category = Category.objects.create(
+            user=self.user,
+            name='Комиссия банка',
+            type=TransactionType.EXPENSE,
+        )
+        canonical_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/canonical.pdf',
+            file_hash='canonical-hash',
+        )
+        canonical_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('13.20'),
+            date=moment,
+            source_ref=None,
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=2,
+        )
+        canonical_row = BankStatementRow.objects.create(
+            upload=canonical_upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('13.20'),
+            source_row_position=0,
+            transaction=canonical_transaction,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        upload = self._generic_upload(
+            [
+                {
+                    'date': moment + timedelta(hours=2),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': None,
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+        )
+
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(row.canonical_row, canonical_row)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))

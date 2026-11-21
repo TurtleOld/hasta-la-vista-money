@@ -74,10 +74,12 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 # Banks whose parsed rows may be posted only by a closed local category rule.
-LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon'})
+# A generic statement has no bank identity, so only table structure and a
+# locally known category can post it.
+LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
 # Banks whose reference is a hint: only file hash, stable format and
 # matching operation fields can prove an exact repeat.
-WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon'})
+WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:
@@ -87,6 +89,24 @@ def _is_unparsed(trans: dict[str, Any]) -> bool:
         or trans.get('amount') is None
         or trans.get('date') is None,
     )
+
+
+def _reference_strength(bank: str, trans: dict[str, Any]) -> str:
+    """Return the trust level of a parsed row reference.
+
+    A generic statement has no bank identity, so any reference seen there
+    stays a weak hint even if malformed metadata claims otherwise.
+
+    Args:
+        bank: Bank/format code of the parse result.
+        trans: One parsed statement row.
+
+    Returns:
+        ``'weak'`` or ``'strong'``.
+    """
+    if bank == 'generic':
+        return 'weak'
+    return str(trans.get('source_ref_strength') or 'weak')
 
 
 @dataclass(frozen=True)
@@ -335,12 +355,13 @@ class BankStatementImportService:
             trans_date = trans.get('date')
             unparsed = _is_unparsed(trans)
             source_ref = trans.get('source_ref')
+            source_ref_strength = _reference_strength(bank, trans)
             row_position = trans.get('row_position', idx)
             source = trans.get('source')
             abs_amount = abs(amount) if amount is not None else None
             match_calendar_date = (
                 source == 'ozon'
-                or bank == 'ozon'
+                or bank in {'ozon', 'generic'}
                 or bool(trans.get('date_only'))
             )
             is_credit_income = (
@@ -380,10 +401,7 @@ class BankStatementImportService:
                     trans_date=trans_date,
                     match_calendar_date=match_calendar_date,
                     format_version=format_version,
-                    source_ref_strength=trans.get(
-                        'source_ref_strength',
-                        'weak',
-                    ),
+                    source_ref_strength=source_ref_strength,
                 )
 
             # The classifier is a network call: keep it out of the row
@@ -425,19 +443,24 @@ class BankStatementImportService:
                         trans_date=trans_date,
                         match_calendar_date=match_calendar_date,
                         format_version=format_version,
-                        source_ref_strength=trans.get(
-                            'source_ref_strength',
-                            'weak',
-                        ),
+                        source_ref_strength=source_ref_strength,
                     )
                 if uses_local_categories and not unparsed and exact is None:
                     existing_row = BankStatementRow.objects.filter(
                         upload=upload,
                         source_row_position=row_position,
+                        source_format_version=format_version,
                     ).first()
                     if (
                         existing_row is not None
                         and existing_row.transaction_id is not None
+                        and self._row_matches(
+                            existing_row,
+                            type_value=type_value,
+                            amount=abs_amount,
+                            trans_date=trans_date,
+                            match_calendar_date=match_calendar_date,
+                        )
                     ):
                         exact = ExactObservation(row=existing_row)
                 if unparsed:
@@ -702,7 +725,13 @@ class BankStatementImportService:
         bank: str,
         source_ref: str | None,
     ) -> StatementFingerprint | None:
-        """Return the active fingerprint, or None when keys are unavailable."""
+        """Return the active fingerprint, or None when keys are unavailable.
+
+        A generic statement has no bank identity, so it never gets an HMAC
+        fingerprint even if malformed metadata carries a reference.
+        """
+        if bank == 'generic':
+            return None
         try:
             return self.identity_service.fingerprint(
                 bank=bank,
@@ -1335,10 +1364,7 @@ class BankStatementImportService:
                             else True
                         ),
                         format_version=format_version,
-                        source_ref_strength=trans.get(
-                            'source_ref_strength',
-                            'weak',
-                        ),
+                        source_ref_strength=_reference_strength(bank, trans),
                     )
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, idx, exact))
