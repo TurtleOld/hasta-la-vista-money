@@ -96,6 +96,56 @@ RAIFFEISEN_INCOME_COL = 3
 RAIFFEISEN_EXPENSE_COL = 4
 RAIFFEISEN_DESCRIPTION_COL = 5
 
+# Closed local category rules for Raiffeisen. A rule matches only its own
+# direction, so an incoming salary cannot become an expense category.
+RAIFFEISEN_LOCAL_CATEGORY_RULES: tuple[
+    tuple[re.Pattern[str], str, str],
+    ...,
+] = (
+    (
+        re.compile(r'заработн|зарплат|оплата труда'),
+        'Заработная плата',
+        'income',
+    ),
+    (
+        re.compile(r'процент\w* по вкладу'),
+        'Проценты по вкладу',
+        'income',
+    ),
+    (
+        re.compile(r'снятие наличных|выдача наличных|\batm\b'),
+        'Наличные',
+        'expense',
+    ),
+    (
+        re.compile(r'^комисси'),
+        'Комиссия банка',
+        'expense',
+    ),
+)
+
+
+def raiffeisen_local_category(
+    description: str,
+    transaction_type: str,
+) -> str | None:
+    """Return a closed locally known category for a Raiffeisen row.
+
+    Args:
+        description: Cleaned statement row description.
+        transaction_type: ``'income'`` or ``'expense'``.
+
+    Returns:
+        Category name from the closed rule set, or ``None`` when the row
+        has no locally known category and must stay unresolved.
+    """
+    normalized = description.casefold()
+    for pattern, category, rule_type in RAIFFEISEN_LOCAL_CATEGORY_RULES:
+        if rule_type == transaction_type and pattern.search(normalized):
+            return category
+    return None
+
+
 # Sberbank column indices
 SBERBANK_DATE_COL = 0
 SBERBANK_CATEGORY_COL = 1
@@ -146,24 +196,25 @@ class BankStatementParseError(Exception):
 
 def _dedup_transactions(
     transactions: list[dict[str, Any]],
+    *,
+    merge_repeated_refs: bool = True,
 ) -> list[dict[str, Any]]:
-    """Remove duplicate transactions within a single parsed statement.
+    """Remove duplicates within one parsed statement.
 
-    Transactions with the same non-empty ``source_ref`` are considered
-    duplicates regardless of other fields. Transactions without a
-    ``source_ref`` fall back to ``(date, amount, description)``.
+    A repeated bank reference alone is an identity only where the bank
+    format guarantees it. When ``merge_repeated_refs`` is false every row
+    is kept and positioned, so a reused document number cannot hide an
+    operation.
     """
-    seen_refs: set[str] = set()
+    seen_rows: set[str] = set()
     unique: list[dict[str, Any]] = []
     for position, t in enumerate(transactions):
         t['row_position'] = position
         ref = t.get('source_ref')
-        if ref:
-            if ref in seen_refs:
+        if ref and merge_repeated_refs:
+            if ref in seen_rows:
                 continue
-            seen_refs.add(ref)
-            unique.append(t)
-            continue
+            seen_rows.add(ref)
         unique.append(t)
     return unique
 
@@ -388,7 +439,10 @@ class _GenericBankParser(BaseBankStatementParser):
             transactions = [
                 t for t in transactions if t['amount'] != Decimal(0)
             ]
-            transactions = _dedup_transactions(transactions)
+            transactions = _dedup_transactions(
+                transactions,
+                merge_repeated_refs=self.bank_code != 'raiffeisen',
+            )
             closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
@@ -502,7 +556,7 @@ class _GenericBankParser(BaseBankStatementParser):
         df: pd.DataFrame,
         index: int,
     ) -> datetime | None:
-        for i in range(index, max(0, index - 5), -1):
+        for i in range(index, max(-1, index - 5), -1):
             check_row = df.iloc[i]
             for col_idx in range(min(2, len(check_row))):
                 if len(check_row) > col_idx:
@@ -560,6 +614,9 @@ class _RaiffeisenBankParser(_GenericBankParser):
     """
 
     bank_code = 'raiffeisen'
+    # Version 2 keeps unsupported rows visible and adds local categories;
+    # a row imported by the previous mapping must be reassigned manually.
+    format_version = 2
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Райффайзенбанка.
@@ -600,6 +657,56 @@ class _RaiffeisenBankParser(_GenericBankParser):
         if match:
             return match.group(1)
         return None
+
+    def _parse_transaction_row(
+        self,
+        row: pd.Series,
+        df: pd.DataFrame,
+        index: int,
+    ) -> dict[str, Any] | None:
+        """Parse one Raiffeisen row and keep unsupported fragments visible."""
+        trans = super()._parse_transaction_row(row, df, index)
+        if trans is None:
+            return self._unsupported_row(row, df, index)
+        trans['source_ref_strength'] = 'weak'
+        amount = trans.get('amount')
+        if amount is not None:
+            trans['category_name'] = raiffeisen_local_category(
+                str(trans.get('description') or ''),
+                'income' if amount > 0 else 'expense',
+            )
+        return trans
+
+    def _unsupported_row(
+        self,
+        row: pd.Series,
+        df: pd.DataFrame,
+        index: int,
+    ) -> dict[str, Any]:
+        """Return a visible fragment for a row the parser cannot complete."""
+        description = self._clean_description(
+            self._extract_description(
+                row,
+                df,
+                index,
+                RAIFFEISEN_DESCRIPTION_COL,
+            ),
+        )
+        if not description:
+            description = ' '.join(
+                str(value).strip()
+                for value in row
+                if str(value).strip() and str(value).strip() != 'nan'
+            )
+        return {
+            'date': self._extract_date_from_context(df, index),
+            'amount': self._extract_amount_from_row(row),
+            'description': description[:250],
+            'source_ref': self._extract_source_ref(row),
+            'source_ref_strength': 'weak',
+            'category_name': None,
+            'parse_issue': 'unsupported',
+        }
 
 
 # ---------------------------------------------------------------------------
