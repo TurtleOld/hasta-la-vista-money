@@ -176,11 +176,15 @@ class BankStatementUploadView(
                 user_id=user.pk,
             )
 
-            restart = not created and _import_service(
-                self.request,
-            ).restart_if_stale(upload)
+            should_start = created
+            replay_started = False
+            if not created:
+                replay_started = _import_service(
+                    self.request,
+                ).prepare_known_replay(upload, pdf_file)
+                should_start = replay_started
 
-            if created or restart:
+            if should_start:
                 task_runner = cast(
                     'Any',
                     process_bank_statement_task,
@@ -194,13 +198,21 @@ class BankStatementUploadView(
             else:
                 messages.warning(
                     self.request,
-                    _('Эта выписка уже была загружена.'),
+                    _('Эта выписка уже обрабатывается.'),
+                )
+            if replay_started:
+                messages.warning(
+                    self.request,
+                    _(
+                        'Этот файл уже известен. Запущена сверка без '
+                        'автоматического проведения операций.',
+                    ),
                 )
 
             # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
 
-            if created or restart:
+            if created:
                 messages.success(self.request, str(self.success_message))
 
         except Exception as e:
@@ -367,6 +379,9 @@ class BankStatementReconciliationView(
             self.request.GET.get('page'),
         )
         context['outcome'] = outcome
+        context['overlap_warning'] = _import_service(
+            self.request,
+        ).has_overlapping_period(self.object)
         markup = _markup_service(self.request)
         context['exclusions'] = markup.confirmed_exclusions(self.object)
         context['legacy_skips'] = markup.legacy_skipped_rows(self.object)

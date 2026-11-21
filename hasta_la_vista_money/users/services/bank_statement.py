@@ -53,7 +53,7 @@ class StatementParseResult:
             остатка (``exact_moment`` или ``closing_day``).
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
-        period_end: Конец периода выписки, если известно.
+        period_end: Конец периода выписки, если он явно напечатан.
         requires_markup: Строки не проводятся до разметки пользователем.
         bank: Код банка, задающий контекст технического отпечатка.
         format_version: Версия сопоставления парсера и формата файла.
@@ -111,6 +111,9 @@ RAIFFEISEN_ACCOUNT_PATTERN = re.compile(
 RAIFFEISEN_PERIOD_PATTERN = re.compile(
     r'Период:\s*с\s*(\d{2}\.\d{2}\.\d{4})',
 )
+RAIFFEISEN_PERIOD_END_PATTERN = re.compile(
+    r'Период:\s*с\s*\d{2}\.\d{2}\.\d{4}\s*по\s*(\d{2}\.\d{2}\.\d{4})',
+)
 RAIFFEISEN_CLOSING_PATTERN = re.compile(
     r'Собственные средства на конец\s+(\d{2}\.\d{2}\.\d{4})',
 )
@@ -151,6 +154,29 @@ RAIFFEISEN_LOCAL_CATEGORY_RULES: tuple[
 )
 
 
+def _closed_local_category(
+    description: str,
+    transaction_type: str,
+    rules: tuple[tuple[re.Pattern[str], str, str], ...],
+) -> str | None:
+    """Match a description against one bank's closed directional rules.
+
+    Args:
+        description: Cleaned statement row description.
+        transaction_type: ``'income'`` or ``'expense'``.
+        rules: Closed local rule set of the specific bank or format.
+
+    Returns:
+        Category name from the rule set, or ``None`` when no rule matches
+        in the row's own direction.
+    """
+    normalized = description.casefold()
+    for pattern, category, rule_type in rules:
+        if rule_type == transaction_type and pattern.search(normalized):
+            return category
+    return None
+
+
 def raiffeisen_local_category(
     description: str,
     transaction_type: str,
@@ -165,11 +191,11 @@ def raiffeisen_local_category(
         Category name from the closed rule set, or ``None`` when the row
         has no locally known category and must stay unresolved.
     """
-    normalized = description.casefold()
-    for pattern, category, rule_type in RAIFFEISEN_LOCAL_CATEGORY_RULES:
-        if rule_type == transaction_type and pattern.search(normalized):
-            return category
-    return None
+    return _closed_local_category(
+        description,
+        transaction_type,
+        RAIFFEISEN_LOCAL_CATEGORY_RULES,
+    )
 
 
 # Sberbank column indices
@@ -177,6 +203,9 @@ SBERBANK_DATE_COL = 0
 SBERBANK_CATEGORY_COL = 1
 SBERBANK_AMOUNT_COL = 2
 SBERBANK_BALANCE_COL = 3
+SBERBANK_PERIOD_PATTERN = re.compile(
+    r'За период\s+(\d{2}\.\d{2}\.\d{4})\s*[—–-]\s*(\d{2}\.\d{2}\.\d{4})',
+)
 
 # Closed local category rules for Sberbank. The statement category label is
 # only a hint: a row is posted automatically only when this closed set knows
@@ -485,9 +514,66 @@ class BaseBankStatementParser(ABC):
 # Generic Russian bank parser (original logic)
 # ---------------------------------------------------------------------------
 
+# Closed local category rules for a statement with no bank identity. Only a
+# rule in its own direction is locally known; everything else stays
+# unresolved for the user.
+GENERIC_LOCAL_CATEGORY_RULES: tuple[
+    tuple[re.Pattern[str], str, str],
+    ...,
+] = (
+    (
+        re.compile(r'заработн|зарплат|оплата труда'),
+        'Заработная плата',
+        'income',
+    ),
+    (
+        re.compile(r'^комисси'),
+        'Комиссия банка',
+        'expense',
+    ),
+    (
+        re.compile(
+            r'снятие наличных|выдача наличных|банкомат|\batm\b',
+        ),
+        'Наличные',
+        'expense',
+    ),
+    (
+        re.compile(r'покупк'),
+        'Покупки',
+        'expense',
+    ),
+)
+
+
+def generic_local_category(
+    description: str,
+    transaction_type: str,
+) -> str | None:
+    """Return a closed locally known category for a generic row.
+
+    Args:
+        description: Cleaned statement row description.
+        transaction_type: ``'income'`` or ``'expense'``.
+
+    Returns:
+        Category name from the closed rule set, or ``None`` when the row
+        has no locally known category and must stay unresolved.
+    """
+    return _closed_local_category(
+        description,
+        transaction_type,
+        GENERIC_LOCAL_CATEGORY_RULES,
+    )
+
 
 class _GenericBankParser(BaseBankStatementParser):
     """Generic parser for Russian bank statements."""
+
+    # Version 2 keeps unsupported row fragments visible and adds closed
+    # local category rules. A row imported by the previous mapping must be
+    # reassigned manually.
+    format_version = 2
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку неизвестного банка.
@@ -531,7 +617,10 @@ class _GenericBankParser(BaseBankStatementParser):
                     transactions.extend(parsed)
 
             transactions = [
-                t for t in transactions if t['amount'] != Decimal(0)
+                trans
+                for trans in transactions
+                if trans['amount'] != Decimal(0)
+                or (self.bank_code == 'generic' and trans.get('parse_issue'))
             ]
             transactions = _dedup_transactions(
                 transactions,
@@ -576,21 +665,40 @@ class _GenericBankParser(BaseBankStatementParser):
     def _parse_table(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         transactions: list[dict[str, Any]] = []
         for row_idx, row in df.iterrows():
+            row_index = int(row_idx) if isinstance(row_idx, int) else 0
+            is_transaction_row = False
             try:
                 first_col = str(row.iloc[0]) if len(row) > 0 else ''
                 if not first_col or first_col == 'nan':
                     continue
                 if self._extract_transaction_number(first_col) is None:
                     continue
-                row_index = int(row_idx) if isinstance(row_idx, int) else 0
+                is_transaction_row = True
                 trans = self._parse_transaction_row(row, df, row_index)
+                if trans is None:
+                    trans = self._unsupported_row(row, df, row_index)
                 if trans:
                     transactions.append(trans)
-            except ValueError as e:
+            except (
+                ValueError,
+                TypeError,
+                KeyError,
+                IndexError,
+                InvalidOperation,
+            ) as e:
                 logger.warning(
                     'bank_statement_row_parse_failed',
                     row=row_idx,
                     error=str(e),
+                )
+                if self.bank_code != 'generic':
+                    if isinstance(e, ValueError):
+                        continue
+                    raise
+                if not is_transaction_row:
+                    continue
+                transactions.append(
+                    self._unsupported_row(row, df, row_index),
                 )
         return transactions
 
@@ -601,13 +709,25 @@ class _GenericBankParser(BaseBankStatementParser):
         index: int,
     ) -> dict[str, Any] | None:
         amount = self._extract_amount_from_row(row)
-        if amount is None:
+        if amount is None or (
+            amount == Decimal(0) and self.bank_code == 'generic'
+        ):
             return None
 
         description_col_idx = self._get_description_column_index(row)
         date = self._extract_date_from_context(df, index)
         if date is None:
             return None
+
+        own_description = (
+            str(row.iloc[description_col_idx])
+            if len(row) > description_col_idx
+            else ''
+        )
+        if own_description and own_description != 'nan':
+            own_description = self._clean_description(own_description.strip())
+        else:
+            own_description = ''
 
         description = self._extract_description(
             row,
@@ -624,11 +744,63 @@ class _GenericBankParser(BaseBankStatementParser):
             'amount': amount,
             'description': description[:250],
             'source_ref': self._extract_source_ref(row),
+            'source_ref_strength': 'weak',
+            'category_name': (
+                generic_local_category(
+                    own_description,
+                    'income' if amount > 0 else 'expense',
+                )
+                if own_description
+                else None
+            ),
         }
 
     def _extract_source_ref(self, row: pd.Series) -> str | None:
         """Return a stable per-bank operation id, or None if unavailable."""
         return None
+
+    def _unsupported_row(
+        self,
+        row: pd.Series,
+        df: pd.DataFrame,
+        index: int,
+    ) -> dict[str, Any]:
+        """Return a visible fragment for an incomplete generic row.
+
+        Args:
+            row: Table row that looked like a potential operation.
+            df: Full table used for optional date context.
+            index: Row index in ``df``.
+
+        Returns:
+            Row fragment marked with ``parse_issue``; no money is posted.
+        """
+        amount = self._extract_amount_from_row(row)
+        date = self._extract_date_from_context(df, index)
+        raw_description = self._extract_description(
+            row,
+            df,
+            index,
+            self._get_description_column_index(row),
+        )
+        description = (
+            self._clean_description(raw_description) if raw_description else ''
+        )
+        if not description:
+            description = ' '.join(
+                str(value).strip()
+                for value in row
+                if str(value).strip() and str(value).strip() != 'nan'
+            )
+        return {
+            'date': date,
+            'amount': amount,
+            'description': description[:250],
+            'source_ref': self._extract_source_ref(row),
+            'source_ref_strength': 'weak',
+            'category_name': None,
+            'parse_issue': 'unsupported',
+        }
 
     def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
         for col_idx in range(2, len(row)):
@@ -724,6 +896,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
         full_text = self.full_text
         result.account_number = self._extract_account_number(full_text)
         result.period_start = self._extract_period_start(full_text)
+        result.period_end = self._extract_period_end(full_text)
         closing_date, closing_balance = self._extract_closing(full_text)
         result.closing_balance_date = closing_date
         result.closing_balance = closing_balance
@@ -742,6 +915,14 @@ class _RaiffeisenBankParser(_GenericBankParser):
     def _extract_period_start(full_text: str) -> date_type | None:
         """Return the explicitly printed statement period start."""
         match = RAIFFEISEN_PERIOD_PATTERN.search(full_text)
+        if match is None:
+            return None
+        return _parse_ru_date(match.group(1))
+
+    @staticmethod
+    def _extract_period_end(full_text: str) -> date_type | None:
+        """Return the explicitly printed statement period end."""
+        match = RAIFFEISEN_PERIOD_END_PATTERN.search(full_text)
         if match is None:
             return None
         return _parse_ru_date(match.group(1))
@@ -1280,9 +1461,20 @@ class _SberbankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
+            period_match = SBERBANK_PERIOD_PATTERN.search(full_text)
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                period_start=(
+                    _parse_ru_date(period_match.group(1))
+                    if period_match is not None
+                    else None
+                ),
+                period_end=(
+                    _parse_ru_date(period_match.group(2))
+                    if period_match is not None
+                    else None
+                ),
                 bank=self.bank_code,
                 format_version=self.format_version,
             )

@@ -195,6 +195,10 @@ class BankStatementUpload(Model):
             _('Осознанно неполный учёт'),
         )
 
+    class ProcessingMode(TextChoices):
+        IMPORT = 'import', _('Импорт')
+        RECONCILIATION = 'reconciliation', _('Сверка')
+
     user = ForeignKey(
         User,
         on_delete=CASCADE,
@@ -208,6 +212,14 @@ class BankStatementUpload(Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    processing_mode = CharField(
+        max_length=20,
+        choices=ProcessingMode.choices,
+        default=ProcessingMode.IMPORT,
+    )
+    statement_bank = CharField(max_length=20, blank=True, default='')
+    statement_period_from = DateField(blank=True, null=True)
+    statement_period_to = DateField(blank=True, null=True)
     progress = IntegerField(default=0)
     total_transactions = IntegerField(default=0)
     processed_transactions = IntegerField(default=0)

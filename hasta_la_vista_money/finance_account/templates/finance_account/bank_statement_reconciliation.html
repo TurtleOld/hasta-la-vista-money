@@ -9,6 +9,11 @@
     <p class="mb-5 text-sm text-gray-600 dark:text-gray-300">
         {% translate 'Решения доступны до' %} {{ upload.expires_at|date:'d.m.Y H:i' }}.
     </p>
+    {% if overlap_warning %}
+        <p class="mb-5 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            {% translate 'Период этой выписки пересекается с уже загруженной выпиской этого счёта и банка. Повторная загрузка идёт в режиме сверки: новые строки требуют решения, автоматического проведения нет.' %}
+        </p>
+    {% endif %}
     <nav class="mb-6 flex flex-wrap gap-2" aria-label="{% translate 'Фильтр решений' %}">
         <a href="?outcome=all" class="rounded px-3 py-2 {% if outcome == 'all' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Все' %}</a>
         <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>
