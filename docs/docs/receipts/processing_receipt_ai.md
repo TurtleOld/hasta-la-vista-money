@@ -275,7 +275,9 @@ FNS_SESSION_CACHE_TTL_SECONDS=3600
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def process_receipt_image(image_file):
     try:
@@ -291,7 +293,7 @@ def process_receipt_image(image_file):
         return parsed_result
 
     except Exception as e:
-        logger.error(f"Receipt processing failed: {e}")
+        logger.error(f'Receipt processing failed: {e}')
         raise
 ```
 

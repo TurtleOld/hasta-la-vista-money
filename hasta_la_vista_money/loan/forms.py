@@ -5,7 +5,7 @@ and payment forms.
 """
 
 from datetime import date, datetime, time
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar
 
 from django.db.models import QuerySet
 from django.forms import (
@@ -24,11 +24,11 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 from hasta_la_vista_money.users.models import User
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class LoanForm(ModelForm[Loan]):

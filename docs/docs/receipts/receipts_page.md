@@ -21,20 +21,25 @@
 ```python
 class Seller(models.Model):
     """Продавец/магазин"""
+
     name_seller = models.CharField(max_length=255)
     retail_place_address = models.CharField(max_length=1000)
     retail_place = models.CharField(max_length=1000)
 
+
 class Product(models.Model):
     """Товар в чеке"""
+
     product_name = models.CharField(max_length=1000)
     category = models.CharField(max_length=250)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
+
 class Receipt(models.Model):
     """Кассовый чек"""
+
     receipt_date = models.DateTimeField()
     number_receipt = models.IntegerField()
     total_sum = models.DecimalField(max_digits=10, decimal_places=2)
@@ -88,12 +93,13 @@ class Receipt(models.Model):
 
 ```python
 # Группировка чеков по месяцам
-receipt_info_by_month = Receipt.objects.filter(user=user).annotate(
-    month=TruncMonth('receipt_date')
-).values('month').annotate(
-    total_sum=Sum('total_sum'),
-    count=Count('id')
-).order_by('month')
+receipt_info_by_month = (
+    Receipt.objects.filter(user=user)
+    .annotate(month=TruncMonth('receipt_date'))
+    .values('month')
+    .annotate(total_sum=Sum('total_sum'), count=Count('id'))
+    .order_by('month')
+)
 ```
 
 ## Функциональные кнопки
@@ -316,11 +322,11 @@ POST   /api/sellers/               # Создание продавца
 ```python
 # Проверка достаточности средств
 if total_sum > account.balance:
-    raise ValidationError("Недостаточно средств на счете")
+    raise ValidationError('Недостаточно средств на счете')
 
 # Проверка уникальности номера чека
 if Receipt.objects.filter(user=user, number_receipt=number).exists():
-    raise ValidationError("Чек с таким номером уже существует")
+    raise ValidationError('Чек с таким номером уже существует')
 ```
 
 ### Защита от ошибок
@@ -339,8 +345,7 @@ receipts = Receipt.objects.select_related('seller', 'account').filter(user=user)
 
 # Аннотации для агрегации
 total_stats = Receipt.objects.filter(user=user).aggregate(
-    total_sum=Sum('total_sum'),
-    total_count=Count('id')
+    total_sum=Sum('total_sum'), total_count=Count('id')
 )
 ```
 
@@ -404,15 +409,17 @@ total_stats = Receipt.objects.filter(user=user).aggregate(
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def process_receipt_image(image_file):
     try:
         result = process_pending_receipt(image_file)
-        logger.info(f"Receipt processed successfully: {result}")
+        logger.info(f'Receipt processed successfully: {result}')
         return result
     except Exception as e:
-        logger.error(f"Receipt processing error: {e}")
+        logger.error(f'Receipt processing error: {e}')
         raise
 ```
 

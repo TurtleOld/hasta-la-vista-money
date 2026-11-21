@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -692,20 +692,20 @@ class AccountingCompletenessService:
         uploads: list[BankStatementUpload],
         period_start: date,
         period_end: date,
-    ) -> object | None:
+    ) -> FinalReconciliationBlock | None:
         """Project the global retained block onto this account's uploads."""
         if balance_block is None:
             return None
-        upload_ids = getattr(balance_block, 'upload_ids', None)
-        if upload_ids is None:
-            # A provider without upload identifiers cannot be narrowed.
-            return balance_block
         relevant = {
             upload.pk
             for upload in uploads
             if _upload_in_period(upload, period_start, period_end)
         }
-        return balance_block if relevant.intersection(upload_ids) else None
+        return (
+            balance_block
+            if relevant.intersection(balance_block.upload_ids)
+            else None
+        )
 
     @staticmethod
     def _balance_reason(balance_block: FinalReconciliationBlock) -> str:
@@ -721,23 +721,15 @@ class AccountingCompletenessService:
         account_ids: Sequence[int],
         period_start: date | None,
         period_end: date | None,
-        provider: object | None,
-    ) -> object | None:
+        provider: StatementBalanceVerificationServiceProtocol | None,
+    ) -> FinalReconciliationBlock | None:
         if provider is None:
             return None
-        method = getattr(provider, 'final_reconciliation_block', None)
-        if method is None:
-            raise TypeError(
-                'balance provider has no final_reconciliation_block',
-            )
-        return cast(
-            'object | None',
-            method(
-                user_id=owner.pk,
-                account_ids=account_ids,
-                period_start=period_start,
-                period_end=period_end,
-            ),
+        return provider.final_reconciliation_block(
+            user_id=owner.pk,
+            account_ids=account_ids,
+            period_start=period_start,
+            period_end=period_end,
         )
 
     @staticmethod

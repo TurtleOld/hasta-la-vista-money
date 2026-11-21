@@ -1,7 +1,6 @@
 """Tests for posting a loan payment as a financial movement."""
 
 from decimal import Decimal
-from typing import cast
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -11,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import (
     Loan,
     PaymentMakeLoan,
@@ -21,7 +20,7 @@ from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.users.models import User
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class PostLoanPaymentTest(TestCase):

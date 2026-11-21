@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 from unittest import mock
 
 from django.test import Client, TestCase
@@ -12,7 +12,6 @@ from django.utils import timezone
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -63,7 +62,7 @@ def _payload() -> dict[str, Any]:
     }
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class ReceiptProcessingLogTaskTests(TestCase):

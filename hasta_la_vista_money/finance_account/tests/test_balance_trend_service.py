@@ -18,7 +18,6 @@ from hasta_la_vista_money.deposits.commands import (
 from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -52,7 +51,7 @@ def _points(trend: 'BalanceTrendData') -> dict[str, Decimal]:
     }
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class BalanceTrendServiceTests(TestCase):

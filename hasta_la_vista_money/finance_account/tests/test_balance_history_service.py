@@ -12,7 +12,6 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class BalanceHistoryServiceTests(TestCase):

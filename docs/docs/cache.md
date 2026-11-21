@@ -101,7 +101,7 @@ categories = get_cached_category_tree(
     user_id=user.id,
     category_type='expense',
     categories=expense_categories,
-    depth=3
+    depth=3,
 )
 ```
 
@@ -223,6 +223,7 @@ REST_FRAMEWORK = {
 
 ```python
 from django.core.cache import cache
+
 cache.clear()
 ```
 

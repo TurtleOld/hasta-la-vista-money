@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from datetime import date
 
     from hasta_la_vista_money.users.models import User
+    from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
+        StatementBalanceVerificationServiceProtocol,
+    )
     from hasta_la_vista_money.users.services.accounting_completeness import (
         AccountingCompletenessResult,
         BalanceBlockProjection,
@@ -26,7 +29,9 @@ class AccountingCompletenessServiceProtocol(Protocol):
         account_ids: Sequence[int] | None = None,
         period_start: date,
         period_end: date,
-        balance_provider: object | None = None,
+        balance_provider: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
     ) -> AccountingCompletenessResult: ...
 
     def balance_block(
@@ -36,5 +41,5 @@ class AccountingCompletenessServiceProtocol(Protocol):
         account_ids: Sequence[int] | None = None,
         period_start: date | None = None,
         period_end: date | None = None,
-        provider: object | None = None,
+        provider: StatementBalanceVerificationServiceProtocol | None = None,
     ) -> BalanceBlockProjection: ...

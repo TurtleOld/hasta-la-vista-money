@@ -6,19 +6,17 @@ including filtering by user, group, type, and currency.
 
 from collections.abc import Iterable
 from decimal import Decimal
-from typing import cast
 
 from django.db.models import Min, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     AccountQuerySet,
 )
 from hasta_la_vista_money.users.models import User
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class AccountRepository:

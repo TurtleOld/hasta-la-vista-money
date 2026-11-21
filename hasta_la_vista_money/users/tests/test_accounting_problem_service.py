@@ -32,6 +32,9 @@ from hasta_la_vista_money.users.services.accounting_completeness import (
 from hasta_la_vista_money.users.services.accounting_problem_service import (
     AccountingProblemService,
 )
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    FinalReconciliationBlock,
+)
 
 
 class AccountingProblemServiceFixture(TestCase):
@@ -367,15 +370,16 @@ class AccountingProblemServiceTest(AccountingProblemServiceFixture):
         self.assertEqual(result.incomplete_reasons, ())
 
     def test_balance_attention_comes_from_the_08_projection(self) -> None:
-        class _Block:
-            upload_ids = (self.balance_upload.pk,)
-            reasons = ('balance_unexplained_mismatch',)
+        block = FinalReconciliationBlock(
+            upload_ids=(self.balance_upload.pk,),
+            reasons=('balance_unexplained_mismatch',),
+        )
 
         class _Completeness:
             @staticmethod
             def balance_block(**kwargs: Any) -> BalanceBlockProjection:
                 del kwargs
-                return BalanceBlockProjection(block=_Block(), checked=True)
+                return BalanceBlockProjection(block=block, checked=True)
 
         service = AccountingProblemService(
             repository=(

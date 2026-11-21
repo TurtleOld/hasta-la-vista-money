@@ -15,7 +15,6 @@ from hasta_la_vista_money.deposits.models import (
 from hasta_la_vista_money.deposits.movement_source import DepositMovementSource
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
 )
 from hasta_la_vista_money.users.factories import UserFactory
@@ -32,7 +31,7 @@ def _sberbank() -> Bank:
     return bank
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class DepositMovementSourceTests(TestCase):

@@ -76,7 +76,6 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Receipt
@@ -465,7 +464,7 @@ def _previous_month_range(value: date) -> tuple[date, date]:
     return start, _end_of_month(start)
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class FinancesView(LoginRequiredMixin, TemplateView):

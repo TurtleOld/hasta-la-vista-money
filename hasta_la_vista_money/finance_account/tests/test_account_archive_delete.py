@@ -18,7 +18,6 @@ from hasta_la_vista_money.finance_account.factories import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.loan.models import Loan
@@ -35,7 +34,7 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 ACCOUNT_LABEL = 'finance_account.Account'
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class AccountArchiveDeleteBase(TestCase):

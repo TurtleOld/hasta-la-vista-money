@@ -49,8 +49,10 @@
 class ExpenseService:
     pass
 
+
 class AccountRepository:
     pass
+
 
 class CreditCalculationService:
     pass
@@ -63,6 +65,7 @@ class CreditCalculationService:
 ```python
 def create_expense(data: dict) -> Expense:
     pass
+
 
 def get_account_balance(account: Account) -> Decimal:
     pass
@@ -109,11 +112,14 @@ class ExpenseService:
 def is_authenticated(self) -> bool:
     pass
 
+
 def has_permission(self, user: User) -> bool:
     pass
 
+
 def should_apply_discount(self, amount: Decimal) -> bool:
     pass
+
 
 can_delete = account.balance == ZERO
 is_valid = form.is_valid()
@@ -127,11 +133,14 @@ is_valid = form.is_valid()
 def create_expense(self, data: dict) -> Expense:
     pass
 
+
 def update_account(self, account: Account, data: dict) -> Account:
     pass
 
+
 def delete_receipt(self, receipt: Receipt) -> None:
     pass
+
 
 def calculate_interest(self, principal: Decimal, rate: float) -> Decimal:
     pass
@@ -145,6 +154,7 @@ def calculate_interest(self, principal: Decimal, rate: float) -> Decimal:
 # ❌ Плохо
 def calc_int(pr: Decimal, rt: float) -> Decimal:
     pass
+
 
 # ✅ Хорошо
 def calculate_interest(principal: Decimal, rate: float) -> Decimal:
@@ -277,9 +287,11 @@ def calculate_total(
 def process_data(data: Any) -> Any:
     pass
 
+
 # ✅ Хорошо
 def process_data(data: dict[str, str | int]) -> ProcessedData:
     pass
+
 
 # ✅ Хорошо (с Protocol)
 def process_data(data: ProcessableData) -> ProcessedData:
@@ -304,6 +316,7 @@ TransactionAmount: TypeAlias = Decimal
 ```python
 from typing import TypedDict
 
+
 class AccountSummary(TypedDict):
     balance: Decimal
     debt: Decimal
@@ -323,6 +336,7 @@ class AccountSummary(TypedDict):
 def process_receipt(self, receipt_data: dict) -> Receipt:
     # 100+ строк кода
     pass
+
 
 # ✅ Хорошо (разбито на методы)
 def process_receipt(self, receipt_data: dict) -> Receipt:
@@ -351,17 +365,18 @@ def process_payment(account: Account, amount: Decimal) -> bool:
     else:
         return False
 
+
 # ✅ Хорошо
 def process_payment(account: Account, amount: Decimal) -> bool:
     if not account:
         return False
-    
+
     if not account.is_active:
         return False
-    
+
     if account.balance < amount:
         return False
-    
+
     # обработка
     return True
 ```
@@ -396,14 +411,19 @@ from hasta_la_vista_money.expense.models import Expense
 ```python
 class AccountError(ValueError):
     """Base exception for account-related errors."""
+
     pass
+
 
 class InsufficientFundsError(AccountError):
     """Raised when account has insufficient funds."""
+
     pass
+
 
 class AccountNotFoundError(AccountError):
     """Raised when account is not found."""
+
     pass
 ```
 
@@ -437,8 +457,7 @@ raise ValueError('Error')
 
 # ✅ Хорошо
 raise InsufficientFundsError(
-    f'Account {account.id} has balance {account.balance}, '
-    f'but required {amount}'
+    f'Account {account.id} has balance {account.balance}, but required {amount}'
 )
 ```
 
@@ -481,8 +500,10 @@ class TestExpenseService(TestCase):
 def test_create_expense_success(self) -> None:
     pass
 
+
 def test_create_expense_insufficient_funds(self) -> None:
     pass
+
 
 def test_update_expense_changes_account_balance(self) -> None:
     pass
@@ -521,14 +542,19 @@ class ExpenseServiceCreationTest(TestCase):
 ```python
 class TestExpenseServiceCreation(TestCase):
     """Test expense creation functionality."""
+
     pass
+
 
 class TestExpenseServiceUpdate(TestCase):
     """Test expense update functionality."""
+
     pass
+
 
 class TestExpenseServiceDeletion(TestCase):
     """Test expense deletion functionality."""
+
     pass
 ```
 
@@ -553,23 +579,24 @@ from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
+
 class ExpenseService:
     """Service for managing expense operations."""
-    
+
     def __init__(
         self,
         expense_repository: ExpenseRepository,
         account_service: AccountServiceProtocol,
     ):
         """Initialize expense service.
-        
+
         Args:
             expense_repository: Repository for expense data access
             account_service: Service for account operations
         """
         self.expense_repository = expense_repository
         self.account_service = account_service
-    
+
     def create_expense(
         self,
         user: 'User',
@@ -580,7 +607,7 @@ class ExpenseService:
         notes: str | None = None,
     ) -> Expense:
         """Create a new expense record.
-        
+
         Args:
             user: User who owns the expense
             account: Account from which the expense is made
@@ -588,16 +615,16 @@ class ExpenseService:
             category: Expense category
             date: Date of the expense
             notes: Optional notes for the expense
-            
+
         Returns:
             Created Expense instance
-            
+
         Raises:
             ValidationError: If amount is negative or account balance
                 is insufficient
         """
         self._validate_expense_data(user, account, amount)
-        
+
         expense = self.expense_repository.create(
             user=user,
             account=account,
@@ -606,11 +633,11 @@ class ExpenseService:
             date=date,
             notes=notes,
         )
-        
+
         self.account_service.decrease_balance(account, amount)
-        
+
         return expense
-    
+
     def _validate_expense_data(
         self,
         user: 'User',
@@ -618,21 +645,21 @@ class ExpenseService:
         amount: Decimal,
     ) -> None:
         """Validate expense data before creation.
-        
+
         Args:
             user: User who owns the expense
             account: Account to validate
             amount: Amount to validate
-            
+
         Raises:
             ValidationError: If validation fails
         """
         if amount <= 0:
             raise ValidationError('Amount must be positive')
-        
+
         if account.user != user:
             raise ValidationError('Account does not belong to user')
-        
+
         if account.balance < amount:
             raise ValidationError('Insufficient funds')
 ```

@@ -1,12 +1,12 @@
 from datetime import timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ScanQRForm, UploadImageForm
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.typing_helpers import get_user_model
@@ -22,7 +22,7 @@ else:
 FORMS = (ScanQRForm, UploadImageForm)
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class UploadFormsDefaultAccountTests(TestCase):

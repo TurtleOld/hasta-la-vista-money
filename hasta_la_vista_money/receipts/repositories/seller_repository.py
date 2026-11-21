@@ -4,14 +4,12 @@ This module provides data access layer for Seller model,
 including filtering and CRUD operations.
 """
 
-from typing import cast
-
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.receipts.models import Seller, SellerManager
+from hasta_la_vista_money.receipts.models import Seller
 from hasta_la_vista_money.users.models import User
 
-_seller_manager = cast('SellerManager', Seller.objects)
+_seller_manager = Seller.objects
 
 
 class SellerRepository:

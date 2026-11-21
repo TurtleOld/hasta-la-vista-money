@@ -1,11 +1,10 @@
 from decimal import Decimal
-from typing import cast
 
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
@@ -15,7 +14,7 @@ from hasta_la_vista_money.users.typing_helpers import get_user_model
 User = get_user_model()
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class ReceiptBalanceDeltaTest(TestCase):

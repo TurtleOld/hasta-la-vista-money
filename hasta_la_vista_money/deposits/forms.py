@@ -22,7 +22,6 @@ from hasta_la_vista_money.finance_account.bank_constants import (
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
 )
 
@@ -59,7 +58,7 @@ def _parse_html5_date(token: str) -> date:
     raise ValidationError(message)
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class ReverseDepositEventForm(forms.Form):

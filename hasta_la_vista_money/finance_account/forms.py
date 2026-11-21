@@ -48,7 +48,6 @@ from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
     AccountCoverageConfirmation,
-    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -66,7 +65,7 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 
 # The project manager adds typed querysets; ``Manager`` is what Django's
 # typing exposes, so narrow it once here instead of at every use.
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -685,14 +684,14 @@ class AccountCoverageForm(TailwindFormMixin, Form):
         super().__init__(*args, **kwargs)
         if self.request_user is not None:
             account_field = cast(
-                'ModelChoiceField',
+                'ModelChoiceField[Account]',
                 self.fields['account'],
             )
             account_field.queryset = Account.objects.filter(
                 user=self.request_user,
             ).order_by('name_account')
             upload_field = cast(
-                'ModelChoiceField',
+                'ModelChoiceField[BankStatementUpload]',
                 self.fields['statement_upload'],
             )
             upload_field.queryset = BankStatementUpload.objects.filter(

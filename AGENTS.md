@@ -148,8 +148,7 @@ class ExpenseService:
 ```python
 # Пример протокола
 class ExpenseServiceProtocol(Protocol):
-    def create_expense(self, data: dict) -> Expense:
-        ...
+    def create_expense(self, data: dict) -> Expense: ...
 ```
 
 **Правила:**
@@ -211,8 +210,7 @@ class ExpenseServiceProtocol(Protocol):
 1. Создайте протокол в `app/protocols/services.py`:
 ```python
 class MyServiceProtocol(Protocol):
-    def do_something(self, data: dict) -> Result:
-        ...
+    def do_something(self, data: dict) -> Result: ...
 ```
 
 2. Создайте реализацию в `app/services/my_service.py`:
@@ -254,7 +252,7 @@ class MyAPIView(APIView):
 
 2. Зарегистрируйте в `app/urls.py`:
 ```python
-path('api/my-endpoint/', MyAPIView.as_view(), name='my_endpoint'),
+(path('api/my-endpoint/', MyAPIView.as_view(), name='my_endpoint'),)
 ```
 
 **Важно:**
@@ -318,6 +316,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 User = get_user_model()
+
 
 class ExpenseServiceTest(TestCase):
     def test_create_expense(self) -> None:
@@ -462,6 +461,7 @@ paginate_by = 10
 
 # ✅ Хорошо
 from hasta_la_vista_money.constants import PAGINATE_BY_DEFAULT
+
 paginate_by = PAGINATE_BY_DEFAULT
 ```
 
@@ -698,8 +698,8 @@ FEAT: add new feature
 ```python
 # 1. Протокол (app/protocols/services.py)
 class MyFeatureServiceProtocol(Protocol):
-    def process(self, data: dict) -> Result:
-        ...
+    def process(self, data: dict) -> Result: ...
+
 
 # 2. Модель (app/models.py)
 class MyFeature(models.Model):
@@ -707,10 +707,12 @@ class MyFeature(models.Model):
     data = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
 
+
 # 3. Репозиторий (app/repositories/my_feature_repository.py)
 class MyFeatureRepository:
     def get_by_user(self, user: User) -> QuerySet[MyFeature]:
         return MyFeature.objects.filter(user=user)
+
 
 # 4. Сервис (app/services/my_feature_service.py)
 class MyFeatureService:
@@ -724,6 +726,7 @@ class MyFeatureService:
         # Бизнес-логика
         return result
 
+
 # 5. Контейнер (app/containers.py)
 class MyAppContainer(containers.DeclarativeContainer):
     my_feature_repository = providers.Singleton(MyFeatureRepository)
@@ -734,6 +737,7 @@ class MyAppContainer(containers.DeclarativeContainer):
             repository=my_feature_repository,
         )
     )
+
 
 # 6. API View (app/apis.py)
 class MyFeatureAPIView(APIView):
@@ -746,8 +750,9 @@ class MyFeatureAPIView(APIView):
         result = service.process(request.data)
         return Response(result, status=201)
 
+
 # 7. URL (app/urls.py)
-path('api/my-feature/', MyFeatureAPIView.as_view(), name='my_feature'),
+(path('api/my-feature/', MyFeatureAPIView.as_view(), name='my_feature'),)
 ```
 
 ---

@@ -7,7 +7,6 @@ user's tracking, or falls outside the selected period, still counts.
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import cast
 
 from django.test import TestCase
 
@@ -18,7 +17,6 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -36,7 +34,7 @@ from hasta_la_vista_money.users.typing_helpers import get_user_model
 User = get_user_model()
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class CardDebtForBalanceTest(TestCase):

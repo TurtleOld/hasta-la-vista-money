@@ -2,7 +2,6 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import cast
 from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -10,7 +9,7 @@ from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
     UpdateTransactionCommand,
@@ -38,7 +37,7 @@ from hasta_la_vista_money.users.models import User
 TEST_PASSWORD = 'pwd123456!'  # nosec B105
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class TransactionServiceTest(TestCase):

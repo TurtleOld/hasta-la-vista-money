@@ -5,7 +5,6 @@ import uuid
 from collections.abc import Callable
 from datetime import timedelta
 from decimal import Decimal
-from typing import cast
 
 from django.contrib.auth.models import Group
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -19,7 +18,6 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    AccountManager,
     Bank,
 )
 from hasta_la_vista_money.receipts.models import Receipt, Seller
@@ -213,7 +211,7 @@ def _project_url_names(
     return names
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class AccessPolicyTest(TestCase):

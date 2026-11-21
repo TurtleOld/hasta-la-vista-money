@@ -6,8 +6,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import ProtectedError, QuerySet
 
 from hasta_la_vista_money.core.types import RequestWithContainer
-from hasta_la_vista_money.finance_account.models import AccountManager
-from hasta_la_vista_money.receipts.models import SellerManager
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
@@ -47,9 +45,9 @@ logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
 
 
-_seller_manager = cast('SellerManager', Seller.objects)
+_seller_manager = Seller.objects
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class ReceiptCreateView(

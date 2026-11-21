@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
-from hasta_la_vista_money.finance_account.models import Account, AccountManager
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
@@ -20,7 +20,7 @@ class ValidationResult:
     account: 'Account | None' = None
 
 
-_account_manager = cast('AccountManager', Account.objects)
+_account_manager = Account.objects
 
 
 class ReceiptAPIValidator:
