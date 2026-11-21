@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db import DatabaseError, transaction
 from django.db.models import (
@@ -28,7 +28,6 @@ from hasta_la_vista_money.finance_account.services.financial_change_hooks import
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -59,11 +58,10 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.services.protocols import (
         AccountCoverageServiceProtocol,
     )
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
 
-_OBJECTS_ATTR = 'objects'
-
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class InvalidReconciliationDecisionError(ValueError):
@@ -211,12 +209,21 @@ class BankStatementReconciliationService:
         rows = BankStatementRow.objects.filter(upload=upload)
         if outcome != constants.STATEMENT_OUTCOME_ALL:
             rows = rows.filter(decision=outcome)
-        return rows.prefetch_related(
-            'candidates__transaction__category',
-            'candidates__transfer__from_account',
-            'candidates__transfer__to_account',
-            'decision_audits',
-        ).order_by('transaction_date', 'pk')
+        return (
+            rows.annotate(
+                bank_data_available=ExpressionWrapper(
+                    StatementRowRepository.bank_data_available_q(),
+                    output_field=BooleanField(),
+                ),
+            )
+            .prefetch_related(
+                'candidates__transaction__category',
+                'candidates__transfer__from_account',
+                'candidates__transfer__to_account',
+                'decision_audits',
+            )
+            .order_by('transaction_date', 'pk')
+        )
 
     def decide(
         self,
@@ -743,7 +750,6 @@ class BankStatementReconciliationService:
         note_financial_change(
             coverage_service=self.coverage_service,
             changes=[(account, bank_calendar_date or moment)],
-            moments=[bank_calendar_date or moment],
         )
         return created
 

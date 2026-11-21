@@ -77,17 +77,17 @@ class AccountingControlView(LoginRequiredMixin, TemplateView):
         user = cast('User', self.request.user)
         service = _problem_service(self.request)
         form = AccountingControlFilterForm(self.request.GET)
-        form.is_valid()
-        data = form.cleaned_data
+        is_valid = form.is_valid()
+        data = form.cleaned_data if is_valid else {}
         selected = _selected(data)
-        account_id = data.get('account')
-        account_ids = (account_id,) if account_id is not None else ()
         filters = AccountingProblemFilter(
             bank_code=selected['bank'],
             currency=selected['currency'],
             kind=selected['kind'],
             state=selected['state'],
         )
+        account_id = data.get('account')
+        account_ids = (account_id,) if account_id is not None else ()
         error = ' '.join(
             str(message)
             for messages in form.errors.values()
@@ -102,17 +102,13 @@ class AccountingControlView(LoginRequiredMixin, TemplateView):
                 filters=filters,
             )
         except ValidationError as exc:
+            # The chosen account or period is not provable for this owner:
+            # show the same list without them instead of failing the page.
             error = ' '.join(filter(None, (error, ' '.join(exc.messages))))
             selected['account'] = ''
-            problem_list = service.problems(
-                user,
-                filters=AccountingProblemFilter(
-                    bank_code=selected['bank'],
-                    currency=selected['currency'],
-                    kind=selected['kind'],
-                    state=selected['state'],
-                ),
-            )
+            selected['date_from'] = ''
+            selected['date_to'] = ''
+            problem_list = service.problems(user, filters=filters)
         context.update(
             {
                 'problem_list': problem_list,

@@ -2,15 +2,20 @@
 
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import AccountCoverageForm
 from hasta_la_vista_money.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -24,7 +29,7 @@ class AccountCoverageConfirmView(LoginRequiredMixin, View):
         request_with_container = cast('RequestWithContainer', request)
         user = request.user
         if not isinstance(user, User):
-            return HttpResponse(status=403)
+            return HttpResponse(status=constants.FORBIDDEN)
         form = AccountCoverageForm(data=request.POST, user=user)
         if not form.is_valid():
             messages.error(
@@ -48,7 +53,13 @@ class AccountCoverageConfirmView(LoginRequiredMixin, View):
                 source=source,
                 statement_upload=upload,
             )
-        except Exception:
+        except (ValidationError, PermissionDenied):
+            logger.warning(
+                'account_coverage_confirm_rejected',
+                account_id=account.pk,
+                period_start=str(form.cleaned_data['period_start']),
+                period_end=str(form.cleaned_data['period_end']),
+            )
             messages.error(
                 request,
                 _('Не удалось подтвердить покрытие выбранного периода'),

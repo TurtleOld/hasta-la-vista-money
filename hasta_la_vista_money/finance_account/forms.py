@@ -11,9 +11,10 @@ error handling for financial operations.
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Q, TextChoices
 from django.forms import (
     BooleanField,
     CharField,
@@ -31,6 +32,8 @@ from django.forms import (
     Select,
     Textarea,
 )
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -61,12 +64,9 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 
-_OBJECTS_ATTR = 'objects'
-
-BANK_DAY_INPUT_FORMAT = '%Y-%m-%d'
-
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+# The project manager adds typed querysets; ``Manager`` is what Django's
+# typing exposes, so narrow it once here instead of at every use.
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -355,14 +355,14 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             self.fields['exchange_date'] = DateTimeField(
                 label=_('Дата перевода'),
                 widget=DateInput(
-                    format=BANK_DAY_INPUT_FORMAT,
+                    format=constants.HTML5_DATE_WIRE_FORMAT,
                     attrs={
                         'type': 'date',
                         'data-flatpickr': 'true',
                         'data-flatpickr-mode': 'date',
                     },
                 ),
-                input_formats=[BANK_DAY_INPUT_FORMAT],
+                input_formats=[constants.HTML5_DATE_WIRE_FORMAT],
             )
             self.fields['exchange_date'].initial = bank_day
             self.initial['exchange_date'] = bank_day
@@ -684,15 +684,21 @@ class AccountCoverageForm(TailwindFormMixin, Form):
         self.request_user: User | None = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if self.request_user is not None:
-            self.fields['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
+            account_field = cast(
+                'ModelChoiceField',
+                self.fields['account'],
+            )
+            account_field.queryset = Account.objects.filter(
                 user=self.request_user,
             ).order_by('name_account')
-            self.fields['statement_upload'].queryset = (  # type: ignore[attr-defined]
-                BankStatementUpload.objects.filter(
-                    user=self.request_user,
-                    account__user=self.request_user,
-                ).order_by('-created_at')
+            upload_field = cast(
+                'ModelChoiceField',
+                self.fields['statement_upload'],
             )
+            upload_field.queryset = BankStatementUpload.objects.filter(
+                user=self.request_user,
+                account__user=self.request_user,
+            ).order_by('-created_at')
         self.add_tailwind_classes()
 
     def clean(self) -> dict[str, Any]:
@@ -736,3 +742,67 @@ class StatementRowExcludeForm(Form):
         strip=True,
         widget=Textarea(attrs={'rows': 2}),
     )
+
+
+def parse_balance_moment(
+    raw_value: str,
+    zone_name: str,
+) -> datetime | None:
+    """Parse an optional explicit balance instant without guessing a zone."""
+    if not raw_value:
+        return None
+    moment = parse_datetime(raw_value)
+    if moment is None:
+        raise ValidationError(_('Не удалось разобрать момент остатка.'))
+    if timezone.is_naive(moment):
+        if not zone_name:
+            raise ValidationError(
+                _('Для момента остатка укажите часовой пояс.'),
+            )
+        try:
+            moment = moment.replace(tzinfo=ZoneInfo(zone_name))
+        except (KeyError, ValueError) as error:
+            raise ValidationError(
+                _('Неизвестный часовой пояс остатка.'),
+            ) from error
+    return moment
+
+
+class BankStatementBalanceActionForm(Form):
+    """Validate one balance-verification action of the reconciliation page."""
+
+    class Action(TextChoices):
+        """Every action the reconciliation page may submit."""
+
+        CONFIRM = 'confirm_balance', _('Подтвердить остаток')
+        VERIFY = 'verify_balance', _('Проверить остаток')
+        EXPLAIN = 'explain_mismatch', _('Объяснить расхождение')
+
+    action = ChoiceField(
+        choices=Action.choices,
+        error_messages={'invalid_choice': _('Неизвестное действие проверки.')},
+    )
+    balance_kind = ChoiceField(
+        choices=BankStatementUpload.BalanceKind.choices,
+        required=False,
+    )
+    balance_date = DateField(
+        required=False,
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        error_messages={
+            'invalid': _('Не удалось разобрать дату остатка.'),
+        },
+    )
+    balance_at = CharField(required=False, strip=True)
+    timezone_name = CharField(required=False, strip=True)
+    reason = CharField(required=False, strip=True)
+
+    def clean(self) -> dict[str, Any]:
+        """Parse the optional moment only for the action that needs it."""
+        cleaned_data = super().clean()
+        if cleaned_data and cleaned_data.get('action') == self.Action.CONFIRM:
+            cleaned_data['balance_at'] = parse_balance_moment(
+                cleaned_data.get('balance_at', ''),
+                cleaned_data.get('timezone_name', ''),
+            )
+        return cleaned_data or {}

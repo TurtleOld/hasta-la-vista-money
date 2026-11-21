@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
-from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Final, cast
 from zoneinfo import ZoneInfo
 
@@ -11,7 +10,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import BooleanField, ExpressionWrapper, QuerySet
+from django.db.models import QuerySet
 from django.http import (
     Http404,
     HttpRequest,
@@ -46,14 +45,12 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
+    BankStatementUploadStartServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
 )
 from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
     StatementBalanceVerificationServiceProtocol,
-)
-from hasta_la_vista_money.users.repositories.statement_row_repository import (
-    StatementRowRepository,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     RosDorBankRowKind,
@@ -64,12 +61,13 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationExpiredError,
     StaleStatementCandidateError,
 )
+from hasta_la_vista_money.users.services.bank_statement_upload_start import (
+    UploadStartResult,
+    UploadStartStatus,
+)
 from hasta_la_vista_money.users.services.statement_markup import (
     REFUND_CATEGORY_NAME,
     StatementMarkupConflictError,
-)
-from hasta_la_vista_money.users.services.statement_retention_policy import (
-    statement_retention_deadline,
 )
 from hasta_la_vista_money.users.tasks import (
     process_bank_statement_typed as process_bank_statement_task,
@@ -93,6 +91,17 @@ ROW_KIND_LABELS: Final[dict[str, Any]] = {
     RosDorBankRowKind.C2B: _('Оплата по СБП'),
     RosDorBankRowKind.UNKNOWN: _('Прочее'),
 }
+
+
+def _upload_start_service(
+    request: HttpRequest,
+) -> BankStatementUploadStartServiceProtocol:
+    """Resolve the upload generator through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'BankStatementUploadStartServiceProtocol',
+        request_with_container.container.users.bank_statement_upload_start_service(),
+    )
 
 
 def _reconciliation_service(
@@ -168,6 +177,8 @@ class BankStatementUploadView(
 
     template_name = 'finance_account/bank_statement_upload.html'
     form_class = BankStatementUploadForm
+    #: Set by ``form_valid`` before the success message is rendered.
+    upload_result: UploadStartResult
     success_message = _(
         'Банковская выписка загружена и будет обработана в фоновом режиме. '
         'Данные появятся в расходах и доходах в течение нескольких минут.',
@@ -182,189 +193,71 @@ class BankStatementUploadView(
     def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
         """Store the PDF and enqueue a run without posting on a repeat."""
         user = cast('User', self.request.user)
-        pdf_file = form.cleaned_data['pdf_file']
-        account = form.cleaned_data['account']
-        reconciliation_only = bool(
-            form.cleaned_data.get('reconciliation_only'),
-        )
-        file_hash = self._compute_pdf_hash(pdf_file)
-
-        self.in_flight_upload = False
+        service = _upload_start_service(self.request)
         try:
-            self._retry_retained_pdf_cleanup(user, account, file_hash)
-
-            logger.info(
-                'bank_statement_upload_creating',
-                user_id=user.pk,
-                account_id=account.pk,
+            result = service.start(
+                user=user,
+                account=form.cleaned_data['account'],
+                pdf_file=form.cleaned_data['pdf_file'],
+                reconciliation_only=bool(
+                    form.cleaned_data.get('reconciliation_only'),
+                ),
             )
-
-            with transaction.atomic():
-                # The agreed order: the account first, then the upload.
-                Account.objects.select_for_update().get(pk=account.pk)
-                upload, created = BankStatementUpload.objects.get_or_create(
-                    user=user,
-                    account=account,
-                    file_hash=file_hash,
-                    defaults={
-                        'pdf_file': pdf_file,
-                        'status': BankStatementUpload.Status.PENDING,
-                        'expires_at': statement_retention_deadline(user),
-                        'reconciliation_only': reconciliation_only,
-                    },
-                )
-                if not created:
-                    upload = (
-                        BankStatementUpload.objects.select_for_update().get(
-                            pk=upload.pk,
-                        )
-                    )
-                    if self._is_fresh_in_flight(upload):
-                        # A live run owns the generation; never swap its PDF.
-                        self.in_flight_upload = True
-                    else:
-                        old_pdf_name = upload.pdf_file.name
-                        storage = upload.pdf_file.storage
-                        retention_marker = upload.retention_cleaned_at
-                        if retention_marker is not None:
-                            if upload.pdf_file.name:
-                                form.add_error(
-                                    'pdf_file',
-                                    _(
-                                        'Не удалось удалить предыдущую '
-                                        'выписку. Повторите загрузку позже.',
-                                    ),
-                                )
-                                return self.form_invalid(form)
-                            StatementRowRepository.stamp_legacy_cleaned_rows(
-                                upload.pk,
-                                retention_marker,
-                            )
-                        upload.pdf_file = pdf_file
-                        upload.expires_at = statement_retention_deadline(user)
-                        upload.retention_cleaned_at = None
-                        upload.reconciliation_only = True
-                        upload.status = BankStatementUpload.Status.PENDING
-                        upload.progress = 0
-                        upload.processed_transactions = 0
-                        upload.error_message = ''
-                        upload.celery_task_id = ''
-                        upload.save(
-                            update_fields=[
-                                'pdf_file',
-                                'expires_at',
-                                'retention_cleaned_at',
-                                'reconciliation_only',
-                                'status',
-                                'progress',
-                                'processed_transactions',
-                                'error_message',
-                                'celery_task_id',
-                                'updated_at',
-                            ],
-                        )
-                        reconciliation_only = True
-                        if (
-                            old_pdf_name
-                            and old_pdf_name != upload.pdf_file.name
-                        ):
-                            transaction.on_commit(
-                                lambda: storage.delete(old_pdf_name),
-                            )
-
-            logger.info(
-                'bank_statement_upload_created',
-                upload_id=upload.pk,
-                user_id=user.pk,
-                repeated=not created,
-            )
-
-            if not self.in_flight_upload:
-                task_runner = cast('Any', process_bank_statement_task)
-                task = task_runner.delay(upload.pk)
-                logger.info(
-                    'bank_statement_task_enqueued',
-                    upload_id=upload.pk,
-                    task_id=task.id,
-                )
-
-            self.request.session['last_upload_id'] = upload.pk
-            self.repeated_upload = not created
-            self.reconciliation_only_upload = reconciliation_only
-
-        except Exception as e:
+        except Exception:
             logger.exception(
                 'bank_statement_upload_failed',
                 user_id=user.pk,
             )
             messages.error(
                 self.request,
-                f'Произошла ошибка при загрузке файла: {e!s}',
+                _(
+                    'Не удалось сохранить выписку. '
+                    'Повторите загрузку или обратитесь к администратору.',
+                ),
             )
             return self.form_invalid(form)
 
-        return super().form_valid(form)
-
-    @staticmethod
-    def _is_fresh_in_flight(upload: BankStatementUpload) -> bool:
-        """Tell whether a live run still owns this upload generation."""
-        if upload.status not in {
-            BankStatementUpload.Status.PENDING,
-            BankStatementUpload.Status.PROCESSING,
-        }:
-            return False
-        stale_after = timedelta(
-            minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
-        )
-        return timezone.now() - upload.updated_at <= stale_after
-
-    def _retry_retained_pdf_cleanup(
-        self,
-        user: User,
-        account: Account,
-        file_hash: str,
-    ) -> None:
-        """Retry a retained PDF delete before replacing its pointer."""
-        has_pending_pdf = (
-            BankStatementUpload.objects.filter(
-                user=user,
-                account=account,
-                file_hash=file_hash,
-                retention_cleaned_at__isnull=False,
+        if result.status is UploadStartStatus.CLEANUP_PENDING:
+            form.add_error(
+                'pdf_file',
+                _(
+                    'Не удалось удалить предыдущую выписку. '
+                    'Повторите загрузку позже.',
+                ),
             )
-            .exclude(pdf_file='')
-            .exists()
-        )
-        if has_pending_pdf:
-            typed_request = cast('RequestWithContainer', self.request)
-            typed_request.container.users.bank_statement_retention_service().cleanup_expired()
+            return self.form_invalid(form)
 
-    @staticmethod
-    def _compute_pdf_hash(pdf_file: Any) -> str:
-        """Hash an uploaded PDF while restoring its read position."""
-        digest = sha256()
-        for chunk in pdf_file.chunks():
-            digest.update(chunk)
-        pdf_file.seek(0)
-        return digest.hexdigest()
+        if result.status is not UploadStartStatus.IN_FLIGHT:
+            task_runner = cast('Any', process_bank_statement_task)
+            task = task_runner.delay(result.upload_id)
+            logger.info(
+                'bank_statement_task_enqueued',
+                upload_id=result.upload_id,
+                task_id=task.id,
+            )
+
+        self.request.session['last_upload_id'] = result.upload_id
+        self.upload_result = result
+        return super().form_valid(form)
 
     def get_success_message(self, cleaned_data: dict[str, Any]) -> str:
         """Explain a repeat or reconciliation-only run honestly."""
-        if getattr(self, 'in_flight_upload', False):
+        result = self.upload_result
+        if result.status is UploadStartStatus.IN_FLIGHT:
             return str(
                 _(
                     'Эта выписка уже обрабатывается. Дождитесь завершения '
                     'или повторите загрузку позже.',
                 ),
             )
-        if getattr(self, 'repeated_upload', False):
+        if result.status is UploadStartStatus.REPEATED:
             return str(
                 _(
                     'Эта выписка уже известна. Выполняется сверка без '
                     'автоматического проведения операций.',
                 ),
             )
-        if getattr(self, 'reconciliation_only_upload', False):
+        if result.reconciliation_only:
             return str(
                 _(
                     'Выписка загружена в режиме «Только сверить»: новые '
@@ -516,12 +409,7 @@ class BankStatementReconciliationView(
             self.object,
             self.request.GET.get('outcome'),
         )
-        rows = service.reconciliation_rows(self.object, outcome).annotate(
-            bank_data_available=ExpressionWrapper(
-                StatementRowRepository.bank_data_available_q(),
-                output_field=BooleanField(),
-            ),
-        )
+        rows = service.reconciliation_rows(self.object, outcome)
         context['page_obj'] = Paginator(
             rows,
             STATEMENT_RECONCILIATION_PAGE_SIZE,
@@ -963,7 +851,7 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except ReconciliationExpiredError:
-            return HttpResponse(status=410)
+            return HttpResponse(status=constants.GONE)
         except StaleStatementCandidateError:
             return self._stale_response(request, row)
         return redirect(
@@ -1072,7 +960,7 @@ class BankStatementReconciliationRevisionView(LoginRequiredMixin, View):
                 cast('User', request.user).pk,
             )
         except ReconciliationExpiredError:
-            return HttpResponse(status=410)
+            return HttpResponse(status=constants.GONE)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         return redirect(
@@ -1106,7 +994,7 @@ class BankStatementPendingTransferDismissView(LoginRequiredMixin, View):
                 cast('User', request.user).pk,
             )
         except ReconciliationExpiredError:
-            return HttpResponse(status=410)
+            return HttpResponse(status=constants.GONE)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         return redirect('finance_account:list')
@@ -1141,7 +1029,7 @@ class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
         except BankStatementRow.DoesNotExist as error:
             raise Http404 from error
         except ReconciliationExpiredError:
-            return HttpResponse(status=410)
+            return HttpResponse(status=constants.GONE)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except StaleStatementCandidateError:

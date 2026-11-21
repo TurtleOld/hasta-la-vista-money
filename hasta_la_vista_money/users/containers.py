@@ -17,6 +17,7 @@ from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    BankStatementUploadStartServiceProtocol,
     StatementIdentityServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
@@ -57,6 +58,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
     BankStatementRetentionService,
+)
+from hasta_la_vista_money.users.services.bank_statement_upload_start import (
+    BankStatementUploadStartService,
 )
 from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
@@ -176,6 +180,13 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         BankStatementRetentionService,
         reconciliation_service=bank_statement_reconciliation_service,
+    )
+
+    bank_statement_upload_start_service: providers.Factory[
+        BankStatementUploadStartServiceProtocol
+    ] = providers.Factory(
+        BankStatementUploadStartService,
+        retention_service=bank_statement_retention_service,
     )
 
     statement_markup_service: providers.Factory[

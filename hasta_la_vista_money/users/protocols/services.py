@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from datetime import date, datetime
     from decimal import Decimal
 
+    from django.core.files.uploadedfile import UploadedFile
     from django.db.models import QuerySet
 
     from config.containers import ApplicationContainer
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.services.bank_statement_import import (
         StatementGeneration,
         StatementImportResult,
+    )
+    from hasta_la_vista_money.users.services.bank_statement_upload_start import (  # noqa: E501
+        UploadStartResult,
     )
     from hasta_la_vista_money.users.services.monthly_statistics_service import (
         DashboardSummaryStatisticsDict,
@@ -281,6 +285,20 @@ class BankStatementRetentionServiceProtocol(Protocol):
     """Protocol for statement retention cleanup."""
 
     def cleanup_expired(self, now: datetime | None = None) -> int: ...
+
+
+@runtime_checkable
+class BankStatementUploadStartServiceProtocol(Protocol):
+    """Protocol for storing one statement upload generation."""
+
+    def start(
+        self,
+        *,
+        user: User,
+        account: Account,
+        pdf_file: UploadedFile,
+        reconciliation_only: bool,
+    ) -> UploadStartResult: ...
 
 
 @runtime_checkable

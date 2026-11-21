@@ -11,6 +11,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import StatementRowExcludeForm
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
@@ -27,6 +28,20 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+
+#: HTTP status of each decision conflict a concurrent change can raise.
+_DECISION_STATUS = {
+    ReconciliationExpiredError: constants.GONE,
+    ReconciliationDecisionConflictError: constants.CONFLICT,
+}
+
+
+def _decision_error_response(error: Exception) -> HttpResponse:
+    """Map a decision conflict to its status, one place for every action."""
+    for error_type, status in _DECISION_STATUS.items():
+        if isinstance(error, error_type):
+            return HttpResponse(status=status)
+    raise error
 
 
 def _link_service(
@@ -94,10 +109,11 @@ class StatementRowDeferView(LoginRequiredMixin, View):
                 row.pk,
                 cast('User', request.user).pk,
             )
-        except ReconciliationExpiredError:
-            return HttpResponse(status=410)
-        except ReconciliationDecisionConflictError:
-            return HttpResponse(status=409)
+        except (
+            ReconciliationExpiredError,
+            ReconciliationDecisionConflictError,
+        ) as error:
+            return _decision_error_response(error)
         messages.success(request, _('Строка отложена.'))
         return _decision_redirect(request, upload_id)
 
@@ -131,10 +147,11 @@ class StatementRowExcludeView(LoginRequiredMixin, View):
         except ValidationError:
             messages.error(request, _('Укажите причину исключения строки.'))
             return _decision_redirect(request, upload_id)
-        except ReconciliationExpiredError:
-            return HttpResponse(status=410)
-        except ReconciliationDecisionConflictError:
-            return HttpResponse(status=409)
+        except (
+            ReconciliationExpiredError,
+            ReconciliationDecisionConflictError,
+        ) as error:
+            return _decision_error_response(error)
         messages.success(request, _('Строка исключена из учёта.'))
         return _decision_redirect(request, upload_id)
 
@@ -156,9 +173,10 @@ class StatementRowResumeView(LoginRequiredMixin, View):
                 row.pk,
                 cast('User', request.user).pk,
             )
-        except ReconciliationExpiredError:
-            return HttpResponse(status=410)
-        except ReconciliationDecisionConflictError:
-            return HttpResponse(status=409)
+        except (
+            ReconciliationExpiredError,
+            ReconciliationDecisionConflictError,
+        ) as error:
+            return _decision_error_response(error)
         messages.success(request, _('Строка возвращена на обработку.'))
         return _decision_redirect(request, upload_id)
