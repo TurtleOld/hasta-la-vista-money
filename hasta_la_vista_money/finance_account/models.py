@@ -331,6 +331,78 @@ class Account(TimeStampedModel):
         )
 
 
+class StatementPeriodCoverage(models.Model):
+    """Confirmed statement period for an account.
+
+    Coverage is an independent confirmation: it never resolves statement
+    rows and never proves a balance check.
+    """
+
+    # shortcut: ADR-0018 coverage actuality and revision reason stay
+    # unimplemented in ticket 09; ticket 11 keeps that acceptance gap.
+    class Source(models.TextChoices):
+        BANK_STATEMENT = 'bank_statement', _('Период банковской выписки')
+        MANUAL_CONFIRMATION = (
+            'manual_confirmation',
+            _('Ручное подтверждение'),
+        )
+
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name='statement_period_coverages',
+    )
+    upload = models.ForeignKey(
+        'users.BankStatementUpload',
+        on_delete=models.SET_NULL,
+        related_name='period_coverages',
+        blank=True,
+        null=True,
+    )
+    period_start = models.DateField(verbose_name=_('Начало периода'))
+    period_end = models.DateField(verbose_name=_('Конец периода'))
+    source = models.CharField(max_length=32, choices=Source.choices)
+    author = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='statement_period_coverages',
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['period_start', 'pk']
+        verbose_name = _('Покрытие периода выписки')
+        verbose_name_plural = _('Покрытия периодов выписок')
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(period_end__gte=models.F('period_start')),
+                name='stmt_coverage_period_order',
+            ),
+            models.UniqueConstraint(
+                fields=['account', 'period_start', 'period_end'],
+                condition=models.Q(source='manual_confirmation'),
+                name='uniq_manual_stmt_coverage',
+            ),
+            models.UniqueConstraint(
+                fields=['account', 'upload', 'period_start', 'period_end'],
+                condition=models.Q(source='bank_statement'),
+                name='uniq_stmt_coverage_upload',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['account', 'period_start', 'period_end'],
+                name='fa_stmt_coverage_period_idx',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        """Return the covered period of the account."""
+        return f'{self.account_id}: {self.period_start}..{self.period_end}'
+
+
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
     """
     Custom QuerySet for TransferMoneyLog model with common filters.

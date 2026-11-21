@@ -65,6 +65,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
     )
+    from hasta_la_vista_money.users.protocols.services import (
+        StatementCoverageServiceProtocol,
+    )
     from hasta_la_vista_money.users.repositories.statement_row_repository import (  # noqa: E501
         StatementRowRepository,
     )
@@ -129,12 +132,22 @@ class BankStatementImportService:
         account_repository: AccountRepository,
         statement_row_repository: StatementRowRepository,
         identity_service: StatementIdentityService,
+        coverage_service: StatementCoverageServiceProtocol,
     ) -> None:
-        """Инициализировать сервис категоризатором и репозиториями."""
+        """Инициализировать сервис зависимостями импорта.
+
+        Args:
+            classifier: Категоризатор операций.
+            account_repository: Репозиторий счетов.
+            statement_row_repository: Репозиторий строк выписки.
+            identity_service: Сервис безопасной идентичности строк.
+            coverage_service: Сервис покрытия периода выписки.
+        """
         self.classifier = classifier
         self.account_repository = account_repository
         self.statement_row_repository = statement_row_repository
         self.identity_service = identity_service
+        self.coverage_service = coverage_service
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -219,6 +232,12 @@ class BankStatementImportService:
                 recognize_known=not unsafe_identity,
             )
             upload.refresh_from_db()
+            if parse_result.requires_markup:
+                self.coverage_service.record_statement_period(
+                    upload,
+                    parse_result.period_start,
+                    parse_result.period_end,
+                )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
@@ -247,6 +266,11 @@ class BankStatementImportService:
             )
             upload.refresh_from_db()
 
+        self.coverage_service.record_statement_period(
+            upload,
+            parse_result.period_start,
+            parse_result.period_end,
+        )
         return StatementImportResult(
             income_count=income_count,
             expense_count=expense_count,
