@@ -80,6 +80,8 @@ class BankStatementRetentionService:
                 )
             row_ids = [row.pk for row in rows]
             BankStatementCandidate.objects.filter(row_id__in=row_ids).delete()
+            # The technical row position is not bank payload: it is the
+            # stable key a known-file replay uses to restore this row.
             BankStatementRow.objects.filter(pk__in=row_ids).update(
                 transaction_type=None,
                 transaction_date=None,
@@ -90,7 +92,6 @@ class BankStatementRetentionService:
                 merchant_key='',
                 counterparty_account='',
                 source_ref=None,
-                source_row_position=None,
                 candidate=None,
             )
             upload.pdf_file = ''

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from datetime import datetime
     from decimal import Decimal
 
+    from django.core.files.uploadedfile import UploadedFile
     from django.db.models import QuerySet
 
     from config.containers import ApplicationContainer
@@ -301,6 +302,14 @@ class BankStatementImportServiceProtocol(Protocol):
     """Protocol for the unified bank statement import pipeline."""
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool: ...
+
+    def prepare_known_replay(
+        self,
+        upload: BankStatementUpload,
+        pdf_file: UploadedFile,
+    ) -> bool: ...
+
+    def has_overlapping_period(self, upload: BankStatementUpload) -> bool: ...
 
     def import_statement(
         self,

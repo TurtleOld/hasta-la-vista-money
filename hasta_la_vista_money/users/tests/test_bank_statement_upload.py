@@ -174,10 +174,11 @@ class TestBankStatementUploadView(TestCase):
     @patch(
         'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
     )
-    def test_repeated_file_does_not_start_second_import(
+    def test_repeated_file_starts_reconciliation_run(
         self,
         mock_task: MagicMock,
     ) -> None:
+        """Known file hash reuses the upload but starts a reconciliation run."""
         mock_task.delay.return_value = MagicMock(id='test-task-id')
         pdf_content = b'%PDF-1.4 identical statement'
 
@@ -193,9 +194,18 @@ class TestBankStatementUploadView(TestCase):
                     ),
                 },
             )
+            BankStatementUpload.objects.filter(
+                user=self.user,
+                account=self.account,
+            ).update(status=BankStatementUpload.Status.COMPLETED)
 
         self.assertEqual(BankStatementUpload.objects.count(), 1)
-        mock_task.delay.assert_called_once()
+        self.assertEqual(mock_task.delay.call_count, 2)
+        upload = BankStatementUpload.objects.get()
+        self.assertEqual(
+            upload.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
 
     def test_identical_rows_without_source_ref_remain_distinct(self) -> None:
         transaction = {
@@ -619,7 +629,7 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertIsNone(row.transaction_type)
         self.assertIsNone(row.transaction_date)
         self.assertIsNone(row.amount)
-        self.assertIsNone(row.source_row_position)
+        self.assertIsNotNone(row.source_row_position)
         self.assertFalse(row.candidates.exists())
 
     def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
@@ -1145,7 +1155,15 @@ class TestBankStatementReconciliationView(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(BankStatementUpload.objects.count(), 1)
-        task.delay.assert_not_called()
+        task.delay.assert_called_once()
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertGreater(self.upload.expires_at, deadline)
+        self.assertTrue(bool(self.upload.pdf_file))
 
     def test_cleanup_failure_keeps_pending_row_and_can_be_retried(
         self,
@@ -4315,6 +4333,7 @@ class TestRaiffeisenBankParser(TestCase):
             '68509471470637308180',
         )
         self.assertEqual(result.period_start, date(2025, 11, 20))
+        self.assertEqual(result.period_end, date(2026, 11, 20))
         self.assertEqual(
             result.closing_balance_date,
             date(2026, 11, 20),
@@ -4858,6 +4877,8 @@ class TestSberbankParser(TestCase):
 
         self.assertEqual(result.bank, 'sberbank')
         self.assertEqual(result.format_version, 2)
+        self.assertEqual(result.period_start, date(2026, 7, 1))
+        self.assertEqual(result.period_end, date(2026, 11, 19))
         self.assertEqual(len(result.transactions), 6)
         self.assertEqual(
             [t['amount'] for t in result.transactions],
@@ -6536,6 +6557,8 @@ class TestBankStatementImportReliability(TestCase):
         *,
         file_hash: str = '',
         format_version: int = 1,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BankStatementUpload:
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -6551,6 +6574,8 @@ class TestBankStatementImportReliability(TestCase):
                 transactions=transactions,
                 bank='raiffeisen',
                 format_version=format_version,
+                period_start=period_start,
+                period_end=period_end,
             )
             process_bank_statement_task.apply(args=[upload.pk])
         return upload
@@ -8016,7 +8041,6 @@ class TestBankStatementImportReliability(TestCase):
         self.assertFalse(Transaction.objects.exists())
         self.assertFalse(BankStatementRow.objects.exists())
 
-
     def test_ozon_real_statement_imports_known_and_keeps_transfers(
         self,
     ) -> None:
@@ -8334,3 +8358,265 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(row.canonical_row, canonical_row)
         self.assertEqual(Transaction.objects.count(), 1)
         self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def _replay_parse_result(
+        self,
+        moment: datetime,
+        *,
+        source_ref: str,
+        amount: Decimal = Decimal('-13.20'),
+        description: str = 'Комиссия за обслуживание',
+        category_name: str = 'Комиссия банка',
+        row_position: int = 0,
+    ) -> StatementParseResult:
+        return StatementParseResult(
+            transactions=[
+                {
+                    'date': moment,
+                    'amount': amount,
+                    'description': description,
+                    'source_ref': source_ref,
+                    'source_ref_strength': 'weak',
+                    'category_name': category_name,
+                    'row_position': row_position,
+                },
+            ],
+            bank='raiffeisen',
+            format_version=1,
+        )
+
+    def test_known_file_replay_restores_rows_without_moving_money(
+        self,
+    ) -> None:
+        """A retained known file restores bank data and keeps its decision."""
+        moment = datetime(2026, 2, 1, 10, tzinfo=UTC)
+        parse_result = self._replay_parse_result(moment, source_ref='R-REPLAY')
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/replay.pdf',
+            file_hash='replay-file',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+        upload.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        transaction = cast('Transaction', row.transaction)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        old_expiry = upload.expires_at
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertFalse(bool(upload.pdf_file))
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'replay.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            upload.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertGreater(upload.expires_at, old_expiry)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.transaction, transaction)
+        self.assertEqual(row.amount, Decimal('13.20'))
+        self.assertEqual(row.description, 'Комиссия за обслуживание')
+        self.assertEqual(row.source_ref, 'R-REPLAY')
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+        self.assertEqual(
+            AuditLog.objects.filter(
+                user=self.user,
+                model_name=STATEMENT_IMPORT_LABEL,
+            ).count(),
+            2,
+        )
+
+    def test_known_file_replay_does_not_recreate_deleted_movement(
+        self,
+    ) -> None:
+        """A replay keeps a deleted movement deleted and the row unresolved."""
+        moment = datetime(2026, 2, 2, 10, tzinfo=UTC)
+        parse_result = self._replay_parse_result(
+            moment,
+            source_ref='R-DELETED',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/deleted.pdf',
+            file_hash='deleted-file',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+        row = BankStatementRow.objects.get(upload=upload)
+        transaction = cast('Transaction', row.transaction)
+        ApplicationContainer().transactions.transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'deleted.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_overlapping_new_file_stays_reconciliation_and_links_known(
+        self,
+    ) -> None:
+        """A known-period overlap posts nothing and keeps new rows pending."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        first = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-OVERLAP',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='overlap-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        first_row = BankStatementRow.objects.get(upload=first)
+        self.assertEqual(first_row.decision, BankStatementRow.Decision.NEW)
+
+        second = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-OVERLAP',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment + timedelta(days=1),
+                    'amount': Decimal('-40.00'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'R-NEW',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Продукты',
+                    'row_position': 1,
+                },
+            ],
+            file_hash='overlap-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+
+        self.account.refresh_from_db()
+        second.refresh_from_db()
+        rows = BankStatementRow.objects.filter(upload=second)
+        known = rows.get(source_ref='R-OVERLAP')
+        new = rows.get(source_ref='R-NEW')
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertEqual(known.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(known.canonical_row, first_row)
+        self.assertEqual(
+            new.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+        self.assertEqual(
+            second.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(
+            AuditLog.objects.filter(
+                user=self.user,
+                model_name=STATEMENT_IMPORT_LABEL,
+            ).count(),
+            2,
+        )
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[second.pk],
+            ),
+        )
+        self.assertContains(response, 'пересекается')
+
+    def test_unknown_period_never_claims_overlap(self) -> None:
+        """Without explicit periods no overlap is claimed either way."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/unknown-period.pdf',
+            file_hash='unknown-period',
+            statement_bank='raiffeisen',
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+
+        self.assertFalse(service.has_overlapping_period(upload))
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
+        )
+        self.assertNotContains(response, 'пересекается')
