@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
     """Join the two independently applied users migration leaves."""
 
     dependencies = [
-        ('users', '0026_statement_balance_verification'),
+        ('users', '0027_merge_statement_identity_balance'),
         ('users', '0028_user_statement_retention_days'),
     ]
 
