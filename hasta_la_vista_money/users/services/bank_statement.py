@@ -49,6 +49,7 @@ class StatementParseResult:
         closing_balance_date: Дата конечного остатка, если известна.
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
+        period_end: Конец периода выписки, если он явно напечатан.
         requires_markup: Строки не проводятся до разметки пользователем.
         bank: Код банка, задающий контекст технического отпечатка.
         format_version: Версия сопоставления парсера и формата файла.
@@ -59,6 +60,7 @@ class StatementParseResult:
     closing_balance_date: date_type | None = None
     account_number: str | None = None
     period_start: date_type | None = None
+    period_end: date_type | None = None
     requires_markup: bool = False
     bank: str = 'generic'
     format_version: int = 1
@@ -101,6 +103,9 @@ RAIFFEISEN_ACCOUNT_PATTERN = re.compile(
 )
 RAIFFEISEN_PERIOD_PATTERN = re.compile(
     r'Период:\s*с\s*(\d{2}\.\d{2}\.\d{4})',
+)
+RAIFFEISEN_PERIOD_END_PATTERN = re.compile(
+    r'Период:\s*с\s*\d{2}\.\d{2}\.\d{4}\s*по\s*(\d{2}\.\d{2}\.\d{4})',
 )
 RAIFFEISEN_CLOSING_PATTERN = re.compile(
     r'Собственные средства на конец\s+(\d{2}\.\d{2}\.\d{4})',
@@ -191,6 +196,9 @@ SBERBANK_DATE_COL = 0
 SBERBANK_CATEGORY_COL = 1
 SBERBANK_AMOUNT_COL = 2
 SBERBANK_BALANCE_COL = 3
+SBERBANK_PERIOD_PATTERN = re.compile(
+    r'За период\s+(\d{2}\.\d{2}\.\d{4})\s*[—–-]\s*(\d{2}\.\d{2}\.\d{4})',
+)
 
 # Closed local category rules for Sberbank. The statement category label is
 # only a hint: a row is posted automatically only when this closed set knows
@@ -881,6 +889,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
         full_text = self.full_text
         result.account_number = self._extract_account_number(full_text)
         result.period_start = self._extract_period_start(full_text)
+        result.period_end = self._extract_period_end(full_text)
         closing_date, closing_balance = self._extract_closing(full_text)
         result.closing_balance_date = closing_date
         result.closing_balance = closing_balance
@@ -899,6 +908,14 @@ class _RaiffeisenBankParser(_GenericBankParser):
     def _extract_period_start(full_text: str) -> date_type | None:
         """Return the explicitly printed statement period start."""
         match = RAIFFEISEN_PERIOD_PATTERN.search(full_text)
+        if match is None:
+            return None
+        return _parse_ru_date(match.group(1))
+
+    @staticmethod
+    def _extract_period_end(full_text: str) -> date_type | None:
+        """Return the explicitly printed statement period end."""
+        match = RAIFFEISEN_PERIOD_END_PATTERN.search(full_text)
         if match is None:
             return None
         return _parse_ru_date(match.group(1))
@@ -1437,9 +1454,20 @@ class _SberbankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
+            period_match = SBERBANK_PERIOD_PATTERN.search(full_text)
             return StatementParseResult(
                 transactions=transactions,
                 closing_balance=closing_balance,
+                period_start=(
+                    _parse_ru_date(period_match.group(1))
+                    if period_match is not None
+                    else None
+                ),
+                period_end=(
+                    _parse_ru_date(period_match.group(2))
+                    if period_match is not None
+                    else None
+                ),
                 bank=self.bank_code,
                 format_version=self.format_version,
             )
@@ -2238,6 +2266,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             closing_balance_date=self._parse_day(header.group(3)),
             account_number=header.group(1),
             period_start=self._parse_day(header.group(2)),
+            period_end=self._parse_day(header.group(3)),
             requires_markup=True,
             bank=self.bank_code,
             format_version=self.format_version,

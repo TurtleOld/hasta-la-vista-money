@@ -41,6 +41,7 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
     User,
+    bank_statement_expires_at,
 )
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
@@ -60,6 +61,8 @@ from hasta_la_vista_money.users.services.statement_identity import (
 )
 
 if TYPE_CHECKING:
+    from django.core.files.uploadedfile import UploadedFile
+
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
@@ -207,6 +210,127 @@ class BankStatementImportService:
             upload.refresh_from_db()
         return bool(restarted)
 
+    def prepare_known_replay(
+        self,
+        upload: BankStatementUpload,
+        pdf_file: UploadedFile,
+    ) -> bool:
+        """Start an explicit reconciliation run for one known file hash.
+
+        The existing upload and its stable rows are reused. A file removed
+        by retention is attached again, and only this upload's bank data
+        gets a fresh retention deadline; decisions, links and the money
+        history are left untouched.
+
+        Args:
+            upload: Existing upload found by the same account and hash.
+            pdf_file: The explicitly uploaded file of that hash.
+
+        Returns:
+            ``True`` when the reconciliation run may be enqueued. ``False``
+            when a fresh run is already in flight and must not be doubled.
+        """
+        stale_after = timedelta(
+            minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES,
+        )
+        with transaction.atomic():
+            locked = (
+                BankStatementUpload.objects.select_for_update()
+                .select_related('account', 'user')
+                .get(pk=upload.pk)
+            )
+            if (
+                locked.status
+                in {
+                    BankStatementUpload.Status.PENDING,
+                    BankStatementUpload.Status.PROCESSING,
+                }
+                and timezone.now() - locked.updated_at <= stale_after
+            ):
+                return False
+            if not locked.pdf_file:
+                locked.pdf_file.save(
+                    pdf_file.name or 'statement.pdf',
+                    pdf_file,
+                    save=False,
+                )
+            locked.processing_mode = (
+                BankStatementUpload.ProcessingMode.RECONCILIATION
+            )
+            locked.status = BankStatementUpload.Status.PENDING
+            locked.progress = 0
+            locked.total_transactions = 0
+            locked.processed_transactions = 0
+            locked.income_count = 0
+            locked.expense_count = 0
+            locked.skipped_count = 0
+            locked.imported_count = 0
+            locked.linked_count = 0
+            locked.awaiting_decision_count = 0
+            locked.needs_transfer_count = 0
+            locked.expired_count = 0
+            locked.failed_count = 0
+            locked.statement_closing_balance = None
+            locked.account_balance_after = None
+            locked.balance_discrepancy = None
+            locked.error_message = ''
+            locked.expires_at = bank_statement_expires_at()
+            locked.retention_cleaned_at = None
+            locked.save(
+                update_fields=[
+                    'pdf_file',
+                    'processing_mode',
+                    'status',
+                    'progress',
+                    'total_transactions',
+                    'processed_transactions',
+                    'income_count',
+                    'expense_count',
+                    'skipped_count',
+                    'imported_count',
+                    'linked_count',
+                    'awaiting_decision_count',
+                    'needs_transfer_count',
+                    'expired_count',
+                    'failed_count',
+                    'statement_closing_balance',
+                    'account_balance_after',
+                    'balance_discrepancy',
+                    'error_message',
+                    'expires_at',
+                    'retention_cleaned_at',
+                    'updated_at',
+                ],
+            )
+        upload.refresh_from_db()
+        return True
+
+    def has_overlapping_period(self, upload: BankStatementUpload) -> bool:
+        """Return whether another known upload of the same bank overlaps.
+
+        Only explicitly parsed bank and period boundaries are compared. An
+        unknown period proves nothing and never claims that the files do
+        not overlap.
+        """
+        if (
+            not upload.statement_bank
+            or upload.statement_period_from is None
+            or upload.statement_period_to is None
+        ):
+            return False
+        return (
+            BankStatementUpload.objects.filter(
+                account_id=upload.account_id,
+                statement_bank=upload.statement_bank,
+                statement_period_from__isnull=False,
+                statement_period_to__isnull=False,
+                statement_period_from__lte=upload.statement_period_to,
+                statement_period_to__gte=upload.statement_period_from,
+            )
+            .exclude(pk=upload.pk)
+            .exists()
+        )
+
     def import_statement(
         self,
         upload: BankStatementUpload,
@@ -235,7 +359,30 @@ class BankStatementImportService:
                 self._match_account(upload, parse_result.account_number)
 
         upload.total_transactions = len(transactions)
-        upload.save(update_fields=['total_transactions'])
+        upload.statement_bank = parse_result.bank
+        upload.statement_period_from = parse_result.period_start
+        upload.statement_period_to = parse_result.period_end
+        upload.save(
+            update_fields=[
+                'total_transactions',
+                'statement_bank',
+                'statement_period_from',
+                'statement_period_to',
+            ],
+        )
+        if (
+            upload.processing_mode
+            != BankStatementUpload.ProcessingMode.RECONCILIATION
+            and self.has_overlapping_period(upload)
+        ):
+            upload.processing_mode = (
+                BankStatementUpload.ProcessingMode.RECONCILIATION
+            )
+            upload.save(update_fields=['processing_mode'])
+        reconciliation = (
+            upload.processing_mode
+            == BankStatementUpload.ProcessingMode.RECONCILIATION
+        )
 
         logger.info(
             'bank_statement_transactions_found',
@@ -244,14 +391,25 @@ class BankStatementImportService:
         )
 
         unsafe_identity = self._fingerprints_are_unsafe(upload)
-        if parse_result.requires_markup or unsafe_identity:
-            self._save_markup_rows(
-                upload,
-                transactions,
-                parse_result,
-                recognize_known=not unsafe_identity,
-            )
-            upload.refresh_from_db()
+        if reconciliation or parse_result.requires_markup or unsafe_identity:
+            with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+                self._save_markup_rows(
+                    upload,
+                    transactions,
+                    parse_result,
+                    recognize_known=not unsafe_identity,
+                    restore_existing=reconciliation,
+                )
+                upload.refresh_from_db()
+                record_statement_import_summary(
+                    user=upload.user,
+                    account=upload.account,
+                    created=0,
+                    skipped_duplicates=upload.skipped_count,
+                    period_from=parse_result.period_start,
+                    period_to=parse_result.period_end,
+                    mode=upload.processing_mode,
+                )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
@@ -676,6 +834,7 @@ class BankStatementImportService:
             skipped_duplicates=skipped_count,
             period_from=period_from,
             period_to=period_to,
+            mode=upload.processing_mode,
         )
         return income_count, expense_count, skipped_count, needs_transfer_count
 
@@ -1326,6 +1485,7 @@ class BankStatementImportService:
         parse_result: StatementParseResult,
         *,
         recognize_known: bool,
+        restore_existing: bool = False,
     ) -> None:
         """Save rows awaiting user markup; none of them is posted.
 
@@ -1333,6 +1493,11 @@ class BankStatementImportService:
         account become exact duplicate observations. Without usable keys
         every row is saved for manual resolution: a missing key never
         turns into "the operation does not exist" or auto-posting.
+
+        In reconciliation mode an existing row of this same upload is
+        restored from the re-uploaded file in place, keeping its decision,
+        movement, transfer and candidate links. A new row during a replay
+        is still only saved for resolution, never posted.
         """
         bank = parse_result.bank
         format_version = parse_result.format_version
@@ -1341,16 +1506,35 @@ class BankStatementImportService:
             upload = self._lock_account(upload)
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
+            replay = restore_existing and upload.statement_rows.exists()
             for idx, trans in enumerate(transactions):
+                source_position = trans.get('row_position')
+                position = (
+                    idx if source_position is None else int(source_position)
+                )
+                fingerprint = self._fingerprint(
+                    upload=upload,
+                    bank=bank,
+                    source_ref=trans.get('source_ref'),
+                )
+                if restore_existing and self._restore_existing_row(
+                    upload=upload,
+                    trans=trans,
+                    row_position=position,
+                    bank=bank,
+                    fingerprint=fingerprint,
+                    format_version=format_version,
+                ):
+                    continue
                 if _is_unparsed(trans):
-                    new_rows[idx] = trans
+                    new_rows[position] = trans
                     continue
                 if recognize_known:
                     exact = self._find_exact_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
-                        row_position=idx,
+                        row_position=position,
                         type_value=(
                             TransactionType.INCOME
                             if trans['amount'] > 0
@@ -1367,7 +1551,7 @@ class BankStatementImportService:
                         source_ref_strength=_reference_strength(bank, trans),
                     )
                     if exact is not None and not exact.conflict:
-                        duplicates.append((trans, idx, exact))
+                        duplicates.append((trans, position, exact))
                         continue
                     if self._has_unresolved_observation(
                         upload=upload,
@@ -1382,12 +1566,12 @@ class BankStatementImportService:
                         trans_date=trans['date'],
                     ):
                         continue
-                new_rows[idx] = trans
+                new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
             # mark up.
             cancelled = _mutual_cancel_positions(new_rows)
             rows = []
-            for idx, trans in new_rows.items():
+            for position, trans in new_rows.items():
                 amount = trans.get('amount')
                 fingerprint = self._fingerprint(
                     upload=upload,
@@ -1415,7 +1599,7 @@ class BankStatementImportService:
                             trans.get('category_name') or '',
                         )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
-                        source_row_position=idx,
+                        source_row_position=position,
                         source_format_version=format_version,
                         source_fingerprint=(
                             fingerprint.digest if fingerprint else ''
@@ -1438,7 +1622,7 @@ class BankStatementImportService:
                         ),
                         decision=(
                             BankStatementRow.Decision.MUTUAL_CANCEL
-                            if idx in cancelled
+                            if position in cancelled
                             else BankStatementRow.Decision.AWAITING_MARKUP
                         ),
                     ),
@@ -1446,11 +1630,11 @@ class BankStatementImportService:
             # A rerun of the same upload hits the per-upload row
             # constraint.
             BankStatementRow.objects.bulk_create(rows, ignore_conflicts=True)
-            for trans, idx, exact in duplicates:
+            for trans, position, exact in duplicates:
                 self._save_duplicate_row(
                     upload=upload,
                     trans=trans,
-                    row_position=idx,
+                    row_position=position,
                     type_value=(
                         TransactionType.INCOME
                         if trans['amount'] > 0
@@ -1461,7 +1645,9 @@ class BankStatementImportService:
                     format_version=format_version,
                 )
             upload.processed_transactions = len(transactions)
-            upload.skipped_count = len(transactions) - len(rows)
+            upload.skipped_count = (
+                len(duplicates) if replay else len(transactions) - len(rows)
+            )
             upload.failed_count = sum(
                 1 for trans in transactions if _is_unparsed(trans)
             )
@@ -1475,6 +1661,104 @@ class BankStatementImportService:
                     'updated_at',
                 ],
             )
+
+    def _restore_existing_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        bank: str,
+        fingerprint: StatementFingerprint | None,
+        format_version: int,
+    ) -> BankStatementRow | None:
+        """Restore one re-uploaded row in place, keeping its decisions.
+
+        The row is matched by its bank fingerprint when one exists, or by
+        the same stable position only within the same parser/format
+        version. A stale position from another mapping is detached so the
+        row can be reassigned instead of silently merged. Only blank bank
+        fields are filled: decision, movement, transfer, candidate and
+        canonical links stay exactly as they were.
+        """
+        rows = BankStatementRow.objects.select_for_update().filter(
+            upload=upload,
+        )
+        row = None
+        if fingerprint is not None:
+            candidate = rows.filter(
+                source_fingerprint=fingerprint.digest,
+            ).first()
+            if candidate is not None:
+                stable_format = (
+                    candidate.source_format_version == format_version
+                )
+                unique_reference = (
+                    rows.filter(
+                        source_fingerprint=fingerprint.digest,
+                    ).count()
+                    == 1
+                )
+                if _reference_strength(bank, trans) == 'strong' or (
+                    stable_format and unique_reference
+                ):
+                    row = candidate
+        if row is None:
+            row = rows.filter(
+                source_row_position=row_position,
+                source_format_version=format_version,
+            ).first()
+        if row is None:
+            stale = rows.filter(source_row_position=row_position).first()
+            if stale is not None:
+                BankStatementRow.objects.filter(pk=stale.pk).update(
+                    source_row_position=None,
+                )
+            return None
+        if row.amount is not None and row.transaction_date is not None:
+            return row
+        amount = trans.get('amount')
+        trans_date = trans.get('date')
+        payload: dict[str, Any] = {
+            'description': strip_pii(str(trans.get('description') or ''))[
+                : constants.TWO_HUNDRED_FIFTY
+            ],
+            'source_ref': trans.get('source_ref') or None,
+            'source_format_version': format_version,
+            'match_calendar_date': (
+                bool(trans.get('date_only')) if bank == 'raiffeisen' else True
+            ),
+            'kind': str(trans.get('kind', '')),
+            'merchant_key': trans.get('merchant_key') or '',
+            'counterparty_account': trans.get('counterparty_account') or '',
+        }
+        if amount is not None:
+            payload['amount'] = abs(amount)
+            payload['transaction_type'] = (
+                BankStatementRow.TransactionType.INCOME
+                if amount > 0
+                else BankStatementRow.TransactionType.EXPENSE
+            )
+        if trans_date is not None:
+            payload['transaction_date'] = trans_date
+        if (
+            row.source_row_position is None
+            and not rows.exclude(
+                pk=row.pk,
+            )
+            .filter(source_row_position=row_position)
+            .exists()
+        ):
+            payload['source_row_position'] = row_position
+        if fingerprint is not None:
+            payload.update(
+                source_fingerprint=fingerprint.digest,
+                source_fingerprint_key_version=fingerprint.key_version,
+                source_fingerprint_format_version=(fingerprint.format_version),
+            )
+        BankStatementRow.objects.filter(pk=row.pk).update(**payload)
+        row.refresh_from_db()
+        return row
 
     def _has_unresolved_observation(
         self,

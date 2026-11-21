@@ -39,6 +39,7 @@ class RosDorBankParserTest(SimpleTestCase):
 
         self.assertEqual(result.account_number, '40817810000000000001')
         self.assertEqual(result.period_start, date(2026, 3, 1))
+        self.assertEqual(result.period_end, date(2026, 3, 3))
         self.assertEqual(result.closing_balance_date, date(2026, 3, 3))
         self.assertEqual(result.closing_balance, Decimal('56000.00'))
 

@@ -32,6 +32,7 @@ def record_statement_import_summary(
     skipped_duplicates: int,
     period_from: date | None,
     period_to: date | None,
+    mode: str = 'import',
 ) -> None:
     """Record the one entry describing an import run's own facts."""
     AuditLog.objects.create(
@@ -45,6 +46,7 @@ def record_statement_import_summary(
             'skipped_duplicates': skipped_duplicates,
             'period_from': period_from.isoformat() if period_from else None,
             'period_to': period_to.isoformat() if period_to else None,
+            'mode': mode,
         },
         operation_id=current_operation_id(),
         kind=current_operation_kind(),
