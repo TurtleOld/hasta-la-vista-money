@@ -224,7 +224,7 @@
                                 {% endif %}
                             </div>
                             <div>
-                                {% if can_write and check.actual and check.result == 'discrepancy' and not check.explanation_code %}
+                                {% if can_write and check.can_explain %}
                                     <form method="post" class="statement-form control-coverage-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="action" value="{{ explain_action }}">

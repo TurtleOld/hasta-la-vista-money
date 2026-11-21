@@ -899,6 +899,28 @@ class TestAccountServices(TestCase):
         )
         self.assertFalse(control.balance.actual)
 
+    def test_control_does_not_hide_an_unchecked_sibling_statement(
+        self,
+    ) -> None:
+        moment = timezone.now()
+        checked = self._balance_upload(
+            closing=Decimal('1000.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        service.verify(checked)
+        self._upload(total_transactions=1)
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+
+        self.assertEqual(len(control.balance_checks), 2)
+        self.assertFalse(control.balance.checked)
+        self.assertEqual(control.balance.label, 'Не проверено')
+
     def test_currency_change_invalidates_balance_check(self) -> None:
         moment = timezone.now() - timedelta(days=2)
         upload = self._balance_upload(
