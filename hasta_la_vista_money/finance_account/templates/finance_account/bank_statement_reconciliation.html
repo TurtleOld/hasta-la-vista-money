@@ -113,6 +113,7 @@
     {% empty %}
         <p>{% translate 'Нет строк для сверки.' %}</p>
     {% endfor %}
+    {% include 'finance_account/partials/_statement_exclusions.html' %}
     {% if page_obj.paginator.num_pages > 1 %}
         <nav class="mt-6 flex items-center justify-between" aria-label="{% translate 'Страницы сверки' %}">
             {% if page_obj.has_previous %}<a href="?outcome={{ outcome }}&page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% else %}<span></span>{% endif %}

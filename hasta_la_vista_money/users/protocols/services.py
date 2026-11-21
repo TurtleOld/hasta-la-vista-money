@@ -122,14 +122,25 @@ class StatementMarkupServiceProtocol(Protocol):
         self,
         upload_id: int,
         user_id: int,
+        deferred_ids: set[int] | None = None,
     ) -> tuple[int, int]: ...
 
     def decide_many(
         self,
         upload_id: int,
         user_id: int,
-        decisions: dict[int, tuple[str, int | None]],
+        decisions: dict[int, tuple[str, int | str | None]],
     ) -> tuple[int, int]: ...
+
+    def confirmed_exclusions(
+        self,
+        upload: BankStatementUpload,
+    ) -> QuerySet[BankStatementRow]: ...
+
+    def legacy_skipped_rows(
+        self,
+        upload: BankStatementUpload,
+    ) -> QuerySet[BankStatementRow]: ...
 
     def post_transfer(
         self,
@@ -138,7 +149,19 @@ class StatementMarkupServiceProtocol(Protocol):
         account_id: int | None,
     ) -> BankStatementRow: ...
 
-    def skip(self, row_id: int, user_id: int) -> BankStatementRow: ...
+    def exclude(
+        self,
+        row_id: int,
+        user_id: int,
+        exclusion_code: str,
+    ) -> BankStatementRow: ...
+
+    def undo_exclusion(
+        self,
+        row_id: int,
+        user_id: int,
+        upload_id: int | None = None,
+    ) -> BankStatementRow: ...
 
 
 @runtime_checkable

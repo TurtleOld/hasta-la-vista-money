@@ -41,6 +41,9 @@ from hasta_la_vista_money.users.models import (
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     TRANSFER_DATE_WINDOW,
     local_row_date,
@@ -70,10 +73,12 @@ class StatementMarkupService:
         balance_service: BalanceService,
         account_repository: AccountRepository,
         transfer_log_repository: TransferMoneyLogRepository,
+        statement_row_repository: StatementRowRepository,
     ) -> None:
         self._balance_service = balance_service
         self._account_repository = account_repository
         self._transfer_log_repository = transfer_log_repository
+        self._statement_row_repository = statement_row_repository
 
     @staticmethod
     def pending_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
@@ -81,6 +86,20 @@ class StatementMarkupService:
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         ).order_by('transaction_date', 'pk')
+
+    def confirmed_exclusions(
+        self,
+        upload: BankStatementUpload,
+    ) -> QuerySet[BankStatementRow]:
+        """Return rows excluded with an approved reason."""
+        return self._statement_row_repository.confirmed_exclusions(upload.pk)
+
+    def legacy_skipped_rows(
+        self,
+        upload: BankStatementUpload,
+    ) -> QuerySet[BankStatementRow]:
+        """Return skipped rows that lack a confirmed exclusion reason."""
+        return self._statement_row_repository.legacy_skipped_rows(upload.pk)
 
     @staticmethod
     def pending_summary(user_id: int) -> tuple[int, int | None]:
@@ -278,6 +297,7 @@ class StatementMarkupService:
         self,
         upload_id: int,
         user_id: int,
+        deferred_ids: set[int] | None = None,
     ) -> tuple[int, int]:
         """Post rows with a remembered category as one operation.
 
@@ -289,7 +309,7 @@ class StatementMarkupService:
         posted = 0
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
             for row_id, category_id in remembered.items():
-                if row_id in duplicates:
+                if row_id in duplicates or row_id in (deferred_ids or set()):
                     continue
                 try:
                     self._decide(
@@ -310,12 +330,13 @@ class StatementMarkupService:
         self,
         upload_id: int,
         user_id: int,
-        decisions: dict[int, tuple[str, int | None]],
+        decisions: dict[int, tuple[str, int | str | None]],
     ) -> tuple[int, int]:
         """Apply per-row decisions of the markup page as one operation.
 
         A decision is ``('post', category_id)``, ``('transfer', account_id)``
-        or ``('skip', None)``. Returns the decided and the failed row counts.
+        or ``('skip', exclusion_code)``. Returns the decided and the failed
+        row counts.
         """
         upload = BankStatementUpload.objects.get(pk=upload_id, user_id=user_id)
         pending = set(
@@ -332,9 +353,20 @@ class StatementMarkupService:
                     self._decide(
                         row_id,
                         user_id,
-                        value if decision == 'post' else None,
+                        (
+                            value
+                            if decision == 'post' and isinstance(value, int)
+                            else None
+                        ),
                         skip=decision == 'skip',
-                        transfer_account_id=value,
+                        exclusion_code=(
+                            str(value) if decision == 'skip' else ''
+                        ),
+                        transfer_account_id=(
+                            value
+                            if decision == 'transfer' and isinstance(value, int)
+                            else None
+                        ),
                         as_transfer=decision == 'transfer',
                         finalize=False,
                     )
@@ -362,10 +394,81 @@ class StatementMarkupService:
                 as_transfer=True,
             )
 
-    def skip(self, row_id: int, user_id: int) -> BankStatementRow:
-        """Skip the row without touching the balance."""
+    def exclude(
+        self,
+        row_id: int,
+        user_id: int,
+        exclusion_code: str,
+    ) -> BankStatementRow:
+        """Exclude the row with an approved reason, without money."""
         with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
-            return self._decide(row_id, user_id, None, skip=True)
+            return self._decide(
+                row_id,
+                user_id,
+                None,
+                skip=True,
+                exclusion_code=exclusion_code,
+            )
+
+    def undo_exclusion(
+        self,
+        row_id: int,
+        user_id: int,
+        upload_id: int | None = None,
+    ) -> BankStatementRow:
+        """Return an excluded row to processing without creating money."""
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            return self._undo_exclusion(row_id, user_id, upload_id)
+
+    @transaction.atomic
+    def _undo_exclusion(
+        self,
+        row_id: int,
+        user_id: int,
+        upload_id: int | None,
+    ) -> BankStatementRow:
+        uploads = BankStatementUpload.objects.select_for_update().filter(
+            statement_rows__pk=row_id,
+            user_id=user_id,
+        )
+        if upload_id is not None:
+            uploads = uploads.filter(pk=upload_id)
+        upload = uploads.select_related('account').get()
+        row = BankStatementRow.objects.select_for_update().get(
+            pk=row_id,
+            upload=upload,
+        )
+        if row.decision != BankStatementRow.Decision.SKIPPED:
+            raise StatementMarkupConflictError(row.decision)
+        if (
+            timezone.now() >= upload.expires_at
+            or upload.retention_cleaned_at is not None
+        ):
+            raise StatementMarkupConflictError('expired')
+        previous_code = row.exclusion_code
+        row.decision = BankStatementRow.Decision.AWAITING_MARKUP
+        row.exclusion_code = ''
+        row.decided_at = None
+        row.save(update_fields=['decision', 'exclusion_code', 'decided_at'])
+        BankStatementDecisionAudit.objects.create(
+            row=row,
+            actor_id=user_id,
+            decision=row.decision,
+            previous_decision=BankStatementRow.Decision.SKIPPED,
+            exclusion_code=previous_code,
+        )
+        upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        upload.account_balance_after = None
+        upload.balance_discrepancy = None
+        upload.save(
+            update_fields=[
+                'status',
+                'account_balance_after',
+                'balance_discrepancy',
+            ],
+        )
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
+        return row
 
     @transaction.atomic
     def _decide(
@@ -375,6 +478,7 @@ class StatementMarkupService:
         category_id: int | None,
         *,
         skip: bool,
+        exclusion_code: str = '',
         transfer_account_id: int | None = None,
         as_transfer: bool = False,
         finalize: bool = True,
@@ -392,9 +496,12 @@ class StatementMarkupService:
             raise StatementMarkupConflictError(row.decision)
         if timezone.now() >= upload.expires_at:
             raise StatementMarkupConflictError('expired')
+        if skip and exclusion_code not in BankStatementRow.ExclusionCode.values:
+            raise StatementMarkupConflictError('exclusion_code')
 
         if skip:
             row.decision = BankStatementRow.Decision.SKIPPED
+            row.exclusion_code = exclusion_code
         elif as_transfer:
             row.transfer = self._create_transfer(
                 row,
@@ -410,14 +517,23 @@ class StatementMarkupService:
             )
             self._remember(row, upload.user, row.transaction)
             row.decision = BankStatementRow.Decision.NEW
+        if not skip:
+            row.exclusion_code = ''
         row.decided_at = timezone.now()
         row.save(
-            update_fields=['transaction', 'transfer', 'decision', 'decided_at'],
+            update_fields=[
+                'transaction',
+                'transfer',
+                'decision',
+                'exclusion_code',
+                'decided_at',
+            ],
         )
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=user_id,
             decision=row.decision,
+            exclusion_code=row.exclusion_code,
             transaction=row.transaction,
         )
         if finalize:

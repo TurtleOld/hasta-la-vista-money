@@ -15,14 +15,20 @@ from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.models import (
+    BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    InvalidReconciliationDecisionError,
+)
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupConflictError,
 )
+
+EXCLUSION_CODE = 'NON_FINANCIAL_BANK_RECORD'
 
 
 class StatementMarkupFixture(TestCase):
@@ -107,7 +113,7 @@ class StatementMarkupTest(StatementMarkupFixture):
     def test_skip_does_not_touch_balance(self) -> None:
         row = self._row(1)
 
-        self.service.skip(row.pk, self.user.pk)
+        self.service.exclude(row.pk, self.user.pk, EXCLUSION_CODE)
 
         row.refresh_from_db()
         self.account.refresh_from_db()
@@ -166,7 +172,7 @@ class StatementMarkupTest(StatementMarkupFixture):
         )
 
         with self.assertRaises(StatementMarkupConflictError):
-            self.service.skip(row.pk, self.user.pk)
+            self.service.exclude(row.pk, self.user.pk, EXCLUSION_CODE)
 
     def test_regular_row_requires_category(self) -> None:
         row = self._row(1)
@@ -218,7 +224,7 @@ class StatementMarkupTest(StatementMarkupFixture):
             self.upload.status,
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
-        self.service.skip(second.pk, self.user.pk)
+        self.service.exclude(second.pk, self.user.pk, EXCLUSION_CODE)
 
         self.upload.refresh_from_db()
         self.assertEqual(
@@ -624,7 +630,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
                 'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
-            {'row': row.pk, f'skip-{row.pk}': 'on'},
+            {'row': row.pk, f'exclude-{row.pk}': EXCLUSION_CODE},
         )
 
         row.refresh_from_db()
@@ -643,7 +649,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
             {
                 'row': [posted.pk, skipped.pk, untouched.pk],
                 f'category-{posted.pk}': category.pk,
-                f'skip-{skipped.pk}': 'on',
+                f'exclude-{skipped.pk}': EXCLUSION_CODE,
                 f'category-{skipped.pk}': category.pk,
                 f'category-{untouched.pk}': '',
             },
@@ -712,7 +718,7 @@ class StatementMarkupViewTest(StatementMarkupFixture):
                 'finance_account:bank_statement_markup_decide',
                 args=[self.upload.pk],
             ),
-            {'row': row.pk, f'skip-{row.pk}': 'on'},
+            {'row': row.pk, f'exclude-{row.pk}': EXCLUSION_CODE},
         )
 
         row.refresh_from_db()
@@ -862,7 +868,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
 
-    def test_probable_duplicate_is_marked_skip_by_default(self) -> None:
+    def test_probable_duplicate_is_not_excluded_by_default(self) -> None:
         category = self._category('Продукты')
         duplicate = self._row(1)
         fresh = self._row(2, amount='250.00')
@@ -883,8 +889,12 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             ),
         )
 
-        self.assertContains(response, f'name="skip-{duplicate.pk}" checked')
-        self.assertContains(response, f'name="skip-{fresh.pk}">')
+        self.assertContains(response, 'Похоже, уже учтена')
+        self.assertContains(response, f'name="exclude-{duplicate.pk}"')
+        self.assertContains(response, f'name="exclude-{fresh.pk}"')
+        self.assertContains(response, f'name="defer-{duplicate.pk}" checked')
+        self.assertContains(response, f'name="defer-{fresh.pk}">')
+        self.assertNotContains(response, f'name="skip-{duplicate.pk}"')
 
     def test_type_is_part_of_the_key(self) -> None:
         expense = self._category('Продукты')
@@ -907,7 +917,7 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
             self.user.pk,
             category.pk,
         )
-        self.service.skip(self._keyed(2).pk, self.user.pk)
+        self.service.exclude(self._keyed(2).pk, self.user.pk, EXCLUSION_CODE)
 
         self.assertFalse(MerchantCategory.objects.exists())
 
@@ -1008,7 +1018,10 @@ class RememberedMerchantCategoryTest(StatementMarkupFixture):
                 'finance_account:bank_statement_markup_post_remembered',
                 args=[self.upload.pk],
             ),
-            {'row': [skipped.pk, posted.pk], f'skip-{skipped.pk}': 'on'},
+            {
+                'row': [skipped.pk, posted.pk],
+                f'exclude-{skipped.pk}': EXCLUSION_CODE,
+            },
         )
 
         skipped.refresh_from_db()
@@ -1044,7 +1057,7 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         self.upload.refresh_from_db()
         self.assertIsNone(self.upload.balance_discrepancy)
 
-        self.service.skip(second.pk, self.user.pk)
+        self.service.exclude(second.pk, self.user.pk, EXCLUSION_CODE)
         self.upload.refresh_from_db()
         self.assertEqual(self.upload.account_balance_after, Decimal('900.00'))
         self.assertEqual(self.upload.balance_discrepancy, Decimal('-20.00'))
@@ -1054,7 +1067,7 @@ class StatementMarkupRemindersTest(StatementMarkupFixture):
         self.upload.save()
         row = self._row(1)
 
-        self.service.skip(row.pk, self.user.pk)
+        self.service.exclude(row.pk, self.user.pk, EXCLUSION_CODE)
 
         self.upload.refresh_from_db()
         self.assertIsNone(self.upload.balance_discrepancy)
@@ -1196,7 +1209,7 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
 
     def test_already_decided_row_rolls_everything_back(self) -> None:
         first, second = self._row(1), self._row(2)
-        self.service.skip(second.pk, self.user.pk)
+        self.service.exclude(second.pk, self.user.pk, EXCLUSION_CODE)
         category = self._category('Продукты')
 
         with self.assertRaises(StatementMarkupConflictError):
@@ -1266,7 +1279,7 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
                 'row': [skipped.pk, posted.pk],
                 'rows': [skipped.pk, posted.pk],
                 'category': category.pk,
-                f'skip-{skipped.pk}': 'on',
+                f'exclude-{skipped.pk}': EXCLUSION_CODE,
             },
         )
 
@@ -1295,7 +1308,7 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
         self.assertContains(response, 'id="markup-form"')
         self.assertContains(response, f'formaction="{bulk_url}"')
         self.assertNotContains(response, 'form="bulk-form"')
-        self.assertContains(response, f'name="skip-{row.pk}"')
+        self.assertContains(response, f'name="exclude-{row.pk}"')
 
     def test_bulk_view_without_selection_changes_nothing(self) -> None:
         self.client.force_login(self.user)
@@ -1329,3 +1342,321 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
 
         self.assertContains(response, f'name="rows" value="{card.pk}"')
         self.assertNotContains(response, f'name="rows" value="{own.pk}"')
+
+
+class StatementRowExclusionTest(StatementMarkupFixture):
+    """Exclusion, undo and legacy skip behavior of a RosDorBank row."""
+
+    def _exclude(
+        self,
+        row: BankStatementRow,
+        code: str = EXCLUSION_CODE,
+    ) -> None:
+        self.service.exclude(row.pk, self.user.pk, code)
+
+    def test_deferred_row_does_not_move_money_and_stays_a_problem(self) -> None:
+        deferred = self._row(1)
+        posted = self._row(2, amount='50.00')
+
+        self.service.post(posted.pk, self.user.pk, self._category('Еда').pk)
+
+        deferred.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            deferred.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIn(
+            deferred.pk,
+            self.service.pending_rows(self.upload).values_list(
+                'pk',
+                flat=True,
+            ),
+        )
+        self.assertEqual(self.account.balance, Decimal('950.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_deferred_duplicate_is_not_posted_in_bulk(self) -> None:
+        category = self._category('Продукты')
+        duplicate = self._row(1)
+        fresh = self._row(2, amount='250.00')
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type='expense',
+            amount=Decimal('100.00'),
+            date=datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()),
+        )
+        self.client.force_login(self.user)
+
+        self.client.post(
+            reverse(
+                'finance_account:bank_statement_markup_bulk',
+                args=[self.upload.pk],
+            ),
+            {
+                'row': [duplicate.pk, fresh.pk],
+                'rows': [duplicate.pk, fresh.pk],
+                'category': category.pk,
+                f'defer-{duplicate.pk}': 'on',
+            },
+        )
+
+        duplicate.refresh_from_db()
+        fresh.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            duplicate.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(fresh.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(self.account.balance, Decimal('750.00'))
+
+    def test_exclusion_requires_an_approved_code(self) -> None:
+        row = self._row(1)
+        for code in ('', 'PARSE_ERROR', 'ALREADY_ACCOUNTED'):
+            with self.assertRaises(StatementMarkupConflictError):
+                self._exclude(row, code)
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(row.exclusion_code, '')
+        self.assertIsNone(row.decided_at)
+        self.assertFalse(BankStatementDecisionAudit.objects.exists())
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_each_approved_code_adds_history_and_a_caveat(self) -> None:
+        for position, code in enumerate(
+            BankStatementRow.ExclusionCode.values,
+            start=1,
+        ):
+            row = self._row(position)
+
+            self._exclude(row, code)
+
+            row.refresh_from_db()
+            self.assertEqual(row.decision, BankStatementRow.Decision.SKIPPED)
+            self.assertEqual(row.exclusion_code, code)
+            self.assertIsNotNone(row.decided_at)
+            audit = BankStatementDecisionAudit.objects.get(row=row)
+            self.assertEqual(audit.actor_id, self.user.pk)
+            self.assertEqual(audit.exclusion_code, code)
+            self.assertIsNotNone(audit.created_at)
+            self.assertNotIn(
+                row.pk,
+                self.service.pending_rows(self.upload).values_list(
+                    'pk',
+                    flat=True,
+                ),
+            )
+            self.assertIn(
+                row.pk,
+                self.service.confirmed_exclusions(self.upload).values_list(
+                    'pk',
+                    flat=True,
+                ),
+            )
+
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_exclusion_is_visible_as_a_caveat_not_a_problem(self) -> None:
+        row = self._row(1)
+        self._exclude(row)
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Оговорки полноты')
+        self.assertContains(response, 'Нефинансовая запись банка')
+        self.assertEqual(
+            list(response.context['exclusions'].values_list('pk', flat=True)),
+            [row.pk],
+        )
+        self.assertFalse(response.context['legacy_skips'].exists())
+        self.assertNotIn(
+            row.pk,
+            [item.pk for item in response.context['page_obj']],
+        )
+
+    def test_undo_exclusion_returns_the_row_without_money(self) -> None:
+        self.upload.statement_closing_balance = Decimal('1000.00')
+        self.upload.save()
+        row = self._row(1)
+        self._exclude(row)
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.balance_discrepancy,
+            Decimal('0.00'),
+        )
+
+        self.service.undo_exclusion(row.pk, self.user.pk)
+
+        row.refresh_from_db()
+        self.upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(row.exclusion_code, '')
+        self.assertIsNone(row.decided_at)
+        self.assertIsNone(row.transaction)
+        self.assertIsNone(row.transfer)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertFalse(Transaction.objects.exists())
+        self.assertIn(
+            row.pk,
+            self.service.pending_rows(self.upload).values_list(
+                'pk',
+                flat=True,
+            ),
+        )
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertIsNone(self.upload.account_balance_after)
+        self.assertIsNone(self.upload.balance_discrepancy)
+        audits = list(BankStatementDecisionAudit.objects.filter(row=row))
+        self.assertEqual(len(audits), 2)
+        undo = audits[-1]
+        self.assertEqual(
+            undo.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            undo.previous_decision,
+            BankStatementRow.Decision.SKIPPED,
+        )
+        self.assertEqual(undo.exclusion_code, EXCLUSION_CODE)
+        self.assertEqual(undo.actor_id, self.user.pk)
+
+    def test_undo_view_returns_the_row_and_rejects_another_upload(
+        self,
+    ) -> None:
+        row = self._row(1)
+        self._exclude(row)
+        other = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='other.pdf',
+        )
+        self.client.force_login(self.user)
+        url = reverse(
+            'finance_account:bank_statement_markup_undo_exclusion',
+            args=[self.upload.pk, row.pk],
+        )
+
+        wrong = self.client.post(
+            reverse(
+                'finance_account:bank_statement_markup_undo_exclusion',
+                args=[other.pk, row.pk],
+            ),
+        )
+        response = self.client.post(url)
+        repeated = self.client.post(url)
+
+        self.assertEqual(wrong.status_code, 404)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(repeated.status_code, 302)
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+
+    def test_legacy_skip_needs_review_and_can_be_undone(self) -> None:
+        row = self._row(1)
+        BankStatementRow.objects.filter(pk=row.pk).update(
+            decision=BankStatementRow.Decision.SKIPPED,
+            decided_at=timezone.now(),
+        )
+        row.refresh_from_db()
+        self.assertIn(
+            row.pk,
+            self.service.legacy_skipped_rows(self.upload).values_list(
+                'pk',
+                flat=True,
+            ),
+        )
+        self.assertFalse(
+            self.service.confirmed_exclusions(self.upload).exists(),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertContains(response, 'Требует проверки')
+        self.assertContains(response, 'ПЯТЁРОЧКА')
+
+        self.service.undo_exclusion(row.pk, self.user.pk)
+
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.decided_at)
+
+    def test_invalid_transition_changes_neither_money_nor_audit(self) -> None:
+        row = self._row(1)
+        category = self._category('Продукты')
+        self.service.post(row.pk, self.user.pk, category.pk)
+        audits = BankStatementDecisionAudit.objects.filter(row=row).count()
+
+        with self.assertRaises(StatementMarkupConflictError):
+            self._exclude(row)
+        with self.assertRaises(StatementMarkupConflictError):
+            self.service.undo_exclusion(row.pk, self.user.pk)
+
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.exclusion_code, '')
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(
+            BankStatementDecisionAudit.objects.filter(row=row).count(),
+            audits,
+        )
+
+    def test_linked_decision_requires_a_concrete_movement(self) -> None:
+        row = self._row(1)
+        BankStatementRow.objects.filter(pk=row.pk).update(
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        row.refresh_from_db()
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+
+        with self.assertRaises(InvalidReconciliationDecisionError):
+            service.decide(row.pk, 'linked', self.user.pk)
+
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementDecisionAudit.objects.exists())

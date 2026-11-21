@@ -237,6 +237,16 @@ class BankStatementRow(Model):
         INCOME = 'income', _('Доход')
         EXPENSE = 'expense', _('Расход')
 
+    class ExclusionCode(TextChoices):
+        NON_FINANCIAL_BANK_RECORD = (
+            'NON_FINANCIAL_BANK_RECORD',
+            _('Нефинансовая запись банка'),
+        )
+        CONSCIOUS_ACCOUNTING_OMISSION = (
+            'CONSCIOUS_ACCOUNTING_OMISSION',
+            _('Осознанно не включаю операцию в учёт'),
+        )
+
     upload = ForeignKey(
         BankStatementUpload,
         on_delete=CASCADE,
@@ -291,6 +301,12 @@ class BankStatementRow(Model):
         choices=Decision.choices,
         default=Decision.PENDING,
     )
+    exclusion_code = CharField(
+        max_length=40,
+        choices=ExclusionCode.choices,
+        blank=True,
+        default='',
+    )
     created_at = DateTimeField(auto_now_add=True)
     decided_at = DateTimeField(blank=True, null=True)
 
@@ -311,6 +327,10 @@ class BankStatementRow(Model):
             Index(
                 fields=['upload', 'decision'],
                 name='users_statement_decision_idx',
+            ),
+            Index(
+                fields=['upload', 'decision', 'exclusion_code'],
+                name='users_statement_exclusion_idx',
             ),
         ]
 
@@ -404,6 +424,18 @@ class BankStatementDecisionAudit(Model):
     decision = CharField(
         max_length=20,
         choices=BankStatementRow.Decision.choices,
+    )
+    previous_decision = CharField(
+        max_length=20,
+        choices=BankStatementRow.Decision.choices,
+        blank=True,
+        default='',
+    )
+    exclusion_code = CharField(
+        max_length=40,
+        choices=BankStatementRow.ExclusionCode.choices,
+        blank=True,
+        default='',
     )
     previous_transaction = ForeignKey(
         'transactions.Transaction',

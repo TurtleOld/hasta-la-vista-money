@@ -367,6 +367,9 @@ class BankStatementReconciliationView(
             self.request.GET.get('page'),
         )
         context['outcome'] = outcome
+        markup = _markup_service(self.request)
+        context['exclusions'] = markup.confirmed_exclusions(self.object)
+        context['legacy_skips'] = markup.legacy_skipped_rows(self.object)
         return context
 
 
@@ -420,6 +423,9 @@ class BankStatementMarkupView(
         ]
 
         context['remembered_count'] = len(remembered)
+        context['exclusions'] = service.confirmed_exclusions(self.object)
+        context['legacy_skips'] = service.legacy_skipped_rows(self.object)
+        context['exclusion_codes'] = BankStatementRow.ExclusionCode.choices
         context['rows'] = [
             {
                 'row': row,
@@ -458,20 +464,56 @@ def _markup_message(reason: str) -> str:
     return str(_('Строка уже размечена или срок разметки истёк.'))
 
 
-def _skip_marked_rows(request: HttpRequest, upload_id: int) -> set[int]:
-    """Skip rows ticked «Пропустить»; every page action submits the marks."""
-    marked = {
+def _deferred_rows(request: HttpRequest) -> set[int]:
+    """Return rows ticked «Отложить»; they stay unresolved."""
+    return {
         int(value)
         for value in request.POST.getlist('row')
-        if value.isdigit() and request.POST.get(f'skip-{value}')
+        if value.isdigit() and request.POST.get(f'defer-{value}')
     }
-    if marked:
+
+
+def _markup_decisions(
+    request: HttpRequest,
+) -> dict[int, tuple[str, int | str | None]]:
+    """Read the per-row decisions of the markup page."""
+    decisions: dict[int, tuple[str, int | str | None]] = {}
+    for value in request.POST.getlist('row'):
+        if not value.isdigit():
+            continue
+        exclusion = request.POST.get(f'exclude-{value}', '')
+        if exclusion:
+            decisions[int(value)] = ('skip', exclusion)
+            continue
+        if request.POST.get(f'defer-{value}'):
+            continue
+        account = request.POST.get(f'account-{value}', '')
+        category = request.POST.get(f'category-{value}', '')
+        if account.isdigit():
+            decisions[int(value)] = ('transfer', int(account))
+        elif category == 'refund':
+            decisions[int(value)] = ('post', None)
+        elif category.isdigit():
+            decisions[int(value)] = ('post', int(category))
+    return decisions
+
+
+def _excluded_rows(request: HttpRequest, upload_id: int) -> set[int]:
+    """Exclude rows with a chosen reason; every page action submits them."""
+    decisions: dict[int, tuple[str, int | str | None]] = {}
+    for value in request.POST.getlist('row'):
+        if not value.isdigit():
+            continue
+        code = request.POST.get(f'exclude-{value}')
+        if code:
+            decisions[int(value)] = ('skip', code)
+    if decisions:
         _markup_service(request).decide_many(
             upload_id,
             cast('User', request.user).pk,
-            dict.fromkeys(marked, ('skip', None)),
+            decisions,
         )
-    return marked
+    return set(decisions)
 
 
 class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
@@ -485,20 +527,7 @@ class BankStatementMarkupDecisionView(LoginRequiredMixin, View):
             user=user,
             account__user=user,
         )
-        decisions: dict[int, tuple[str, int | None]] = {}
-        for value in request.POST.getlist('row'):
-            if not value.isdigit():
-                continue
-            account = request.POST.get(f'account-{value}', '')
-            category = request.POST.get(f'category-{value}', '')
-            if request.POST.get(f'skip-{value}'):
-                decisions[int(value)] = ('skip', None)
-            elif account.isdigit():
-                decisions[int(value)] = ('transfer', int(account))
-            elif category == 'refund':
-                decisions[int(value)] = ('post', None)
-            elif category.isdigit():
-                decisions[int(value)] = ('post', int(category))
+        decisions = _markup_decisions(request)
         if not decisions:
             messages.error(
                 request,
@@ -537,7 +566,7 @@ class BankStatementMarkupBulkView(LoginRequiredMixin, View):
             user=user,
             account__user=user,
         )
-        skipped = _skip_marked_rows(request, upload_id)
+        skipped = _excluded_rows(request, upload_id) | _deferred_rows(request)
         row_ids = [
             int(value)
             for value in request.POST.getlist('rows')
@@ -585,10 +614,11 @@ class BankStatementMarkupRememberedView(LoginRequiredMixin, View):
             user=user,
             account__user=user,
         )
-        _skip_marked_rows(request, upload_id)
+        _excluded_rows(request, upload_id)
         posted, skipped = _markup_service(request).post_remembered(
             upload_id,
             user.pk,
+            _deferred_rows(request),
         )
         messages.success(
             request,
@@ -598,6 +628,43 @@ class BankStatementMarkupRememberedView(LoginRequiredMixin, View):
             messages.error(
                 request,
                 _('Не удалось провести строк: %(count)s') % {'count': skipped},
+            )
+        return redirect(
+            reverse('finance_account:bank_statement_markup', args=[upload_id]),
+        )
+
+
+class BankStatementMarkupUndoExclusionView(LoginRequiredMixin, View):
+    """Return an excluded row to processing without creating money."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        user = cast('User', request.user)
+        get_object_or_404(
+            BankStatementUpload,
+            pk=upload_id,
+            user=user,
+            account__user=user,
+        )
+        try:
+            _markup_service(request).undo_exclusion(
+                row_id,
+                user.pk,
+                upload_id,
+            )
+        except (
+            BankStatementRow.DoesNotExist,
+            BankStatementUpload.DoesNotExist,
+        ) as error:
+            raise Http404 from error
+        except StatementMarkupConflictError:
+            messages.error(
+                request,
+                _('Строка уже вернулась в обработку или срок истёк.'),
             )
         return redirect(
             reverse('finance_account:bank_statement_markup', args=[upload_id]),

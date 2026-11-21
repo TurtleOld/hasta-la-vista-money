@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.bank_statement_views import (
     BankStatementMarkupCategoryView,
     BankStatementMarkupDecisionView,
     BankStatementMarkupRememberedView,
+    BankStatementMarkupUndoExclusionView,
     BankStatementMarkupView,
     BankStatementPendingTransferDismissView,
     BankStatementPendingTransferLinkView,
@@ -164,6 +165,12 @@ urlpatterns = [
         'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/category/',
         BankStatementMarkupCategoryView.as_view(),
         name='bank_statement_markup_category',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/markup/<int:row_id>/'
+        'undo-exclusion/',
+        BankStatementMarkupUndoExclusionView.as_view(),
+        name='bank_statement_markup_undo_exclusion',
     ),
     path(
         'bank-statement-upload/<int:pk>/reconciliation/',

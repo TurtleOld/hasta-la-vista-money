@@ -149,6 +149,9 @@ class BankStatementReconciliationService:
         rows = BankStatementRow.objects.filter(upload=upload)
         if outcome != constants.STATEMENT_OUTCOME_ALL:
             rows = rows.filter(decision=outcome)
+        else:
+            # Exclusions and legacy skips are caveats of their own section.
+            rows = rows.exclude(decision=BankStatementRow.Decision.SKIPPED)
         return rows.prefetch_related(
             'candidates__transaction__category',
             'candidates__transfer__from_account',

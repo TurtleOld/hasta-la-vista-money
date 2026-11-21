@@ -40,6 +40,36 @@ class StatementRowRepository:
     """Statement rows linked to movements and repayment rows."""
 
     @staticmethod
+    def confirmed_exclusions(
+        upload_id: int,
+    ) -> QuerySet[BankStatementRow]:
+        """Return rows of the upload excluded with an approved reason."""
+        return (
+            BankStatementRow.objects.filter(
+                upload_id=upload_id,
+                decision=BankStatementRow.Decision.SKIPPED,
+                exclusion_code__in=BankStatementRow.ExclusionCode.values,
+            )
+            .prefetch_related('decision_audits__actor')
+            .order_by('transaction_date', 'pk')
+        )
+
+    @staticmethod
+    def legacy_skipped_rows(
+        upload_id: int,
+    ) -> QuerySet[BankStatementRow]:
+        """Return skipped rows of the upload without an approved reason."""
+        return (
+            BankStatementRow.objects.filter(
+                upload_id=upload_id,
+                decision=BankStatementRow.Decision.SKIPPED,
+            )
+            .exclude(exclusion_code__in=BankStatementRow.ExclusionCode.values)
+            .prefetch_related('decision_audits__actor')
+            .order_by('transaction_date', 'pk')
+        )
+
+    @staticmethod
     def _linked_rows(
         movement: Transaction | TransferMoneyLog,
     ) -> QuerySet[BankStatementRow]:
