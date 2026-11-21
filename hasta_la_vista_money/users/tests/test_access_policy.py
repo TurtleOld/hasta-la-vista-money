@@ -152,6 +152,7 @@ OWN_ONLY_SURFACES = frozenset(
         'finance_account:bank_statement_markup_category',
         'finance_account:bank_statement_markup_decide',
         'finance_account:bank_statement_markup_post_remembered',
+        'finance_account:bank_statement_markup_undo_exclusion',
         'finance_account:bank_statement_pending_transfer_dismiss',
         'finance_account:bank_statement_pending_transfer_link',
         'finance_account:bank_statement_reconciliation',
