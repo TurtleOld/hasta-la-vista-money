@@ -1102,6 +1102,17 @@ class TestAccountServices(TestCase):
         )
         self.assertEqual(upload.balance_explained_by, self.user1)
 
+        service.verify(upload)
+        upload.refresh_from_db()
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertFalse(control.balance.blocks_final_reconciliation)
+
     def test_approved_explanations_are_audited_and_never_apply_money(
         self,
     ) -> None:
