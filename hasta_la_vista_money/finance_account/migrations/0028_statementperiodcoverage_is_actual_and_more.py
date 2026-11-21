@@ -32,6 +32,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='transfermoneylog',
+            name='source_format_version',
+            field=models.PositiveIntegerField(default=0),
+        ),
+        migrations.AddField(
+            model_name='transfermoneylog',
             name='source_file_hash',
             field=models.CharField(blank=True, max_length=64, null=True),
         ),

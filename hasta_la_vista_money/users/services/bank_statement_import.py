@@ -1752,13 +1752,20 @@ class BankStatementImportService:
         if row is None:
             # An unstamped position is missing evidence, not proven parser
             # drift: the same upload replay may restore it in place and
-            # stamp the current format. A recorded different format stays
-            # a conflict for manual reassignment.
-            row = rows.filter(
+            # stamp the current format. The bank reference must still match,
+            # so a dropped format never merges a different operation. A
+            # recorded different format stays a conflict for manual
+            # reassignment.
+            legacy_position = rows.filter(
                 source_row_position=row_position,
                 source_format_version=0,
                 source_fingerprint='',
             ).first()
+            if legacy_position is not None and (
+                (legacy_position.source_ref or '')
+                == (trans.get('source_ref') or '')
+            ):
+                row = legacy_position
         if row is None:
             stale = rows.filter(source_row_position=row_position).first()
             if stale is not None:

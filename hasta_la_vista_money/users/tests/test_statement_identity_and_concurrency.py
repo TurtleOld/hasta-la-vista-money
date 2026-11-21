@@ -1864,6 +1864,7 @@ class TransferAuditProvenanceRetentionTest(TestCase):
             source_fingerprint='fingerprint-shared',
             source_fingerprint_key_version='k1',
             source_fingerprint_format_version=1,
+            source_format_version=2,
             kind='own_c2c',
             counterparty_account='40817810000000000001',
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
@@ -1967,6 +1968,7 @@ class TransferAuditProvenanceRetentionTest(TestCase):
             )
             self.assertEqual(payload['source_file_hash'], 'file-a')
             self.assertEqual(payload['source_row_position'], 7)
+            self.assertEqual(payload['source_format_version'], 2)
 
         independent_copy = AuditLog.objects.filter(
             model_name='finance_account.TransferMoneyLog',

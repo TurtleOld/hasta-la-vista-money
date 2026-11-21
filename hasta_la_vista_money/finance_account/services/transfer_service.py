@@ -137,6 +137,9 @@ class TransferService:
                     if row is not None
                     else 0
                 ),
+                source_format_version=(
+                    row.source_format_version if row is not None else 0
+                ),
                 source_file_hash=(
                     (row.upload.file_hash or None) if row is not None else None
                 ),

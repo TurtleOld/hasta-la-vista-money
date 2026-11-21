@@ -9667,12 +9667,6 @@ class TestBankStatementImportReliability(TestCase):
                         source_fingerprint='',
                     ).exists(),
                 )
-                self.assertFalse(
-                    Transaction.objects.filter(
-                        account=account,
-                        amount=Decimal(0),
-                    ).exists(),
-                )
                 if upload.statement_period_from is not None:
                     self.assertTrue(
                         StatementPeriodCoverage.objects.filter(

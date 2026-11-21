@@ -510,6 +510,7 @@ class TransferMoneyLog(TimeStampedModel):
     source_fingerprint_format_version = models.PositiveIntegerField(
         default=0,
     )
+    source_format_version = models.PositiveIntegerField(default=0)
     source_file_hash = models.CharField(
         max_length=64,
         blank=True,

@@ -66,6 +66,7 @@ class TransferMoneyLogAdmin(
         'source_fingerprint',
         'source_fingerprint_key_version',
         'source_fingerprint_format_version',
+        'source_format_version',
         'source_file_hash',
         'source_row_position',
     )

@@ -269,6 +269,7 @@ HIDDEN_AUDIT_FIELDS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
                 'source_fingerprint',
                 'source_fingerprint_key_version',
                 'source_fingerprint_format_version',
+                'source_format_version',
                 'source_file_hash',
                 'source_row_position',
             },

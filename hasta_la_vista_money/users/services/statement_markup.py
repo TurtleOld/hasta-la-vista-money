@@ -682,6 +682,7 @@ class StatementMarkupService:
             source_fingerprint_format_version=(
                 row.source_fingerprint_format_version
             ),
+            source_format_version=row.source_format_version,
             source_file_hash=upload.file_hash or None,
             source_row_position=row.source_row_position,
         )
