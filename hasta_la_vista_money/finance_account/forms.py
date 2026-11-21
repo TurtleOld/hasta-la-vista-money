@@ -17,6 +17,7 @@ from django.forms import (
     CharField,
     ChoiceField,
     DateField,
+    DateInput,
     DecimalField,
     FileField,
     FileInput,
@@ -51,7 +52,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementUpload, User
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -553,6 +554,54 @@ class BankStatementUploadForm(Form):
                 )
             pdf_file.seek(0)
         return pdf_file
+
+
+class ManualCoverageForm(Form):
+    """Owner confirmation of an accounting period without a bank statement."""
+
+    period_start = DateField(
+        label=_('Начало периода'),
+        input_formats=['%Y-%m-%d'],
+        widget=DateInput(
+            format='%Y-%m-%d',
+            attrs={'type': 'date'},
+        ),
+    )
+    period_end = DateField(
+        label=_('Конец периода'),
+        input_formats=['%Y-%m-%d'],
+        widget=DateInput(
+            format='%Y-%m-%d',
+            attrs={'type': 'date'},
+        ),
+    )
+
+    def clean(self) -> dict[str, Any]:
+        """Reject a period that ends before it starts.
+
+        Returns:
+            Cleaned form data.
+
+        Raises:
+            ValidationError: If the end date precedes the start date.
+        """
+        cleaned = super().clean() or {}
+        start = cleaned.get('period_start')
+        end = cleaned.get('period_end')
+        if start and end and end < start:
+            raise ValidationError(
+                _('Конец периода не может быть раньше начала.'),
+            )
+        return cleaned
+
+
+class BalanceExplanationForm(Form):
+    """Owner explanation of a balance discrepancy by an approved code."""
+
+    code = ChoiceField(
+        label=_('Объяснение расхождения'),
+        choices=BankStatementUpload.ExplanationCode.choices,
+    )
 
 
 class RepaymentTransferLinkForm(Form):

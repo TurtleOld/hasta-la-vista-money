@@ -41,6 +41,9 @@ from hasta_la_vista_money.users.models import (
     MerchantCategory,
     User,
 )
+from hasta_la_vista_money.users.protocols.services import (
+    StatementBalanceVerificationServiceProtocol,
+)
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
 )
@@ -74,11 +77,15 @@ class StatementMarkupService:
         account_repository: AccountRepository,
         transfer_log_repository: TransferMoneyLogRepository,
         statement_row_repository: StatementRowRepository,
+        balance_verification_service: (
+            StatementBalanceVerificationServiceProtocol
+        ),
     ) -> None:
         self._balance_service = balance_service
         self._account_repository = account_repository
         self._transfer_log_repository = transfer_log_repository
         self._statement_row_repository = statement_row_repository
+        self._balance_verification_service = balance_verification_service
 
     @staticmethod
     def pending_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
@@ -460,11 +467,17 @@ class StatementMarkupService:
         upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         upload.account_balance_after = None
         upload.balance_discrepancy = None
+        upload.balance_is_actual = False
+        upload.balance_reason = (
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED
+        )
         upload.save(
             update_fields=[
                 'status',
                 'account_balance_after',
                 'balance_discrepancy',
+                'balance_is_actual',
+                'balance_reason',
             ],
         )
         BankStatementReconciliationService.refresh_outcome_counts(upload)
@@ -545,14 +558,9 @@ class StatementMarkupService:
         if self.pending_rows(upload).exists():
             return
         upload.status = BankStatementUpload.Status.COMPLETED
-        fields = ['status']
-        closing = upload.statement_closing_balance
-        if closing is not None:
-            upload.account.refresh_from_db(fields=['balance'])
-            upload.account_balance_after = upload.account.balance
-            upload.balance_discrepancy = closing - upload.account.balance
-            fields += ['account_balance_after', 'balance_discrepancy']
-        upload.save(update_fields=fields)
+        upload.save(update_fields=['status'])
+        if upload.statement_closing_balance is not None:
+            self._balance_verification_service.verify(upload)
 
     def _create_movement(
         self,

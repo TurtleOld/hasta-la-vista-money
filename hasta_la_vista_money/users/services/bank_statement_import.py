@@ -67,6 +67,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
     )
+    from hasta_la_vista_money.users.protocols.services import (
+        StatementCoverageServiceProtocol,
+    )
     from hasta_la_vista_money.users.repositories.statement_row_repository import (  # noqa: E501
         StatementRowRepository,
     )
@@ -124,6 +127,10 @@ class StatementImportResult:
         needs_transfer_count: Число зачислений на кредитный счёт,
             сохранённых как непроведённые погашения.
         closing_balance: Конечный остаток из выписки, если удалось извлечь.
+        closing_balance_date: Дата конечного остатка, если известна.
+        closing_balance_moment: Точный момент остатка, если банк его даёт.
+        closing_balance_currency: Подтверждённая валюта остатка.
+        closing_balance_semantics: Подтверждённая семантика остатка.
     """
 
     income_count: int
@@ -131,6 +138,10 @@ class StatementImportResult:
     skipped_count: int
     needs_transfer_count: int
     closing_balance: Decimal | None
+    closing_balance_date: date | None = None
+    closing_balance_moment: datetime | None = None
+    closing_balance_currency: str | None = None
+    closing_balance_semantics: str | None = None
 
 
 @dataclass(frozen=True)
@@ -165,12 +176,22 @@ class BankStatementImportService:
         account_repository: AccountRepository,
         statement_row_repository: StatementRowRepository,
         identity_service: StatementIdentityService,
+        coverage_service: StatementCoverageServiceProtocol,
     ) -> None:
-        """Инициализировать сервис категоризатором и репозиториями."""
+        """Инициализировать сервис зависимостями импорта.
+
+        Args:
+            classifier: Категоризатор операций.
+            account_repository: Репозиторий счетов.
+            statement_row_repository: Репозиторий строк выписки.
+            identity_service: Сервис безопасной идентичности строк.
+            coverage_service: Сервис покрытия периода выписки.
+        """
         self.classifier = classifier
         self.account_repository = account_repository
         self.statement_row_repository = statement_row_repository
         self.identity_service = identity_service
+        self.coverage_service = coverage_service
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -410,12 +431,22 @@ class BankStatementImportService:
                     period_to=parse_result.period_end,
                     mode=upload.processing_mode,
                 )
+            if parse_result.requires_markup:
+                self.coverage_service.record_statement_period(
+                    upload,
+                    parse_result.period_start,
+                    parse_result.period_end,
+                )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
                 skipped_count=upload.skipped_count,
                 needs_transfer_count=0,
                 closing_balance=parse_result.closing_balance,
+                closing_balance_date=parse_result.closing_balance_date,
+                closing_balance_moment=parse_result.closing_balance_moment,
+                closing_balance_currency=parse_result.closing_balance_currency,
+                closing_balance_semantics=parse_result.closing_balance_semantics,
             )
 
         existing_categories = list(
@@ -438,12 +469,21 @@ class BankStatementImportService:
             )
             upload.refresh_from_db()
 
+        self.coverage_service.record_statement_period(
+            upload,
+            parse_result.period_start,
+            parse_result.period_end,
+        )
         return StatementImportResult(
             income_count=income_count,
             expense_count=expense_count,
             skipped_count=skipped_count,
             needs_transfer_count=needs_transfer_count,
             closing_balance=parse_result.closing_balance,
+            closing_balance_date=parse_result.closing_balance_date,
+            closing_balance_moment=parse_result.closing_balance_moment,
+            closing_balance_currency=parse_result.closing_balance_currency,
+            closing_balance_semantics=parse_result.closing_balance_semantics,
         )
 
     def _process_transactions(

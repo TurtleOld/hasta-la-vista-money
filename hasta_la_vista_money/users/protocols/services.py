@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import datetime
+    from datetime import date, datetime
     from decimal import Decimal
 
     from django.core.files.uploadedfile import UploadedFile
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from config.containers import ApplicationContainer
     from hasta_la_vista_money.finance_account.models import (
         Account,
+        StatementPeriodCoverage,
         TransferMoneyLog,
     )
     from hasta_la_vista_money.transactions.models import Category, Transaction
@@ -26,12 +27,21 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.services import (
         bank_statement_reconciliation,
     )
+    from hasta_la_vista_money.users.services.accounting_control import (
+        AccountingControlSummary,
+    )
     from hasta_la_vista_money.users.services.bank_statement_import import (
         StatementImportResult,
     )
     from hasta_la_vista_money.users.services.monthly_statistics_service import (
         DashboardSummaryStatisticsDict,
         StatisticsFilters,
+    )
+    from hasta_la_vista_money.users.services.statement_balance_verification import (  # noqa: E501
+        BalanceVerificationState,
+    )
+    from hasta_la_vista_money.users.services.statement_coverage import (
+        CoverageSummary,
     )
     from hasta_la_vista_money.users.services.statistics import UserStatistics
     from hasta_la_vista_money.users.services.summary_statistics_service import (
@@ -315,3 +325,69 @@ class BankStatementImportServiceProtocol(Protocol):
         self,
         upload: BankStatementUpload,
     ) -> StatementImportResult: ...
+
+
+@runtime_checkable
+class StatementCoverageServiceProtocol(Protocol):
+    """Protocol for independent statement period coverage."""
+
+    def record_statement_period(
+        self,
+        upload: BankStatementUpload,
+        period_start: date | None,
+        period_end: date | None,
+    ) -> StatementPeriodCoverage | None: ...
+
+    def confirm_manual(
+        self,
+        user: User,
+        account: Account,
+        period_start: date,
+        period_end: date,
+    ) -> StatementPeriodCoverage: ...
+
+    def summary(
+        self,
+        account: Account,
+        period_start: date,
+        period_end: date,
+    ) -> CoverageSummary: ...
+
+
+@runtime_checkable
+class StatementBalanceVerificationServiceProtocol(Protocol):
+    """Protocol for statement balance checks and explanations."""
+
+    def verify(
+        self,
+        upload: BankStatementUpload,
+    ) -> BankStatementUpload: ...
+
+    def refresh_actuality(
+        self,
+        upload: BankStatementUpload,
+    ) -> BankStatementUpload: ...
+
+    def explain(
+        self,
+        upload: BankStatementUpload,
+        user: User,
+        code: str,
+    ) -> BankStatementUpload: ...
+
+    def describe(
+        self,
+        upload: BankStatementUpload,
+    ) -> BalanceVerificationState: ...
+
+
+@runtime_checkable
+class AccountingControlServiceProtocol(Protocol):
+    """Protocol for the accounting control summary."""
+
+    def build(
+        self,
+        account: Account,
+        period_start: date,
+        period_end: date,
+    ) -> AccountingControlSummary: ...

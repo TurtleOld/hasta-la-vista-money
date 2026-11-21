@@ -16,6 +16,9 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
 )
+from hasta_la_vista_money.users.services.bank_statement_import import (
+    StatementImportResult,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
@@ -29,6 +32,28 @@ def _cleanup_expired_bank_statements() -> dict[str, int]:
     """Remove expired statement data and return the number cleaned."""
     service = ApplicationContainer().users.bank_statement_retention_service()
     return {'cleaned': service.cleanup_expired()}
+
+
+def _store_statement_balance(
+    upload: BankStatementUpload,
+    result: StatementImportResult,
+) -> None:
+    """Store only balance metadata the parser actually confirmed.
+
+    A date without confirmed closing semantics stays a bank date; no exact
+    moment or currency is inferred from the account.
+    """
+    upload.statement_closing_balance = result.closing_balance
+    upload.balance_currency = result.closing_balance_currency or ''
+    upload.balance_moment = result.closing_balance_moment
+    upload.balance_bank_date = result.closing_balance_date
+    semantics = result.closing_balance_semantics
+    if semantics == BankStatementUpload.BalanceType.EXACT_MOMENT:
+        upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+    elif semantics == BankStatementUpload.BalanceType.CLOSING_DAY:
+        upload.balance_type = BankStatementUpload.BalanceType.CLOSING_DAY
+    else:
+        upload.balance_type = BankStatementUpload.BalanceType.UNKNOWN
 
 
 cleanup_expired_bank_statements = shared_task(
@@ -81,7 +106,8 @@ def process_bank_statement_task(
             )
         _initialize_upload(upload, self)
 
-        service = ApplicationContainer().users.bank_statement_import_service()
+        container = ApplicationContainer()
+        service = container.users.bank_statement_import_service()
         result = service.import_statement(upload)
 
         upload.account.refresh_from_db(fields=['balance'])
@@ -90,14 +116,14 @@ def process_bank_statement_task(
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         ).exists()
-        if result.closing_balance is not None:
-            upload.statement_closing_balance = result.closing_balance
-        # Until every row is marked up the discrepancy is known to be false.
-        if result.closing_balance is not None and not awaiting_markup:
-            upload.account_balance_after = upload.account.balance
-            upload.balance_discrepancy = (
-                result.closing_balance - upload.account.balance
-            )
+        pending = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+        ).exists()
+        unresolved = (
+            awaiting_markup or pending or result.needs_transfer_count > 0
+        )
+        _store_statement_balance(upload, result)
 
         if empty_parse:
             upload.error_message = str(
@@ -106,11 +132,10 @@ def process_bank_statement_task(
                     'полнота не подтверждена.',
                 ),
             )
-        upload.status = _completion_status(
-            upload,
-            empty_parse=empty_parse,
-            awaiting_markup=awaiting_markup,
-        )
+        if empty_parse or unresolved:
+            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        else:
+            upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
         upload.save(
             update_fields=[
@@ -119,10 +144,17 @@ def process_bank_statement_task(
                 'updated_at',
                 'error_message',
                 'statement_closing_balance',
-                'account_balance_after',
-                'balance_discrepancy',
+                'balance_currency',
+                'balance_moment',
+                'balance_bank_date',
+                'balance_type',
             ],
         )
+        if result.closing_balance is not None and not unresolved:
+            balance_service = (
+                container.users.statement_balance_verification_service()
+            )
+            upload = balance_service.verify(upload)
         BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
@@ -179,30 +211,6 @@ def process_bank_statement_task(
         )
         _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
         raise
-
-
-def _completion_status(
-    upload: BankStatementUpload,
-    *,
-    empty_parse: bool,
-    awaiting_markup: bool,
-) -> str:
-    """Return the status of a finished run without claiming false coverage.
-
-    A pending duplicate or an unperformed credit-card repayment still needs
-    a user decision, so the run is not complete yet.
-    """
-    if empty_parse or awaiting_markup:
-        return BankStatementUpload.Status.AWAITING_CONFIRMATION
-    if BankStatementRow.objects.filter(
-        upload=upload,
-        decision__in={
-            BankStatementRow.Decision.PENDING,
-            BankStatementRow.Decision.NEEDS_TRANSFER,
-        },
-    ).exists():
-        return BankStatementUpload.Status.AWAITING_CONFIRMATION
-    return BankStatementUpload.Status.COMPLETED
 
 
 def _mark_upload_failed(upload_id: int, message: str) -> None:
