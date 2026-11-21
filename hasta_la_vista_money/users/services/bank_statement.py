@@ -169,6 +169,47 @@ SBERBANK_CATEGORY_COL = 1
 SBERBANK_AMOUNT_COL = 2
 SBERBANK_BALANCE_COL = 3
 
+# Closed local category rules for Sberbank. The statement category label is
+# only a hint: a row is posted automatically only when this closed set knows
+# it. Unknown labels stay unresolved for the user.
+SBERBANK_LOCAL_CATEGORY_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r'^транспорт$'), 'Транспорт'),
+    (re.compile(r'^супермаркет'), 'Продукты'),
+    (re.compile(r'^рестораны и кафе$'), 'Рестораны и кафе'),
+    (re.compile(r'^фастфуд$'), 'Фастфуд'),
+    (
+        re.compile(r'^коммунальные платежи'),
+        'Коммунальные платежи, связь, интернет',
+    ),
+    (re.compile(r'^наличные$'), 'Наличные'),
+    (re.compile(r'^комисси'), 'Комиссия банка'),
+    (re.compile(r'^прочие расходы$'), 'Прочие расходы'),
+)
+
+
+def sberbank_local_category(
+    description: str,
+    transaction_type: str,
+) -> str | None:
+    """Return a closed locally known category for a Sberbank row.
+
+    Args:
+        description: Statement category label used as row description.
+        transaction_type: ``'income'`` or ``'expense'``.
+
+    Returns:
+        Category name from the closed rule set, or ``None`` when the row
+        has no locally known category and must stay unresolved.
+    """
+    if transaction_type != 'expense':
+        return None
+    normalized = description.strip().casefold().rstrip('.')
+    for pattern, category in SBERBANK_LOCAL_CATEGORY_RULES:
+        if pattern.search(normalized):
+            return category
+    return None
+
+
 # Ozon column indices
 OZON_DATE_COL = 0
 OZON_DOCUMENT_COL = 1
@@ -1167,6 +1208,10 @@ class _SberbankParser(BaseBankStatementParser):
     """
 
     bank_code = 'sberbank'
+    # Version 2 keeps every potential row visible, treats the auth code as a
+    # weak hint and adds closed local categories. A row imported by the
+    # previous mapping must be reassigned manually.
+    format_version = 2
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Сбербанка (кредитная карта).
@@ -1207,10 +1252,10 @@ class _SberbankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            transactions = [
-                t for t in transactions if t['amount'] != Decimal(0)
-            ]
-            transactions = _dedup_transactions(transactions)
+            transactions = _dedup_transactions(
+                transactions,
+                merge_repeated_refs=False,
+            )
             closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
@@ -1392,26 +1437,23 @@ class _SberbankParser(BaseBankStatementParser):
             amount_text = ''
 
         if row_b is None:
-            self._add_transaction_if_valid(
+            self._append_sberbank_row(
                 transactions,
                 date,
-                amount_text,
+                self._extract_sberbank_amount(amount_text),
                 category,
                 None,
             )
             return i + 1
 
         source_ref = self._extract_authcode(row_b)
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        self._append_sberbank_row(
+            transactions,
+            date,
+            self._extract_sberbank_amount(amount_text),
+            category,
+            source_ref,
+        )
         return i + 2
 
     def _extract_category_from_merged_col0(self, text: str) -> str:
@@ -1464,37 +1506,57 @@ class _SberbankParser(BaseBankStatementParser):
             else ''
         )
         source_ref = self._extract_authcode(row_b)
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        self._append_sberbank_row(
+            transactions,
+            date,
+            self._extract_sberbank_amount(amount_text),
+            category,
+            source_ref,
+        )
         return i + 2 if row_b is not None else i + 1
 
-    def _add_transaction_if_valid(
+    def _append_sberbank_row(
         self,
         transactions: list[dict[str, Any]],
         date: datetime,
-        amount_text: str,
+        amount: Decimal | None,
         category: str,
         source_ref: str | None,
     ) -> None:
-        """Add transaction to list if amount is valid and non-zero."""
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        """Append every potential Sberbank row with a traceable outcome.
+
+        A row whose amount cannot be read, or reads as zero, is kept as a
+        visible parse fragment without money. The auth code is only a weak
+        hint and the category label is mapped through closed local rules.
+
+        Args:
+            transactions: Accumulated statement rows.
+            date: Bank operation date parsed from the row.
+            amount: Signed amount, or ``None`` when it cannot be read.
+            category: Bank category label used as the description.
+            source_ref: Auth code hint, never a global identity.
+        """
+        description = (category or 'Операция')[:250]
+        parse_issue: str | None = None
+        if amount is None:
+            parse_issue = 'unparsed'
+        elif amount == Decimal(0):
+            parse_issue = 'zero_amount'
+        row: dict[str, Any] = {
+            'date': date,
+            'amount': amount,
+            'description': description,
+            'source_ref': source_ref,
+            'source_ref_strength': 'weak',
+            'category_name': (
+                sberbank_local_category(description, 'expense')
+                if amount is not None and amount < 0
+                else None
+            ),
+        }
+        if parse_issue is not None:
+            row['parse_issue'] = parse_issue
+        transactions.append(row)
 
     def _extract_sberbank_amount(self, text: str) -> Decimal | None:
         """Extract signed amount: '+' → positive, else negative.
