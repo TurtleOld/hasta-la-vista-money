@@ -77,6 +77,7 @@ class BalanceCheck:
     bank_balance: Decimal | None
     ledger_balance: Decimal | None
     discrepancy: Decimal | None
+    has_amounts: bool
     explanation_code: str
     explanation_completeness: str
     blocks_final_reconciliation: bool
@@ -225,6 +226,7 @@ class AccountingControlService:
         """Aggregate per-upload checks without hiding an unexplained gap."""
         active = [check for check in checks if check.checked]
         latest = active[0] if active else None
+        unchecked = any(not check.checked for check in checks)
         blocks = any(check.blocks_final_reconciliation for check in checks)
         stale = any(not check.actual for check in active)
         explained = any(
@@ -245,6 +247,9 @@ class AccountingControlService:
         elif blocks:
             label = _('Расхождение')
             result = BankStatementUpload.BalanceResult.DISCREPANCY
+        elif unchecked:
+            label = _('Не проверено')
+            result = BankStatementUpload.BalanceResult.NOT_CHECKED
         elif stale:
             label = _('Требует перепроверки')
             result = latest.result
@@ -259,8 +264,8 @@ class AccountingControlService:
             result = BankStatementUpload.BalanceResult.NOT_CHECKED
         details = tuple(check.detail for check in active if check.detail)
         return BalanceCheck(
-            checked=bool(active),
-            actual=bool(active) and not stale,
+            checked=bool(active) and not unchecked,
+            actual=bool(active) and not stale and not unchecked,
             result=result,
             reason=latest.reason if latest else '',
             label=str(label),
@@ -270,6 +275,7 @@ class AccountingControlService:
             bank_balance=latest.bank_balance if latest else None,
             ledger_balance=latest.ledger_balance if latest else None,
             discrepancy=latest.discrepancy if latest else None,
+            has_amounts=latest.has_amounts if latest else False,
             explanation_code=latest.explanation_code if latest else '',
             explanation_completeness=(latest.completeness if latest else ''),
             blocks_final_reconciliation=blocks,

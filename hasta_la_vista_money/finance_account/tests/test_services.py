@@ -797,6 +797,31 @@ class TestAccountServices(TestCase):
         self.assertIsNone(missing_currency.account_balance_after)
         self.assertIsNone(missing_currency.balance_discrepancy)
 
+    def test_unresolved_rows_are_not_checked_even_for_a_locked_moment(
+        self,
+    ) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        self._row(upload, 1, transaction_date=moment)
+
+        service = self.container.users.statement_balance_verification_service()
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.UNRESOLVED_ROWS,
+        )
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+
     def test_amount_or_date_change_invalidates_and_category_does_not(
         self,
     ) -> None:
@@ -873,6 +898,28 @@ class TestAccountServices(TestCase):
             moment.date(),
         )
         self.assertFalse(control.balance.actual)
+
+    def test_currency_change_invalidates_balance_check(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('1000.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        service.verify(upload)
+        Account.objects.filter(pk=self.account1.pk).update(currency='USD')
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+
+        self.assertFalse(control.balance.actual)
+        self.assertEqual(
+            control.balance.reason,
+            BankStatementUpload.BalanceReason.CURRENCY_CHANGED,
+        )
 
     def test_retention_keeps_balance_metadata_without_sums(self) -> None:
         moment = timezone.now() - timedelta(days=2)
