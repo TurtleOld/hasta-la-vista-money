@@ -1994,6 +1994,49 @@ class TransferAuditProvenanceRetentionTest(TestCase):
         self.assertEqual(row.source_fingerprint, 'fingerprint-shared')
         self.assertEqual(row.source_row_position, 7)
 
+    def test_repayment_transfer_keeps_statement_provenance(self) -> None:
+        """A transfer closing a repayment row carries safe bank identity."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.other,
+            pdf_file='repayment.pdf',
+            file_hash='file-c',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('300.00'),
+            source_row_position=9,
+            source_fingerprint='repayment-fingerprint',
+            source_fingerprint_key_version='k2',
+            source_fingerprint_format_version=1,
+            source_format_version=3,
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=self.other,
+                amount=Decimal('300.00'),
+                user=self.user,
+                exchange_date=WHEN,
+                statement_row_id=row.pk,
+            )
+        )
+
+        self.assertEqual(
+            transfer.source_fingerprint,
+            'repayment-fingerprint',
+        )
+        self.assertEqual(transfer.source_fingerprint_key_version, 'k2')
+        self.assertEqual(transfer.source_fingerprint_format_version, 1)
+        self.assertEqual(transfer.source_format_version, 3)
+        self.assertEqual(transfer.source_file_hash, 'file-c')
+        self.assertEqual(transfer.source_row_position, 9)
+
     def test_balance_metadata_survives_cleanup_without_amounts(self) -> None:
         upload = self.upload
         upload.balance_currency = 'RUB'
