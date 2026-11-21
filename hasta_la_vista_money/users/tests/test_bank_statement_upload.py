@@ -6421,7 +6421,23 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(upload.income_count, 0)
         self.assertEqual(upload.expense_count, 4)
         self.assertEqual(upload.needs_transfer_count, 2)
-        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        status = self.client.get(
+            reverse(
+                'finance_account:bank_statement_upload_status',
+                args=[upload.pk],
+            ),
+        )
+        self.assertEqual(
+            status.json()['reconciliation_url'],
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[upload.pk],
+            ),
+        )
         classifier.classify.assert_not_called()
 
     def test_raiffeisen_known_category_posts_row_and_movement(self) -> None:
