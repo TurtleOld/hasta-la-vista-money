@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.forms import ScanQRForm, UploadImageForm
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.typing_helpers import get_user_model
@@ -22,7 +22,9 @@ else:
 FORMS = (ScanQRForm, UploadImageForm)
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class UploadFormsDefaultAccountTests(TestCase):

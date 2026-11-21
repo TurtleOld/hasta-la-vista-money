@@ -103,19 +103,13 @@
 
 ```python
 # Автоматическое объединение по датам
-expense_dataset = (
-    Expense.objects.filter(user=user)
-    .values('date')
-    .annotate(total_amount=Sum('amount'))
-    .order_by('date')
-)
+expense_dataset = Expense.objects.filter(user=user).values('date').annotate(
+    total_amount=Sum('amount')
+).order_by('date')
 
-income_dataset = (
-    Income.objects.filter(user=user)
-    .values('date')
-    .annotate(total_amount=Sum('amount'))
-    .order_by('date')
-)
+income_dataset = Income.objects.filter(user=user).values('date').annotate(
+    total_amount=Sum('amount')
+).order_by('date')
 ```
 
 #### Особенности отображения
@@ -183,11 +177,11 @@ class TransferMoneyLog(models.Model):
 ```python
 # Проверка достаточности средств
 if amount > from_account.balance:
-    raise ValidationError('Недостаточно средств на счете')
+    raise ValidationError("Недостаточно средств на счете")
 
 # Проверка различных счетов
 if from_account == to_account:
-    raise ValidationError('Нельзя переводить на тот же счет')
+    raise ValidationError("Нельзя переводить на тот же счет")
 ```
 
 ## Производительность

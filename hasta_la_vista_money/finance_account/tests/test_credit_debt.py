@@ -17,6 +17,7 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -34,7 +35,9 @@ from hasta_la_vista_money.users.typing_helpers import get_user_model
 User = get_user_model()
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class CardDebtForBalanceTest(TestCase):

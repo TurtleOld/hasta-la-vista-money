@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
 )
 from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
@@ -13,7 +14,9 @@ from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
 )
 from hasta_la_vista_money.users.models import User
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestReceiptAPIValidatorAccountSelection(TestCase):

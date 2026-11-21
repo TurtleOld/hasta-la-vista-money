@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.factories import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
@@ -33,7 +34,9 @@ else:
     UserType = get_user_model()
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestAccountServices(TestCase):

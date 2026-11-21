@@ -41,12 +41,13 @@ else:
     User = get_user_model()
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
     Product,
     ProductCategory,
     Receipt,
+    ReceiptManager,
     Seller,
 )
 from hasta_la_vista_money.receipts.services.fns_qr import (
@@ -104,8 +105,10 @@ _READONLY_CLASSES = (
 )
 
 
-_account_manager = Account.objects
-_receipt_manager = Receipt.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
 
 
 class ReceiptFilter(django_filters.FilterSet):

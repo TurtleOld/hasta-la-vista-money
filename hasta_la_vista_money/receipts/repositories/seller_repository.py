@@ -6,10 +6,12 @@ including filtering and CRUD operations.
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.receipts.models import Seller
+from hasta_la_vista_money.receipts.models import Seller, SellerManager
 from hasta_la_vista_money.users.models import User
 
-_seller_manager = Seller.objects
+_OBJECTS_ATTR = 'objects'
+
+_seller_manager: SellerManager = getattr(Seller, _OBJECTS_ATTR)
 
 
 class SellerRepository:

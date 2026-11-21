@@ -18,7 +18,7 @@ from config.containers import ApplicationContainer
 from config.middleware import CoreMiddleware
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.receipts.forms import (
     ProductForm,
     ProductFormSet,
@@ -69,7 +69,9 @@ JPEG_BYTES = _image_bytes('JPEG')
 PNG_BYTES = _image_bytes('PNG')
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestReceipt(TestCase):

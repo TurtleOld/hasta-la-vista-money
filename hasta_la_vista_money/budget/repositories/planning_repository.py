@@ -8,11 +8,13 @@ from datetime import date
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.budget.models import Planning, PlanningManager
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
 
-_planning_manager = Planning.objects
+_OBJECTS_ATTR = 'objects'
+
+_planning_manager: PlanningManager = getattr(Planning, _OBJECTS_ATTR)
 
 
 class PlanningRepository:

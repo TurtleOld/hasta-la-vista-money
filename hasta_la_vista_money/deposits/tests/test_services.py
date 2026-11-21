@@ -44,6 +44,7 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -68,7 +69,9 @@ def _sberbank() -> Bank:
     return bank
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class DepositServiceIntegrationTests(TestCase):

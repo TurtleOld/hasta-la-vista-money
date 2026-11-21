@@ -8,10 +8,12 @@ from datetime import date
 
 from django.db.models import QuerySet
 
-from hasta_la_vista_money.budget.models import DateList
+from hasta_la_vista_money.budget.models import DateList, DateListManager
 from hasta_la_vista_money.users.models import User
 
-_datelist_manager = DateList.objects
+_OBJECTS_ATTR = 'objects'
+
+_datelist_manager: DateListManager = getattr(DateList, _OBJECTS_ATTR)
 
 
 class DateListRepository:

@@ -76,6 +76,7 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Receipt
@@ -464,7 +465,7 @@ def _previous_month_range(value: date) -> tuple[date, date]:
     return start, _end_of_month(start)
 
 
-_account_manager = Account.objects
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class FinancesView(LoginRequiredMixin, TemplateView):
@@ -477,7 +478,9 @@ class FinancesView(LoginRequiredMixin, TemplateView):
 
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/partials/_finances_results.html']
-        return [self.template_name]
+        # The base mixin declares ``template_name`` as optional.
+        template_name: str | None = self.template_name
+        return [template_name] if template_name is not None else []
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build combined finances context."""
@@ -1888,7 +1891,9 @@ class AccountView(
         """Return partial template for HTMX requests (group filter)."""
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/_account_dashboard_partial.html']
-        return [self.template_name]
+        # The base mixin declares ``template_name`` as optional.
+        template_name: str | None = self.template_name
+        return [template_name] if template_name is not None else []
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user or group.

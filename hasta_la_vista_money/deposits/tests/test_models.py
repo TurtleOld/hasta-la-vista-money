@@ -14,6 +14,7 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
 )
 from hasta_la_vista_money.users.factories import UserFactory
@@ -38,7 +39,9 @@ def _make_deposit(user: 'User') -> Deposit:
     )
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class DepositTermRateKindTests(TestCase):

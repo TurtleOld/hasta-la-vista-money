@@ -128,7 +128,7 @@ POST   /api/income-categories/      # Добавить категорию
 ```python
 # Пример валидации суммы
 if amount <= 0:
-    raise ValidationError('Сумма дохода должна быть положительной')
+    raise ValidationError("Сумма дохода должна быть положительной")
 ```
 
 ### Защита от ошибок
@@ -149,20 +149,14 @@ if amount <= 0:
 
 ```python
 # Сумма доходов по дням
-income_dataset = (
-    Income.objects.filter(user=user)
-    .values('date')
-    .annotate(total_amount=Sum('amount'))
-    .order_by('date')
-)
+income_dataset = Income.objects.filter(user=user).values('date').annotate(
+    total_amount=Sum('amount')
+).order_by('date')
 
 # Сумма по категориям
-category_dataset = (
-    Income.objects.filter(user=user)
-    .values('category__name')
-    .annotate(total_amount=Sum('amount'))
-    .order_by('-total_amount')
-)
+category_dataset = Income.objects.filter(user=user).values('category__name').annotate(
+    total_amount=Sum('amount')
+).order_by('-total_amount')
 ```
 
 ## Производительность
@@ -195,19 +189,17 @@ category_dataset = (
 ```python
 # Логирование операций
 import logging
-
 logger = logging.getLogger(__name__)
-
 
 def add_income(user, amount, category, account):
     try:
         income = Income.objects.create(
             user=user, amount=amount, category=category, account=account
         )
-        logger.info(f'Income added: {amount} to {account} in {category}')
+        logger.info(f"Income added: {amount} to {account} in {category}")
         return income
     except Exception as e:
-        logger.error(f'Income add error: {e}')
+        logger.error(f"Income add error: {e}")
         raise
 ```
 

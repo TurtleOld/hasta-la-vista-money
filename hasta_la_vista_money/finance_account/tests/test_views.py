@@ -23,6 +23,7 @@ from hasta_la_vista_money.constants import (
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -56,7 +57,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.views import AuthRequest
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TestAccountView(TestCase):

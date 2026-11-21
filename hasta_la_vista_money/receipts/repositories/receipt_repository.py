@@ -14,10 +14,13 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     Product,
     Receipt,
+    ReceiptManager,
 )
 from hasta_la_vista_money.users.models import User
 
-_receipt_manager = Receipt.objects
+_OBJECTS_ATTR = 'objects'
+
+_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
 
 
 class ReceiptRepository:

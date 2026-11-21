@@ -48,6 +48,7 @@ from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
     AccountCoverageConfirmation,
+    AccountManager,
     Bank,
     TransferMoneyLog,
 )
@@ -65,7 +66,9 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 
 # The project manager adds typed querysets; ``Manager`` is what Django's
 # typing exposes, so narrow it once here instead of at every use.
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):

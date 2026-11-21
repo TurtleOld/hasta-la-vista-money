@@ -179,44 +179,28 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
 ```python
 class ProductSerializer(serializers.ModelSerializer):
     """Сериализатор для товаров."""
-
+    
     class Meta:
         model = Product
         fields = [
-            'id',
-            'product_name',
-            'category',
-            'price',
-            'quantity',
-            'amount',
-            'nds_type',
-            'nds_sum',
+            'id', 'product_name', 'category', 'price',
+            'quantity', 'amount', 'nds_type', 'nds_sum'
         ]
         read_only_fields = ['id', 'created_at']
 
-
 class ReceiptSerializer(serializers.ModelSerializer):
     """Сериализатор для чеков."""
-
+    
     seller = SellerSerializer(read_only=True)
     account = AccountSerializer(read_only=True)
     products = ProductSerializer(many=True, read_only=True)
-
+    
     class Meta:
         model = Receipt
         fields = [
-            'id',
-            'receipt_date',
-            'number_receipt',
-            'total_sum',
-            'operation_type',
-            'manual',
-            'nds10',
-            'nds20',
-            'seller',
-            'account',
-            'products',
-            'created_at',
+            'id', 'receipt_date', 'number_receipt', 'total_sum',
+            'operation_type', 'manual', 'nds10', 'nds20',
+            'seller', 'account', 'products', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 ```
@@ -249,35 +233,29 @@ class ReceiptViewSet(viewsets.ModelViewSet):
 ```python
 class ReceiptForm(forms.ModelForm):
     """Форма для создания/редактирования чека."""
-
+    
     class Meta:
         model = Receipt
         fields = [
-            'receipt_date',
-            'number_receipt',
-            'total_sum',
-            'operation_type',
-            'seller',
-            'account',
-            'nds10',
-            'nds20',
+            'receipt_date', 'number_receipt', 'total_sum',
+            'operation_type', 'seller', 'account', 'nds10', 'nds20'
         ]
         widgets = {
             'receipt_date': forms.DateTimeInput(
                 attrs={'type': 'datetime-local'}
             )
         }
-
+    
     def clean(self):
         cleaned_data = super().clean()
         total_sum = cleaned_data.get('total_sum')
         account = cleaned_data.get('account')
-
+        
         # Проверка баланса
         if total_sum and account:
             if total_sum > account.balance:
-                raise ValidationError('Недостаточно средств на счете')
-
+                raise ValidationError("Недостаточно средств на счете")
+        
         return cleaned_data
 ```
 
@@ -289,7 +267,7 @@ ProductFormSet = forms.inlineformset_factory(
     Product,
     fields=['product_name', 'category', 'price', 'quantity', 'amount'],
     extra=1,
-    can_delete=True,
+    can_delete=True
 )
 ```
 
@@ -300,18 +278,22 @@ ProductFormSet = forms.inlineformset_factory(
 ```python
 class ReceiptModelTest(TestCase):
     """Тесты для модели Receipt."""
-
+    
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser', password='testpass'
+            username='testuser',
+            password='testpass'
         )
         self.account = Account.objects.create(
-            user=self.user, name_account='Test Account', balance=1000.00
+            user=self.user,
+            name_account='Test Account',
+            balance=1000.00
         )
         self.seller = Seller.objects.create(
-            user=self.user, name_seller='Test Seller'
+            user=self.user,
+            name_seller='Test Seller'
         )
-
+    
     def test_receipt_creation(self):
         """Тест создания чека."""
         receipt = Receipt.objects.create(
@@ -320,9 +302,9 @@ class ReceiptModelTest(TestCase):
             operation_type=1,
             seller=self.seller,
             user=self.user,
-            account=self.account,
+            account=self.account
         )
-
+        
         self.assertEqual(receipt.total_sum, 100.00)
         self.assertEqual(receipt.operation_type, 1)
         self.assertTrue(receipt.manual)
@@ -333,13 +315,14 @@ class ReceiptModelTest(TestCase):
 ```python
 class ReceiptAPITest(APITestCase):
     """Тесты для API чеков."""
-
+    
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser', password='testpass'
+            username='testuser',
+            password='testpass'
         )
         self.client.force_authenticate(user=self.user)
-
+    
     def test_create_receipt(self):
         """Тест создания чека через API."""
         data = {
@@ -347,9 +330,9 @@ class ReceiptAPITest(APITestCase):
             'total_sum': '100.00',
             'operation_type': 1,
             'seller': 1,
-            'account': 1,
+            'account': 1
         }
-
+        
         response = self.client.post('/api/receipts/', data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Receipt.objects.count(), 1)
@@ -360,18 +343,21 @@ class ReceiptAPITest(APITestCase):
 ```python
 class ReceiptIntegrationTest(TestCase):
     """Интеграционные тесты для чеков."""
-
+    
     def test_receipt_with_products(self):
         """Тест создания чека с товарами."""
         # Создание чека
         receipt = Receipt.objects.create(...)
-
+        
         # Добавление товаров
         product1 = Product.objects.create(
-            product_name='Молоко', price=85.00, quantity=2.00, amount=170.00
+            product_name='Молоко',
+            price=85.00,
+            quantity=2.00,
+            amount=170.00
         )
         receipt.product.add(product1)
-
+        
         # Проверка
         self.assertEqual(receipt.product.count(), 1)
         self.assertEqual(receipt.total_sum, 170.00)
@@ -383,18 +369,20 @@ class ReceiptIntegrationTest(TestCase):
 
 ```python
 # Использование select_related для уменьшения запросов
-receipts = Receipt.objects.select_related('seller', 'account', 'user').filter(
-    user=request.user
-)
+receipts = Receipt.objects.select_related(
+    'seller', 'account', 'user'
+).filter(user=request.user)
 
 # Использование prefetch_related для ManyToMany
-receipts = Receipt.objects.prefetch_related('product').filter(user=request.user)
+receipts = Receipt.objects.prefetch_related(
+    'product'
+).filter(user=request.user)
 
 # Аннотации для агрегации
 stats = Receipt.objects.filter(user=user).aggregate(
     total_sum=Sum('total_sum'),
     total_count=Count('id'),
-    avg_sum=Avg('total_sum'),
+    avg_sum=Avg('total_sum')
 )
 ```
 
@@ -403,18 +391,18 @@ stats = Receipt.objects.filter(user=user).aggregate(
 ```python
 from django.core.cache import cache
 
-
 def get_receipt_statistics(user):
     """Получение статистики чеков с кэшированием."""
     cache_key = f'receipt_stats_{user.id}'
     stats = cache.get(cache_key)
-
+    
     if stats is None:
         stats = Receipt.objects.filter(user=user).aggregate(
-            total_sum=Sum('total_sum'), total_count=Count('id')
+            total_sum=Sum('total_sum'),
+            total_count=Count('id')
         )
         cache.set(cache_key, stats, 300)  # 5 минут
-
+    
     return stats
 ```
 
@@ -441,25 +429,26 @@ class Receipt(models.Model):
 def validate_receipt_data(data):
     """Валидация данных чека."""
     errors = {}
-
+    
     # Проверка суммы
     if data.get('total_sum', 0) <= 0:
         errors['total_sum'] = 'Сумма должна быть больше нуля'
-
+    
     # Проверка даты
     receipt_date = data.get('receipt_date')
     if receipt_date and receipt_date > timezone.now():
         errors['receipt_date'] = 'Дата не может быть в будущем'
-
+    
     # Проверка номера чека
     number_receipt = data.get('number_receipt')
     if number_receipt:
         existing = Receipt.objects.filter(
-            user=data['user'], number_receipt=number_receipt
+            user=data['user'],
+            number_receipt=number_receipt
         ).exists()
         if existing:
             errors['number_receipt'] = 'Чек с таким номером уже существует'
-
+    
     return errors
 ```
 
@@ -485,16 +474,15 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-
 def log_receipt_operation(operation, receipt, user):
     """Логирование операций с чеками."""
     logger.info(
-        'Receipt operation',
+        "Receipt operation",
         operation=operation,
         receipt_id=receipt.id,
         user_id=user.id,
         total_sum=str(receipt.total_sum),
-        seller=receipt.seller.name_seller,
+        seller=receipt.seller.name_seller
     )
 ```
 
@@ -504,9 +492,12 @@ def log_receipt_operation(operation, receipt, user):
 def handle_receipt_error(error, context):
     """Обработка ошибок при работе с чеками."""
     logger.error(
-        'Receipt error', error=str(error), context=context, exc_info=True
+        "Receipt error",
+        error=str(error),
+        context=context,
+        exc_info=True
     )
-
+    
     # Уведомление администратора
     if settings.DEBUG:
         raise error
@@ -623,15 +614,17 @@ def integrate_with_bank_api(receipt_data):
 ```python
 class ReceiptFilter(django_filters.FilterSet):
     """Кастомные фильтры для чеков."""
-
+    
     date_range = django_filters.DateFromToRangeFilter(
-        field_name='receipt_date', label='Период'
+        field_name='receipt_date',
+        label='Период'
     )
-
+    
     total_sum_range = django_filters.RangeFilter(
-        field_name='total_sum', label='Диапазон сумм'
+        field_name='total_sum',
+        label='Диапазон сумм'
     )
-
+    
     class Meta:
         model = Receipt
         fields = {

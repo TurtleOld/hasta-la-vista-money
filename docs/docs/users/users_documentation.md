@@ -140,21 +140,9 @@ urlpatterns = [
     path('set-theme/', SwitchThemeView.as_view(), name='set_theme'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('dashboard/data/', DashboardDataView.as_view(), name='dashboard_data'),
-    path(
-        'dashboard/widget/',
-        DashboardWidgetConfigView.as_view(),
-        name='dashboard_widget',
-    ),
-    path(
-        'dashboard/drilldown/',
-        DashboardDrillDownView.as_view(),
-        name='dashboard_drilldown',
-    ),
-    path(
-        'dashboard/comparison/',
-        DashboardComparisonView.as_view(),
-        name='dashboard_comparison',
-    ),
+    path('dashboard/widget/', DashboardWidgetConfigView.as_view(), name='dashboard_widget'),
+    path('dashboard/drilldown/', DashboardDrillDownView.as_view(), name='dashboard_drilldown'),
+    path('dashboard/comparison/', DashboardComparisonView.as_view(), name='dashboard_comparison'),
     path('groups/', include('hasta_la_vista_money.users.groups_urls')),
     path('ajax/', include('hasta_la_vista_money.users.ajax_urls')),
 ]
@@ -165,11 +153,7 @@ urlpatterns = [
 ```python
 urlpatterns = [
     path('groups-for-user/', groups_for_user_ajax, name='groups_for_user'),
-    path(
-        'groups-not-for-user/',
-        groups_not_for_user_ajax,
-        name='groups_not_for_user',
-    ),
+    path('groups-not-for-user/', groups_not_for_user_ajax, name='groups_not_for_user'),
 ]
 ```
 
@@ -258,21 +242,12 @@ urlpatterns = [
        'AUTH_COOKIE': 'access_token',
        'AUTH_COOKIE_REFRESH': 'refresh_token',
        'AUTH_COOKIE_DOMAIN': None,
-       'AUTH_COOKIE_SECURE': os.environ.get(
-           'SESSION_COOKIE_SECURE', 'false'
-       ).lower()
-       == 'true',
+       'AUTH_COOKIE_SECURE': os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true',
        'AUTH_COOKIE_HTTP_ONLY': True,
        'AUTH_COOKIE_PATH': '/',
        'AUTH_COOKIE_SAMESITE': 'Lax',
-       'AUTH_COOKIE_MAX_AGE': int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60'))
-       * 60,
-       'AUTH_COOKIE_REFRESH_MAX_AGE': int(
-           os.environ.get('REFRESH_TOKEN_LIFETIME', '7')
-       )
-       * 24
-       * 60
-       * 60,
+       'AUTH_COOKIE_MAX_AGE': int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')) * 60,
+       'AUTH_COOKIE_REFRESH_MAX_AGE': int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7')) * 24 * 60 * 60,
    }
    ```
 
@@ -598,7 +573,7 @@ class DashboardWidget(Model):
     'intercept': float,  # точка пересечения
     'r_squared': float,  # коэффициент детерминации (R²)
     'trend_line': list[dict],  # точки линии динамики
-    'forecast': list[dict],  # прогноз на 3 месяца вперёд
+    'forecast': list[dict]  # прогноз на 3 месяца вперёд
 }
 ```
 
@@ -612,8 +587,14 @@ class DashboardWidget(Model):
 **Возвращает:**
 ```python
 {
-    'current': {'expenses': Decimal, 'income': Decimal},
-    'previous': {'expenses': Decimal, 'income': Decimal},
+    'current': {
+        'expenses': Decimal,
+        'income': Decimal
+    },
+    'previous': {
+        'expenses': Decimal,
+        'income': Decimal
+    }
 }
 ```
 

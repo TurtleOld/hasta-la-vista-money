@@ -9,7 +9,7 @@ from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, AccountManager
 from hasta_la_vista_money.transactions.commands import (
     CreateTransactionCommand,
     UpdateTransactionCommand,
@@ -37,7 +37,9 @@ from hasta_la_vista_money.users.models import User
 TEST_PASSWORD = 'pwd123456!'  # nosec B105
 
 
-_account_manager = Account.objects
+_OBJECTS_ATTR = 'objects'
+
+_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
 
 
 class TransactionServiceTest(TestCase):
