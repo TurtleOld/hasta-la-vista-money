@@ -8359,6 +8359,162 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(Transaction.objects.count(), 1)
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 
+    def test_real_raiffeisen_replay_keeps_rows_by_source_position(
+        self,
+    ) -> None:
+        """Real 1-based positions survive replay before and after cleanup."""
+        with RAIFFEISEN_REAL_FIXTURE.open('rb') as pdf:
+            upload = BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file=File(pdf, name='raiffeisen-replay.pdf'),
+            )
+        process_bank_statement_task.apply(args=[upload.pk])
+        upload.refresh_from_db()
+        rows = upload.statement_rows.order_by('source_row_position')
+        before = {
+            row.source_row_position: (
+                row.pk,
+                row.decision,
+                row.transaction_id,
+                row.amount,
+                row.source_ref,
+            )
+            for row in rows
+        }
+        self.assertEqual(sorted(before), list(range(1, 139)))
+        self.assertIsNone(before[4][4])
+        self.assertEqual(before[73][1], BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(before[73][2])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('-119000.00'))
+        pdf_content = RAIFFEISEN_REAL_FIXTURE.read_bytes()
+        service = ApplicationContainer().users.bank_statement_import_service()
+
+        for cleaned in (False, True):
+            if cleaned:
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    expires_at=timezone.now(),
+                )
+                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+                upload.refresh_from_db()
+            current = {
+                row.source_row_position: (
+                    row.pk,
+                    row.decision,
+                    row.transaction_id,
+                )
+                for row in upload.statement_rows.all()
+            }
+            self.assertTrue(
+                service.prepare_known_replay(
+                    upload,
+                    SimpleUploadedFile(
+                        'raiffeisen-replay.pdf',
+                        pdf_content,
+                        content_type='application/pdf',
+                    ),
+                ),
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+            upload.refresh_from_db()
+            after = {
+                row.source_row_position: (
+                    row.pk,
+                    row.decision,
+                    row.transaction_id,
+                    row.amount,
+                    row.source_ref,
+                )
+                for row in upload.statement_rows.all()
+            }
+            self.assertEqual(sorted(after), list(range(1, 139)))
+            self.assertEqual(
+                {position: values[:3] for position, values in after.items()},
+                current,
+            )
+            self.assertEqual(Transaction.objects.count(), 1)
+            self.account.refresh_from_db()
+            self.assertEqual(self.account.balance, Decimal('-119000.00'))
+            self.assertEqual(after[73][3], Decimal('120000.00'))
+            self.assertEqual(after[73][4], '311345')
+            self.assertTrue(
+                upload.statement_rows.get(
+                    source_row_position=4,
+                ).description,
+            )
+
+    def test_cleaned_partial_fragment_is_restored_by_replay(self) -> None:
+        """An explicit replay restores a cleaned unparsed fragment in place."""
+        parse_result = StatementParseResult(
+            transactions=[
+                {
+                    'date': None,
+                    'amount': None,
+                    'description': 'Неизвестная операция',
+                    'parse_issue': 'unsupported',
+                    'row_position': 7,
+                },
+            ],
+            bank='generic',
+            format_version=2,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/fragment.pdf',
+            file_hash='fragment-file',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+        row = BankStatementRow.objects.get(upload=upload)
+        row_pk = row.pk
+        self.assertEqual(row.source_row_position, 7)
+        self.assertEqual(row.description, 'Неизвестная операция')
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(row.description, '')
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'fragment.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 1)
+        row = rows.get()
+        self.assertEqual(row.pk, row_pk)
+        self.assertEqual(row.source_row_position, 7)
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(row.description, 'Неизвестная операция')
+        self.assertIsNone(row.amount)
+        self.assertIsNone(row.transaction_date)
+        self.assertFalse(Transaction.objects.exists())
+
     def _replay_parse_result(
         self,
         moment: datetime,

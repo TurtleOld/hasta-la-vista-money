@@ -1508,9 +1508,10 @@ class BankStatementImportService:
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
             replay = restore_existing and upload.statement_rows.exists()
             for idx, trans in enumerate(transactions):
-                if _is_unparsed(trans):
-                    new_rows[idx] = trans
-                    continue
+                source_position = trans.get('row_position')
+                position = (
+                    idx if source_position is None else int(source_position)
+                )
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1519,18 +1520,21 @@ class BankStatementImportService:
                 if restore_existing and self._restore_existing_row(
                     upload=upload,
                     trans=trans,
-                    row_position=idx,
+                    row_position=position,
                     bank=bank,
                     fingerprint=fingerprint,
                     format_version=format_version,
                 ):
+                    continue
+                if _is_unparsed(trans):
+                    new_rows[position] = trans
                     continue
                 if recognize_known:
                     exact = self._find_exact_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
-                        row_position=idx,
+                        row_position=position,
                         type_value=(
                             TransactionType.INCOME
                             if trans['amount'] > 0
@@ -1547,7 +1551,7 @@ class BankStatementImportService:
                         source_ref_strength=_reference_strength(bank, trans),
                     )
                     if exact is not None and not exact.conflict:
-                        duplicates.append((trans, idx, exact))
+                        duplicates.append((trans, position, exact))
                         continue
                     if self._has_unresolved_observation(
                         upload=upload,
@@ -1562,12 +1566,12 @@ class BankStatementImportService:
                         trans_date=trans['date'],
                     ):
                         continue
-                new_rows[idx] = trans
+                new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
             # mark up.
             cancelled = _mutual_cancel_positions(new_rows)
             rows = []
-            for idx, trans in new_rows.items():
+            for position, trans in new_rows.items():
                 amount = trans.get('amount')
                 fingerprint = self._fingerprint(
                     upload=upload,
@@ -1595,7 +1599,7 @@ class BankStatementImportService:
                             trans.get('category_name') or '',
                         )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
-                        source_row_position=idx,
+                        source_row_position=position,
                         source_format_version=format_version,
                         source_fingerprint=(
                             fingerprint.digest if fingerprint else ''
@@ -1618,7 +1622,7 @@ class BankStatementImportService:
                         ),
                         decision=(
                             BankStatementRow.Decision.MUTUAL_CANCEL
-                            if idx in cancelled
+                            if position in cancelled
                             else BankStatementRow.Decision.AWAITING_MARKUP
                         ),
                     ),
@@ -1626,11 +1630,11 @@ class BankStatementImportService:
             # A rerun of the same upload hits the per-upload row
             # constraint.
             BankStatementRow.objects.bulk_create(rows, ignore_conflicts=True)
-            for trans, idx, exact in duplicates:
+            for trans, position, exact in duplicates:
                 self._save_duplicate_row(
                     upload=upload,
                     trans=trans,
-                    row_position=idx,
+                    row_position=position,
                     type_value=(
                         TransactionType.INCOME
                         if trans['amount'] > 0
@@ -1713,15 +1717,10 @@ class BankStatementImportService:
             return None
         if row.amount is not None and row.transaction_date is not None:
             return row
+        amount = trans.get('amount')
+        trans_date = trans.get('date')
         payload: dict[str, Any] = {
-            'transaction_type': (
-                BankStatementRow.TransactionType.INCOME
-                if trans['amount'] > 0
-                else BankStatementRow.TransactionType.EXPENSE
-            ),
-            'transaction_date': trans['date'],
-            'amount': abs(trans['amount']),
-            'description': strip_pii(str(trans['description']))[
+            'description': strip_pii(str(trans.get('description') or ''))[
                 : constants.TWO_HUNDRED_FIFTY
             ],
             'source_ref': trans.get('source_ref') or None,
@@ -1733,6 +1732,15 @@ class BankStatementImportService:
             'merchant_key': trans.get('merchant_key') or '',
             'counterparty_account': trans.get('counterparty_account') or '',
         }
+        if amount is not None:
+            payload['amount'] = abs(amount)
+            payload['transaction_type'] = (
+                BankStatementRow.TransactionType.INCOME
+                if amount > 0
+                else BankStatementRow.TransactionType.EXPENSE
+            )
+        if trans_date is not None:
+            payload['transaction_date'] = trans_date
         if (
             row.source_row_position is None
             and not rows.exclude(
