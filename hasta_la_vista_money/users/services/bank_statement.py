@@ -1705,14 +1705,24 @@ class _OzonBankParser(BaseBankStatementParser):
 
     Columns: [0]=Дата операции | [1]=Документ |
     [2]=Назначение платежа | [3]=Российские рубли | [4]=Валюта
+
+    Every potential operation becomes a row: known purposes keep their
+    closed local category, while unknown purposes and transfers stay
+    unresolved and are never dropped. A document number is only a weak
+    hint, so repeated numbers never merge rows.
     """
+
+    bank_code = 'ozon'
+    # Version 2 keeps unknown purposes, transfers and row fragments
+    # visible and treats the document number as a weak hint.
+    format_version = 2
 
     _operation_start_pattern = re.compile(
         r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}\b',
     )
 
     def parse(self) -> StatementParseResult:
-        """Parse purchases, refunds, and tips from an Ozon statement."""
+        """Parse every potential Ozon operation into a traceable row."""
         try:
             logger.info('bank_statement_parse_started', parser='ozon')
             tables = self._read_tables(edge_tol=OZON_TABLE_EDGE_TOL)
@@ -1733,7 +1743,10 @@ class _OzonBankParser(BaseBankStatementParser):
                 )
                 raise BankStatementParseError(error_msg)
 
-            transactions = _dedup_transactions(transactions)
+            transactions = _dedup_transactions(
+                transactions,
+                merge_repeated_refs=False,
+            )
             logger.info(
                 'bank_statement_parse_completed',
                 parser='ozon',
@@ -1747,8 +1760,8 @@ class _OzonBankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF Ozon: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
-            # Transfers are intentionally excluded, so closing-balance
-            # reconciliation would report an expected false discrepancy.
+            # Ozon statements do not expose a closing balance or period
+            # to this parser, so none is invented for reconciliation.
             return StatementParseResult(
                 transactions=transactions,
                 bank=self.bank_code,
@@ -1780,9 +1793,7 @@ class _OzonBankParser(BaseBankStatementParser):
                 parts.append(next_row)
                 next_index += 1
 
-            transaction = self._parse_operation(parts, page)
-            if transaction is not None:
-                transactions.append(transaction)
+            transactions.append(self._parse_operation(parts, page))
             index = next_index
 
         return transactions, operation_rows
@@ -1800,7 +1811,19 @@ class _OzonBankParser(BaseBankStatementParser):
         self,
         rows: list[pd.Series],
         page: str,
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
+        """Return one traceable row, keeping fragments without money.
+
+        Args:
+            rows: Rows of a single operation, including continuation rows.
+            page: PDF page label used for diagnostics.
+
+        Returns:
+            Row dict with a weak document hint and the closed local
+            ``category_name`` when known. Missing document, unreadable
+            amount or a zero amount becomes ``parse_issue`` so the import
+            keeps the fragment visible without posting it.
+        """
         date_text = ' '.join(self._cell(row, OZON_DATE_COL) for row in rows)
         trans_date = self._extract_ozon_date(date_text)
         source_ref = re.sub(
@@ -1808,48 +1831,36 @@ class _OzonBankParser(BaseBankStatementParser):
             '',
             self._joined_column(rows, OZON_DOCUMENT_COL),
         )
-        description = self._joined_column(rows, OZON_DESCRIPTION_COL)
+        purpose = self._joined_column(rows, OZON_DESCRIPTION_COL)
         amount_text = self._joined_column(rows, OZON_AMOUNT_COL)
-        where = (
-            f'Операция Ozon на стр. {page} '
-            f'(дата: {self._cell(rows[0], OZON_DATE_COL) or "—"}, '
-            f'документ: {source_ref or "—"}, '
-            f'назначение: {description or "—"})'
-        )
-
-        category = self._category_for_description(description)
-        if category is None:
-            logger.warning(
-                'bank_statement_ozon_operation_skipped',
-                source_ref=source_ref,
-            )
-            return None
-
-        missing = [
-            field
-            for field, value in (
-                ('дата операции', trans_date),
-                ('номер документа', source_ref),
-            )
-            if not value
-        ]
-        if missing:
-            error_msg = f'{where}: не найдены {", ".join(missing)}'
-            raise BankStatementParseError(error_msg)
-
         amount = self._extract_ozon_amount(amount_text)
-        if amount is None or amount == Decimal(0):
-            error_msg = f'{where}: не удалось разобрать сумму «{amount_text}»'
-            raise BankStatementParseError(error_msg)
+        category = self._category_for_description(purpose)
 
-        return {
+        parse_issue: str | None = None
+        if not trans_date or not source_ref or amount is None:
+            parse_issue = 'unparsed'
+        elif amount == Decimal(0):
+            parse_issue = 'zero_amount'
+        if parse_issue is not None:
+            logger.warning(
+                'bank_statement_ozon_row_unparsed',
+                page=page,
+                source_ref=source_ref,
+                issue=parse_issue,
+            )
+
+        row: dict[str, Any] = {
             'date': trans_date,
             'amount': amount,
-            'description': category,
+            'description': category or purpose or 'Операция Ozon',
             'category_name': category,
-            'source_ref': source_ref,
+            'source_ref': source_ref or None,
+            'source_ref_strength': 'weak',
             'source': 'ozon',
         }
+        if parse_issue is not None:
+            row['parse_issue'] = parse_issue
+        return row
 
     def _cell(self, row: pd.Series, index: int) -> str:
         if len(row) <= index:
