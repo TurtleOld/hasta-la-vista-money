@@ -112,16 +112,17 @@ class RosDorBankUploadTest(TestCase):
 
         second = self._upload()
 
+        rows = BankStatementRow.objects.filter(upload=second)
         self.assertEqual(
-            list(
-                BankStatementRow.objects.filter(upload=second).values_list(
-                    'source_ref',
-                    flat=True,
-                ),
-            ),
-            ['110-03.03.2026'],
+            list(rows.values_list('source_ref', flat=True)),
+            ['101-01.03.2026', '110-03.03.2026'],
         )
-        self.assertEqual(second.skipped_count, 9)
+        repeated = rows.get(source_ref='101-01.03.2026')
+        self.assertEqual(
+            repeated.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(second.skipped_count, 8)
 
     def test_number_from_header_is_assigned_to_selected_account(self) -> None:
         self._upload()
