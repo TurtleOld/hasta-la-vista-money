@@ -48,6 +48,9 @@ from hasta_la_vista_money.users.services.statement_identity import (
 
 WHEN = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
 KEYS = {'k1': 'first-test-secret', 'k2': 'second-test-secret'}
+# Explicit synthetic namespace: production banks keep their own policy and
+# the generic bank has no bank identity to fingerprint.
+SYNTHETIC_BANK = 'synthetic-test'
 
 
 class StatementFingerprintTest(TestCase):
@@ -61,7 +64,7 @@ class StatementFingerprintTest(TestCase):
         )
 
         base = service.fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=1,
             source_ref='doc-1',
         )
@@ -81,7 +84,7 @@ class StatementFingerprintTest(TestCase):
         self.assertNotEqual(
             base.digest,
             service.fingerprint(
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
                 account_id=2,
                 source_ref='doc-1',
             ).digest,
@@ -94,12 +97,12 @@ class StatementFingerprintTest(TestCase):
             format_version=1,
         )
         written = service.fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=1,
             source_ref='doc-1',
         )
         recognized = service.recognition(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=1,
             source_ref='doc-1',
         )
@@ -116,7 +119,7 @@ class StatementFingerprintTest(TestCase):
         self.assertFalse(unconfigured.is_configured)
         with self.assertRaises(StatementFingerprintUnavailableError):
             unconfigured.fingerprint(
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
                 account_id=1,
                 source_ref='doc-1',
             )
@@ -129,7 +132,7 @@ class StatementFingerprintTest(TestCase):
         self.assertEqual(rotated.missing_keys({'k1', 'k2'}), {'k1'})
         with self.assertRaises(StatementFingerprintUnavailableError):
             rotated.fingerprint(
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
                 account_id=1,
                 source_ref='doc-1',
                 key_version='k1',
@@ -188,7 +191,7 @@ class StatementIdentityImportTest(TestCase):
         ) as parser:
             parser.return_value.parse.return_value = StatementParseResult(
                 transactions=transactions,
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
                 format_version=format_version,
             )
             return self.import_service.import_statement(upload)
@@ -202,7 +205,7 @@ class StatementIdentityImportTest(TestCase):
         key_version: str = 'k2',
     ) -> BankStatementRow:
         fingerprint = self.identity.fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=self.account.pk,
             source_ref=source_ref,
             key_version=key_version,
@@ -482,7 +485,7 @@ class StatementIdentityImportTest(TestCase):
             active_key_version='k2',
             format_version=1,
         ).fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=self.account.pk,
             source_ref='doc-1',
         )
@@ -516,7 +519,7 @@ class StatementIdentityImportTest(TestCase):
                         'row_position': 0,
                     },
                 ],
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
             )
             result = service.import_statement(upload)
 
@@ -550,7 +553,7 @@ class StatementIdentityImportTest(TestCase):
                         'row_position': 0,
                     },
                 ],
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
             )
             upload = self._upload('unconfigured.pdf')
             result = service.import_statement(upload)
@@ -594,7 +597,7 @@ class StatementIdentityImportTest(TestCase):
                         'row_position': 0,
                     },
                 ],
-                bank='ozon',
+                bank=SYNTHETIC_BANK,
             )
             result = service.import_statement(upload)
 
@@ -878,7 +881,7 @@ class RetentionKeepsFingerprintTest(TestCase):
             active_key_version='k2',
             format_version=1,
         ).fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=account.pk,
             source_ref='doc-1',
         )
@@ -970,7 +973,7 @@ class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
             active_key_version='k2',
             format_version=1,
         ).fingerprint(
-            bank='ozon',
+            bank=SYNTHETIC_BANK,
             account_id=self.account.pk,
             source_ref='doc-1',
         )
@@ -1393,7 +1396,7 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                                     'row_position': 0,
                                 },
                             ],
-                            bank='ozon',
+                            bank=SYNTHETIC_BANK,
                         )
                     )
                     service.import_statement(uploads[index])

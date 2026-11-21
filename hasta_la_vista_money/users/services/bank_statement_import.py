@@ -77,10 +77,10 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 # Banks whose parsed rows may be posted only by a closed local category rule.
-LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank'})
+LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon'})
 # Banks whose reference is a hint: only file hash, stable format and
 # matching operation fields can prove an exact repeat.
-WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank'})
+WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon'})
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:
