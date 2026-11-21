@@ -76,6 +76,11 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
+# Banks whose parsed rows may be posted only by a closed local category rule.
+LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank'})
+# Banks whose reference is a hint: only file hash, stable format and
+# matching operation fields can prove an exact repeat.
+WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank'})
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:
@@ -350,7 +355,7 @@ class BankStatementImportService:
         format_version = (
             parse_result.format_version if parse_result is not None else 1
         )
-        is_raiffeisen = bank == 'raiffeisen'
+        uses_local_categories = bank in LOCAL_CATEGORY_BANKS
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:
@@ -429,7 +434,7 @@ class BankStatementImportService:
                 category_name is None
                 and not unparsed
                 and not is_credit_income
-                and not is_raiffeisen
+                and not uses_local_categories
                 and not (exact is not None and not exact.conflict)
             ):
                 category_name = self._classify_category(
@@ -465,7 +470,7 @@ class BankStatementImportService:
                             'weak',
                         ),
                     )
-                if is_raiffeisen and not unparsed and exact is None:
+                if uses_local_categories and not unparsed and exact is None:
                     existing_row = BankStatementRow.objects.filter(
                         upload=upload,
                         source_row_position=row_position,
@@ -516,7 +521,7 @@ class BankStatementImportService:
                         skipped_count += 1
                 else:
                     row_category = str(category_name or FALLBACK_CATEGORY)
-                    if is_raiffeisen and (
+                    if uses_local_categories and (
                         category_name is None
                         or source_ref in ambiguous_refs
                         or self._has_unresolved_observation(
@@ -594,12 +599,18 @@ class BankStatementImportService:
                                 source_ref=source_ref or None,
                                 source_file_hash=(
                                     upload.file_hash
-                                    if (not source_ref or bank == 'raiffeisen')
+                                    if (
+                                        not source_ref
+                                        or bank in WEAK_REFERENCE_BANKS
+                                    )
                                     else None
                                 ),
                                 source_row_position=(
                                     row_position
-                                    if (not source_ref or bank == 'raiffeisen')
+                                    if (
+                                        not source_ref
+                                        or bank in WEAK_REFERENCE_BANKS
+                                    )
                                     else None
                                 ),
                                 source_format_version=format_version,
@@ -617,7 +628,7 @@ class BankStatementImportService:
                                     else 0
                                 ),
                             )
-                            if is_raiffeisen:
+                            if uses_local_categories:
                                 self._save_autopost_row(
                                     upload=upload,
                                     trans=trans,
@@ -773,9 +784,9 @@ class BankStatementImportService:
                 trans_date=trans_date,
                 match_calendar_date=match_calendar_date,
             )
-        if source_ref and bank != 'raiffeisen':
+        if source_ref and bank not in WEAK_REFERENCE_BANKS:
             return None
-        if bank == 'raiffeisen' and not upload.file_hash:
+        if bank in WEAK_REFERENCE_BANKS and not upload.file_hash:
             return None
         return self._exact_by_position(
             upload=upload,

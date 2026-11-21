@@ -178,6 +178,47 @@ SBERBANK_CATEGORY_COL = 1
 SBERBANK_AMOUNT_COL = 2
 SBERBANK_BALANCE_COL = 3
 
+# Closed local category rules for Sberbank. The statement category label is
+# only a hint: a row is posted automatically only when this closed set knows
+# it. Unknown labels stay unresolved for the user.
+SBERBANK_LOCAL_CATEGORY_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r'^транспорт$'), 'Транспорт'),
+    (re.compile(r'^супермаркет'), 'Продукты'),
+    (re.compile(r'^рестораны и кафе$'), 'Рестораны и кафе'),
+    (re.compile(r'^фастфуд$'), 'Фастфуд'),
+    (
+        re.compile(r'^коммунальные платежи'),
+        'Коммунальные платежи, связь, интернет',
+    ),
+    (re.compile(r'^наличные$'), 'Наличные'),
+    (re.compile(r'^комисси'), 'Комиссия банка'),
+    (re.compile(r'^прочие расходы$'), 'Прочие расходы'),
+)
+
+
+def sberbank_local_category(
+    description: str,
+    transaction_type: str,
+) -> str | None:
+    """Return a closed locally known category for a Sberbank row.
+
+    Args:
+        description: Statement category label used as row description.
+        transaction_type: ``'income'`` or ``'expense'``.
+
+    Returns:
+        Category name from the closed rule set, or ``None`` when the row
+        has no locally known category and must stay unresolved.
+    """
+    if transaction_type != 'expense':
+        return None
+    normalized = description.strip().casefold().rstrip('.')
+    for pattern, category in SBERBANK_LOCAL_CATEGORY_RULES:
+        if pattern.search(normalized):
+            return category
+    return None
+
+
 # Ozon column indices
 OZON_DATE_COL = 0
 OZON_DOCUMENT_COL = 1
@@ -1176,6 +1217,10 @@ class _SberbankParser(BaseBankStatementParser):
     """
 
     bank_code = 'sberbank'
+    # Version 2 keeps every potential row visible, treats the auth code as a
+    # weak hint and adds closed local categories. A row imported by the
+    # previous mapping must be reassigned manually.
+    format_version = 2
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Сбербанка (кредитная карта).
@@ -1216,10 +1261,10 @@ class _SberbankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            transactions = [
-                t for t in transactions if t['amount'] != Decimal(0)
-            ]
-            transactions = _dedup_transactions(transactions)
+            transactions = _dedup_transactions(
+                transactions,
+                merge_repeated_refs=False,
+            )
             closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
@@ -1258,25 +1303,58 @@ class _SberbankParser(BaseBankStatementParser):
                 )
             ):
                 return True
-        # Fallback: if col[0] contains a datetime pattern,
-        # treat as transaction table
+        # Fallback: a real transaction row A carries the bank time. A
+        # summary "Остаток на DD.MM.YYYY" row is not an operation.
         for _, row in df.iterrows():
             cell = str(row.iloc[0]) if len(row) > 0 else ''
-            if self._extract_date(cell) is not None:
+            if self._extract_date(cell) is not None and re.search(
+                r'\d{2}:\d{2}',
+                cell,
+            ):
                 return True
         return False
 
     def _find_data_start_row(self, df: pd.DataFrame) -> int:
-        """Return index of first row where col[0] contains a valid date."""
+        """Return the first row that can start a bank operation.
+
+        A malformed bank date must not hide the row before the first
+        readable date: a row with a readable amount is still a potential
+        operation and is kept as a visible parse fragment.
+        """
         for i in range(len(df)):
+            row = df.iloc[i]
             cell = (
-                str(df.iloc[i, SBERBANK_DATE_COL])
-                if len(df.columns) > 0
+                str(row.iloc[SBERBANK_DATE_COL])
+                if len(row) > SBERBANK_DATE_COL
                 else ''
             )
-            if self._extract_date(cell) is not None:
+            if self._extract_date(cell) is not None or self._looks_like_row_a(
+                row,
+            ):
                 return i
         return 0
+
+    def _looks_like_row_a(self, row: pd.Series | None) -> bool:
+        """Return whether a row starts an operation instead of continuing it.
+
+        Row A carries the bank time and amount. Row B only carries the
+        processing date, auth code hint and description.
+        """
+        if row is None or len(row) <= SBERBANK_DATE_COL:
+            return False
+        first_cell = str(row.iloc[SBERBANK_DATE_COL])
+        if re.search(r'\b\d{2}:\d{2}\b', first_cell):
+            return True
+        for col in (SBERBANK_CATEGORY_COL, SBERBANK_AMOUNT_COL):
+            if (
+                len(row) > col
+                and self._extract_sberbank_amount(
+                    str(row.iloc[col]),
+                )
+                is not None
+            ):
+                return True
+        return False
 
     def _parse_table(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         """Parse Sberbank table with paired-row (A+B) structure.
@@ -1325,7 +1403,14 @@ class _SberbankParser(BaseBankStatementParser):
         (no row B available) by treating the transaction as single-row.
         """
         row_a = df.iloc[i]
-        row_b = df.iloc[i + 1] if i + 1 < len(df) else None
+        next_row = df.iloc[i + 1] if i + 1 < len(df) else None
+        # A missing row B must not swallow the next operation: a row that
+        # carries a bank time or an amount starts its own operation.
+        row_b = (
+            next_row
+            if next_row is not None and not self._looks_like_row_a(next_row)
+            else None
+        )
 
         date = self._extract_date(
             str(row_a.iloc[SBERBANK_DATE_COL])
@@ -1333,7 +1418,13 @@ class _SberbankParser(BaseBankStatementParser):
             else '',
         )
         if date is None:
-            return i + 1
+            consumed_continuation = self._append_missing_date_fragment(
+                row_a,
+                row_b,
+                merged_col,
+                transactions,
+            )
+            return i + 2 if consumed_continuation else i + 1
 
         if merged_col:
             return self._parse_merged_layout(
@@ -1352,8 +1443,9 @@ class _SberbankParser(BaseBankStatementParser):
         * ``'DD.MM.YYYY / 869838'`` — older layouts.
         * ``'DD.MM.YYYY\\n869838\\n<description>'`` — the merged 3-column
           layout used on the last page of multi-page statements.
-        The 3-7 digit number after the date uniquely identifies the
-        transaction within the account.
+        The 3-7 digit number after the bank date is a weak hint for display
+        and position context only. It is never a global identity: a reused
+        code must not merge away another operation.
         """
         if row is None or len(row) <= SBERBANK_DATE_COL:
             return None
@@ -1364,6 +1456,58 @@ class _SberbankParser(BaseBankStatementParser):
         if match:
             return match.group(1)
         return None
+
+    def _append_missing_date_fragment(
+        self,
+        row_a: pd.Series,
+        row_b: pd.Series | None,
+        merged_col: bool,
+        transactions: list[dict[str, Any]],
+    ) -> bool:
+        """Keep a broken-date potential operation visible without money.
+
+        Headers, totals and page titles carry neither a readable amount nor
+        an auth code, so they stay skipped. A broken operation and its
+        continuation produce one fragment instead of two rows.
+
+        Returns:
+            ``True`` when ``row_b`` was consumed as the continuation of the
+            broken pair, ``False`` when it is a separate row.
+        """
+        if merged_col:
+            amount_text = (
+                str(row_a.iloc[SBERBANK_CATEGORY_COL])
+                if len(row_a) > SBERBANK_CATEGORY_COL
+                else ''
+            )
+            category = self._extract_category_from_merged_col0(
+                str(row_a.iloc[SBERBANK_DATE_COL]),
+            )
+        else:
+            amount_text = (
+                str(row_a.iloc[SBERBANK_AMOUNT_COL])
+                if len(row_a) > SBERBANK_AMOUNT_COL
+                else ''
+            )
+            category = (
+                str(row_a.iloc[SBERBANK_CATEGORY_COL])
+                if len(row_a) > SBERBANK_CATEGORY_COL
+                else ''
+            )
+            if category == 'nan':
+                category = ''
+        amount = self._extract_sberbank_amount(amount_text)
+        source_ref = self._extract_authcode(row_b)
+        if amount is None and source_ref is None:
+            return False
+        self._append_sberbank_row(
+            transactions,
+            None,
+            amount,
+            category,
+            source_ref,
+        )
+        return row_b is not None
 
     def _parse_merged_layout(
         self,
@@ -1401,26 +1545,23 @@ class _SberbankParser(BaseBankStatementParser):
             amount_text = ''
 
         if row_b is None:
-            self._add_transaction_if_valid(
+            self._append_sberbank_row(
                 transactions,
                 date,
-                amount_text,
+                self._extract_sberbank_amount(amount_text),
                 category,
                 None,
             )
             return i + 1
 
         source_ref = self._extract_authcode(row_b)
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        self._append_sberbank_row(
+            transactions,
+            date,
+            self._extract_sberbank_amount(amount_text),
+            category,
+            source_ref,
+        )
         return i + 2
 
     def _extract_category_from_merged_col0(self, text: str) -> str:
@@ -1446,19 +1587,10 @@ class _SberbankParser(BaseBankStatementParser):
     ) -> int:
         """Parse 4-column standard layout.
 
-        When row_b is None (row_a is the last row in the table) the
-        transaction is treated as single-row: still emit it, just without
-        the row B continuation.
+        When row_b is None (row_a is the last row in the table or the next
+        row starts another operation) the transaction is treated as
+        single-row: still emit it, just without the row B continuation.
         """
-        if row_b is not None:
-            row_b_amount = (
-                str(row_b.iloc[SBERBANK_AMOUNT_COL])
-                if len(row_b) > SBERBANK_AMOUNT_COL
-                else ''
-            )
-            if row_b_amount not in ('', 'nan'):
-                return i + 1
-
         category = (
             str(row_a.iloc[SBERBANK_CATEGORY_COL]).strip()
             if len(row_a) > SBERBANK_CATEGORY_COL
@@ -1473,37 +1605,60 @@ class _SberbankParser(BaseBankStatementParser):
             else ''
         )
         source_ref = self._extract_authcode(row_b)
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        self._append_sberbank_row(
+            transactions,
+            date,
+            self._extract_sberbank_amount(amount_text),
+            category,
+            source_ref,
+        )
         return i + 2 if row_b is not None else i + 1
 
-    def _add_transaction_if_valid(
+    def _append_sberbank_row(
         self,
         transactions: list[dict[str, Any]],
-        date: datetime,
-        amount_text: str,
+        date: datetime | None,
+        amount: Decimal | None,
         category: str,
         source_ref: str | None,
     ) -> None:
-        """Add transaction to list if amount is valid and non-zero."""
-        amount = self._extract_sberbank_amount(amount_text)
-        if amount is not None and amount != Decimal(0):
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': amount,
-                    'description': (category or 'Операция')[:250],
-                    'source_ref': source_ref,
-                },
-            )
+        """Append every potential Sberbank row with a traceable outcome.
+
+        A row whose bank date cannot be read, whose amount cannot be read,
+        or which reads as zero is kept as a visible parse fragment without
+        money. The auth code is only a weak hint and the category label is
+        mapped through closed local rules.
+
+        Args:
+            transactions: Accumulated statement rows.
+            date: Bank operation date, or ``None`` when it cannot be read.
+            amount: Signed amount, or ``None`` when it cannot be read.
+            category: Bank category label used as the description.
+            source_ref: Auth code hint, never a global identity.
+        """
+        description = (category or 'Операция')[:250]
+        parse_issue: str | None = None
+        if date is None:
+            parse_issue = 'missing_date'
+        elif amount is None:
+            parse_issue = 'unparsed'
+        elif amount == Decimal(0):
+            parse_issue = 'zero_amount'
+        row: dict[str, Any] = {
+            'date': date,
+            'amount': amount,
+            'description': description,
+            'source_ref': source_ref,
+            'source_ref_strength': 'weak',
+            'category_name': (
+                sberbank_local_category(description, 'expense')
+                if amount is not None and amount < 0
+                else None
+            ),
+        }
+        if parse_issue is not None:
+            row['parse_issue'] = parse_issue
+        transactions.append(row)
 
     def _extract_sberbank_amount(self, text: str) -> Decimal | None:
         """Extract signed amount: '+' → positive, else negative.
