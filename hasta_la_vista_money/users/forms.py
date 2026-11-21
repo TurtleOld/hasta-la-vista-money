@@ -135,6 +135,25 @@ class RegisterByInviteForm(UserCreationForm[User]):
 class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
+    statement_retention_days = forms.IntegerField(
+        required=False,
+        min_value=constants.STATEMENT_RETENTION_DAYS_MIN,
+        max_value=constants.STATEMENT_RETENTION_DAYS_MAX,
+        label=_('Хранить банковские данные, дней'),
+        help_text=_(
+            'Срок фиксируется при каждой новой загрузке выписки. '
+            'Изменение не переписывает уже назначенные сроки.',
+        ),
+        widget=forms.NumberInput(
+            attrs={
+                'class': FORM_CONTROL_CLASS,
+                'min': constants.STATEMENT_RETENTION_DAYS_MIN,
+                'max': constants.STATEMENT_RETENTION_DAYS_MAX,
+                'step': 1,
+            },
+        ),
+    )
+
     def clean_timezone_name(self) -> str:
         """Reject any value outside the canonical IANA timezone list."""
         timezone_name = str(self.cleaned_data.get('timezone_name', ''))
@@ -143,6 +162,13 @@ class UpdateUserForm(ModelForm[User]):
                 _('Выберите часовой пояс из списка.'),
             )
         return timezone_name
+
+    def clean_statement_retention_days(self) -> int:
+        """Keep the fixed term when an older client omits the field."""
+        value = self.cleaned_data.get('statement_retention_days')
+        if value is None:
+            return self.instance.statement_retention_days
+        return int(value)
 
     class Meta:
         model: ClassVar[type[User]] = User
@@ -160,9 +186,6 @@ class UpdateUserForm(ModelForm[User]):
             'first_name': _('Имя'),
             'last_name': _('Фамилия'),
             'timezone_name': _('Часовой пояс'),
-            'statement_retention_days': _(
-                'Хранить банковские данные, дней',
-            ),
         }
         widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(
@@ -197,14 +220,6 @@ class UpdateUserForm(ModelForm[User]):
                     'autocomplete': 'off',
                 },
             ),
-            'statement_retention_days': forms.NumberInput(
-                attrs={
-                    'class': FORM_CONTROL_CLASS,
-                    'min': constants.STATEMENT_RETENTION_DAYS_MIN,
-                    'max': constants.STATEMENT_RETENTION_DAYS_MAX,
-                    'step': 1,
-                },
-            ),
         }
         help_texts: ClassVar[dict[str, Any]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
@@ -214,10 +229,6 @@ class UpdateUserForm(ModelForm[User]):
             'timezone_name': _(
                 'Определяет календарный день, группировку и фильтрацию '
                 'в вашей финансовой ленте.',
-            ),
-            'statement_retention_days': _(
-                'Срок фиксируется при каждой новой загрузке выписки. '
-                'Изменение не переписывает уже назначенные сроки.',
             ),
         }
         error_messages: ClassVar[dict[str, dict[str, Any]]] = {
