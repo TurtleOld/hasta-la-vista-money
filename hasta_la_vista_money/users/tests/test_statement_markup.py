@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -118,6 +118,28 @@ class StatementMarkupTest(StatementMarkupFixture):
         row.refresh_from_db()
         self.account.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_manual_coverage_does_not_decide_rows_or_move_money(self) -> None:
+        row = self._row(1)
+        coverage_service = (
+            ApplicationContainer().users.statement_coverage_service()
+        )
+
+        coverage_service.confirm_manual(
+            self.user,
+            self.account,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
         self.assertEqual(self.account.balance, Decimal('1000.00'))
         self.assertFalse(Transaction.objects.exists())
 
@@ -554,6 +576,50 @@ class StatementMarkupViewTest(StatementMarkupFixture):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'ПЯТЁРОЧКА', count=2)
+
+    def test_control_lists_deferred_row_in_existing_markup_screen(self) -> None:
+        deferred = self._row(1)
+        BankStatementRow.objects.filter(pk=deferred.pk).update(
+            transaction_date=timezone.now(),
+        )
+        deferred.refresh_from_db()
+        today = timezone.localdate()
+        self.client.post(
+            reverse(
+                'finance_account:bank_statement_markup_bulk',
+                args=[self.upload.pk],
+            ),
+            {
+                'rows': deferred.pk,
+                f'defer-{deferred.pk}': 'on',
+            },
+        )
+
+        params: dict[str, str | int] = {
+            'account': self.account.pk,
+            'period_start': today.replace(day=1).isoformat(),
+            'period_end': today.isoformat(),
+        }
+        response = self.client.get(
+            reverse('finance_account:accounting_control'),
+            params,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['control'].rows.awaiting_markup, 1)
+        self.assertContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
+        )
+        self.assertContains(response, 'остаются нерешёнными')
+        deferred.refresh_from_db()
+        self.assertEqual(
+            deferred.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
 
     def test_other_user_gets_404(self) -> None:
         other = User.objects.create_user(username='other', password='x')

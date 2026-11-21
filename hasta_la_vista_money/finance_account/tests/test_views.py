@@ -24,6 +24,7 @@ from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import (
     Account,
     Bank,
+    StatementPeriodCoverage,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.tests.helpers import (
@@ -49,7 +50,12 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.factories import UserFactory
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import (
+    BankStatementRow,
+    BankStatementUpload,
+    FamilyGroupMembership,
+    User,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -897,6 +903,229 @@ class TestFinancesView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
         return request
+
+    def _control_url(
+        self,
+        account: Account | None = None,
+        start: date = date(2026, 3, 1),
+        end: date = date(2026, 3, 31),
+        group_id: str | None = None,
+    ) -> str:
+        url = reverse('finance_account:accounting_control')
+        query = [
+            f'period_start={start.isoformat()}',
+            f'period_end={end.isoformat()}',
+        ]
+        if account is not None:
+            query.append(f'account={account.pk}')
+        if group_id is not None:
+            query.append(f'group_id={group_id}')
+        return f'{url}?{"&".join(query)}'
+
+    def test_accounting_control_requires_login(self) -> None:
+        response = self.client.get(
+            reverse('finance_account:accounting_control'),
+        )
+
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+
+    def test_accounting_control_selects_account_and_period(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            self._control_url(self.account),
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(response.context['selected_account'], self.account)
+        self.assertEqual(response.context['period_start'], date(2026, 3, 1))
+        self.assertEqual(response.context['period_end'], date(2026, 3, 31))
+        self.assertIsNotNone(response.context['control'])
+
+    def test_accounting_control_shows_five_separate_measurements(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(self._control_url(self.account))
+
+        for heading in (
+            'Техническая обработка',
+            'Разрешение строк',
+            'Доступность банковских данных',
+            'Покрытие периода',
+            'Проверка остатка',
+            'Исключения',
+        ):
+            with self.subTest(heading=heading):
+                self.assertContains(response, heading)
+        self.assertContains(response, 'Не проверено')
+
+    def test_accounting_control_rejects_malformed_account_id(self) -> None:
+        self.client.force_login(self.user)
+        malformed = '9' * 5000
+
+        response = self.client.get(
+            reverse('finance_account:accounting_control'),
+            {'account': malformed},
+        )
+        post = self.client.post(
+            reverse('finance_account:accounting_control'),
+            {
+                'account': malformed,
+                'period_start': '2026-04-01',
+                'period_end': '2026-04-30',
+            },
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIsNone(response.context['selected_account'])
+        self.assertEqual(post.status_code, 404)
+
+    def test_accounting_control_requires_account_selection(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finance_account:accounting_control'),
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIsNone(response.context['selected_account'])
+        self.assertIsNone(response.context['control'])
+        self.assertContains(response, 'Выберите счёт')
+
+    def test_accounting_control_links_to_existing_statement_screens(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-links.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('10.00'),
+            description='Кофе',
+            source_ref='control-links',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        reviewed = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-reviewed.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+
+        response = self.client.get(
+            self._control_url(
+                self.account,
+                timezone.localdate().replace(day=1),
+                timezone.localdate(),
+            ),
+        )
+
+        self.assertContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[upload.pk],
+            ),
+        )
+        self.assertContains(
+            response,
+            reverse(
+                'finance_account:bank_statement_reconciliation',
+                args=[reviewed.pk],
+            ),
+        )
+
+    def test_accounting_control_family_viewer_reads_but_cannot_write(
+        self,
+    ) -> None:
+        group = Group.objects.create(name='Семья')
+        viewer: User = cast('User', UserFactory(username='family-viewer'))
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=viewer,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
+        self.client.force_login(viewer)
+
+        response = self.client.get(
+            self._control_url(
+                self.account,
+                group_id=str(group.pk),
+            ),
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(response.context['selected_account'], self.account)
+        self.assertFalse(response.context['can_write'])
+        self.assertContains(response, self.account.name_account)
+
+        forbidden = self.client.post(
+            reverse('finance_account:accounting_control'),
+            {
+                'account': self.account.pk,
+                'period_start': '2026-04-01',
+                'period_end': '2026-04-30',
+            },
+        )
+
+        self.assertEqual(forbidden.status_code, 404)
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(
+                account=self.account,
+                source=StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+            ).exists(),
+        )
+
+    def test_accounting_control_owner_confirms_manual_coverage_without_money(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+        balance = self.account.balance
+
+        response = self.client.post(
+            reverse('finance_account:accounting_control'),
+            {
+                'account': self.account.pk,
+                'period_start': '2026-04-01',
+                'period_end': '2026-04-30',
+            },
+        )
+
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        coverage = StatementPeriodCoverage.objects.get(account=self.account)
+        self.assertEqual(
+            coverage.source,
+            StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+        )
+        self.assertEqual(coverage.author, self.user)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, balance)
+        self.assertFalse(
+            BankStatementRow.objects.filter(
+                upload__account=self.account,
+            ).exists(),
+        )
+
+    def test_accounting_control_does_not_block_statistics(self) -> None:
+        self.client.force_login(self.user)
+
+        control = self.client.get(self._control_url(self.account))
+        statistics = self.client.get(reverse('users:statistics'))
+
+        self.assertEqual(control.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(statistics.status_code, constants.SUCCESS_CODE)
 
 
 class TestAccountCreateView(TestCase):
