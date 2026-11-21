@@ -9,6 +9,7 @@ from typing import Any
 
 from django.contrib import admin
 from django.contrib.auth.models import AbstractUser, Group
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
     CASCADE,
     SET_NULL,
@@ -24,6 +25,7 @@ from django.db.models import (
     JSONField,
     Model,
     PositiveIntegerField,
+    PositiveSmallIntegerField,
     Q,
     TextChoices,
     TextField,
@@ -35,13 +37,24 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.constants import (
     DEFAULT_TIMEZONE_NAME,
     STATEMENT_RETENTION_DAYS,
+    STATEMENT_RETENTION_DAYS_MAX,
+    STATEMENT_RETENTION_DAYS_MIN,
 )
 from hasta_la_vista_money.core.upload_paths import bank_statement_upload_to
 
 
-def bank_statement_expires_at() -> datetime:
-    """Return the default reconciliation and retention deadline."""
-    return timezone.now() + timedelta(days=STATEMENT_RETENTION_DAYS)
+def bank_statement_expires_at(days: int | None = None) -> datetime:
+    """Return a reconciliation deadline ``days`` ahead of now.
+
+    Args:
+        days: Retention length fixed for one upload. ``None`` keeps the
+            project default.
+
+    Returns:
+        The deadline fixed for the upload.
+    """
+    retention = STATEMENT_RETENTION_DAYS if days is None else days
+    return timezone.now() + timedelta(days=retention)
 
 
 class User(AbstractUser):
@@ -52,12 +65,22 @@ class User(AbstractUser):
 
     Attributes:
         theme: User's preferred theme (default: 'auto').
+        statement_retention_days: How long bank statement data is kept
+            after a new upload (default: 30 days).
     """
 
     theme: CharField[Any, Any] = CharField(max_length=10, default='auto')
     timezone_name: CharField[Any, Any] = CharField(
         max_length=64,
         default=DEFAULT_TIMEZONE_NAME,
+    )
+    statement_retention_days: int = PositiveSmallIntegerField(  # type: ignore[assignment]
+        default=STATEMENT_RETENTION_DAYS,
+        validators=[
+            MinValueValidator(STATEMENT_RETENTION_DAYS_MIN),
+            MaxValueValidator(STATEMENT_RETENTION_DAYS_MAX),
+        ],
+        verbose_name=_('Срок хранения банковских данных, дни'),
     )
 
     def __str__(self) -> str:

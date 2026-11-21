@@ -1,6 +1,6 @@
 """Statement identity, canonical duplicates, and atomic balance behaviour."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier, Thread
 from typing import Any, cast
@@ -1421,6 +1421,97 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_cleanup_and_replay_race_keeps_one_movement(self) -> None:
+        """Cleanup and an explicit replay never resurrect deleted money."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'race.pdf',
+                b'%PDF-1.4 race statement',
+                content_type='application/pdf',
+            ),
+            file_hash='race-file',
+            status=BankStatementUpload.Status.COMPLETED,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def cleanup() -> None:
+            try:
+                barrier.wait(timeout=3)
+                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def replay() -> None:
+            try:
+                barrier.wait(timeout=3)
+                ApplicationContainer().users.bank_statement_import_service().prepare_known_replay(
+                    upload,
+                    SimpleUploadedFile(
+                        'race.pdf',
+                        b'%PDF-1.4 race statement',
+                        content_type='application/pdf',
+                    ),
+                )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=cleanup), Thread(target=replay)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        for error in errors:
+            if error is not None:
+                self.fail(f'Cleanup or replay failed unexpectedly: {error}')
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.transaction_id, movement.pk)
+        upload.refresh_from_db()
+        self.assertIsNone(upload.retention_cleaned_at)
+        self.assertGreater(upload.expires_at, timezone.now())
+        self.assertTrue(bool(upload.pdf_file))
 
     def test_concurrent_decisions_create_one_movement(self) -> None:
         upload = BankStatementUpload.objects.create(

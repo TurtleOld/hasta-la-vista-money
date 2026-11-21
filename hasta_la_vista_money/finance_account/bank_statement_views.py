@@ -39,6 +39,7 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
     User,
+    bank_statement_expires_at,
 )
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementImportServiceProtocol,
@@ -167,6 +168,9 @@ class BankStatementUploadView(
                 defaults={
                     'pdf_file': pdf_file,
                     'status': BankStatementUpload.Status.PENDING,
+                    'expires_at': bank_statement_expires_at(
+                        days=user.statement_retention_days,
+                    ),
                 },
             )
 
