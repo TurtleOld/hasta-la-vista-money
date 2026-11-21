@@ -373,7 +373,11 @@ class BankStatementImportService:
             row_position = trans.get('row_position', idx)
             source = trans.get('source')
             abs_amount = abs(amount) if amount is not None else None
-            match_calendar_date = source == 'ozon' or bank == 'ozon'
+            match_calendar_date = (
+                source == 'ozon'
+                or bank == 'ozon'
+                or bool(trans.get('date_only'))
+            )
             is_credit_income = (
                 amount is not None
                 and amount > 0
@@ -1162,6 +1166,7 @@ class BankStatementImportService:
                 'source_ref': trans.get('source_ref') or None,
                 'canonical_row': canonical_row,
                 'transaction': transaction,
+                'match_calendar_date': bool(trans.get('date_only')),
                 'source_format_version': format_version,
                 'source_fingerprint': (
                     fingerprint.digest if fingerprint else ''
@@ -1353,7 +1358,11 @@ class BankStatementImportService:
                         ),
                         amount=abs(trans['amount']),
                         trans_date=trans['date'],
-                        match_calendar_date=True,
+                        match_calendar_date=(
+                            bool(trans.get('date_only'))
+                            if bank == 'raiffeisen'
+                            else True
+                        ),
                         format_version=format_version,
                         source_ref_strength=trans.get(
                             'source_ref_strength',
@@ -1420,7 +1429,11 @@ class BankStatementImportService:
                         source_fingerprint_format_version=(
                             fingerprint.format_version if fingerprint else 0
                         ),
-                        match_calendar_date=amount is not None,
+                        match_calendar_date=(
+                            bool(trans.get('date_only'))
+                            if bank == 'raiffeisen'
+                            else True
+                        ),
                         kind=str(trans.get('kind', '')),
                         merchant_key=trans.get('merchant_key') or '',
                         counterparty_account=(

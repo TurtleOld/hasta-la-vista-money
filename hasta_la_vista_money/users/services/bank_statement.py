@@ -95,6 +95,32 @@ RAIFFEISEN_DOC_COL = 2
 RAIFFEISEN_INCOME_COL = 3
 RAIFFEISEN_EXPENSE_COL = 4
 RAIFFEISEN_DESCRIPTION_COL = 5
+RAIFFEISEN_CARD_COL = 6
+# Some stream tables collapse the statement into four columns:
+# [0]=date and document/number | [1]=amount | [2]=details | [3]=card
+RAIFFEISEN_COMPACT_COLUMNS = 4
+RAIFFEISEN_COMPACT_AMOUNT_COL = 1
+RAIFFEISEN_COMPACT_DESCRIPTION_COL = 2
+RAIFFEISEN_COMPACT_REF_PATTERN = re.compile(
+    r'^\s*(\d+)[\s/]+(\d+)\s*$',
+)
+RAIFFEISEN_TIME_PATTERN = re.compile(r'\d{1,2}:\d{2}')
+RAIFFEISEN_ACCOUNT_PATTERN = re.compile(
+    r'Номер счета[\s\S]{0,300}?([\d\xa0 ]{15,})',
+)
+RAIFFEISEN_PERIOD_PATTERN = re.compile(
+    r'Период:\s*с\s*(\d{2}\.\d{2}\.\d{4})',
+)
+RAIFFEISEN_CLOSING_PATTERN = re.compile(
+    r'Собственные средства на конец\s+(\d{2}\.\d{2}\.\d{4})',
+)
+RAIFFEISEN_MONEY_LINE = re.compile(r'[+-]?\d[\d ]*,\d{2}')
+RAIFFEISEN_MIN_DOC_DIGITS = 3
+RAIFFEISEN_FALLBACK_POSITION_BASE = 1_000_000
+RAIFFEISEN_PURPOSE_PATTERN = re.compile(
+    r'^(перевод|оплата|выдача|выплата|комисси|зачислен|процент|возврат|пополнен)',
+)
+RAIFFEISEN_DATE_PARTS = 3
 
 # Closed local category rules for Raiffeisen. A rule matches only its own
 # direction, so an incoming salary cannot become an expense category.
@@ -113,7 +139,7 @@ RAIFFEISEN_LOCAL_CATEGORY_RULES: tuple[
         'income',
     ),
     (
-        re.compile(r'снятие наличных|выдача наличных|\batm\b'),
+        re.compile(r'снятие наличных|выдача наличных|банкомат|\batm\b'),
         'Наличные',
         'expense',
     ),
@@ -209,7 +235,7 @@ def _dedup_transactions(
     seen_rows: set[str] = set()
     unique: list[dict[str, Any]] = []
     for position, t in enumerate(transactions):
-        t['row_position'] = position
+        t.setdefault('row_position', position)
         ref = t.get('source_ref')
         if ref and merge_repeated_refs:
             if ref in seen_rows:
@@ -217,6 +243,26 @@ def _dedup_transactions(
             seen_rows.add(ref)
         unique.append(t)
     return unique
+
+
+def _parse_ru_date(text: str) -> date_type | None:
+    """Parse an explicit DD.MM.YYYY date without inventing a time."""
+    parts = text.strip().split('.')
+    if len(parts) != RAIFFEISEN_DATE_PARTS:
+        return None
+    try:
+        return date_type(int(parts[2]), int(parts[1]), int(parts[0]))
+    except ValueError:
+        return None
+
+
+def _parse_ru_money(text: str) -> Decimal | None:
+    """Parse an explicit Russian money value."""
+    normalized = text.replace('\xa0', '').replace(' ', '').replace(',', '.')
+    try:
+        return Decimal(normalized)
+    except InvalidOperation:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -229,9 +275,11 @@ class BaseBankStatementParser(ABC):
 
     bank_code = 'generic'
     format_version = 1
+    min_table_columns = MIN_TABLE_COLUMNS
 
     def __init__(self, pdf_path: str | Path) -> None:
         self.pdf_path = Path(pdf_path)
+        self.full_text = ''
         if not self.pdf_path.exists():
             error_msg = f'PDF file not found: {pdf_path}'
             raise FileNotFoundError(error_msg)
@@ -338,7 +386,7 @@ class BaseBankStatementParser(ABC):
 
         cleaned = re.sub(r'\s+\d{2}\.\d{2}\.\d{2,4}', '', description)
         cleaned = re.sub(
-            r'\s*\d+(?:\s?\d+)*(?:,\d{2})?\s*(?:руб\.?|₽)',
+            r'\s*\d+(?:\s?\d+)*(?:[.,]\d{2})?\s*(?:руб\.?|₽)',
             '',
             cleaned,
         )
@@ -348,7 +396,11 @@ class BaseBankStatementParser(ABC):
             cleaned,
             flags=re.IGNORECASE,
         )
-        cleaned = re.sub(r'\s*[,;]?\s*г\s+[^,]+(?:,\s*[^,]+)*$', '', cleaned)
+        cleaned = re.sub(
+            r'(?:^|[,;])\s*г\.?\s+[^,]+(?:,\s*[^,]+)*$',
+            '',
+            cleaned,
+        )
         cleaned = cleaned.strip(' ,;.')
 
         if not cleaned:
@@ -412,6 +464,7 @@ class _GenericBankParser(BaseBankStatementParser):
                 full_text = extract_text(str(self.pdf_path))
             except Exception:
                 full_text = ''
+            self.full_text = full_text
             tables = self._read_tables()
             logger.info('bank_statement_tables_found', tables=len(tables))
             transactions: list[dict[str, Any]] = []
@@ -425,7 +478,7 @@ class _GenericBankParser(BaseBankStatementParser):
                 table_df = table.df
                 if len(
                     table_df.columns,
-                ) >= MIN_TABLE_COLUMNS and self._is_transaction_table(
+                ) >= self.min_table_columns and self._is_transaction_table(
                     table_df,
                 ):
                     parsed = self._parse_table(table_df)
@@ -617,6 +670,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
     # Version 2 keeps unsupported rows visible and adds local categories;
     # a row imported by the previous mapping must be reassigned manually.
     format_version = 2
+    min_table_columns = RAIFFEISEN_COMPACT_COLUMNS
 
     def parse(self) -> StatementParseResult:
         """Разобрать PDF-выписку Райффайзенбанка.
@@ -625,7 +679,57 @@ class _RaiffeisenBankParser(_GenericBankParser):
             ``StatementParseResult`` со списком операций и конечным остатком.
         """
         logger.info('bank_statement_parse_started', parser='raiffeisen')
-        return super().parse()
+        result = super().parse()
+        full_text = self.full_text
+        result.account_number = self._extract_account_number(full_text)
+        result.period_start = self._extract_period_start(full_text)
+        closing_date, closing_balance = self._extract_closing(full_text)
+        result.closing_balance_date = closing_date
+        result.closing_balance = closing_balance
+        return result
+
+    @staticmethod
+    def _extract_account_number(full_text: str) -> str | None:
+        """Return the explicitly printed account number."""
+        match = RAIFFEISEN_ACCOUNT_PATTERN.search(full_text)
+        if match is None:
+            return None
+        digits = re.sub(r'\D', '', match.group(1))
+        return digits or None
+
+    @staticmethod
+    def _extract_period_start(full_text: str) -> date_type | None:
+        """Return the explicitly printed statement period start."""
+        match = RAIFFEISEN_PERIOD_PATTERN.search(full_text)
+        if match is None:
+            return None
+        return _parse_ru_date(match.group(1))
+
+    @staticmethod
+    def _extract_closing(
+        full_text: str,
+    ) -> tuple[date_type | None, Decimal | None]:
+        """Return explicitly printed closing balance date and amount."""
+        match = RAIFFEISEN_CLOSING_PATTERN.search(full_text)
+        if match is None:
+            return None, None
+        closing_date = _parse_ru_date(match.group(1))
+        tail = full_text[match.end() :]
+        for line in tail.splitlines()[:10]:
+            normalized = line.replace('\xa0', ' ').strip()
+            if any(
+                normalized.startswith(label)
+                for label in (
+                    '№ С/С',
+                    'Дата операции',
+                    'Количество операций',
+                    'Обороты',
+                )
+            ):
+                break
+            if RAIFFEISEN_MONEY_LINE.fullmatch(normalized):
+                return closing_date, _parse_ru_money(normalized)
+        return closing_date, None
 
     def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
         """Read income from col[3] and expense from col[4]."""
@@ -668,14 +772,361 @@ class _RaiffeisenBankParser(_GenericBankParser):
         trans = super()._parse_transaction_row(row, df, index)
         if trans is None:
             return self._unsupported_row(row, df, index)
+        date, has_time = self._date_with_precision(df, index)
+        if date is not None:
+            trans['date'] = date
+        trans['date_only'] = not has_time
+        row_number = self._extract_transaction_number(str(row.iloc[0]))
+        if row_number is not None:
+            trans['row_position'] = row_number
         trans['source_ref_strength'] = 'weak'
         amount = trans.get('amount')
         if amount is not None:
+            category_text = str(trans.get('description') or '')
+            if len(row) > RAIFFEISEN_DESCRIPTION_COL:
+                own_cell = str(
+                    row.iloc[RAIFFEISEN_DESCRIPTION_COL],
+                ).strip()
+                if own_cell and own_cell != 'nan':
+                    category_text = own_cell
             trans['category_name'] = raiffeisen_local_category(
-                str(trans.get('description') or ''),
+                category_text,
                 'income' if amount > 0 else 'expense',
             )
         return trans
+
+    def _date_with_precision(
+        self,
+        df: pd.DataFrame,
+        index: int,
+    ) -> tuple[datetime | None, bool]:
+        """Return the nearest bank date and whether it carried a time."""
+        for i in range(index, max(-1, index - 5), -1):
+            check_row = df.iloc[i]
+            for col_idx in range(min(2, len(check_row))):
+                text = str(check_row.iloc[col_idx])
+                date = self._extract_date(text)
+                if date is not None:
+                    return date, bool(
+                        RAIFFEISEN_TIME_PATTERN.search(text),
+                    )
+        return None, False
+
+    def _is_transaction_table(self, df: pd.DataFrame) -> bool:
+        """Accept both wide and collapsed Raiffeisen stream tables."""
+        if super()._is_transaction_table(df):
+            return True
+        if len(df.columns) != RAIFFEISEN_COMPACT_COLUMNS:
+            return False
+        return any(
+            self._extract_date(str(row.iloc[0])) is not None
+            for _idx, row in df.iterrows()
+            if len(row) > 0
+        )
+
+    def _parse_table(self, df: pd.DataFrame) -> list[dict[str, Any]]:
+        """Parse wide tables and collapsed four-column stream tables."""
+        if len(df.columns) == RAIFFEISEN_COMPACT_COLUMNS:
+            return self._parse_compact_table(df)
+        return super()._parse_table(df)
+
+    def _parse_compact_table(
+        self,
+        df: pd.DataFrame,
+    ) -> list[dict[str, Any]]:
+        """Parse a four-column Raiffeisen table without dropping rows."""
+        amount_rows: list[tuple[int, Decimal]] = []
+        for index in range(len(df)):
+            row = df.iloc[index]
+            if len(row) <= RAIFFEISEN_COMPACT_AMOUNT_COL:
+                continue
+            amount_text = str(
+                row.iloc[RAIFFEISEN_COMPACT_AMOUNT_COL],
+            )
+            amount = self._extract_amount_from_column(amount_text)
+            if amount is None:
+                continue
+            amount_rows.append(
+                (index, -amount if '-' in amount_text else amount),
+            )
+
+        transactions: list[dict[str, Any]] = []
+        handled_rows = {index for index, _amount in amount_rows}
+        for position, (index, signed_amount) in enumerate(amount_rows):
+            previous_amount = amount_rows[position - 1][0] if position else -1
+            next_amount = (
+                amount_rows[position + 1][0]
+                if position + 1 < len(amount_rows)
+                else len(df)
+            )
+            date, has_time = self._date_with_precision(df, index)
+            source_ref, row_number = self._compact_reference(df, index)
+            start, end = self._compact_bounds(
+                df,
+                index,
+                previous_amount,
+                next_amount,
+                position == 0,
+            )
+            description, category_text = self._compact_description(
+                df,
+                index,
+                RAIFFEISEN_COMPACT_DESCRIPTION_COL,
+                start,
+                end,
+            )
+            common = {
+                'date': date,
+                'amount': signed_amount,
+                'description': description,
+                'source_ref': source_ref,
+                'source_ref_strength': 'weak',
+                'date_only': not has_time,
+                'row_position': (
+                    row_number
+                    if row_number is not None
+                    else RAIFFEISEN_FALLBACK_POSITION_BASE + position + 1
+                ),
+            }
+            if date is None:
+                transactions.append(
+                    {
+                        **common,
+                        'category_name': None,
+                        'parse_issue': 'unsupported',
+                    },
+                )
+                continue
+            transactions.append(
+                {
+                    **common,
+                    'category_name': raiffeisen_local_category(
+                        category_text,
+                        'income' if signed_amount > 0 else 'expense',
+                    ),
+                },
+            )
+
+        for index in range(len(df)):
+            if index in handled_rows:
+                continue
+            row = df.iloc[index]
+            if len(row) <= RAIFFEISEN_COMPACT_AMOUNT_COL:
+                continue
+            if self._compact_reference(df, index) == (None, None):
+                continue
+            date, has_time = self._date_with_precision(df, index)
+            description, _category = self._compact_description(
+                df,
+                index,
+                RAIFFEISEN_COMPACT_DESCRIPTION_COL,
+                index - 1,
+                index + 1,
+            )
+            source_ref, row_number = self._compact_reference(df, index)
+            transactions.append(
+                {
+                    'date': date,
+                    'amount': None,
+                    'description': description,
+                    'source_ref': source_ref,
+                    'source_ref_strength': 'weak',
+                    'date_only': not has_time,
+                    'row_position': (
+                        row_number
+                        if row_number is not None
+                        else RAIFFEISEN_FALLBACK_POSITION_BASE
+                        + len(transactions)
+                        + 1
+                    ),
+                    'category_name': None,
+                    'parse_issue': 'unsupported',
+                },
+            )
+        return transactions
+
+    def _compact_reference(
+        self,
+        df: pd.DataFrame,
+        index: int,
+    ) -> tuple[str | None, int | None]:
+        """Read document number and statement row number from one cell."""
+        row = df.iloc[index]
+        if len(row) == 0:
+            return None, None
+        match = RAIFFEISEN_COMPACT_REF_PATTERN.match(str(row.iloc[0]))
+        if match is None:
+            return None, None
+        document = match.group(1)
+        return (
+            document if len(document) >= RAIFFEISEN_MIN_DOC_DIGITS else None,
+            int(match.group(2)),
+        )
+
+    def _form_description(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        cell_col: int,
+        start: int,
+        end: int,
+    ) -> tuple[str, str]:
+        """Join one operation's purpose and continuation lines."""
+        own_cell = ''
+        row = df.iloc[index]
+        if len(row) > cell_col:
+            own_cell = str(row.iloc[cell_col]).strip()
+            if own_cell == 'nan':
+                own_cell = ''
+        purpose: list[str] = []
+        for i in range(max(0, start), index):
+            text = self._description_cell(df, i, cell_col)
+            if text and RAIFFEISEN_PURPOSE_PATTERN.match(text.casefold()):
+                purpose.append(text)
+        parts = list(purpose)
+        if own_cell:
+            parts.append(own_cell)
+        for i in range(index + 1, min(end, len(df) - 1) + 1):
+            text = self._description_cell(df, i, cell_col)
+            if text and not RAIFFEISEN_PURPOSE_PATTERN.match(
+                text.casefold(),
+            ):
+                parts.append(text)
+        description = self._clean_description(' '.join(parts))
+        category_text = ' '.join(
+            purpose + ([own_cell] if own_cell else []),
+        )
+        return (
+            description[:250] if description else 'Операция',
+            category_text,
+        )
+
+    def _compact_description(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        cell_col: int,
+        start: int,
+        end: int,
+    ) -> tuple[str, str]:
+        """Join one compact operation's own detail band."""
+        parts: list[str] = []
+        for i in range(max(0, start), min(end, len(df) - 1) + 1):
+            text = self._description_cell(df, i, cell_col)
+            if not text:
+                continue
+            if i > index and RAIFFEISEN_PURPOSE_PATTERN.match(
+                text.casefold(),
+            ):
+                continue
+            parts.append(text)
+        description = self._clean_description(' '.join(parts))
+        return (
+            description[:250] if description else 'Операция',
+            ' '.join(parts),
+        )
+
+    def _compact_bounds(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        previous_amount: int,
+        next_amount: int,
+        first: bool,
+    ) -> tuple[int, int]:
+        """Return the detail band owned by one compact operation."""
+        date_index = self._date_row_index(df, index)
+        if first or date_index is None:
+            start = previous_amount + 1
+        else:
+            start = date_index
+            if date_index > 0 and RAIFFEISEN_PURPOSE_PATTERN.match(
+                self._description_cell(
+                    df,
+                    date_index - 1,
+                    RAIFFEISEN_COMPACT_DESCRIPTION_COL,
+                ).casefold(),
+            ):
+                start = date_index - 1
+            start = max(start, previous_amount + 1)
+        if next_amount >= len(df):
+            end = len(df) - 1
+        else:
+            next_date = self._date_row_index(df, next_amount - 1)
+            end = next_date - 1 if next_date is not None else next_amount - 1
+        return start, end
+
+    def _date_row_index(
+        self,
+        df: pd.DataFrame,
+        index: int,
+    ) -> int | None:
+        """Return the nearest date row at or before ``index``."""
+        for i in range(index, -1, -1):
+            row = df.iloc[i]
+            if (
+                len(row) > 0
+                and self._extract_date(str(row.iloc[0])) is not None
+            ):
+                return i
+        return None
+
+    def _description_cell(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        cell_col: int,
+    ) -> str:
+        """Return one usable detail cell, skipping table headers."""
+        row = df.iloc[index]
+        if len(row) <= cell_col:
+            return ''
+        text = str(row.iloc[cell_col]).strip()
+        if (
+            not text
+            or text == 'nan'
+            or 'Детали операции' in text
+            or 'назначение платежа' in text
+        ):
+            return ''
+        return text
+
+    def _extract_description(
+        self,
+        row: pd.Series,
+        df: pd.DataFrame,
+        index: int,
+        description_col_idx: int,
+    ) -> str:
+        """Join one wide-table operation without the next purpose leak."""
+        start = 0
+        for i in range(index - 1, -1, -1):
+            if (
+                self._extract_transaction_number(
+                    str(df.iloc[i, 0]),
+                )
+                is not None
+            ):
+                start = i + 1
+                break
+        end = len(df) - 1
+        for i in range(index + 1, len(df)):
+            if (
+                self._extract_transaction_number(
+                    str(df.iloc[i, 0]),
+                )
+                is not None
+            ):
+                end = i - 1
+                break
+        description, _category = self._form_description(
+            df,
+            index,
+            description_col_idx,
+            start,
+            end,
+        )
+        return description
 
     def _unsupported_row(
         self,

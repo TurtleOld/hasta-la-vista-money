@@ -12,6 +12,7 @@ import pandas as pd
 from celery.exceptions import Retry
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
+from django.core.files import File
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, OperationalError
 from django.test import Client, TestCase
@@ -63,6 +64,10 @@ from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 if TYPE_CHECKING:
     from django.http import HttpResponseRedirect
+
+RAIFFEISEN_REAL_FIXTURE = (
+    Path(__file__).parent / 'fixtures' / 'raiffeisen_statement.pdf'
+)
 
 
 class TestBankStatementUploadView(TestCase):
@@ -4249,6 +4254,181 @@ class TestRaiffeisenBankParser(TestCase):
         self.assertEqual(len(transactions), 1)
         self.assertIsNone(transactions[0]['category_name'])
 
+    def test_compact_cash_does_not_categorize_next_row(self) -> None:
+        """A cash row's tail never categorizes the following operation."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                ['', '', '', ''],
+                ['01.02.2026 18:14', '', '', ''],
+                ['1\n72', '+ 2 000,00 ₽', 'Перевод средств', ''],
+                ['', '', 'Выдача наличных средств', ''],
+                ['23.01.2026 17:22', '', '', ''],
+                ['311345 73', '- 120 000,00 ₽', 'банкомат', ''],
+                ['', '', '', ''],
+                ['20.01.2026 00:00', '', '', ''],
+                ['999\n74', '- 10,00 ₽', 'Оплата покупки', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 3)
+        by_position = {
+            transaction['row_position']: transaction
+            for transaction in transactions
+        }
+        self.assertEqual(by_position[72]['category_name'], None)
+        self.assertEqual(by_position[73]['category_name'], 'Наличные')
+        self.assertEqual(by_position[74]['category_name'], None)
+        self.assertEqual(by_position[73]['source_ref'], '311345')
+
+    def test_compact_row_without_amount_stays_visible(self) -> None:
+        """A document row without amount becomes a visible fragment."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                ['1\n1', '', 'Неизвестная операция', ''],
+                ['', '', '', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['parse_issue'],
+            'unsupported',
+        )
+        self.assertIsNone(transactions[0]['amount'])
+        self.assertEqual(transactions[0]['row_position'], 1)
+
+    def test_real_statement_matches_bank_summary(self) -> None:
+        """Real anonymized statement parses all rows and printed totals."""
+        result = _RaiffeisenBankParser(
+            RAIFFEISEN_REAL_FIXTURE,
+        ).parse()
+
+        income = sum(
+            transaction['amount']
+            for transaction in result.transactions
+            if transaction['amount'] > 0
+        )
+        expense = sum(
+            -transaction['amount']
+            for transaction in result.transactions
+            if transaction['amount'] < 0
+        )
+        self.assertEqual(len(result.transactions), 138)
+        self.assertEqual(income, Decimal('613390.25'))
+        self.assertEqual(expense, Decimal('619845.17'))
+        self.assertEqual(
+            result.account_number,
+            '68509471470637308180',
+        )
+        self.assertEqual(result.period_start, date(2025, 11, 20))
+        self.assertEqual(
+            result.closing_balance_date,
+            date(2026, 11, 20),
+        )
+        self.assertEqual(result.closing_balance, Decimal('0.00'))
+
+        positions = sorted(
+            transaction['row_position'] for transaction in result.transactions
+        )
+        self.assertEqual(positions, list(range(1, 139)))
+        refs = [
+            transaction['source_ref']
+            for transaction in result.transactions
+            if transaction['source_ref']
+        ]
+        self.assertEqual(len(refs), 125)
+        self.assertEqual(len(set(refs)), 125)
+        self.assertEqual(
+            sum(
+                1
+                for transaction in result.transactions
+                if not transaction['source_ref']
+            ),
+            13,
+        )
+        self.assertFalse(
+            any(
+                transaction.get('parse_issue')
+                for transaction in result.transactions
+            ),
+        )
+        categories = [
+            transaction['category_name'] for transaction in result.transactions
+        ]
+        self.assertEqual(categories.count(None), 137)
+        self.assertEqual(categories.count('Наличные'), 1)
+
+        by_position = {
+            transaction['row_position']: transaction
+            for transaction in result.transactions
+        }
+        self.assertEqual(
+            (
+                by_position[1]['date'].date(),
+                by_position[1]['amount'],
+                by_position[1]['source_ref'],
+            ),
+            (date(2026, 10, 14), Decimal('-5001.00'), '930579'),
+        )
+        self.assertEqual(
+            (
+                by_position[19]['date'].date(),
+                by_position[19]['amount'],
+                by_position[19]['source_ref'],
+            ),
+            (date(2026, 5, 23), Decimal('3000.00'), '875409'),
+        )
+        self.assertEqual(
+            (
+                by_position[73]['amount'],
+                by_position[73]['source_ref'],
+                by_position[73]['category_name'],
+            ),
+            (Decimal('-120000.00'), '311345', 'Наличные'),
+        )
+        self.assertEqual(
+            (
+                by_position[138]['date'].date(),
+                by_position[138]['amount'],
+                by_position[138]['source_ref'],
+            ),
+            (date(2025, 11, 20), Decimal('-1000.00'), '77289'),
+        )
+        transfers = [
+            transaction
+            for transaction in result.transactions
+            if 'перевод' in transaction['description'].casefold()
+        ]
+        self.assertTrue(transfers)
+        self.assertTrue(
+            all(
+                transaction['category_name'] is None
+                for transaction in transfers
+            ),
+        )
+        self.assertIn('1080.00 NQWMXBV', by_position[20]['description'])
+        self.assertNotIn('1080.00 NQWMXBV', by_position[21]['description'])
+        self.assertIn('Перевод с номера', by_position[21]['description'])
+        self.assertIn(
+            '14334414337310000610',
+            by_position[39]['description'],
+        )
+        self.assertNotIn(
+            '14334414337310000610',
+            by_position[38]['description'],
+        )
+        self.assertIn('Оплата услуг', by_position[32]['description'])
+        self.assertIn(
+            'Номер перевода 5223682132',
+            by_position[32]['description'],
+        )
+
 
 class TestSberbankParser(TestCase):
     """Unit tests for the Sberbank credit card statement parser."""
@@ -6492,6 +6672,51 @@ class TestBankStatementImportReliability(TestCase):
             ).count(),
             2,
         )
+
+    def test_real_raiffeisen_statement_posts_only_local_category(self) -> None:
+        """Real statement posts only the known cash row and keeps 137 rows."""
+        with RAIFFEISEN_REAL_FIXTURE.open('rb') as pdf:
+            upload = BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file=File(pdf, name='raiffeisen.pdf'),
+            )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(upload.total_transactions, 138)
+        self.assertEqual(upload.processed_transactions, 138)
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(self.account.balance, Decimal('-119000.00'))
+        self.assertEqual(
+            self.account.account_number,
+            '68509471470637308180',
+        )
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('0.00'),
+        )
+        self.assertIsNone(upload.balance_discrepancy)
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 138)
+        self.assertEqual(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            137,
+        )
+        posted = rows.get(
+            decision=BankStatementRow.Decision.NEW,
+        )
+        self.assertEqual(posted.source_row_position, 73)
+        self.assertEqual(posted.amount, Decimal('120000.00'))
+        self.assertIsNotNone(posted.transaction)
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement_import.'
