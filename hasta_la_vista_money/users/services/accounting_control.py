@@ -352,11 +352,6 @@ class AccountingControlService:
             legacy_label = _('Требует проверки: %(reason)s') % {
                 'reason': reason,
             }
-        elif (
-            upload.legacy_review_state
-            == BankStatementUpload.LegacyReviewState.REVIEWED
-        ):
-            legacy_label = _('Легаси-данные проверены')
         else:
             legacy_label = ''
         return UploadControl(

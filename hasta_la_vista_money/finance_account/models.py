@@ -345,10 +345,6 @@ class StatementPeriodCoverage(models.Model):
             'period_revised',
             _('Период пересмотрен повторным разбором'),
         )
-        REPLACED_BY_CONFIRMATION = (
-            'replaced_by_confirmation',
-            _('Заменено новым подтверждением'),
-        )
 
     class Source(models.TextChoices):
         BANK_STATEMENT = 'bank_statement', _('Период банковской выписки')

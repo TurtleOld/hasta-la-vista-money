@@ -21,10 +21,6 @@ class Migration(migrations.Migration):
                 blank=True,
                 choices=[
                     ('period_revised', 'Период пересмотрен повторным разбором'),
-                    (
-                        'replaced_by_confirmation',
-                        'Заменено новым подтверждением',
-                    ),
                 ],
                 default='',
                 max_length=40,

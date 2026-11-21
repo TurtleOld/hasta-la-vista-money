@@ -225,7 +225,6 @@ class BankStatementUpload(Model):
     class LegacyReviewState(TextChoices):
         NOT_REQUIRED = 'not_required', _('Проверка не требуется')
         REQUIRES_REVIEW = 'requires_review', _('Требует проверки')
-        REVIEWED = 'reviewed', _('Проверено')
 
     class LegacyReviewReason(TextChoices):
         NO_ROW_EVIDENCE = (

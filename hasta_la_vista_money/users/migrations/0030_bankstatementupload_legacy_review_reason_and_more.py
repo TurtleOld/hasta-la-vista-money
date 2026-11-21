@@ -72,7 +72,6 @@ class Migration(migrations.Migration):
                 choices=[
                     ('not_required', 'Проверка не требуется'),
                     ('requires_review', 'Требует проверки'),
-                    ('reviewed', 'Проверено'),
                 ],
                 default='not_required',
                 max_length=20,
