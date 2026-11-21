@@ -63,6 +63,7 @@ class BalanceVerificationState:
     ledger_balance: Decimal | None
     discrepancy: Decimal | None
     has_amounts: bool
+    can_explain: bool
     explanation_code: str
     explanation_label: str
     completeness: str
@@ -401,7 +402,16 @@ class StatementBalanceVerificationService:
             bank_balance=upload.statement_closing_balance,
             ledger_balance=upload.account_balance_after,
             discrepancy=upload.balance_discrepancy,
-            has_amounts=upload.statement_closing_balance is not None,
+            has_amounts=(
+                upload.statement_closing_balance is not None
+                and upload.account_balance_after is not None
+            ),
+            can_explain=(
+                actual
+                and result == BankStatementUpload.BalanceResult.DISCREPANCY
+                and not explanation_code
+                and upload.retention_cleaned_at is None
+            ),
             explanation_code=explanation_code,
             explanation_label=explanation_label,
             completeness=completeness,

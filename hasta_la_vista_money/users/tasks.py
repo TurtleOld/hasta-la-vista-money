@@ -101,7 +101,8 @@ def process_bank_statement_task(
             )
         _initialize_upload(upload, self)
 
-        service = ApplicationContainer().users.bank_statement_import_service()
+        container = ApplicationContainer()
+        service = container.users.bank_statement_import_service()
         result = service.import_statement(upload)
 
         upload.account.refresh_from_db(fields=['balance'])
@@ -133,7 +134,6 @@ def process_bank_statement_task(
             ],
         )
         if result.closing_balance is not None and not unresolved:
-            container = ApplicationContainer()
             balance_service = (
                 container.users.statement_balance_verification_service()
             )
