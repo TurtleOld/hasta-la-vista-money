@@ -5,7 +5,8 @@ the balance check are reported separately. No measurement proves another.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.db.models import Count, Exists, OuterRef, Q
@@ -15,6 +16,10 @@ from django.utils.translation import gettext as _
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
+)
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    BalanceVerificationState,
+    StatementBalanceVerificationService,
 )
 from hasta_la_vista_money.users.services.statement_coverage import (
     CoverageSummary,
@@ -62,8 +67,19 @@ class BalanceCheck:
     """The balance measurement; never inferred from other measurements."""
 
     checked: bool
+    actual: bool
+    result: str
+    reason: str
     label: str
     detail: str
+    moment: datetime | None
+    currency: str
+    bank_balance: Decimal | None
+    ledger_balance: Decimal | None
+    discrepancy: Decimal | None
+    explanation_code: str
+    explanation_completeness: str
+    blocks_final_reconciliation: bool
 
 
 @dataclass(frozen=True)
@@ -75,19 +91,26 @@ class AccountingControlSummary:
     exclusions: tuple[BankStatementRow, ...]
     coverage: CoverageSummary
     balance: BalanceCheck
+    balance_checks: tuple[BalanceVerificationState, ...]
     adapter_note: str
 
 
 class AccountingControlService:
     """Build the five separate accounting control measurements."""
 
-    def __init__(self, coverage_service: StatementCoverageService) -> None:
-        """Initialise the service with the coverage service.
+    def __init__(
+        self,
+        coverage_service: StatementCoverageService,
+        balance_verification_service: StatementBalanceVerificationService,
+    ) -> None:
+        """Initialise the service with the coverage and balance services.
 
         Args:
             coverage_service: Independent period coverage service.
+            balance_verification_service: Statement balance checks.
         """
         self._coverage_service = coverage_service
+        self._balance_verification_service = balance_verification_service
 
     def build(
         self,
@@ -159,6 +182,12 @@ class AccountingControlService:
             .values_list('upload_id')
             .annotate(count=Count('pk')),
         )
+        balance_checks = tuple(
+            self._balance_verification_service.describe(
+                self._balance_verification_service.refresh_actuality(upload),
+            )
+            for upload in uploads
+        )
         return AccountingControlSummary(
             uploads=tuple(
                 self._upload_control(upload, awaiting_by_upload)
@@ -178,16 +207,8 @@ class AccountingControlService:
                 period_start,
                 period_end,
             ),
-            balance=BalanceCheck(
-                checked=False,
-                label=str(_('Не проверено')),
-                detail=str(
-                    _(
-                        'Проверка остатка не входит в этот срез; '
-                        'расхождение не заявляется.',
-                    ),
-                ),
-            ),
+            balance=self._balance_summary(balance_checks),
+            balance_checks=balance_checks,
             adapter_note=str(
                 _(
                     'Адаптеры этого среза: РосДорБанк. Райффайзен, Сбербанк, '
@@ -195,6 +216,63 @@ class AccountingControlService:
                     'проверки.',
                 ),
             ),
+        )
+
+    @staticmethod
+    def _balance_summary(
+        checks: tuple[BalanceVerificationState, ...],
+    ) -> BalanceCheck:
+        """Aggregate per-upload checks without hiding an unexplained gap."""
+        active = [check for check in checks if check.checked]
+        latest = active[0] if active else None
+        blocks = any(check.blocks_final_reconciliation for check in checks)
+        stale = any(not check.actual for check in active)
+        explained = any(
+            check.result == BankStatementUpload.BalanceResult.DISCREPANCY
+            and check.explanation_code
+            and check.actual
+            for check in active
+        )
+        matched = any(
+            check.result == BankStatementUpload.BalanceResult.MATCHED
+            and check.actual
+            for check in active
+        )
+        result: str
+        if not latest:
+            label = _('Не проверено')
+            result = BankStatementUpload.BalanceResult.NOT_CHECKED
+        elif blocks:
+            label = _('Расхождение')
+            result = BankStatementUpload.BalanceResult.DISCREPANCY
+        elif stale:
+            label = _('Требует перепроверки')
+            result = latest.result
+        elif explained:
+            label = _('Расхождение объяснено')
+            result = BankStatementUpload.BalanceResult.DISCREPANCY
+        elif matched:
+            label = _('Совпадает')
+            result = BankStatementUpload.BalanceResult.MATCHED
+        else:
+            label = _('Не проверено')
+            result = BankStatementUpload.BalanceResult.NOT_CHECKED
+        details = tuple(check.detail for check in active if check.detail)
+        return BalanceCheck(
+            checked=bool(active),
+            actual=bool(active) and not stale,
+            result=result,
+            reason=latest.reason if latest else '',
+            label=str(label),
+            detail=' · '.join(details),
+            moment=latest.moment if latest else None,
+            currency=latest.currency if latest else '',
+            bank_balance=latest.bank_balance if latest else None,
+            ledger_balance=latest.ledger_balance if latest else None,
+            discrepancy=latest.discrepancy if latest else None,
+            explanation_code=latest.explanation_code if latest else '',
+            explanation_completeness=(latest.completeness if latest else ''),
+            blocks_final_reconciliation=blocks,
         )
 
     @staticmethod

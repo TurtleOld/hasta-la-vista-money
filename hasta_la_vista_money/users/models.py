@@ -144,6 +144,42 @@ class BankStatementUpload(Model):
         )
         FAILED = 'failed', _('Ошибка')
 
+    class BalanceResult(TextChoices):
+        NOT_CHECKED = 'not_checked', _('Не проверено')
+        MATCHED = 'matched', _('Совпадает')
+        DISCREPANCY = 'discrepancy', _('Расхождение')
+
+    class BalanceType(TextChoices):
+        CLOSING = 'closing', _('Исходящий остаток')
+
+    class BalanceReason(TextChoices):
+        MISSING_BALANCE = 'missing_balance', _('Остаток не указан')
+        MISSING_MOMENT = 'missing_moment', _('Момент остатка не указан')
+        MISSING_CURRENCY = 'missing_currency', _('Валюта не указана')
+        MONEY_OR_DATE_CHANGED = (
+            'money_or_date_changed',
+            _('Изменились сумма или дата движения'),
+        )
+        CURRENCY_CHANGED = 'currency_changed', _('Изменилась валюта счёта')
+        BANK_DATA_CLEANED = (
+            'bank_data_cleaned',
+            _('Банковские данные очищены'),
+        )
+        ACCOUNTING_REOPENED = (
+            'accounting_reopened',
+            _('Учёт переоткрыт'),
+        )
+
+    class ExplanationCode(TextChoices):
+        BANK_POSTING_DATE_DIFFERENCE = (
+            'BANK_POSTING_DATE_DIFFERENCE',
+            _('Подтверждённое различие дат отражения'),
+        )
+        CONSCIOUS_INCOMPLETE_ACCOUNTING = (
+            'CONSCIOUS_INCOMPLETE_ACCOUNTING',
+            _('Осознанно неполный учёт'),
+        )
+
     user = ForeignKey(
         User,
         on_delete=CASCADE,
@@ -189,6 +225,44 @@ class BankStatementUpload(Model):
         null=True,
         blank=True,
         verbose_name=_('Расхождение баланса'),
+    )
+    balance_type = CharField(
+        max_length=20,
+        choices=BalanceType.choices,
+        default=BalanceType.CLOSING,
+    )
+    balance_moment = DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_('Момент остатка по выписке'),
+    )
+    balance_currency = CharField(max_length=3, blank=True, default='')
+    balance_result = CharField(
+        max_length=20,
+        choices=BalanceResult.choices,
+        default=BalanceResult.NOT_CHECKED,
+    )
+    balance_checked_at = DateTimeField(blank=True, null=True)
+    balance_is_actual = BooleanField(default=False)
+    balance_reason = CharField(
+        max_length=40,
+        choices=BalanceReason.choices,
+        blank=True,
+        default='',
+    )
+    balance_explanation_code = CharField(
+        max_length=40,
+        choices=ExplanationCode.choices,
+        blank=True,
+        default='',
+    )
+    balance_explained_at = DateTimeField(blank=True, null=True)
+    balance_explained_by = ForeignKey(
+        User,
+        on_delete=SET_NULL,
+        related_name='statement_balance_explanations',
+        blank=True,
+        null=True,
     )
     error_message = TextField(blank=True, default='')
     celery_task_id = CharField(max_length=255, blank=True, default='')

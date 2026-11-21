@@ -1,10 +1,12 @@
 """Celery tasks for user-related async operations."""
 
+from datetime import datetime, time
 from typing import Any
 
 import structlog
 from celery import shared_task
 from django.db import InterfaceError, OperationalError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
@@ -15,6 +17,7 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
+    StatementParseResult,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -29,6 +32,23 @@ def _cleanup_expired_bank_statements() -> dict[str, int]:
     """Remove expired statement data and return the number cleaned."""
     service = ApplicationContainer().users.bank_statement_retention_service()
     return {'cleaned': service.cleanup_expired()}
+
+
+def _store_statement_balance(
+    upload: BankStatementUpload,
+    result: StatementParseResult,
+) -> None:
+    """Store the parsed closing balance and its bank day moment.
+
+    Only values the parser actually provided are stored; a missing date is
+    not replaced with the import time.
+    """
+    if result.closing_balance is not None:
+        upload.statement_closing_balance = result.closing_balance
+    if result.closing_balance_date is not None:
+        upload.balance_moment = timezone.make_aware(
+            datetime.combine(result.closing_balance_date, time.max),
+        )
 
 
 cleanup_expired_bank_statements = shared_task(
@@ -89,14 +109,7 @@ def process_bank_statement_task(
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         ).exists()
-        if result.closing_balance is not None:
-            upload.statement_closing_balance = result.closing_balance
-        # Until every row is marked up the discrepancy is known to be false.
-        if result.closing_balance is not None and not awaiting_markup:
-            upload.account_balance_after = upload.account.balance
-            upload.balance_discrepancy = (
-                result.closing_balance - upload.account.balance
-            )
+        _store_statement_balance(upload, result)
 
         if (
             awaiting_markup
@@ -115,10 +128,15 @@ def process_bank_statement_task(
                 'progress',
                 'updated_at',
                 'statement_closing_balance',
-                'account_balance_after',
-                'balance_discrepancy',
+                'balance_moment',
             ],
         )
+        if result.closing_balance is not None:
+            container = ApplicationContainer()
+            balance_service = (
+                container.users.statement_balance_verification_service()
+            )
+            balance_service.verify(upload)
         BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(

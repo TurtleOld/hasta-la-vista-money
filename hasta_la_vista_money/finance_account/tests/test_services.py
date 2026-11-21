@@ -1,6 +1,6 @@
 """Tests for finance account services."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 from unittest import mock
@@ -23,6 +23,12 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
+)
+from hasta_la_vista_money.system.models import AuditLog
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
 )
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import (
@@ -654,6 +660,395 @@ class TestAccountServices(TestCase):
 
         self.assertTrue(control.uploads[0].has_markup_rows)
         self.assertEqual(control.coverage.state, 'unknown')
+
+    def _balance_upload(
+        self,
+        *,
+        closing: Decimal,
+        moment: datetime,
+        account: Account | None = None,
+    ) -> BankStatementUpload:
+        upload = self._upload(account=account, total_transactions=1)
+        upload.statement_closing_balance = closing
+        upload.balance_moment = moment
+        upload.save(
+            update_fields=['statement_closing_balance', 'balance_moment'],
+        )
+        self.container.users.statement_coverage_service().record_statement_period(
+            upload,
+            moment.date(),
+            moment.date(),
+        )
+        return upload
+
+    def test_statement_balance_uses_history_at_same_moment_and_currency(
+        self,
+    ) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        income = Category.objects.create(
+            user=self.user1,
+            name='Доход',
+            type=TransactionType.INCOME,
+        )
+        Transaction.objects.create(
+            user=self.user1,
+            account=self.account1,
+            category=income,
+            type=TransactionType.INCOME,
+            amount=Decimal('200.00'),
+            date=moment + timedelta(days=1),
+        )
+        upload = self._balance_upload(
+            closing=Decimal('800.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(upload.balance_is_actual)
+        self.assertEqual(upload.balance_currency, 'RUB')
+        self.assertEqual(upload.account_balance_after, Decimal('800.00'))
+        self.assertEqual(upload.balance_discrepancy, Decimal('0.00'))
+        self.assertIsNotNone(upload.balance_checked_at)
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertTrue(control.balance.checked)
+        self.assertTrue(control.balance.actual)
+        self.assertEqual(
+            control.balance.result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertFalse(control.balance.blocks_final_reconciliation)
+
+    def test_missing_balance_data_is_not_checked_not_zero(self) -> None:
+        upload = self._upload(total_transactions=1)
+        service = self.container.users.statement_balance_verification_service()
+
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.MISSING_BALANCE,
+        )
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            timezone.localdate().replace(day=1),
+            timezone.localdate(),
+        )
+        self.assertFalse(control.balance.checked)
+        self.assertIsNone(control.balance.bank_balance)
+        self.assertIsNone(control.balance.ledger_balance)
+        self.assertEqual(control.balance.label, 'Не проверено')
+
+    def test_missing_moment_or_currency_is_not_substituted(self) -> None:
+        service = self.container.users.statement_balance_verification_service()
+        missing_moment = self._upload(total_transactions=1)
+        missing_moment.statement_closing_balance = Decimal('100.00')
+        missing_moment.save(update_fields=['statement_closing_balance'])
+
+        service.verify(missing_moment)
+
+        missing_moment.refresh_from_db()
+        self.assertEqual(
+            missing_moment.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            missing_moment.balance_reason,
+            BankStatementUpload.BalanceReason.MISSING_MOMENT,
+        )
+        self.assertIsNone(missing_moment.account_balance_after)
+
+        Account.objects.filter(pk=self.account1.pk).update(currency='')
+        self.account1.refresh_from_db()
+        missing_currency = self._balance_upload(
+            closing=Decimal('1000.00'),
+            moment=timezone.now(),
+        )
+
+        service.verify(missing_currency)
+
+        missing_currency.refresh_from_db()
+        self.assertEqual(
+            missing_currency.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            missing_currency.balance_reason,
+            BankStatementUpload.BalanceReason.MISSING_CURRENCY,
+        )
+        self.assertIsNone(missing_currency.account_balance_after)
+        self.assertIsNone(missing_currency.balance_discrepancy)
+
+    def test_amount_or_date_change_invalidates_and_category_does_not(
+        self,
+    ) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        expense = Category.objects.create(
+            user=self.user1,
+            name='Расход',
+            type=TransactionType.EXPENSE,
+        )
+        other_expense = Category.objects.create(
+            user=self.user1,
+            name='Другой расход',
+            type=TransactionType.EXPENSE,
+        )
+        transaction = Transaction.objects.create(
+            user=self.user1,
+            account=self.account1,
+            category=expense,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=moment - timedelta(days=1),
+        )
+        Account.objects.filter(pk=self.account1.pk).update(
+            balance=Decimal('900.00'),
+        )
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        control_service = self.container.users.accounting_control_service()
+        service.verify(upload)
+
+        transaction.category = other_expense
+        transaction.save(update_fields=['category'])
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertTrue(control.balance.actual)
+        self.assertEqual(
+            control.balance.result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+
+        transaction.amount = Decimal('200.00')
+        transaction.save(update_fields=['amount'])
+        Account.objects.filter(pk=self.account1.pk).update(
+            balance=Decimal('800.00'),
+        )
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertFalse(control.balance.actual)
+        self.assertEqual(
+            control.balance.reason,
+            BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+        )
+
+        service.verify(upload)
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        transaction.date = moment + timedelta(days=1)
+        transaction.save(update_fields=['date'])
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertFalse(control.balance.actual)
+
+    def test_retention_keeps_balance_metadata_without_sums(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        service.verify(upload)
+        service.explain(
+            upload,
+            self.user1,
+            BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE,
+        )
+        upload.refresh_from_db()
+        checked_at = upload.balance_checked_at
+        upload.expires_at = timezone.now() - timedelta(minutes=1)
+        upload.save(update_fields=['expires_at'])
+
+        self.container.users.bank_statement_retention_service().cleanup_expired()
+
+        upload.refresh_from_db()
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        self.assertEqual(upload.balance_moment, moment)
+        self.assertEqual(
+            upload.balance_type,
+            BankStatementUpload.BalanceType.CLOSING,
+        )
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        self.assertEqual(upload.balance_checked_at, checked_at)
+        self.assertFalse(upload.balance_is_actual)
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.BANK_DATA_CLEANED,
+        )
+        self.assertEqual(
+            upload.balance_explanation_code,
+            BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE,
+        )
+        self.assertEqual(upload.balance_explained_by, self.user1)
+
+    def test_approved_explanations_are_audited_and_never_apply_money(
+        self,
+    ) -> None:
+        categories = {
+            code: ('complete' if code.endswith('DIFFERENCE') else 'incomplete')
+            for code in BankStatementUpload.ExplanationCode.values
+        }
+        for code, completeness in categories.items():
+            with self.subTest(code=code):
+                account: Account = cast(
+                    'Account',
+                    AccountFactory(
+                        user=self.user1,
+                        balance=Decimal('1000.00'),
+                    ),
+                )
+                upload = self._balance_upload(
+                    closing=Decimal('900.00'),
+                    moment=timezone.now() - timedelta(days=2),
+                    account=account,
+                )
+                users = self.container.users
+                service = users.statement_balance_verification_service()
+                service.verify(upload)
+                upload.refresh_from_db()
+                discrepancy = upload.balance_discrepancy
+                account_balance = account.balance
+                transactions = Transaction.objects.count()
+                if upload.balance_moment is None:
+                    self.fail('the fixture must store a balance moment')
+                moment = upload.balance_moment
+                control_service = (
+                    self.container.users.accounting_control_service()
+                )
+                unexplained = control_service.build(
+                    account,
+                    moment.date(),
+                    moment.date(),
+                )
+                self.assertTrue(unexplained.balance.blocks_final_reconciliation)
+
+                service.explain(upload, self.user1, code)
+
+                upload.refresh_from_db()
+                self.assertEqual(upload.balance_explanation_code, code)
+                self.assertEqual(upload.balance_explained_by, self.user1)
+                self.assertIsNotNone(upload.balance_explained_at)
+                self.assertEqual(upload.balance_discrepancy, discrepancy)
+                self.assertEqual(
+                    upload.balance_result,
+                    BankStatementUpload.BalanceResult.DISCREPANCY,
+                )
+                account.refresh_from_db()
+                self.assertEqual(account.balance, account_balance)
+                self.assertEqual(Transaction.objects.count(), transactions)
+                audit = AuditLog.objects.filter(
+                    user=self.user1,
+                    object_pk=str(upload.pk),
+                ).latest('pk')
+                self.assertEqual(
+                    audit.diff['explanation_code'],
+                    code,
+                )
+                self.assertEqual(
+                    audit.diff['completeness'],
+                    completeness,
+                )
+                control = control_service.build(
+                    account,
+                    moment.date(),
+                    moment.date(),
+                )
+                self.assertFalse(
+                    control.balance.blocks_final_reconciliation,
+                )
+                self.assertEqual(
+                    control.balance.explanation_completeness,
+                    completeness,
+                )
+
+    def test_explanation_rejects_free_text_structural_errors_and_other_users(
+        self,
+    ) -> None:
+        service = self.container.users.statement_balance_verification_service()
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=timezone.now() - timedelta(days=2),
+        )
+        service.verify(upload)
+
+        with self.assertRaises(ValidationError):
+            service.explain(upload, self.user1, 'произвольный текст')
+        with self.assertRaises(PermissionDenied):
+            service.explain(
+                upload,
+                self.user2,
+                BankStatementUpload.ExplanationCode.CONSCIOUS_INCOMPLETE_ACCOUNTING,
+            )
+        upload.refresh_from_db()
+        self.assertEqual(upload.balance_explanation_code, '')
+
+        structural = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=timezone.now() - timedelta(days=1),
+        )
+        structural.status = BankStatementUpload.Status.FAILED
+        structural.error_message = 'Сломанная структура файла'
+        structural.save(update_fields=['status', 'error_message'])
+        service.verify(structural)
+        with self.assertRaises(ValidationError):
+            service.explain(
+                structural,
+                self.user1,
+                BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE,
+            )
+
+        matched = self._balance_upload(
+            closing=Decimal('1000.00'),
+            moment=timezone.now() - timedelta(days=1),
+        )
+        service.verify(matched)
+        matched.refresh_from_db()
+        if matched.balance_result != BankStatementUpload.BalanceResult.MATCHED:
+            self.fail('the fixture must produce a matched balance')
+        with self.assertRaises(ValidationError):
+            service.explain(
+                matched,
+                self.user1,
+                BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE,
+            )
 
 
 class TestTransferService(TestCase):
