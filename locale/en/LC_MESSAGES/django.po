@@ -4018,3 +4018,6 @@ msgstr "Invalid end date in the filter."
 
 msgid "Ожидает решения"
 msgstr "Awaiting decision"
+
+msgid "Строка ожидает решения"
+msgstr "The row awaits a decision"
