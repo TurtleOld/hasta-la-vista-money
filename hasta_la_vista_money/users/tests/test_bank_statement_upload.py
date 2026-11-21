@@ -6015,7 +6015,8 @@ class TestOzonBankStatement(TestCase):
                     Decimal('-500.00'),
                     'aaaa1111-bbbb-2222-cccc3333',
                 ),
-                (None, Decimal('500.00'), 'T0000001T0000002'),
+                (None, Decimal('500.00'), 'T0000001'),
+                (None, None, 'T0000002'),
                 ('Чаевые Ozon', Decimal('-50.00'), 'dddd4444-eeee-'),
                 ('Возвраты Ozon', Decimal('12.34'), 'ffff5555-6666-'),
                 (None, Decimal('-9.00'), '7777aaaa-bbbb-'),
@@ -6025,12 +6026,79 @@ class TestOzonBankStatement(TestCase):
             [item['description'] for item in result.transactions],
             [
                 'Покупки Ozon',
-                'Иван Иванович',
+                'Иван',
+                'Иванович',
                 'Чаевые Ozon',
                 'Возвраты Ozon',
                 'Комиссия за смс-',
             ],
         )
+        # The processing-date row above stays a continuation, not a row.
+        self.assertEqual(
+            result.transactions[0]['source_ref'],
+            'aaaa1111-bbbb-2222-cccc3333',
+        )
+        self.assertEqual(result.transactions[2]['parse_issue'], 'unparsed')
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_missing_amount_operation_keeps_its_own_fragment(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """An amountless operation is not glued to a neighbour's amount."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['01.09.2026 11:00:00', 'DOC-B', 'Комиссия банка', ''],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertNotIn('parse_issue', first)
+        self.assertIsNone(middle['amount'])
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['description'], 'Комиссия банка')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
+        self.assertNotIn('parse_issue', last)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_malformed_date_operation_keeps_its_own_fragment(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A broken date never merges one amount into another observation."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['01.09.2026 10:00', 'DOC-B', 'Комиссия банка', '- 5.00 ₽'],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertIsNone(middle['date'])
+        self.assertEqual(middle['amount'], Decimal('-5.00'))
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_unparsed_row_stays_visible_without_blocking_others(

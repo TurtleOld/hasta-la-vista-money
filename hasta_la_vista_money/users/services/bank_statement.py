@@ -1808,13 +1808,25 @@ class _OzonBankParser(BaseBankStatementParser):
         return transactions, operation_rows
 
     def _is_operation_start(self, row: pd.Series) -> bool:
-        # The processing-date row also starts with a date, but has no amount.
-        return bool(
-            self._operation_start_pattern.match(
-                self._cell(row, OZON_DATE_COL),
-            )
-            and self._cell(row, OZON_AMOUNT_COL),
-        )
+        """Return whether the row begins a new potential operation.
+
+        An amount cell always begins a row, even when its date or amount
+        cannot be read: gluing it to the previous operation would mix two
+        financial observations. A dated row with its own complete document
+        and purpose but no amount is an ambiguous fragment, so it starts
+        its own row instead of silently extending a neighbour. A
+        processing-date continuation has no purpose or only a document
+        fragment and stays part of the operation above.
+        """
+        if self._cell(row, OZON_AMOUNT_COL):
+            return True
+        if not self._operation_start_pattern.match(
+            self._cell(row, OZON_DATE_COL),
+        ):
+            return False
+        document = self._cell(row, OZON_DOCUMENT_COL)
+        purpose = self._cell(row, OZON_DESCRIPTION_COL)
+        return bool(document and purpose and not document.endswith('-'))
 
     def _parse_operation(
         self,
