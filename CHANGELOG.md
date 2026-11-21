@@ -1,5 +1,17 @@
 # История изменений
 
+## [2.26.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.25.0...v2.26.0) (2026-11-21)
+
+
+### ✨ Новые возможности
+
+* **finance_account:** add statement row exclusion lifecycle ([#1180](https://github.com/TurtleOld/hasta-la-vista-money/issues/1180)) ([05d477a](https://github.com/TurtleOld/hasta-la-vista-money/commit/05d477a530e5657ab308134113b2b801b5eb1e0c))
+
+
+### 📚 Документация
+
+* **finance_account:** document accounting control domain decisions ([#1177](https://github.com/TurtleOld/hasta-la-vista-money/issues/1177)) ([abbbbbf](https://github.com/TurtleOld/hasta-la-vista-money/commit/abbbbbf7d3dbf766fb58db0a8b4915dcf9de8861))
+
 ## [2.25.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.24.0...v2.25.0) (2026-11-16)
 
 
