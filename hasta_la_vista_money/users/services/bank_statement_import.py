@@ -127,6 +127,10 @@ class StatementImportResult:
         needs_transfer_count: Число зачислений на кредитный счёт,
             сохранённых как непроведённые погашения.
         closing_balance: Конечный остаток из выписки, если удалось извлечь.
+        closing_balance_date: Дата конечного остатка, если известна.
+        closing_balance_moment: Точный момент остатка, если банк его даёт.
+        closing_balance_currency: Подтверждённая валюта остатка.
+        closing_balance_semantics: Подтверждённая семантика остатка.
     """
 
     income_count: int
@@ -134,6 +138,10 @@ class StatementImportResult:
     skipped_count: int
     needs_transfer_count: int
     closing_balance: Decimal | None
+    closing_balance_date: date | None = None
+    closing_balance_moment: datetime | None = None
+    closing_balance_currency: str | None = None
+    closing_balance_semantics: str | None = None
 
 
 @dataclass(frozen=True)
@@ -436,6 +444,10 @@ class BankStatementImportService:
                 skipped_count=upload.skipped_count,
                 needs_transfer_count=0,
                 closing_balance=parse_result.closing_balance,
+                closing_balance_date=parse_result.closing_balance_date,
+                closing_balance_moment=parse_result.closing_balance_moment,
+                closing_balance_currency=parse_result.closing_balance_currency,
+                closing_balance_semantics=parse_result.closing_balance_semantics,
             )
 
         existing_categories = list(
@@ -469,6 +481,10 @@ class BankStatementImportService:
             skipped_count=skipped_count,
             needs_transfer_count=needs_transfer_count,
             closing_balance=parse_result.closing_balance,
+            closing_balance_date=parse_result.closing_balance_date,
+            closing_balance_moment=parse_result.closing_balance_moment,
+            closing_balance_currency=parse_result.closing_balance_currency,
+            closing_balance_semantics=parse_result.closing_balance_semantics,
         )
 
     def _process_transactions(

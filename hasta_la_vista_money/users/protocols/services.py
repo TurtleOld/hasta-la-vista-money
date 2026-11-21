@@ -37,6 +37,9 @@ if TYPE_CHECKING:
         DashboardSummaryStatisticsDict,
         StatisticsFilters,
     )
+    from hasta_la_vista_money.users.services.statement_balance_verification import (  # noqa: E501
+        BalanceVerificationState,
+    )
     from hasta_la_vista_money.users.services.statement_coverage import (
         CoverageSummary,
     )
@@ -349,6 +352,33 @@ class StatementCoverageServiceProtocol(Protocol):
         period_start: date,
         period_end: date,
     ) -> CoverageSummary: ...
+
+
+@runtime_checkable
+class StatementBalanceVerificationServiceProtocol(Protocol):
+    """Protocol for statement balance checks and explanations."""
+
+    def verify(
+        self,
+        upload: BankStatementUpload,
+    ) -> BankStatementUpload: ...
+
+    def refresh_actuality(
+        self,
+        upload: BankStatementUpload,
+    ) -> BankStatementUpload: ...
+
+    def explain(
+        self,
+        upload: BankStatementUpload,
+        user: User,
+        code: str,
+    ) -> BankStatementUpload: ...
+
+    def describe(
+        self,
+        upload: BankStatementUpload,
+    ) -> BalanceVerificationState: ...
 
 
 @runtime_checkable
