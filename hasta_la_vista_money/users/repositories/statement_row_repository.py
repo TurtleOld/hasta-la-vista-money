@@ -87,12 +87,22 @@ class StatementRowRepository:
         """Reopen the movement's rows and return their uploads.
 
         A credit-account repayment goes back to waiting for a transfer,
-        every other row goes back to the pending decision.
+        every other row goes back to the pending decision. Rows that are
+        exact repeat observations of a reopened row are reopened too, so a
+        closed row never outlives its movement.
         """
         rows = self._linked_rows(movement)
+        reopened_ids = list(rows.values_list('pk', flat=True))
+        repeats = BankStatementRow.objects.filter(
+            canonical_row_id__in=reopened_ids,
+        )
         uploads = list(
             BankStatementUpload.objects.filter(
                 pk__in=rows.values('upload_id'),
+            ).union(
+                BankStatementUpload.objects.filter(
+                    pk__in=repeats.values('upload_id'),
+                ),
             ),
         )
         reopened = {'transaction': None, 'transfer': None, 'decided_at': None}
@@ -104,7 +114,69 @@ class StatementRowRepository:
             decision=BankStatementRow.Decision.PENDING,
             **reopened,
         )
+        repeats.update(
+            decision=BankStatementRow.Decision.PENDING,
+            canonical_row=None,
+            decided_at=None,
+        )
         return uploads
+
+    def invalidate_linked_checks(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> None:
+        """Reset the statement checks affected by a date change."""
+        upload_ids = self._linked_rows(movement).values('upload_id')
+        BankStatementUpload.objects.filter(pk__in=upload_ids).update(
+            account_balance_after=None,
+            balance_discrepancy=None,
+        )
+
+    @staticmethod
+    def stored_fingerprint_key_versions(account_id: int) -> set[str]:
+        """Return key versions used by fingerprints of one account."""
+        row_versions = (
+            BankStatementRow.objects.filter(
+                upload__account_id=account_id,
+            )
+            .values_list('source_fingerprint_key_version', flat=True)
+            .distinct()
+        )
+        transaction_versions = (
+            Transaction.objects.filter(account_id=account_id)
+            .values_list('source_fingerprint_key_version', flat=True)
+            .distinct()
+        )
+        return {
+            version
+            for version in (*row_versions, *transaction_versions)
+            if version
+        }
+
+    @staticmethod
+    def stored_fingerprint_format_versions(account_id: int) -> set[int]:
+        """Return fingerprint format versions used on one account."""
+        row_versions = (
+            BankStatementRow.objects.filter(
+                upload__account_id=account_id,
+                source_fingerprint__gt='',
+            )
+            .values_list('source_fingerprint_format_version', flat=True)
+            .distinct()
+        )
+        transaction_versions = (
+            Transaction.objects.filter(
+                account_id=account_id,
+                source_fingerprint__gt='',
+            )
+            .values_list('source_fingerprint_format_version', flat=True)
+            .distinct()
+        )
+        return {
+            version
+            for version in (*row_versions, *transaction_versions)
+            if version
+        }
 
     def lock_account_row(
         self,

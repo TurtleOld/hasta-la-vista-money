@@ -138,6 +138,20 @@ class Transaction(models.Model):
         null=True,
         verbose_name=_('Идентификатор операции в выписке'),
     )
+    source_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+    )
+    source_fingerprint_key_version = models.CharField(
+        max_length=32,
+        blank=True,
+        default='',
+    )
+    source_fingerprint_format_version = models.PositiveIntegerField(
+        default=0,
+    )
+    source_format_version = models.PositiveIntegerField(default=0)
     source_file_hash = models.CharField(
         max_length=64,
         blank=True,
@@ -164,13 +178,12 @@ class Transaction(models.Model):
             models.Index(
                 fields=['account', 'source_file_hash', 'source_row_position'],
             ),
+            models.Index(
+                fields=['account', 'source_fingerprint'],
+                name='txn_account_fp_idx',
+            ),
         ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
-            models.UniqueConstraint(
-                fields=['account', 'source_ref'],
-                condition=Q(source_ref__isnull=False),
-                name='unique_account_source_ref',
-            ),
             models.UniqueConstraint(
                 fields=[
                     'account',

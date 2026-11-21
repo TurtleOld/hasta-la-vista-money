@@ -19,6 +19,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.models import (
@@ -88,6 +91,9 @@ class BulkDecisionResult:
 
 class BankStatementReconciliationService:
     """Apply an owner decision to a probable statement duplicate."""
+
+    def __init__(self, balance_service: BalanceService | None = None) -> None:
+        self._balance_service = balance_service or BalanceService()
 
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
@@ -475,12 +481,31 @@ class BankStatementReconciliationService:
         row: BankStatementRow,
         movement: Transaction | TransferMoneyLog,
     ) -> None:
+        """Link the movement after locking it against another row."""
         if isinstance(movement, TransferMoneyLog):
-            row.transfer = movement
+            locked = TransferMoneyLog.objects.select_for_update().get(
+                pk=movement.pk,
+            )
+            sharing = BankStatementRow.objects.filter(
+                transfer=locked,
+                transaction_type=row.transaction_type,
+            ).exclude(pk=row.pk)
+            if sharing.exists():
+                raise ReconciliationDecisionConflictError('transfer')
+            row.transfer = locked
             row.transaction = None
-        else:
-            row.transaction = movement
-            row.transfer = None
+            return
+        locked_transaction = Transaction.objects.select_for_update().get(
+            pk=movement.pk,
+        )
+        if (
+            BankStatementRow.objects.filter(transaction=locked_transaction)
+            .exclude(pk=row.pk)
+            .exists()
+        ):
+            raise ReconciliationDecisionConflictError('transaction')
+        row.transaction = locked_transaction
+        row.transfer = None
 
     def _candidate_is_current(
         self,
@@ -605,6 +630,7 @@ class BankStatementReconciliationService:
             raise InvalidReconciliationDecisionError(
                 constants.CREDIT_CARD_INCOME_BAN,
             )
+        self._reject_repeated_fingerprint(row, account)
         created = Transaction.objects.create(
             user=row.upload.user,
             account=row.upload.account,
@@ -620,13 +646,42 @@ class BankStatementReconciliationService:
             source_row_position=(
                 row.source_row_position if not row.source_ref else None
             ),
+            source_format_version=row.source_format_version,
+            source_fingerprint=row.source_fingerprint,
+            source_fingerprint_key_version=(row.source_fingerprint_key_version),
+            source_fingerprint_format_version=(
+                row.source_fingerprint_format_version
+            ),
         )
         delta = amount
         if transaction_type == 'expense':
             delta = -delta
-        account.balance += Decimal(delta)
-        account.save(update_fields=['balance', 'updated_at'])
+        # ADR-0014: every balance change goes through the shared service.
+        self._balance_service.apply_account_deltas({account.pk: delta})
         return created
+
+    @staticmethod
+    def _reject_repeated_fingerprint(
+        row: BankStatementRow,
+        account: Account,
+    ) -> None:
+        """Refuse a new movement for an already proven operation."""
+        if not row.source_fingerprint or row.transaction_date is None:
+            return
+        existing = Transaction.objects.filter(
+            account=account,
+            source_fingerprint=row.source_fingerprint,
+        )
+        if row.transaction_id is not None:
+            existing = existing.exclude(pk=row.transaction_id)
+        if row.match_calendar_date:
+            existing = existing.filter(
+                date__date=timezone.localtime(row.transaction_date).date(),
+            )
+        else:
+            existing = existing.filter(date=row.transaction_date)
+        if existing.exists():
+            raise ReconciliationDecisionConflictError('duplicate')
 
     def pending_transfer_rows(
         self,
