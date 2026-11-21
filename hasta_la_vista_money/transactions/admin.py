@@ -16,7 +16,15 @@ class TransactionAdmin(MovementAdminMixin, admin.ModelAdmin[Transaction]):
     list_filter = ('type', 'date', 'category__name')
     search_fields = ('user__username', 'category__name')
     date_hierarchy = 'date'
-    readonly_fields = ('account', 'type', 'amount')
+    readonly_fields = (
+        'account',
+        'type',
+        'amount',
+        'source_fingerprint',
+        'source_fingerprint_key_version',
+        'source_fingerprint_format_version',
+        'source_format_version',
+    )
 
 
 @admin.register(Category)
