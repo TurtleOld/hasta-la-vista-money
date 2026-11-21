@@ -47,6 +47,10 @@ class StatementParseResult:
             ``source_ref``.
         closing_balance: Конечный остаток по выписке, если удалось извлечь.
         closing_balance_date: Дата конечного остатка, если известна.
+        closing_balance_moment: Точный момент остатка, если банк его даёт.
+        closing_balance_currency: Валюта остатка из выписки, если известна.
+        closing_balance_semantics: Подтверждённая банковская семантика
+            остатка (``exact_moment`` или ``closing_day``).
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
         period_end: Конец периода выписки, если известно.
@@ -56,6 +60,9 @@ class StatementParseResult:
     transactions: list[dict[str, Any]] = field(default_factory=list)
     closing_balance: Decimal | None = None
     closing_balance_date: date_type | None = None
+    closing_balance_moment: datetime | None = None
+    closing_balance_currency: str | None = None
+    closing_balance_semantics: str | None = None
     account_number: str | None = None
     period_start: date_type | None = None
     period_end: date_type | None = None
@@ -1311,6 +1318,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             transactions=[self._build_transaction(row) for row in rows],
             closing_balance=closing_balance,
             closing_balance_date=self._parse_day(header.group(3)),
+            closing_balance_semantics='closing_day',
             account_number=header.group(1),
             period_start=self._parse_day(header.group(2)),
             period_end=self._parse_day(header.group(3)),
