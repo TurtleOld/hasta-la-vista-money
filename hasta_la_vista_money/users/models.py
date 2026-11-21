@@ -169,6 +169,10 @@ class BankStatementUpload(Model):
             'accounting_reopened',
             _('Учёт переоткрыт'),
         )
+        UNRESOLVED_ROWS = (
+            'unresolved_rows',
+            _('Есть нерешённые строки выписки'),
+        )
 
     class ExplanationCode(TextChoices):
         BANK_POSTING_DATE_DIFFERENCE = (

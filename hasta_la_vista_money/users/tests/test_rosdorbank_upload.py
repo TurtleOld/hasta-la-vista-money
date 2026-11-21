@@ -60,10 +60,10 @@ class RosDorBankUploadTest(TestCase):
             upload.status,
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
-        self.assertIsNotNone(upload.balance_discrepancy)
+        self.assertIsNone(upload.balance_discrepancy)
         self.assertEqual(
             upload.balance_result,
-            BankStatementUpload.BalanceResult.DISCREPANCY,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
         )
         rows = BankStatementRow.objects.filter(
             upload=upload,

@@ -1616,6 +1616,9 @@ class TestBankStatementReconciliationView(TestCase):
         self.upload.save(
             update_fields=['statement_closing_balance', 'balance_moment'],
         )
+        self.row.decision = BankStatementRow.Decision.LINKED
+        self.row.decided_at = timezone.now()
+        self.row.save(update_fields=['decision', 'decided_at'])
         container = ApplicationContainer()
         users = container.users
         service = users.statement_balance_verification_service()

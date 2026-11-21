@@ -109,15 +109,16 @@ def process_bank_statement_task(
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
         ).exists()
+        pending = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+        ).exists()
+        unresolved = (
+            awaiting_markup or pending or result.needs_transfer_count > 0
+        )
         _store_statement_balance(upload, result)
 
-        if (
-            awaiting_markup
-            or BankStatementRow.objects.filter(
-                upload=upload,
-                decision=BankStatementRow.Decision.PENDING,
-            ).exists()
-        ):
+        if unresolved:
             upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         else:
             upload.status = BankStatementUpload.Status.COMPLETED
@@ -131,12 +132,12 @@ def process_bank_statement_task(
                 'balance_moment',
             ],
         )
-        if result.closing_balance is not None:
+        if result.closing_balance is not None and not unresolved:
             container = ApplicationContainer()
             balance_service = (
                 container.users.statement_balance_verification_service()
             )
-            balance_service.verify(upload)
+            upload = balance_service.verify(upload)
         BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(

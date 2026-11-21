@@ -26,7 +26,10 @@ from hasta_la_vista_money.system.services.audit_context import (
     current_operation_id,
     current_operation_kind,
 )
-from hasta_la_vista_money.users.models import BankStatementUpload
+from hasta_la_vista_money.users.models import (
+    BankStatementRow,
+    BankStatementUpload,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
@@ -59,6 +62,7 @@ class BalanceVerificationState:
     bank_balance: Decimal | None
     ledger_balance: Decimal | None
     discrepancy: Decimal | None
+    has_amounts: bool
     explanation_code: str
     explanation_label: str
     completeness: str
@@ -103,8 +107,18 @@ class StatementBalanceVerificationService:
         now = timezone.now()
         closing = upload.statement_closing_balance
         moment = upload.balance_moment
+        unresolved = BankStatementRow.objects.filter(
+            upload=upload,
+            decision__in=(
+                BankStatementRow.Decision.AWAITING_MARKUP,
+                BankStatementRow.Decision.PENDING,
+                BankStatementRow.Decision.NEEDS_TRANSFER,
+            ),
+        ).exists()
         reason = ''
-        if closing is None:
+        if unresolved:
+            reason = BankStatementUpload.BalanceReason.UNRESOLVED_ROWS
+        elif closing is None:
             reason = BankStatementUpload.BalanceReason.MISSING_BALANCE
         elif moment is None:
             reason = BankStatementUpload.BalanceReason.MISSING_MOMENT
@@ -114,7 +128,12 @@ class StatementBalanceVerificationService:
         explanation_code = upload.balance_explanation_code
         explained_at = upload.balance_explained_at
         explained_by = upload.balance_explained_by
-        if closing is not None and moment is not None and account.currency:
+        if (
+            not unresolved
+            and closing is not None
+            and moment is not None
+            and account.currency
+        ):
             ledger = self._balance_history_service.balance_at(
                 account,
                 moment,
@@ -145,7 +164,9 @@ class StatementBalanceVerificationService:
             balance_currency=account.currency,
             balance_result=result,
             balance_checked_at=now,
-            balance_is_actual=True,
+            balance_is_actual=(
+                result != BankStatementUpload.BalanceResult.NOT_CHECKED
+            ),
             balance_reason=reason,
             account_balance_after=ledger,
             balance_discrepancy=discrepancy,
@@ -380,6 +401,7 @@ class StatementBalanceVerificationService:
             bank_balance=upload.statement_closing_balance,
             ledger_balance=upload.account_balance_after,
             discrepancy=upload.balance_discrepancy,
+            has_amounts=upload.statement_closing_balance is not None,
             explanation_code=explanation_code,
             explanation_label=explanation_label,
             completeness=completeness,

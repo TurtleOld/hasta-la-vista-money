@@ -1,7 +1,7 @@
 """The unified accounting control entry with account and period selection."""
 
 from datetime import date
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -31,6 +31,10 @@ from hasta_la_vista_money.users.services.groups import can_write
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.users.models import User
+
+ACTION_COVERAGE: Final = 'coverage'
+ACTION_EXPLAIN_BALANCE: Final = 'explain_balance'
+ACTION_RECHECK_BALANCE: Final = 'recheck_balance'
 
 
 def _parse_date(value: str | None, default: date) -> date:
@@ -150,6 +154,8 @@ class AccountingControlView(
                 'explanation_form': (
                     BalanceExplanationForm() if writable else None
                 ),
+                'explain_action': ACTION_EXPLAIN_BALANCE,
+                'recheck_action': ACTION_RECHECK_BALANCE,
             },
         )
         return context
@@ -161,7 +167,7 @@ class AccountingControlView(
         if account_id is None:
             raise Http404
         account = get_object_or_404(Account, pk=account_id, user=user)
-        action = request.POST.get('action', 'coverage')
+        action = request.POST.get('action', ACTION_COVERAGE)
         start = _parse_date(
             request.POST.get('period_start'),
             timezone.localdate().replace(day=1),
@@ -170,7 +176,7 @@ class AccountingControlView(
             request.POST.get('period_end'),
             timezone.localdate(),
         )
-        if action in {'explain_balance', 'recheck_balance'}:
+        if action in {ACTION_EXPLAIN_BALANCE, ACTION_RECHECK_BALANCE}:
             upload_id = request.POST.get('upload_id', '')
             if not upload_id.isdigit():
                 raise Http404
@@ -181,7 +187,7 @@ class AccountingControlView(
             )
             service = _balance_service(request)
             try:
-                if action == 'explain_balance':
+                if action == ACTION_EXPLAIN_BALANCE:
                     explanation_form = BalanceExplanationForm(request.POST)
                     if not explanation_form.is_valid():
                         raise ValidationError(
@@ -197,6 +203,13 @@ class AccountingControlView(
                         _('Расхождение остатка объяснено.'),
                     )
                 else:
+                    if upload.retention_cleaned_at is not None:
+                        raise ValidationError(
+                            _(
+                                'Банковские данные очищены: '
+                                'проверка недоступна.',
+                            ),
+                        )
                     service.verify(upload)
                     messages.success(
                         request,
