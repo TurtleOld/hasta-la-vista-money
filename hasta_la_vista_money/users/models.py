@@ -49,14 +49,12 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.receipts.models import Receipt
     from hasta_la_vista_money.transactions.models import Category
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     DEFAULT_TIMEZONE_NAME,
     STATEMENT_RETENTION_DAYS,
 )
 from hasta_la_vista_money.core.upload_paths import bank_statement_upload_to
-
-#: Largest value a PostgreSQL ``integer`` column can hold.
-MAX_DATABASE_INTEGER: Final = 2_147_483_647
 
 
 def bank_statement_expires_at() -> datetime:
@@ -70,12 +68,12 @@ def validate_statement_retention_days(value: int) -> None:
     There is no product maximum: 100 years is allowed while an integer
     outside the column range or a deadline past ``datetime.max`` is not.
     """
-    if value > MAX_DATABASE_INTEGER:
+    if value > constants.DATABASE_INTEGER_MAX:
         raise ValidationError(
             _('Слишком большое число дней хранения: колонка не вместит его.'),
         )
     try:
-        _expiration = timezone.now() + timedelta(days=value)
+        timezone.now() + timedelta(days=value)
     except OverflowError as error:
         raise ValidationError(
             _('Дата удаления выходит за допустимый диапазон дат.'),
@@ -513,7 +511,31 @@ class BankStatementRow(Model):
                 fields=['upload', 'decision'],
                 name='users_statement_decision_idx',
             ),
+            Index(
+                fields=['upload', 'data_expires_at'],
+                name='users_statement_row_expiry_idx',
+            ),
+            Index(
+                fields=['duplicate_of'],
+                name='users_stmt_row_dup_idx',
+            ),
         ]
+
+
+#: Decisions that leave a potential operation unresolved for accounting
+#: control. One definition for every reader; see ADR-0018.
+UNRESOLVED_STATEMENT_DECISIONS: Final[frozenset[str]] = frozenset(
+    {
+        BankStatementRow.Decision.PENDING,
+        BankStatementRow.Decision.NEEDS_TRANSFER,
+        BankStatementRow.Decision.AWAITING_MARKUP,
+        BankStatementRow.Decision.DEFERRED,
+        # Legacy value, migrated to ``deferred``; still read defensively.
+        BankStatementRow.Decision.SKIPPED,
+        BankStatementRow.Decision.PARSE_ERROR,
+        BankStatementRow.Decision.EXPIRED,
+    },
+)
 
 
 class BankStatementCandidate(Model):

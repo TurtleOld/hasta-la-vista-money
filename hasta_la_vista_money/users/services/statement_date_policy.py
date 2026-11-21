@@ -2,18 +2,43 @@
 
 from datetime import UTC, date, datetime
 
-from django.utils import timezone
-
+from hasta_la_vista_money.core.calendar_days import movement_calendar_date
 from hasta_la_vista_money.users.models import BankStatementRow
+
+#: Raised when a row that must carry a date has none. Programmer error, not
+#: a user-facing message.
+NO_ROW_DATE = 'statement row has no operation date'
+
+
+def statement_row_day(row: BankStatementRow) -> date | None:
+    """Return the row's bank day, else the legacy local date of its moment.
+
+    The single place that decides which calendar day a row belongs to. Callers
+    that must have a date use :func:`statement_row_calendar_date`.
+    """
+    moment = row.transaction_date
+    if moment is None:
+        return None
+    return movement_calendar_date(moment, row.bank_calendar_date)
 
 
 def statement_row_calendar_date(row: BankStatementRow) -> date:
     """Return the row's bank day, else the legacy local date of its moment."""
-    if row.bank_calendar_date is not None:
-        return row.bank_calendar_date
-    if row.transaction_date is None:
-        raise ValueError('row')
-    return timezone.localtime(row.transaction_date).date()
+    day = statement_row_day(row)
+    if day is None:
+        raise ValueError(NO_ROW_DATE)
+    return day
+
+
+def statement_row_bank_day(row: BankStatementRow) -> date | None:
+    """Return only a proved bank calendar day, never a datetime date part.
+
+    A row with real datetime precision has no proved bank day: a datetime is a
+    technical anchor, not the bank's own calendar day.
+    """
+    if row.date_precision == BankStatementRow.DatePrecision.DATETIME:
+        return None
+    return row.bank_calendar_date
 
 
 def statement_row_movement_date(
@@ -28,7 +53,7 @@ def statement_row_movement_date(
     """
     moment = row.transaction_date
     if moment is None:
-        raise ValueError('row')
+        raise ValueError(NO_ROW_DATE)
     if row.date_precision == BankStatementRow.DatePrecision.DATETIME:
         return moment, None
     if row.bank_calendar_date is not None:

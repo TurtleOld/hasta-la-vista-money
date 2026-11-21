@@ -15,15 +15,18 @@ from typing import TYPE_CHECKING, cast
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from hasta_la_vista_money.core.calendar_days import local_calendar_date
 from hasta_la_vista_money.users.models import (
+    UNRESOLVED_STATEMENT_DECISIONS,
     BankStatementRow,
     BankStatementUpload,
+)
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_day,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import date
+    from datetime import date, datetime
 
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.services.coverage_service import (
@@ -34,21 +37,15 @@ if TYPE_CHECKING:
         AccountCoverageServiceProtocol,
     )
     from hasta_la_vista_money.users.models import User
+    from hasta_la_vista_money.users.protocols.statement_balance_verification import (  # noqa: E501
+        StatementBalanceVerificationServiceProtocol,
+    )
     from hasta_la_vista_money.users.repositories.accounting_completeness_repository import (  # noqa: E501
         AccountingCompletenessRepository,
     )
-
-UNRESOLVED_DECISIONS = frozenset(
-    {
-        BankStatementRow.Decision.PENDING,
-        BankStatementRow.Decision.AWAITING_MARKUP,
-        BankStatementRow.Decision.NEEDS_TRANSFER,
-        BankStatementRow.Decision.DEFERRED,
-        BankStatementRow.Decision.SKIPPED,
-        BankStatementRow.Decision.PARSE_ERROR,
-        BankStatementRow.Decision.EXPIRED,
-    },
-)
+    from hasta_la_vista_money.users.services.statement_balance_verification import (  # noqa: E501
+        FinalReconciliationBlock,
+    )
 
 _PROBLEM_BY_DECISION: dict[str, str] = {
     BankStatementRow.Decision.PENDING.value: 'pending',
@@ -71,15 +68,15 @@ class ProcessingEvidence:
     status: str
     rows_saved: int
     traceability_version: int
-    verified_at: object | None
+    verified_at: datetime | None
     verified: bool
     reason_code: str
     requires_reupload: bool
     statement_period_start: date | None = None
     statement_period_end: date | None = None
     reconciliation_only: bool = False
-    upload_created_at: object | None = None
-    upload_updated_at: object | None = None
+    upload_created_at: datetime | None = None
+    upload_updated_at: datetime | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -127,7 +124,7 @@ class BalanceAttention:
 class BalanceBlockProjection:
     """Read-only projection of ticket 09's retained finality guard."""
 
-    block: object | None
+    block: FinalReconciliationBlock | None
     checked: bool
 
 
@@ -171,16 +168,12 @@ class AccountingCompletenessResult:
     blockers: tuple[str, ...]
     warnings: tuple[CompletenessWarning, ...]
     can_finalize: bool
-    balance_block: object | None = None
+    balance_block: FinalReconciliationBlock | None = None
 
 
 def _row_day(row: BankStatementRow) -> date | None:
-    if row.bank_calendar_date is not None:
-        return row.bank_calendar_date
-    moment = row.transaction_date
-    if moment is None:
-        return None
-    return local_calendar_date(moment)
+    """Return the row's calendar day, or ``None`` when it has no date."""
+    return statement_row_day(row)
 
 
 def _row_in_period(
@@ -255,7 +248,7 @@ class _RowTally:
         if row.decision == BankStatementRow.Decision.EXCLUDED:
             self._add_excluded(upload, row)
             return
-        if row.decision not in UNRESOLVED_DECISIONS:
+        if row.decision not in UNRESOLVED_STATEMENT_DECISIONS:
             return
         self.unresolved_count += 1
         if row.candidate_id is not None:
@@ -359,7 +352,9 @@ class AccountingCompletenessService:
         *,
         coverage_service: AccountCoverageServiceProtocol,
         repository: AccountingCompletenessRepository,
-        balance_provider: object | None = None,
+        balance_provider: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
     ) -> None:
         self.coverage_service = coverage_service
         self.repository = repository
@@ -372,7 +367,9 @@ class AccountingCompletenessService:
         account_ids: Sequence[int] | None = None,
         period_start: date,
         period_end: date,
-        balance_provider: object | None = None,
+        balance_provider: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
     ) -> AccountingCompletenessResult:
         if period_start > period_end:
             raise ValidationError(
@@ -471,7 +468,7 @@ class AccountingCompletenessService:
         account_ids: Sequence[int] | None = None,
         period_start: date | None = None,
         period_end: date | None = None,
-        provider: object | None = None,
+        provider: StatementBalanceVerificationServiceProtocol | None = None,
     ) -> BalanceBlockProjection:
         """Return ticket 09's retained guard without a full assessment."""
         requested_ids = list(dict.fromkeys(account_ids or ()))
@@ -505,7 +502,7 @@ class AccountingCompletenessService:
         rows_by_upload: dict[int, list[BankStatementRow]],
         period_start: date,
         period_end: date,
-        balance_block: object | None,
+        balance_block: FinalReconciliationBlock | None,
         balance_checked: bool,
     ) -> AccountCompleteness:
         coverage = self.coverage_service.summary(
@@ -523,11 +520,22 @@ class AccountingCompletenessService:
             period_end=period_end,
         )
         tally.finish()
-        processing_verified = all(item.verified for item in processing)
-        processing_reasons = tuple(
-            dict.fromkeys(
-                item.reason_code for item in processing if not item.verified
-            ),
+        # An active account without any statement in the period proves
+        # nothing about row processing: an empty proof set is not a proof
+        # (ADR-0018). An account that did not exist in the period has no
+        # rows to prove.
+        if processing:
+            processing_verified = all(item.verified for item in processing)
+        else:
+            processing_verified = not coverage_required
+        processing_reasons = (
+            tuple(
+                dict.fromkeys(
+                    item.reason_code for item in processing if not item.verified
+                ),
+            )
+            if processing
+            else (() if not coverage_required else ('statement_required',))
         )
         latest_upload = processing[-1] if processing else None
         account_block = self._block_for_account(
@@ -657,7 +665,7 @@ class AccountingCompletenessService:
         *,
         rows_saved: int,
         version: int,
-        verified_at: object | None,
+        verified_at: datetime | None,
         verified: bool,
         reason_code: str,
     ) -> ProcessingEvidence:
@@ -680,7 +688,7 @@ class AccountingCompletenessService:
     @staticmethod
     def _block_for_account(
         *,
-        balance_block: object | None,
+        balance_block: FinalReconciliationBlock | None,
         uploads: list[BankStatementUpload],
         period_start: date,
         period_end: date,
@@ -700,12 +708,11 @@ class AccountingCompletenessService:
         return balance_block if relevant.intersection(upload_ids) else None
 
     @staticmethod
-    def _balance_reason(balance_block: object) -> str:
-        reason = getattr(balance_block, 'reason', '')
-        if reason:
-            return str(reason)
-        reasons = getattr(balance_block, 'reasons', ())
-        return str(next(iter(reasons), 'balance_unexplained_mismatch'))
+    def _balance_reason(balance_block: FinalReconciliationBlock) -> str:
+        """Return the concrete reasons of a retained mismatch block."""
+        return str(
+            next(iter(balance_block.reasons), 'balance_unexplained_mismatch'),
+        )
 
     def _balance_block(
         self,

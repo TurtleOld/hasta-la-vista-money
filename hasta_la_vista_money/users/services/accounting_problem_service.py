@@ -8,9 +8,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy as _
 
-from hasta_la_vista_money.core.calendar_days import local_calendar_date
 from hasta_la_vista_money.users.accounting_types import (
     AccountingAccountOption,
     AccountingKnownTotal,
@@ -24,8 +23,12 @@ from hasta_la_vista_money.users.accounting_types import (
     frozen_counts,
 )
 from hasta_la_vista_money.users.models import (
+    UNRESOLVED_STATEMENT_DECISIONS,
     BankStatementRow,
     BankStatementUpload,
+)
+from hasta_la_vista_money.users.services.statement_date_policy import (
+    statement_row_day,
 )
 from hasta_la_vista_money.users.services.statement_retention_policy import (
     row_has_bank_data,
@@ -34,6 +37,8 @@ from hasta_la_vista_money.users.services.statement_retention_policy import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from datetime import date
+
+    from django.utils.functional import Promise
 
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
@@ -44,43 +49,52 @@ if TYPE_CHECKING:
         AccountingProblemRepository,
     )
 
-_UNRESOLVED_DECISIONS = frozenset(
-    {
-        BankStatementRow.Decision.PENDING,
-        BankStatementRow.Decision.NEEDS_TRANSFER,
-        BankStatementRow.Decision.AWAITING_MARKUP,
-        BankStatementRow.Decision.DEFERRED,
-        BankStatementRow.Decision.PARSE_ERROR,
-        BankStatementRow.Decision.EXPIRED,
-    },
-)
-_ROW_PROBLEMS: Mapping[str, tuple[str, str, str]] = {
-    BankStatementRow.Decision.DEFERRED: (
+
+@dataclass(frozen=True)
+class _RowProblem:
+    """Kind, action and lazy user-facing reason of one row decision."""
+
+    kind: str
+    action: str
+    reason: Promise
+
+
+#: Lazy literals: makemessages extracts every reason, translation happens
+#: per request, never at import time.
+_ROW_PROBLEMS: Mapping[str, _RowProblem] = {
+    BankStatementRow.Decision.DEFERRED: _RowProblem(
         ProblemKind.DEFERRED,
         ProblemAction.RECONCILE,
-        'Строка отложена и всё ещё ждёт решения',
+        _('Строка отложена и всё ещё ждёт решения'),
     ),
-    BankStatementRow.Decision.AWAITING_MARKUP: (
+    # Legacy value: never written, migrated to ``deferred``.
+    BankStatementRow.Decision.SKIPPED: _RowProblem(
+        ProblemKind.DEFERRED,
+        ProblemAction.RECONCILE,
+        _('Строка отложена и всё ещё ждёт решения'),
+    ),
+    BankStatementRow.Decision.AWAITING_MARKUP: _RowProblem(
         ProblemKind.INCOMPLETE_MARKUP,
         ProblemAction.MARKUP,
-        'Строка выписки ещё не размечена',
+        _('Строка выписки ещё не размечена'),
     ),
-    BankStatementRow.Decision.PENDING: (
+    BankStatementRow.Decision.PENDING: _RowProblem(
         ProblemKind.PROBABLE_DUPLICATE,
         ProblemAction.RECONCILE,
-        'Вероятный дубль ждёт решения; отсутствие движения не доказано',
+        _('Вероятный дубль ждёт решения; отсутствие движения не доказано'),
     ),
-    BankStatementRow.Decision.NEEDS_TRANSFER: (
+    BankStatementRow.Decision.NEEDS_TRANSFER: _RowProblem(
         ProblemKind.REPAYMENT,
         ProblemAction.ACCOUNTS,
-        'Погашение ещё не проведено переводом',
+        _('Погашение ещё не проведено переводом'),
     ),
-    BankStatementRow.Decision.PARSE_ERROR: (
+    BankStatementRow.Decision.PARSE_ERROR: _RowProblem(
         ProblemKind.PARSE_ERROR,
         ProblemAction.RECONCILE,
-        'Операция не разобрана; неизвестные поля не заполнены',
+        _('Операция не разобрана; неизвестные поля не заполнены'),
     ),
 }
+_PENDING_REASON = _('Строка ожидает решения')
 _KIND_ORDER = {kind.value: index for index, kind in enumerate(ProblemKind)}
 _KIND_ZERO = {kind.value: 0 for kind in ProblemKind}
 
@@ -143,23 +157,22 @@ class AccountingProblemService:
         )
         accounts = list(self.repository.owner_accounts(owner.pk))
         items: list[AccountingProblemItem] = []
-        totals = _Totals(values={}, incomplete=False)
         recovery_rows: Counter[int] = Counter()
+        # An exclusion carries no date of its own, so this caveat stays scoped
+        # to the selected accounts, bank and currency only.
         excluded_reasons: Counter[str] = Counter()
-        unresolved = 0
 
+        unresolved: list[tuple[BankStatementRow, str]] = []
         for row in rows:
             decision = row.decision
             if decision == BankStatementRow.Decision.EXCLUDED:
-                excluded_reasons[row.decision_reason or _('Без причины')] += 1
+                reason = row.decision_reason or str(_('Без причины'))
+                excluded_reasons[reason] += 1
                 continue
-            if decision not in _UNRESOLVED_DECISIONS:
+            if decision not in UNRESOLVED_STATEMENT_DECISIONS:
                 continue
-            unresolved += 1
-            self._add_total(totals, row)
-            if decision == BankStatementRow.Decision.EXPIRED or not (
-                row_has_bank_data(row)
-            ):
+            unresolved.append((row, decision))
+            if self._row_is_recovery(row, decision):
                 recovery_rows[row.upload_id] += 1
                 continue
             self._append_row_item(items, row, decision)
@@ -179,12 +192,17 @@ class AccountingProblemService:
             end=end,
         )
 
+        listed_rows = [
+            (row, decision)
+            for row, decision in unresolved
+            if self._row_is_listed(row, decision, active, start, end)
+        ]
         items = self._filtered_items(items, active, start, end)
+        totals = self._totals_from_rows(listed_rows)
         counts = self._counts(
             items,
-            recovery_rows,
+            listed_rows,
             excluded_reasons,
-            unresolved,
         )
         return AccountingProblemList(
             items=tuple(items),
@@ -237,12 +255,8 @@ class AccountingProblemService:
 
     @staticmethod
     def _row_date(row: BankStatementRow) -> date | None:
-        if row.bank_calendar_date is not None:
-            return row.bank_calendar_date
-        moment = row.transaction_date
-        if moment is None:
-            return None
-        return local_calendar_date(moment)
+        """Return the row's bank day, or ``None`` when it has no date."""
+        return statement_row_day(row)
 
     def _append_row_item(
         self,
@@ -250,31 +264,29 @@ class AccountingProblemService:
         row: BankStatementRow,
         decision: str,
     ) -> None:
-        kind: str
-        action: str
-        reason: str
         if decision == BankStatementRow.Decision.PENDING and not (
             self._has_duplicate_evidence(row)
         ):
-            kind, action, reason = (
+            problem = _RowProblem(
                 ProblemKind.UNRESOLVED,
                 ProblemAction.RECONCILE,
-                'Строка ожидает решения',
+                _PENDING_REASON,
             )
         else:
-            kind, action, reason = _ROW_PROBLEMS[decision]
+            problem = _ROW_PROBLEMS[decision]
         items.append(
             self._item(
-                kind=kind,
-                action=action,
+                kind=problem.kind,
+                action=problem.action,
                 upload_id=row.upload_id,
                 row_id=row.pk,
                 upload=row.upload,
                 transaction_date=self._row_date(row),
                 amount=row.amount,
                 description=row.description,
-                reason=_(reason),
+                reason=str(problem.reason),
                 data_available=True,
+                direction=row.transaction_type or '',
             ),
         )
 
@@ -295,9 +307,11 @@ class AccountingProblemService:
                     transaction_date=None,
                     amount=None,
                     description='',
-                    reason=_(
-                        'Банковские данные удалены по сроку; '
-                        'требуется повторная загрузка',
+                    reason=str(
+                        _(
+                            'Банковские данные удалены по сроку; '
+                            'требуется повторная загрузка',
+                        ),
                     ),
                     data_available=False,
                     row_count=recovery_count,
@@ -314,7 +328,9 @@ class AccountingProblemService:
                     transaction_date=None,
                     amount=None,
                     description='',
-                    reason=_('Загрузка выписки завершилась ошибкой'),
+                    reason=str(
+                        _('Загрузка выписки завершилась ошибкой'),
+                    ),
                     data_available=False,
                 ),
             )
@@ -359,10 +375,14 @@ class AccountingProblemService:
                     upload=upload,
                     transaction_date=None,
                     amount=None,
-                    description=_('Расхождение с остатком выписки'),
-                    reason=_(
-                        'Известное необъяснённое расхождение остатка; '
-                        'требуется решение пользователя',
+                    description=str(
+                        _('Расхождение с остатком выписки'),
+                    ),
+                    reason=str(
+                        _(
+                            'Известное необъяснённое расхождение остатка; '
+                            'требуется решение пользователя',
+                        ),
                     ),
                     data_available=True,
                 ),
@@ -383,6 +403,7 @@ class AccountingProblemService:
         reason: str,
         data_available: bool,
         row_count: int = 1,
+        direction: str = '',
     ) -> AccountingProblemItem:
         account = upload.account
         return AccountingProblemItem(
@@ -403,19 +424,62 @@ class AccountingProblemService:
             reason=reason,
             row_count=row_count,
             data_available=data_available,
+            direction=direction,
         )
 
     @staticmethod
-    def _add_total(totals: _Totals, row: BankStatementRow) -> None:
-        if row.amount is None:
-            totals.incomplete = True
-            return
-        direction = row.transaction_type or 'unknown'
-        if row.transaction_type is None:
-            totals.incomplete = True
-        key = (row.upload.account.currency, direction)
-        amount, count = totals.values.get(key, (Decimal(0), 0))
-        totals.values[key] = (amount + row.amount, count + 1)
+    def _row_is_recovery(row: BankStatementRow, decision: str) -> bool:
+        """Tell whether an unresolved row lost its statement details."""
+        return decision == BankStatementRow.Decision.EXPIRED or not (
+            row_has_bank_data(row)
+        )
+
+    def _row_is_listed(
+        self,
+        row: BankStatementRow,
+        decision: str,
+        active: AccountingProblemFilter,
+        start: date | None,
+        end: date | None,
+    ) -> bool:
+        """Apply the page filters to one row, exactly as to its item."""
+        if active.kind and self._row_problem_kind(row, decision) != active.kind:
+            return False
+        recovery = self._row_is_recovery(row, decision)
+        if active.state == ProblemState.RECOVERY and not recovery:
+            return False
+        if active.state == ProblemState.AVAILABLE and recovery:
+            return False
+        day = self._row_date(row)
+        if start is not None and day is not None and day < start:
+            return False
+        return not (end is not None and day is not None and day > end)
+
+    def _row_problem_kind(self, row: BankStatementRow, decision: str) -> str:
+        """Return the problem kind a row contributes to the list."""
+        if self._row_is_recovery(row, decision):
+            return ProblemKind.RECOVERY
+        if decision == BankStatementRow.Decision.PENDING and not (
+            self._has_duplicate_evidence(row)
+        ):
+            return ProblemKind.UNRESOLVED
+        return _ROW_PROBLEMS[decision].kind
+
+    @staticmethod
+    def _totals_from_rows(
+        rows: Sequence[tuple[BankStatementRow, str]],
+    ) -> _Totals:
+        """Sum the listed rows, so totals and the list share one scope."""
+        values: dict[tuple[str, str], tuple[Decimal, int]] = {}
+        incomplete = False
+        for row, _decision in rows:
+            if row.amount is None or not row.transaction_type:
+                incomplete = True
+                continue
+            key = (row.upload.account.currency, row.transaction_type)
+            amount, count = values.get(key, (Decimal(0), 0))
+            values[key] = (amount + row.amount, count + 1)
+        return _Totals(values=values, incomplete=incomplete)
 
     def _filtered_items(
         self,
@@ -464,19 +528,25 @@ class AccountingProblemService:
     @staticmethod
     def _counts(
         items: Sequence[AccountingProblemItem],
-        recovery_rows: Counter[int],
+        listed_rows: Sequence[tuple[BankStatementRow, str]],
         excluded_reasons: Counter[str],
-        unresolved: int,
     ) -> AccountingProblemCounts:
+        """Count only what the page lists, plus the exclusion caveat."""
         by_kind = dict(_KIND_ZERO)
         for item in items:
             by_kind[item.kind] += 1
+        recovery_row_count = sum(
+            item.row_count
+            for item in items
+            if item.kind == ProblemKind.RECOVERY
+        )
+        unresolved_row_count = len(listed_rows)
         return frozen_counts(
             total_items=len(items),
             by_kind=by_kind,
-            recovery_row_count=sum(recovery_rows.values()),
+            recovery_row_count=recovery_row_count,
             excluded_row_count=sum(excluded_reasons.values()),
-            unresolved_row_count=unresolved,
+            unresolved_row_count=unresolved_row_count,
         )
 
     @staticmethod

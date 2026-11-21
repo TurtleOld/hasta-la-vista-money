@@ -79,6 +79,7 @@ class AccountingProblemItem:
     reason: str
     row_count: int
     data_available: bool
+    direction: str = ''
 
 
 @dataclass(frozen=True)
