@@ -187,12 +187,19 @@ def _completion_status(
     empty_parse: bool,
     awaiting_markup: bool,
 ) -> str:
-    """Return the status of a finished run without claiming false coverage."""
+    """Return the status of a finished run without claiming false coverage.
+
+    A pending duplicate or an unperformed credit-card repayment still needs
+    a user decision, so the run is not complete yet.
+    """
     if empty_parse or awaiting_markup:
         return BankStatementUpload.Status.AWAITING_CONFIRMATION
     if BankStatementRow.objects.filter(
         upload=upload,
-        decision=BankStatementRow.Decision.PENDING,
+        decision__in={
+            BankStatementRow.Decision.PENDING,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        },
     ).exists():
         return BankStatementUpload.Status.AWAITING_CONFIRMATION
     return BankStatementUpload.Status.COMPLETED
