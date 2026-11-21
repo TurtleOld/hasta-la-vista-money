@@ -942,6 +942,17 @@ class TestAccountServices(TestCase):
             control.balance.reason,
             BankStatementUpload.BalanceReason.CURRENCY_CHANGED,
         )
+        service.verify(upload)
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.CURRENCY_CHANGED,
+        )
+        self.assertIsNone(upload.balance_discrepancy)
 
     def test_retention_keeps_balance_metadata_without_sums(self) -> None:
         moment = timezone.now() - timedelta(days=2)

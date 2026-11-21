@@ -116,9 +116,15 @@ class StatementBalanceVerificationService:
                 BankStatementRow.Decision.NEEDS_TRANSFER,
             ),
         ).exists()
+        stored_currency = upload.balance_currency
+        currency_changed = bool(stored_currency) and (
+            stored_currency != account.currency
+        )
         reason = ''
         if unresolved:
             reason = BankStatementUpload.BalanceReason.UNRESOLVED_ROWS
+        elif currency_changed:
+            reason = BankStatementUpload.BalanceReason.CURRENCY_CHANGED
         elif closing is None:
             reason = BankStatementUpload.BalanceReason.MISSING_BALANCE
         elif moment is None:
@@ -131,6 +137,7 @@ class StatementBalanceVerificationService:
         explained_by = upload.balance_explained_by
         if (
             not unresolved
+            and not currency_changed
             and closing is not None
             and moment is not None
             and account.currency
@@ -162,7 +169,7 @@ class StatementBalanceVerificationService:
 
         BankStatementUpload.objects.filter(pk=upload.pk).update(
             balance_type=BankStatementUpload.BalanceType.CLOSING,
-            balance_currency=account.currency,
+            balance_currency=stored_currency or account.currency,
             balance_result=result,
             balance_checked_at=now,
             balance_is_actual=(
