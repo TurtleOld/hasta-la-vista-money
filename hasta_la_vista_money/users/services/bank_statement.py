@@ -49,6 +49,7 @@ class StatementParseResult:
         closing_balance_date: Дата конечного остатка, если известна.
         account_number: Номер счёта из шапки выписки, если есть.
         period_start: Начало периода выписки, если известно.
+        period_end: Конец периода выписки, если известно.
         requires_markup: Строки не проводятся до разметки пользователем.
     """
 
@@ -57,6 +58,7 @@ class StatementParseResult:
     closing_balance_date: date_type | None = None
     account_number: str | None = None
     period_start: date_type | None = None
+    period_end: date_type | None = None
     requires_markup: bool = False
 
 
@@ -1311,6 +1313,7 @@ class _RosDorBankParser(BaseBankStatementParser):
             closing_balance_date=self._parse_day(header.group(3)),
             account_number=header.group(1),
             period_start=self._parse_day(header.group(2)),
+            period_end=self._parse_day(header.group(3)),
             requires_markup=True,
         )
 

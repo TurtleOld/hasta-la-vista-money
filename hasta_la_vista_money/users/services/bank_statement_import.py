@@ -58,6 +58,9 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
     )
+    from hasta_la_vista_money.users.protocols.services import (
+        StatementCoverageServiceProtocol,
+    )
     from hasta_la_vista_money.users.services.category_classifier import (
         CategoryClassifier,
     )
@@ -102,10 +105,18 @@ class BankStatementImportService:
         self,
         classifier: CategoryClassifier,
         account_repository: AccountRepository,
+        coverage_service: StatementCoverageServiceProtocol,
     ) -> None:
-        """Инициализировать сервис категоризатором и репозиторием счетов."""
+        """Инициализировать сервис зависимостями импорта.
+
+        Args:
+            classifier: Категоризатор операций.
+            account_repository: Репозиторий счетов.
+            coverage_service: Сервис покрытия периода выписки.
+        """
         self.classifier = classifier
         self.account_repository = account_repository
+        self.coverage_service = coverage_service
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool:
         """Вернуть упавшую или зависшую загрузку в очередь.
@@ -183,6 +194,11 @@ class BankStatementImportService:
 
         if parse_result.requires_markup:
             self._save_markup_rows(upload, transactions)
+            self.coverage_service.record_statement_period(
+                upload,
+                parse_result.period_start,
+                parse_result.period_end,
+            )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,
@@ -209,6 +225,11 @@ class BankStatementImportService:
                 existing_categories=existing_categories,
             )
 
+        self.coverage_service.record_statement_period(
+            upload,
+            parse_result.period_start,
+            parse_result.period_end,
+        )
         return StatementImportResult(
             income_count=income_count,
             expense_count=expense_count,
