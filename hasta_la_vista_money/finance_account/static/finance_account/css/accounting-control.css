@@ -1,0 +1,80 @@
+.statement-control .control-selector {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.statement-control .control-measurements {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.statement-control .control-card {
+  height: 100%;
+}
+
+.statement-control .control-adapter-note {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--finances-muted);
+  font-size: 0.85rem;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+}
+
+.statement-control .control-empty {
+  margin-top: 1rem;
+}
+
+.statement-control .control-counts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.statement-control .control-counts div,
+.statement-control .control-row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--finances-border);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+}
+
+.statement-control .control-counts span {
+  color: var(--finances-muted);
+  font-size: 0.85rem;
+}
+
+.statement-control .control-state {
+  color: var(--finances-text);
+  font-weight: 600;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.statement-control .control-state-ok {
+  color: var(--app-accent);
+}
+
+.statement-control .control-state-muted,
+.statement-control .control-gap {
+  color: var(--finances-muted);
+}
+
+.statement-control .control-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.statement-control .control-coverage-form {
+  border-top: 1px solid var(--finances-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}

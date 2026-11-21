@@ -1,6 +1,6 @@
 """Tests for finance account services."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 from unittest import mock
@@ -11,19 +11,25 @@ from django.test import TestCase
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.factories import (
     AccountFactory,
     TransferMoneyLogFactory,
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    StatementPeriodCoverage,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
 from hasta_la_vista_money.users.factories import UserFactory
-from hasta_la_vista_money.users.models import FamilyGroupMembership
+from hasta_la_vista_money.users.models import (
+    BankStatementRow,
+    BankStatementUpload,
+    FamilyGroupMembership,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
@@ -286,6 +292,368 @@ class TestAccountServices(TestCase):
 
         logs = self.account_service.get_transfer_money_log(self.user1)
         self.assertLessEqual(logs.count(), 10)
+
+    def _upload(
+        self,
+        *,
+        total_transactions: int = 0,
+        account: Account | None = None,
+    ) -> BankStatementUpload:
+        return BankStatementUpload.objects.create(
+            user=self.user1,
+            account=account or self.account1,
+            pdf_file='bank_statements/control.pdf',
+            total_transactions=total_transactions,
+        )
+
+    def _row(
+        self,
+        upload: BankStatementUpload,
+        position: int,
+        *,
+        decision: str = BankStatementRow.Decision.PENDING,
+        exclusion_code: str = '',
+        transaction_date: datetime | None = None,
+        kind: str = '',
+    ) -> BankStatementRow:
+        return BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=transaction_date
+            or datetime(
+                2026,
+                3,
+                10,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            amount=Decimal('100.00'),
+            description='Покупка',
+            source_ref=f'control-{position}',
+            source_row_position=position,
+            decision=decision,
+            exclusion_code=exclusion_code,
+            kind=kind,
+        )
+
+    def test_explicit_statement_period_records_coverage(self) -> None:
+        upload = self._upload()
+        service = self.container.users.statement_coverage_service()
+
+        coverage = service.record_statement_period(
+            upload,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+        summary = service.summary(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        if coverage is None:
+            self.fail('statement period was not recorded')
+        self.assertEqual(
+            coverage.source,
+            StatementPeriodCoverage.Source.BANK_STATEMENT,
+        )
+        self.assertEqual(coverage.author, self.user1)
+        self.assertEqual(coverage.upload, upload)
+        self.assertEqual(summary.state, 'covered')
+        self.assertEqual(len(summary.intervals), 1)
+        self.assertEqual(
+            summary.intervals[0].source_label,
+            'Период банковской выписки',
+        )
+        self.assertEqual(summary.gaps, ())
+
+    def test_coverage_is_not_derived_from_row_dates(self) -> None:
+        upload = self._upload(total_transactions=1)
+        self._row(upload, 1)
+        service = self.container.users.statement_coverage_service()
+
+        summary = service.summary(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        self.assertEqual(summary.state, 'unknown')
+        self.assertEqual(summary.intervals, ())
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(
+                account=self.account1,
+            ).exists(),
+        )
+
+    def test_manual_coverage_marks_cash_period_and_requires_owner(self) -> None:
+        cash: Account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user1,
+                type_account=constants.ACCOUNT_TYPE_CASH,
+            ),
+        )
+        service = self.container.users.statement_coverage_service()
+
+        coverage = service.confirm_manual(
+            self.user1,
+            cash,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(
+            coverage.source,
+            StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+        )
+        self.assertEqual(
+            service.summary(cash, date(2026, 1, 1), date(2026, 1, 31)).state,
+            'covered',
+        )
+        repeated = service.confirm_manual(
+            self.user1,
+            cash,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        self.assertEqual(repeated.pk, coverage.pk)
+        self.assertEqual(
+            StatementPeriodCoverage.objects.filter(account=cash).count(),
+            1,
+        )
+        with self.assertRaises(PermissionDenied):
+            service.confirm_manual(
+                self.user2,
+                cash,
+                date(2026, 2, 1),
+                date(2026, 2, 28),
+            )
+
+    def test_manual_cash_coverage_does_not_close_row_problems(self) -> None:
+        cash: Account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user1,
+                type_account=constants.ACCOUNT_TYPE_CASH,
+            ),
+        )
+        upload = self._upload(account=cash)
+        self._row(
+            upload,
+            1,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            transaction_date=timezone.now(),
+        )
+        start = timezone.localdate().replace(day=1)
+        end = timezone.localdate()
+        coverage_service = self.container.users.statement_coverage_service()
+        coverage_service.confirm_manual(self.user1, cash, start, end)
+
+        control = self.container.users.accounting_control_service().build(
+            cash,
+            start,
+            end,
+        )
+
+        self.assertEqual(control.coverage.state, 'covered')
+        self.assertEqual(control.rows.awaiting_markup, 1)
+        self.assertFalse(control.balance.checked)
+
+    def test_coverage_distinguishes_unknown_partial_and_empty(self) -> None:
+        service = self.container.users.statement_coverage_service()
+        period = (date(2026, 5, 1), date(2026, 5, 20))
+
+        unknown = service.summary(self.account1, *period)
+        empty_upload = self._upload(total_transactions=0)
+        service.record_statement_period(
+            empty_upload,
+            date(2026, 5, 1),
+            date(2026, 5, 20),
+        )
+        empty = service.summary(self.account1, *period)
+        service.confirm_manual(
+            self.user1,
+            self.account1,
+            date(2026, 5, 24),
+            date(2026, 5, 25),
+        )
+        partial = service.summary(
+            self.account1,
+            date(2026, 5, 1),
+            date(2026, 5, 25),
+        )
+
+        self.assertEqual(unknown.state, 'unknown')
+        self.assertEqual(empty.state, 'covered')
+        self.assertTrue(empty.intervals[0].has_no_rows)
+        self.assertEqual(partial.state, 'partial')
+        self.assertEqual(len(partial.gaps), 1)
+        self.assertEqual(partial.gaps[0].period_start, date(2026, 5, 21))
+        self.assertEqual(partial.gaps[0].period_end, date(2026, 5, 23))
+
+    def test_control_includes_unknown_period_upload_by_historical_rows(
+        self,
+    ) -> None:
+        upload = self._upload(total_transactions=2)
+        self._row(
+            upload,
+            1,
+            transaction_date=datetime(
+                2026,
+                1,
+                10,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        unknown_date = self._row(upload, 2)
+        BankStatementRow.objects.filter(pk=unknown_date.pk).update(
+            transaction_date=None,
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(len(control.uploads), 1)
+        self.assertEqual(control.rows.pending, 2)
+        self.assertEqual(control.coverage.state, 'unknown')
+
+    def test_control_excludes_empty_unknown_period_upload(self) -> None:
+        self._upload()
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(control.uploads, ())
+
+    def test_coverage_gaps_handle_maximum_date(self) -> None:
+        service = self.container.users.statement_coverage_service()
+        service.confirm_manual(
+            self.user1,
+            self.account1,
+            date(9999, 12, 1),
+            date(9999, 12, 31),
+        )
+
+        summary = service.summary(
+            self.account1,
+            date(9999, 12, 1),
+            date(9999, 12, 31),
+        )
+
+        self.assertEqual(summary.state, 'covered')
+        self.assertEqual(summary.gaps, ())
+
+    def test_control_scopes_row_problems_to_the_selected_period(self) -> None:
+        upload = self._upload(total_transactions=2)
+        coverage_service = self.container.users.statement_coverage_service()
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        self._row(
+            upload,
+            1,
+            transaction_date=datetime(
+                2026,
+                1,
+                5,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        self._row(
+            upload,
+            2,
+            transaction_date=datetime(
+                2026,
+                2,
+                5,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(control.rows.pending, 1)
+
+    def test_control_keeps_rows_exclusions_and_balance_separate(self) -> None:
+        upload = self._upload(total_transactions=2)
+        coverage_service = self.container.users.statement_coverage_service()
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+        self._row(upload, 1)
+        self._row(
+            upload,
+            2,
+            decision=BankStatementRow.Decision.SKIPPED,
+            exclusion_code=BankStatementRow.ExclusionCode.NON_FINANCIAL_BANK_RECORD,
+        )
+        self._row(
+            upload,
+            3,
+            decision=BankStatementRow.Decision.SKIPPED,
+        )
+        self._row(
+            upload,
+            4,
+            decision=BankStatementRow.Decision.EXPIRED,
+        )
+        control_service = self.container.users.accounting_control_service()
+
+        control = control_service.build(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        self.assertEqual(control.coverage.state, 'covered')
+        self.assertEqual(control.rows.pending, 1)
+        self.assertEqual(control.rows.legacy_skips, 1)
+        self.assertEqual(control.rows.expired, 1)
+        self.assertEqual(len(control.exclusions), 1)
+        self.assertFalse(control.balance.checked)
+        self.assertEqual(control.balance.label, 'Не проверено')
+
+    def test_control_does_not_treat_availability_or_adapter_as_coverage(
+        self,
+    ) -> None:
+        upload = self._upload()
+        service = self.container.users.accounting_control_service()
+        start = timezone.localdate().replace(day=1)
+        end = timezone.localdate()
+
+        control = service.build(self.account1, start, end)
+
+        if not control.uploads:
+            self.fail('upload is missing from the control period')
+        self.assertTrue(control.uploads[0].data_available)
+        self.assertFalse(control.uploads[0].has_markup_rows)
+        self.assertIn('Не покрыт', control.uploads[0].markup_label)
+        self.assertEqual(control.coverage.state, 'unknown')
+
+        self._row(
+            upload,
+            1,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            kind='card',
+        )
+        control = service.build(self.account1, start, end)
+
+        self.assertTrue(control.uploads[0].has_markup_rows)
+        self.assertEqual(control.coverage.state, 'unknown')
 
 
 class TestTransferService(TestCase):

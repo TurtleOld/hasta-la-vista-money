@@ -12,18 +12,26 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
 from hasta_la_vista_money.users.protocols.services import (
+    AccountingControlServiceProtocol,
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    StatementCoverageServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
     UserStatisticsServiceProtocol,
+)
+from hasta_la_vista_money.users.repositories.statement_coverage_repository import (  # noqa: E501
+    StatementCoverageRepository,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     StatementRowRepository,
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
+)
+from hasta_la_vista_money.users.services.accounting_control import (
+    AccountingControlService,
 )
 from hasta_la_vista_money.users.services.bank_statement_import import (
     BankStatementImportService,
@@ -38,6 +46,9 @@ from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     ExternalModelCategoryClassifier,
     NoopClassifier,
+)
+from hasta_la_vista_money.users.services.statement_coverage import (
+    StatementCoverageService,
 )
 from hasta_la_vista_money.users.services.statement_markup import (
     StatementMarkupService,
@@ -104,6 +115,23 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(BankStatementReconciliationService)
 
     statement_row_repository = providers.Singleton(StatementRowRepository)
+    statement_coverage_repository = providers.Singleton(
+        StatementCoverageRepository,
+    )
+
+    statement_coverage_service: providers.Factory[
+        StatementCoverageServiceProtocol
+    ] = providers.Factory(
+        StatementCoverageService,
+        coverage_repository=statement_coverage_repository,
+    )
+
+    accounting_control_service: providers.Factory[
+        AccountingControlServiceProtocol
+    ] = providers.Factory(
+        AccountingControlService,
+        coverage_service=statement_coverage_service,
+    )
 
     statement_row_link_service: providers.Factory[
         StatementRowLinkServiceProtocol
@@ -138,4 +166,5 @@ class UsersContainer(containers.DeclarativeContainer):
         BankStatementImportService,
         classifier=category_classifier,
         account_repository=providers.Singleton(AccountRepository),
+        coverage_service=statement_coverage_service,
     )

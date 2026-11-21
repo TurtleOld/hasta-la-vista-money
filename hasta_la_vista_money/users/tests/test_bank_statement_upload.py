@@ -1,7 +1,7 @@
 """Tests for bank statement upload functionality."""
 
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
@@ -22,7 +22,10 @@ from faker import Faker
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    StatementPeriodCoverage,
+)
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.models import (
@@ -1575,6 +1578,37 @@ class TestBankStatementReconciliationView(TestCase):
         self.row.refresh_from_db()
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
 
+    def test_control_does_not_treat_coverage_or_balance_as_row_resolution(
+        self,
+    ) -> None:
+        today = timezone.localdate()
+        coverage_service = (
+            ApplicationContainer().users.statement_coverage_service()
+        )
+        coverage_service.record_statement_period(
+            self.upload,
+            today.replace(day=1),
+            today,
+        )
+        self.upload.balance_discrepancy = Decimal('120.00')
+        self.upload.save(update_fields=['balance_discrepancy'])
+
+        params: dict[str, str | int] = {
+            'account': self.account.pk,
+            'period_start': today.replace(day=1).isoformat(),
+            'period_end': today.isoformat(),
+        }
+        response = self.client.get(
+            reverse('finance_account:accounting_control'),
+            params,
+        )
+
+        control = response.context['control']
+        self.assertEqual(control.coverage.state, 'covered')
+        self.assertEqual(control.rows.pending, 1)
+        self.assertFalse(control.balance.checked)
+        self.assertContains(response, 'Не проверено')
+
 
 class TestBankStatementUploadHistory(TestCase):
     fixtures: list[str] = ['users.yaml']
@@ -1718,6 +1752,125 @@ class TestBankStatementUploadHistory(TestCase):
         )
         self.assertEqual(list(second.context['upload_history']), [uploads[0]])
         self.assertContains(first, '?page=2')
+
+    def _control_response(self) -> Any:
+        today = timezone.localdate()
+        params: dict[str, str | int] = {
+            'account': self.account.pk,
+            'period_start': today.replace(day=1).isoformat(),
+            'period_end': today.isoformat(),
+        }
+        return self.client.get(
+            reverse('finance_account:accounting_control'),
+            params,
+        )
+
+    def test_control_shows_technical_processing_separately_from_rows(
+        self,
+    ) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-technical.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('15.00'),
+            description='Обед',
+            source_ref='control-technical',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+
+        response = self._control_response()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Завершено')
+        self.assertContains(response, 'Техническая обработка')
+        self.assertEqual(response.context['control'].rows.pending, 1)
+        self.assertEqual(response.context['control'].coverage.state, 'unknown')
+        self.assertContains(response, 'Неизвестен')
+
+    def test_control_marks_upload_without_updated_adapter_as_not_covered(
+        self,
+    ) -> None:
+        BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-adapter.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+
+        response = self._control_response()
+
+        control = response.context['control']
+        self.assertFalse(control.uploads[0].has_markup_rows)
+        self.assertIn('Не покрыт этим срезом', control.uploads[0].markup_label)
+        self.assertContains(response, 'Не покрыт этим срезом')
+
+    def test_control_lists_confirmed_exclusion_as_a_caveat(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-exclusion.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('1.00'),
+            description='Не операция',
+            source_ref='control-exclusion',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.SKIPPED,
+            exclusion_code=BankStatementRow.ExclusionCode.NON_FINANCIAL_BANK_RECORD,
+        )
+
+        response = self._control_response()
+
+        control = response.context['control']
+        self.assertEqual(len(control.exclusions), 1)
+        self.assertEqual(control.rows.legacy_skips, 0)
+        self.assertContains(response, 'оговорки полноты')
+        self.assertContains(response, 'Нефинансовая запись банка')
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
+    def test_import_records_explicit_statement_period_coverage(
+        self,
+        parser_class: MagicMock,
+    ) -> None:
+        parser_class.return_value.parse.return_value = StatementParseResult(
+            transactions=[],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+            requires_markup=True,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-period.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        ApplicationContainer().users.bank_statement_import_service().import_statement(
+            upload,
+        )
+
+        coverage = StatementPeriodCoverage.objects.get(upload=upload)
+        self.assertEqual(coverage.period_start, date(2026, 3, 1))
+        self.assertEqual(coverage.period_end, date(2026, 3, 31))
+        self.assertEqual(
+            coverage.source,
+            StatementPeriodCoverage.Source.BANK_STATEMENT,
+        )
+        self.assertEqual(coverage.author, self.user)
 
 
 class TestBankStatementParser(TestCase):

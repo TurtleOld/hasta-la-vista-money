@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+{% load word_hash %}
+
+{% block title %}{% translate 'Контроль учёта' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'transactions/css/transactions.css' %}">
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finance_account/css/bank-statement.css' %}?v={% word_hash %}">
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finance_account/css/accounting-control.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="finances-app statement-upload statement-control">
+    <div class="finances-wrap">
+        <header class="finances-header">
+            <div>
+                <div class="finances-kicker">{% translate 'Финансы' %}</div>
+                <h1 class="finances-title">{% translate 'Контроль учёта' %}</h1>
+                <p class="finances-muted mt-3">{% translate 'Техническая обработка, разрешение строк, доступность банковских данных, покрытие и проверка остатка показываются раздельно.' %}</p>
+            </div>
+            <div class="finances-actions">
+                <a href="{% url 'finances' %}" class="finances-button finances-button-secondary">
+                    {% translate 'Назад к финансам' %}
+                </a>
+                <a href="{% url 'finance_account:bank_statement_upload' %}" class="finances-button finances-button-secondary">
+                    {% translate 'Загрузить выписку' %}
+                </a>
+            </div>
+        </header>
+
+        <section class="composer-card">
+            <div class="composer-hd">
+                <h2>{% translate 'Счёт и период' %}</h2>
+            </div>
+            <form method="get" class="statement-form control-selector">
+                {% if request.GET.group_id %}
+                    <input type="hidden" name="group_id" value="{{ request.GET.group_id }}">
+                {% endif %}
+                <div class="statement-field">
+                    <label for="control-account">{% translate 'Счёт' %}</label>
+                    <select id="control-account" name="account" class="statement-select">
+                        <option value="">{% translate 'Выберите счёт' %}</option>
+                        {% for account in accounts %}
+                            <option value="{{ account.pk }}" {% if selected_account and selected_account.pk == account.pk %}selected{% endif %}>{{ account.name_account }} · {{ account.currency }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="statement-field">
+                    <label for="control-period-start">{% translate 'Начало периода' %}</label>
+                    <input id="control-period-start" type="date" name="period_start" value="{{ period_start|date:'Y-m-d' }}" class="statement-select">
+                </div>
+                <div class="statement-field">
+                    <label for="control-period-end">{% translate 'Конец периода' %}</label>
+                    <input id="control-period-end" type="date" name="period_end" value="{{ period_end|date:'Y-m-d' }}" class="statement-select">
+                </div>
+                <button type="submit" class="finances-button finances-button-primary">{% translate 'Показать' %}</button>
+            </form>
+        </section>
+
+        {% if not selected_account %}
+            <section class="composer-card control-empty">
+                <p class="statement-help">{% translate 'Выберите счёт и период, чтобы увидеть контроль учёта.' %}</p>
+            </section>
+        {% else %}
+            <p class="control-adapter-note">{{ control.adapter_note }}</p>
+
+            <div class="control-measurements">
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Техническая обработка' %}</h2>
+                    </div>
+                    <p class="statement-help">{% translate 'Статус прогона не разрешает строки и не подтверждает покрытие. Метка строк не подтверждает банковский адаптер.' %}</p>
+                    {% for item in control.uploads %}
+                        <div class="statement-history-row">
+                            <div>
+                                <p class="finances-row-title">{{ item.upload.get_status_display }}</p>
+                                <p class="statement-help">{{ item.upload.created_at|date:'d.m.Y H:i' }} · {{ item.markup_label }}</p>
+                            </div>
+                            <div class="finances-row-sub">{{ item.upload.progress }}%</div>
+                        </div>
+                    {% empty %}
+                        <p class="statement-help">{% translate 'Загрузок за выбранный период нет. Это не доказывает полноту обработки.' %}</p>
+                    {% endfor %}
+                </section>
+
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Разрешение строк' %}</h2>
+                    </div>
+                    <p class="statement-help">{% translate 'Отложенные строки остаются нерешёнными в этом списке и не создают отдельного экрана или напоминаний.' %}</p>
+                    <div class="control-counts">
+                        <div><span>{% translate 'Ожидают разметки' %}</span><strong>{{ control.rows.awaiting_markup }}</strong></div>
+                        <div><span>{% translate 'Ожидают решения' %}</span><strong>{{ control.rows.pending }}</strong></div>
+                        <div><span>{% translate 'Нужен перевод' %}</span><strong>{{ control.rows.needs_transfer }}</strong></div>
+                        <div><span>{% translate 'Решены' %}</span><strong>{{ control.rows.resolved }}</strong></div>
+                        <div><span>{% translate 'Требует проверки (легаси-пропуски)' %}</span><strong>{{ control.rows.legacy_skips }}</strong></div>
+                        <div><span>{% translate 'Срок решения истёк' %}</span><strong>{{ control.rows.expired }}</strong></div>
+                    </div>
+                    <p class="statement-help">{% translate 'Строки с неизвестной датой учитываются консервативно во всех выбранных периодах.' %}</p>
+                    {% if can_write %}
+                        {% for item in control.uploads %}
+                            {% if item.data_available %}
+                                <div class="control-links">
+                                    {% if item.awaiting_markup %}
+                                        <a class="finances-button finances-button-primary" href="{% url 'finance_account:bank_statement_markup' item.upload.pk %}">{% blocktranslate with count=item.awaiting_markup %}Разметить ({{ count }}){% endblocktranslate %}</a>
+                                    {% else %}
+                                        <a class="finances-button finances-button-secondary" href="{% url 'finance_account:bank_statement_reconciliation' item.upload.pk %}">{% translate 'Открыть сверку' %}</a>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="statement-help">{% translate 'Решения по строкам принимает только владелец счёта.' %}</p>
+                    {% endif %}
+                </section>
+
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Доступность банковских данных' %}</h2>
+                    </div>
+                    <p class="statement-help">{% translate 'Срок хранения банковских данных не является решением по строке, исключением или покрытием.' %}</p>
+                    {% for item in control.uploads %}
+                        <div class="control-row">
+                            <span>{{ item.upload.created_at|date:'d.m.Y' }}</span>
+                            <span class="control-state {% if item.data_available %}control-state-ok{% else %}control-state-muted{% endif %}">{{ item.data_label }}</span>
+                        </div>
+                    {% empty %}
+                        <p class="statement-help">{% translate 'Банковских данных за выбранный период нет.' %}</p>
+                    {% endfor %}
+                </section>
+
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Покрытие периода' %}</h2>
+                    </div>
+                    <p class="control-state">{{ control.coverage.state_label }}</p>
+                    <p class="statement-help">{% translate 'Границы берутся только из явного периода выписки или ручного подтверждения. Минимум и максимум операций покрытием не являются.' %}</p>
+                    <p class="statement-help">{% translate 'Пустой разбор сам по себе не доказывает отсутствие банковских операций.' %}</p>
+                    {% for interval in control.coverage.intervals %}
+                        <div class="control-row">
+                            <span>{{ interval.period_start|date:'d.m.Y' }} — {{ interval.period_end|date:'d.m.Y' }}</span>
+                            <span class="finances-row-sub">{{ interval.source_label }}{% if interval.author %} · {{ interval.author.username }}{% endif %}{% if interval.has_no_rows %} · {% translate 'Строк нет' %}{% endif %}</span>
+                        </div>
+                    {% endfor %}
+                    {% for gap in control.coverage.gaps %}
+                        <div class="control-row control-gap">
+                            <span>{{ gap.period_start|date:'d.m.Y' }} — {{ gap.period_end|date:'d.m.Y' }}</span>
+                            <span class="finances-row-sub">{% translate 'Разрыв покрытия' %}</span>
+                        </div>
+                    {% endfor %}
+                    {% if can_write %}
+                        <form method="post" class="statement-form control-coverage-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="account" value="{{ selected_account.pk }}">
+                            {% if request.GET.group_id %}<input type="hidden" name="group_id" value="{{ request.GET.group_id }}">{% endif %}
+                            <p class="statement-help">{% translate 'Ручное подтверждение не является банковской выпиской и не закрывает проблемы строк.' %}</p>
+                            <div class="statement-field">
+                                <label for="{{ coverage_form.period_start.id_for_label }}">{{ coverage_form.period_start.label }}</label>
+                                {{ coverage_form.period_start }}
+                                {% for error in coverage_form.period_start.errors %}<p class="statement-field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                            <div class="statement-field">
+                                <label for="{{ coverage_form.period_end.id_for_label }}">{{ coverage_form.period_end.label }}</label>
+                                {{ coverage_form.period_end }}
+                                {% for error in coverage_form.period_end.errors %}<p class="statement-field-error">{{ error }}</p>{% endfor %}
+                            </div>
+                            {% for error in coverage_form.non_field_errors %}<p class="statement-field-error">{{ error }}</p>{% endfor %}
+                            <button type="submit" class="finances-button finances-button-secondary">{% translate 'Подтвердить период' %}</button>
+                        </form>
+                    {% else %}
+                        <p class="statement-help">{% translate 'Подтверждать покрытие может только владелец счёта.' %}</p>
+                    {% endif %}
+                </section>
+
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Исключения и оговорки полноты' %}</h2>
+                    </div>
+                    <p class="statement-help">{% translate 'Исключение — оговорка полноты, а не решённая проблема строки и не доказательство полноты.' %}</p>
+                    {% for row in control.exclusions %}
+                        <div class="statement-history-row">
+                            <div>
+                                <p class="finances-row-title">{{ row.get_exclusion_code_display }}</p>
+                                <p class="statement-help">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.decided_at|date:'d.m.Y H:i' }}</p>
+                            </div>
+                            <div class="finances-row-amount">{{ row.amount|floatformat:2 }} {{ selected_account.currency }}</div>
+                        </div>
+                    {% empty %}
+                        <p class="statement-help">{% translate 'Оговорки полноты' %}: {% translate 'подтверждённых исключений нет.' %}</p>
+                    {% endfor %}
+                </section>
+
+                <section class="composer-card control-card">
+                    <div class="composer-hd">
+                        <h2>{% translate 'Проверка остатка' %}</h2>
+                    </div>
+                    <p class="control-state">{{ control.balance.label }}</p>
+                    <p class="statement-help">{{ control.balance.detail }}</p>
+                </section>
+            </div>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}
