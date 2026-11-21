@@ -49,7 +49,9 @@ class StatementCoverageRepository:
         A repeated parse of the same statement whose explicit period changed
         supersedes the previous bounds of that upload. The old record stays
         for history with an actuality flag and a revision reason; only
-        actual coverage is summarised.
+        actual coverage is summarised. Returning to previously confirmed
+        bounds reactivates that exact record, so A -> B -> A ends with only
+        A actual and B kept as history.
         """
         if upload is not None:
             StatementPeriodCoverage.objects.filter(
@@ -66,7 +68,7 @@ class StatementCoverageRepository:
                     StatementPeriodCoverage.RevisionReason.PERIOD_REVISED
                 ),
             )
-        coverage, _ = StatementPeriodCoverage.objects.get_or_create(
+        coverage, created = StatementPeriodCoverage.objects.get_or_create(
             account_id=account_id,
             upload=upload,
             source=source,
@@ -74,4 +76,11 @@ class StatementCoverageRepository:
             period_end=period_end,
             defaults={'author': author},
         )
+        if not created and (not coverage.is_actual or coverage.revision_reason):
+            StatementPeriodCoverage.objects.filter(pk=coverage.pk).update(
+                is_actual=True,
+                revision_reason='',
+            )
+            coverage.is_actual = True
+            coverage.revision_reason = ''
         return coverage

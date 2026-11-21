@@ -12,14 +12,14 @@ def mark_legacy_uploads(apps, _schema_editor):
     processing. Only an upload without any row evidence, or with legacy
     ``skipped`` rows that have no controlled exclusion code, is marked as
     requiring review. No rows, coverage, movements or money are created or
-    changed, and an upload cleaned by the applied retention migration is
-    left alone because its data cannot be restored.
+    changed. A cleaned upload is marked too: cleanup removed its bank data,
+    but it still does not prove completeness. Its retention timestamp, PDF
+    reference, amounts and row count stay exactly as they were.
     """
     upload_model = apps.get_model('users', 'BankStatementUpload')
     row_model = apps.get_model('users', 'BankStatementRow')
     candidates = upload_model.objects.filter(
         status__in=_TERMINAL_STATUSES,
-        retention_cleaned_at__isnull=True,
     )
     upload_model.objects.filter(pk__in=candidates.values('pk')).exclude(
         pk__in=row_model.objects.values('upload_id'),

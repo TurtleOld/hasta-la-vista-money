@@ -1639,6 +1639,49 @@ class CoverageRevisionTest(TestCase):
         self.assertTrue(manual.is_actual)
         self.assertEqual(manual.revision_reason, '')
 
+    def test_returning_period_reactivates_exact_record(self) -> None:
+        first = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        second = self.service.record_statement_period(
+            self.upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        if first is None or second is None:
+            self.fail('an explicit period must record coverage')
+        repeated = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        if repeated is None:
+            self.fail('a repeated explicit period must record coverage')
+
+        self.assertEqual(repeated.pk, first.pk)
+        self.assertTrue(repeated.is_actual)
+        self.assertEqual(repeated.revision_reason, '')
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertTrue(first.is_actual)
+        self.assertFalse(second.is_actual)
+        self.assertEqual(
+            second.revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        summary = self.service.summary(
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 2, 28),
+        )
+        self.assertEqual(len(summary.intervals), 1)
+        self.assertEqual(summary.intervals[0].period_start, date(2026, 1, 1))
+        self.assertEqual(summary.intervals[0].period_end, date(2026, 1, 31))
+        self.assertEqual(len(summary.gaps), 1)
+        self.assertEqual(summary.gaps[0].period_start, date(2026, 2, 1))
+
 
 class LegacyCompatibilityMigrationTest(TransactionTestCase):
     """The expand/backfill marks only unproved legacy completeness."""
@@ -1721,6 +1764,8 @@ class LegacyCompatibilityMigrationTest(TransactionTestCase):
             pdf_file='cleaned.pdf',
             status='completed',
             total_transactions=3,
+            statement_closing_balance=Decimal('500.00'),
+            balance_discrepancy=Decimal('5.00'),
             retention_cleaned_at=WHEN,
         )
         pending = upload_model.objects.create(
@@ -1761,9 +1806,25 @@ class LegacyCompatibilityMigrationTest(TransactionTestCase):
             BankStatementUpload.objects.get(pk=with_row.pk).legacy_review_state,
             BankStatementUpload.LegacyReviewState.NOT_REQUIRED,
         )
+        cleaned_upload = BankStatementUpload.objects.get(pk=cleaned.pk)
         self.assertEqual(
-            BankStatementUpload.objects.get(pk=cleaned.pk).legacy_review_state,
-            BankStatementUpload.LegacyReviewState.NOT_REQUIRED,
+            cleaned_upload.legacy_review_state,
+            BankStatementUpload.LegacyReviewState.REQUIRES_REVIEW,
+        )
+        self.assertEqual(
+            cleaned_upload.legacy_review_reason,
+            BankStatementUpload.LegacyReviewReason.NO_ROW_EVIDENCE,
+        )
+        self.assertEqual(cleaned_upload.retention_cleaned_at, WHEN)
+        self.assertEqual(cleaned_upload.pdf_file.name, 'cleaned.pdf')
+        self.assertEqual(cleaned_upload.total_transactions, 3)
+        self.assertEqual(
+            cleaned_upload.statement_closing_balance,
+            Decimal('500.00'),
+        )
+        self.assertEqual(
+            cleaned_upload.balance_discrepancy,
+            Decimal('5.00'),
         )
         self.assertEqual(
             BankStatementUpload.objects.get(pk=pending.pk).legacy_review_state,
@@ -1826,6 +1887,10 @@ class LegacyReviewVisibilityTest(TestCase):
         self.assertEqual(summary.coverage.state, 'unknown')
         self.assertEqual(summary.rows.resolved, 0)
         self.assertFalse(summary.balance.checked)
+        self.assertIn('ручной', summary.adapter_note)
+        self.assertNotIn('HMAC', summary.adapter_note)
+        self.assertNotIn('фикстур', summary.adapter_note)
+        self.assertNotIn('production', summary.adapter_note)
 
 
 class TransferAuditProvenanceRetentionTest(TestCase):
