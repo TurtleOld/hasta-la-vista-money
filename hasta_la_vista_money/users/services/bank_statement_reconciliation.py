@@ -430,10 +430,12 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.EXPIRED,
             0,
         )
-        upload.imported_count = (
-            upload.income_count
-            + upload.expense_count
-            + counts.get(BankStatementRow.Decision.NEW, 0)
+        # Auto-posted rows and manual markup rows both count as one movement:
+        # an auto-posted row is also present in income_count/expense_count,
+        # so the larger of the two measures avoids counting it twice.
+        upload.imported_count = max(
+            upload.income_count + upload.expense_count,
+            counts.get(BankStatementRow.Decision.NEW, 0),
         )
         upload.save(
             update_fields=[

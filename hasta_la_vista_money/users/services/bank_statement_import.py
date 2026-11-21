@@ -12,8 +12,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.db import IntegrityError, transaction
@@ -59,8 +60,6 @@ from hasta_la_vista_money.users.services.statement_identity import (
 )
 
 if TYPE_CHECKING:
-    from decimal import Decimal
-
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
@@ -74,6 +73,15 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
+
+
+def _is_unparsed(trans: dict[str, Any]) -> bool:
+    """Return whether a parsed entry lacks data needed for a movement."""
+    return bool(
+        trans.get('parse_issue')
+        or trans.get('amount') is None
+        or trans.get('date') is None,
+    )
 
 
 @dataclass(frozen=True)
@@ -285,6 +293,7 @@ class BankStatementImportService:
         expense_count = upload.expense_count
         skipped_count = upload.skipped_count
         needs_transfer_count = upload.needs_transfer_count
+        failed_count = upload.failed_count
         resume_from = upload.processed_transactions
         batch_size = 10
         total = len(transactions)
@@ -301,39 +310,57 @@ class BankStatementImportService:
         format_version = (
             parse_result.format_version if parse_result is not None else 1
         )
+        is_raiffeisen = bank == 'raiffeisen'
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:
-                row_date = (
-                    trans['date'].date()
-                    if isinstance(trans['date'], datetime)
-                    else trans['date']
+                row_date = trans.get('date')
+                if row_date is None:
+                    continue
+                row_day = (
+                    row_date.date()
+                    if isinstance(row_date, datetime)
+                    else row_date
                 )
-                period_from = min(period_from or row_date, row_date)
-                period_to = max(period_to or row_date, row_date)
+                period_from = min(period_from or row_day, row_day)
+                period_to = max(period_to or row_day, row_day)
                 continue
-            amount = trans['amount']
-            description = trans['description']
-            trans_date = trans['date']
+            amount = trans.get('amount')
+            description = str(trans.get('description') or '')
+            trans_date = trans.get('date')
+            unparsed = _is_unparsed(trans)
             source_ref = trans.get('source_ref')
             row_position = trans.get('row_position', idx)
             source = trans.get('source')
-            abs_amount = abs(amount)
+            abs_amount = abs(amount) if amount is not None else None
             match_calendar_date = source == 'ozon' or bank == 'ozon'
             is_credit_income = (
-                amount > 0
+                amount is not None
+                and amount > 0
                 and upload.account.type_account
                 in constants.CREDIT_ACCOUNT_TYPES
             )
-            if amount > 0:
-                type_value = TransactionType.INCOME
-                balance_change = abs_amount
-            else:
-                type_value = TransactionType.EXPENSE
-                balance_change = -abs_amount
+            # The unparsed branch below never posts money; the casts keep
+            # the money path typed after partial rows were separated.
+            type_value = ''
+            balance_change: Decimal = Decimal(0)
+            if amount is not None:
+                type_value = (
+                    TransactionType.INCOME
+                    if amount > 0
+                    else TransactionType.EXPENSE
+                )
+                balance_change = (
+                    cast('Decimal', abs_amount)
+                    if amount > 0
+                    else -cast('Decimal', abs_amount)
+                )
+            amount = cast('Decimal', amount)
+            trans_date = cast('datetime', trans_date)
+            abs_amount = cast('Decimal', abs_amount)
 
             exact = None
-            if source_ref not in ambiguous_refs:
+            if not unparsed and source_ref not in ambiguous_refs:
                 exact = self._find_exact_observation(
                     upload=upload,
                     bank=bank,
@@ -351,11 +378,14 @@ class BankStatementImportService:
                 )
 
             # The classifier is a network call: keep it out of the row
-            # transaction so a slow model does not hold it open.
+            # transaction so a slow model does not hold it open. A
+            # Raiffeisen row is only posted by a closed local rule.
             category_name = trans.get('category_name')
             if (
                 category_name is None
+                and not unparsed
                 and not is_credit_income
+                and not is_raiffeisen
                 and not (exact is not None and not exact.conflict)
             ):
                 category_name = self._classify_category(
@@ -371,10 +401,11 @@ class BankStatementImportService:
                     expense_count = upload.expense_count
                     skipped_count = upload.skipped_count
                     needs_transfer_count = upload.needs_transfer_count
+                    failed_count = upload.failed_count
                     continue
                 upload = self._lock_account(upload)
                 exact = None
-                if source_ref not in ambiguous_refs:
+                if not unparsed and source_ref not in ambiguous_refs:
                     exact = self._find_exact_observation(
                         upload=upload,
                         bank=bank,
@@ -390,7 +421,26 @@ class BankStatementImportService:
                             'weak',
                         ),
                     )
-                if is_credit_income:
+                if is_raiffeisen and not unparsed and exact is None:
+                    existing_row = BankStatementRow.objects.filter(
+                        upload=upload,
+                        source_row_position=row_position,
+                    ).first()
+                    if (
+                        existing_row is not None
+                        and existing_row.transaction_id is not None
+                    ):
+                        exact = ExactObservation(row=existing_row)
+                if unparsed:
+                    self._save_unparsed_row(
+                        upload=upload,
+                        trans=trans,
+                        row_position=row_position,
+                        bank=bank,
+                        format_version=format_version,
+                    )
+                    failed_count += 1
+                elif is_credit_income:
                     self._save_needs_transfer_row(
                         upload=upload,
                         trans=trans,
@@ -422,95 +472,142 @@ class BankStatementImportService:
                         skipped_count += 1
                 else:
                     row_category = str(category_name or FALLBACK_CATEGORY)
-                    candidates = self._rank_probable_candidates(
-                        account=upload.account,
-                        user=upload.user,
-                        type_value=type_value,
-                        abs_amount=abs_amount,
-                        trans_date=trans_date,
-                        match_calendar_date=match_calendar_date,
-                        description=strip_pii(str(description)),
-                        current_file_hash=upload.file_hash,
-                    )
-                    if candidates:
-                        self._save_probable_duplicate(
-                            upload=upload,
-                            trans=trans,
-                            candidates=candidates,
-                            type_value=type_value,
-                            row_position=row_position,
-                            category_name=row_category,
-                            match_calendar_date=match_calendar_date,
-                        )
-                        skipped_count += 1
-                    else:
-                        if row_category not in existing_categories:
-                            existing_categories.append(row_category)
-                        category, _created_category = (
-                            Category.objects.get_or_create(
-                                user=upload.user,
-                                name=row_category[
-                                    : constants.TWO_HUNDRED_FIFTY
-                                ],
-                                type=type_value,
-                            )
-                        )
-                        fingerprint = self._fingerprint(
+                    if is_raiffeisen and (
+                        category_name is None
+                        or source_ref in ambiguous_refs
+                        or self._has_unresolved_observation(
                             upload=upload,
                             bank=bank,
                             source_ref=source_ref,
-                        )
-                        Transaction.objects.create(
-                            user=upload.user,
-                            account=upload.account,
-                            category=category,
-                            type=type_value,
+                            type_value=type_value,
                             amount=abs_amount,
-                            date=trans_date,
-                            description=strip_pii(str(description))[:250],
-                            source_ref=source_ref or None,
-                            source_file_hash=(
-                                upload.file_hash if not source_ref else None
+                            trans_date=trans_date,
+                        )
+                    ):
+                        self._save_observation_row(
+                            upload=upload,
+                            trans=trans,
+                            row_position=row_position,
+                            type_value=type_value,
+                            fingerprint=self._fingerprint(
+                                upload=upload,
+                                bank=bank,
+                                source_ref=source_ref,
                             ),
-                            source_row_position=(
-                                row_position if not source_ref else None
-                            ),
-                            source_format_version=format_version,
-                            source_fingerprint=(
-                                fingerprint.digest if fingerprint else ''
-                            ),
-                            source_fingerprint_key_version=(
-                                fingerprint.key_version if fingerprint else ''
-                            ),
-                            source_fingerprint_format_version=(
-                                fingerprint.format_version if fingerprint else 0
+                            format_version=format_version,
+                            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+                            suggested_category=(
+                                row_category if category_name else ''
                             ),
                         )
-                        # The bank is the source of truth: no funds check.
-                        upload.account = BalanceService().apply_balance_delta(
-                            upload.account,
-                            balance_change,
-                            check_funds=False,
+                    else:
+                        candidates = self._rank_probable_candidates(
+                            account=upload.account,
+                            user=upload.user,
+                            type_value=type_value,
+                            abs_amount=abs_amount,
+                            trans_date=trans_date,
+                            match_calendar_date=match_calendar_date,
+                            description=strip_pii(str(description)),
+                            current_file_hash=upload.file_hash,
                         )
-                        if type_value == TransactionType.INCOME:
-                            income_count += 1
+                        if candidates:
+                            self._save_probable_duplicate(
+                                upload=upload,
+                                trans=trans,
+                                candidates=candidates,
+                                type_value=type_value,
+                                row_position=row_position,
+                                category_name=row_category,
+                                match_calendar_date=match_calendar_date,
+                            )
+                            skipped_count += 1
                         else:
-                            expense_count += 1
-                        row_date = (
-                            trans_date.date()
-                            if isinstance(trans_date, datetime)
-                            else trans_date
-                        )
-                        if period_from is None or row_date < period_from:
-                            period_from = row_date
-                        if period_to is None or row_date > period_to:
-                            period_to = row_date
+                            if row_category not in existing_categories:
+                                existing_categories.append(row_category)
+                            category, _created_category = (
+                                Category.objects.get_or_create(
+                                    user=upload.user,
+                                    name=row_category[
+                                        : constants.TWO_HUNDRED_FIFTY
+                                    ],
+                                    type=type_value,
+                                )
+                            )
+                            fingerprint = self._fingerprint(
+                                upload=upload,
+                                bank=bank,
+                                source_ref=source_ref,
+                            )
+                            created = Transaction.objects.create(
+                                user=upload.user,
+                                account=upload.account,
+                                category=category,
+                                type=type_value,
+                                amount=abs_amount,
+                                date=trans_date,
+                                description=strip_pii(str(description))[:250],
+                                source_ref=source_ref or None,
+                                source_file_hash=(
+                                    upload.file_hash
+                                    if (not source_ref or bank == 'raiffeisen')
+                                    else None
+                                ),
+                                source_row_position=(
+                                    row_position
+                                    if (not source_ref or bank == 'raiffeisen')
+                                    else None
+                                ),
+                                source_format_version=format_version,
+                                source_fingerprint=(
+                                    fingerprint.digest if fingerprint else ''
+                                ),
+                                source_fingerprint_key_version=(
+                                    fingerprint.key_version
+                                    if fingerprint
+                                    else ''
+                                ),
+                                source_fingerprint_format_version=(
+                                    fingerprint.format_version
+                                    if fingerprint
+                                    else 0
+                                ),
+                            )
+                            if is_raiffeisen:
+                                self._save_autopost_row(
+                                    upload=upload,
+                                    trans=trans,
+                                    row_position=row_position,
+                                    type_value=type_value,
+                                    fingerprint=fingerprint,
+                                    format_version=format_version,
+                                    transaction=created,
+                                    suggested_category=row_category,
+                                )
+                            # Bank is source of truth: no funds check.
+                            upload.account = (
+                                BalanceService().apply_balance_delta(
+                                    upload.account,
+                                    balance_change,
+                                    check_funds=False,
+                                )
+                            )
+                            if type_value == TransactionType.INCOME:
+                                income_count += 1
+                            else:
+                                expense_count += 1
+                            row_date = trans_date.date()
+                            if period_from is None or row_date < period_from:
+                                period_from = row_date
+                            if period_to is None or row_date > period_to:
+                                period_to = row_date
 
                 upload.processed_transactions = idx + 1
                 upload.income_count = income_count
                 upload.expense_count = expense_count
                 upload.skipped_count = skipped_count
                 upload.needs_transfer_count = needs_transfer_count
+                upload.failed_count = failed_count
                 upload.progress = int((idx + 1) / total * 100)
                 upload.save(
                     update_fields=[
@@ -519,6 +616,7 @@ class BankStatementImportService:
                         'expense_count',
                         'skipped_count',
                         'needs_transfer_count',
+                        'failed_count',
                         'progress',
                         'updated_at',
                     ],
@@ -615,9 +713,11 @@ class BankStatementImportService:
     ) -> ExactObservation | None:
         """Return one proven repeat, a drift conflict, or no proof.
 
-        A bank identifier is only a hint: the existing row or movement must
-        also match the direction, amount and bank date. An unknown key or a
-        missing fingerprint means no proof, never a negative conclusion.
+        A strong bank identifier must also match direction, amount and
+        bank date. A weak identifier never proves a repeat by itself, but
+        the same file hash, parser version and row position can. An
+        unknown key or a missing fingerprint means no proof, never a
+        negative conclusion.
         """
         if source_ref and source_ref_strength == 'strong':
             return self._exact_by_reference(
@@ -629,12 +729,18 @@ class BankStatementImportService:
                 trans_date=trans_date,
                 match_calendar_date=match_calendar_date,
             )
-        if source_ref:
+        if source_ref and bank != 'raiffeisen':
+            return None
+        if bank == 'raiffeisen' and not upload.file_hash:
             return None
         return self._exact_by_position(
             upload=upload,
             row_position=row_position,
             format_version=format_version,
+            type_value=type_value,
+            amount=amount,
+            trans_date=trans_date,
+            match_calendar_date=match_calendar_date,
         )
 
     def _exact_by_reference(
@@ -797,8 +903,12 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         row_position: int,
         format_version: int,
+        type_value: str,
+        amount: Decimal,
+        trans_date: datetime,
+        match_calendar_date: bool,
     ) -> ExactObservation | None:
-        """Return a position match, or a parser/format drift conflict."""
+        """Return a position match or a parser/format drift conflict."""
         existing = Transaction.objects.filter(
             account=upload.account,
             source_file_hash=upload.file_hash,
@@ -807,8 +917,15 @@ class BankStatementImportService:
         if not existing.exists():
             return None
         matching = existing.filter(source_format_version=format_version)
-        if matching.exists():
-            return ExactObservation(transaction=matching.first())
+        for movement in matching:
+            if self._transaction_matches(
+                movement,
+                type_value=type_value,
+                amount=amount,
+                trans_date=trans_date,
+                match_calendar_date=match_calendar_date,
+            ):
+                return ExactObservation(transaction=movement)
         return ExactObservation(conflict=True)
 
     @staticmethod
@@ -982,6 +1099,7 @@ class BankStatementImportService:
         decision: str,
         canonical_row: BankStatementRow | None = None,
         transaction: Transaction | None = None,
+        suggested_category: str = '',
     ) -> BankStatementRow:
         """Create one row that records an observation without money."""
         row, _created = BankStatementRow.objects.get_or_create(
@@ -990,8 +1108,15 @@ class BankStatementImportService:
             defaults={
                 'transaction_type': type_value,
                 'transaction_date': trans['date'],
-                'amount': abs(trans['amount']),
+                'amount': (
+                    abs(trans['amount'])
+                    if trans.get('amount') is not None
+                    else None
+                ),
                 'description': strip_pii(str(trans['description']))[
+                    : constants.TWO_HUNDRED_FIFTY
+                ],
+                'suggested_category': suggested_category[
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
@@ -1010,6 +1135,95 @@ class BankStatementImportService:
                 'decision': decision,
             },
         )
+        return row
+
+    def _save_unparsed_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        bank: str,
+        format_version: int,
+    ) -> BankStatementRow:
+        """Record a row fragment that cannot be posted or fully parsed."""
+        amount = trans.get('amount')
+        type_value = ''
+        if amount is not None:
+            type_value = (
+                TransactionType.INCOME
+                if amount > 0
+                else TransactionType.EXPENSE
+            )
+        return self._save_observation_row(
+            upload=upload,
+            trans={**trans, 'description': trans.get('description') or ''},
+            row_position=row_position,
+            type_value=type_value,
+            fingerprint=self._fingerprint(
+                upload=upload,
+                bank=bank,
+                source_ref=trans.get('source_ref'),
+            ),
+            format_version=format_version,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def _save_autopost_row(
+        self,
+        *,
+        upload: BankStatementUpload,
+        trans: dict[str, Any],
+        row_position: int,
+        type_value: str,
+        fingerprint: StatementFingerprint | None,
+        format_version: int,
+        transaction: Transaction,
+        suggested_category: str,
+    ) -> BankStatementRow:
+        """Link an auto-posted movement, including an existing open row."""
+        row = self._save_observation_row(
+            upload=upload,
+            trans=trans,
+            row_position=row_position,
+            type_value=type_value,
+            fingerprint=fingerprint,
+            format_version=format_version,
+            decision=BankStatementRow.Decision.NEW,
+            transaction=transaction,
+            suggested_category=suggested_category,
+        )
+        if (
+            row.transaction_id == transaction.pk
+            and row.decision == BankStatementRow.Decision.NEW
+        ):
+            return row
+        BankStatementRow.objects.filter(
+            pk=row.pk,
+            transaction__isnull=True,
+        ).update(
+            transaction=transaction,
+            decision=BankStatementRow.Decision.NEW,
+            transaction_type=type_value,
+            transaction_date=trans['date'],
+            amount=abs(trans['amount']),
+            description=strip_pii(str(trans['description']))[
+                : constants.TWO_HUNDRED_FIFTY
+            ],
+            source_ref=trans.get('source_ref') or None,
+            source_format_version=format_version,
+            source_fingerprint=(fingerprint.digest if fingerprint else ''),
+            source_fingerprint_key_version=(
+                fingerprint.key_version if fingerprint else ''
+            ),
+            source_fingerprint_format_version=(
+                fingerprint.format_version if fingerprint else 0
+            ),
+            suggested_category=suggested_category[
+                : constants.TWO_HUNDRED_FIFTY
+            ],
+        )
+        row.refresh_from_db()
         return row
 
     def _match_account(
@@ -1083,6 +1297,9 @@ class BankStatementImportService:
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
             for idx, trans in enumerate(transactions):
+                if _is_unparsed(trans):
+                    new_rows[idx] = trans
+                    continue
                 if recognize_known:
                     exact = self._find_exact_observation(
                         upload=upload,
@@ -1125,6 +1342,7 @@ class BankStatementImportService:
             cancelled = _mutual_cancel_positions(new_rows)
             rows = []
             for idx, trans in new_rows.items():
+                amount = trans.get('amount')
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1134,15 +1352,22 @@ class BankStatementImportService:
                     BankStatementRow(
                         upload=upload,
                         transaction_type=(
-                            TransactionType.INCOME
-                            if trans['amount'] > 0
-                            else TransactionType.EXPENSE
+                            None
+                            if amount is None
+                            else (
+                                TransactionType.INCOME
+                                if amount > 0
+                                else TransactionType.EXPENSE
+                            )
                         ),
-                        transaction_date=trans['date'],
-                        amount=abs(trans['amount']),
+                        transaction_date=trans.get('date'),
+                        amount=abs(amount) if amount is not None else None,
                         description=strip_pii(str(trans['description']))[
                             : constants.TWO_HUNDRED_FIFTY
                         ],
+                        suggested_category=str(
+                            trans.get('category_name') or '',
+                        )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
                         source_row_position=idx,
                         source_format_version=format_version,
@@ -1155,7 +1380,7 @@ class BankStatementImportService:
                         source_fingerprint_format_version=(
                             fingerprint.format_version if fingerprint else 0
                         ),
-                        match_calendar_date=True,
+                        match_calendar_date=amount is not None,
                         kind=str(trans.get('kind', '')),
                         merchant_key=trans.get('merchant_key') or '',
                         counterparty_account=(
@@ -1187,11 +1412,15 @@ class BankStatementImportService:
                 )
             upload.processed_transactions = len(transactions)
             upload.skipped_count = len(transactions) - len(rows)
+            upload.failed_count = sum(
+                1 for trans in transactions if _is_unparsed(trans)
+            )
             upload.progress = 100
             upload.save(
                 update_fields=[
                     'processed_transactions',
                     'skipped_count',
+                    'failed_count',
                     'progress',
                     'updated_at',
                 ],
