@@ -70,6 +70,10 @@ RAIFFEISEN_REAL_FIXTURE = (
 
 SBERBANK_FIXTURE = Path(__file__).parent / 'fixtures' / 'sberbank_statement.pdf'
 
+# Real user-provided Ozon statement, coordinator-anonymized: dates and
+# amounts preserved, bank identifiers replaced with synthetic values.
+OZON_FIXTURE = Path(__file__).parent / 'fixtures' / 'ozon_statement.pdf'
+
 
 class TestBankStatementUploadView(TestCase):
     """Test cases for bank statement upload view."""
@@ -5691,8 +5695,77 @@ class TestOzonBankStatement(TestCase):
         parser = _create_parser(self.pdf_path)
         self.assertIsInstance(parser, _OzonBankParser)
 
+    def test_real_anonymized_statement_matches_document_totals(self) -> None:
+        """Real PDF: 56 rows and totals equal the printed statement totals.
+
+        Expected values come from the document text: incoming
+        31 337.83 ₽, outgoing 31 431.03 ₽ and outgoing balance 50.50 ₽,
+        so the signed sum is -93.20 ₽. Category counts and sums were
+        verified against the table rows, not copied from the parser.
+        """
+        result = _OzonBankParser(OZON_FIXTURE).parse()
+
+        transactions = result.transactions
+        self.assertEqual(len(transactions), 56)
+        self.assertFalse(
+            [item for item in transactions if item.get('parse_issue')],
+        )
+        amounts = [cast('Decimal', item['amount']) for item in transactions]
+        self.assertEqual(
+            sum(amount for amount in amounts if amount > 0),
+            Decimal('31337.83'),
+        )
+        self.assertEqual(
+            sum(-amount for amount in amounts if amount < 0),
+            Decimal('31431.03'),
+        )
+        self.assertEqual(sum(amounts), Decimal('-93.20'))
+        self.assertIsNone(result.closing_balance)
+        self.assertIsNone(result.period_start)
+
+        by_category: dict[str | None, list[Decimal]] = {}
+        for item in transactions:
+            by_category.setdefault(item['category_name'], []).append(
+                cast('Decimal', item['amount']),
+            )
+        self.assertEqual(
+            {name: len(values) for name, values in by_category.items()},
+            {
+                'Покупки Ozon': 24,
+                'Возвраты Ozon': 9,
+                'Чаевые Ozon': 5,
+                None: 18,
+            },
+        )
+        self.assertEqual(
+            sum(by_category['Покупки Ozon']),
+            Decimal('-31035.03'),
+        )
+        self.assertEqual(
+            sum(by_category['Возвраты Ozon']),
+            Decimal('7000.83'),
+        )
+        self.assertEqual(sum(by_category['Чаевые Ozon']), Decimal('-396.00'))
+        self.assertEqual(sum(by_category[None]), Decimal('24337.00'))
+        self.assertTrue(
+            all(
+                item['description'].startswith('Перевод')
+                for item in transactions
+                if item['category_name'] is None
+            ),
+        )
+        self.assertEqual(
+            len({item['source_ref'] for item in transactions}),
+            56,
+        )
+
+        first = transactions[0]
+        self.assertEqual(first['amount'], Decimal('-50.00'))
+        self.assertEqual(first['category_name'], 'Чаевые Ozon')
+        self.assertEqual(first['source_ref'], '11721043560')
+
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_parses_allowed_operations_and_skips_transfer(
+    def test_parses_known_operations_and_keeps_transfer_visible(
         self,
         mock_camelot: MagicMock,
     ) -> None:
@@ -5702,22 +5775,47 @@ class TestOzonBankStatement(TestCase):
 
         result = _OzonBankParser(self.pdf_path).parse()
 
-        self.assertEqual(len(result.transactions), 3)
+        self.assertEqual(len(result.transactions), 4)
         self.assertIsNone(result.closing_balance)
+        self.assertIsNone(result.closing_balance_date)
+        self.assertIsNone(result.period_start)
+        self.assertEqual(result.bank, 'ozon')
+        self.assertEqual(result.format_version, 2)
+        self.assertEqual(
+            [item['category_name'] for item in result.transactions],
+            ['Возвраты Ozon', 'Покупки Ozon', None, 'Чаевые Ozon'],
+        )
         self.assertEqual(
             [item['description'] for item in result.transactions],
-            ['Возвраты Ozon', 'Покупки Ozon', 'Чаевые Ozon'],
+            [
+                'Возвраты Ozon',
+                'Покупки Ozon',
+                'Перевод через СБП. Отправитель: А. П.',
+                'Чаевые Ozon',
+            ],
         )
         self.assertEqual(
             [item['amount'] for item in result.transactions],
-            [Decimal('101.00'), Decimal('-2561.00'), Decimal('-49.00')],
+            [
+                Decimal('101.00'),
+                Decimal('-2561.00'),
+                Decimal('2600.00'),
+                Decimal('-49.00'),
+            ],
         )
         self.assertTrue(
             all(item['source'] == 'ozon' for item in result.transactions),
         )
+        self.assertTrue(
+            all(
+                item['source_ref_strength'] == 'weak'
+                for item in result.transactions
+            ),
+        )
+        self.assertNotIn('parse_issue', result.transactions[2])
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_statement_with_only_transfers_is_valid(
+    def test_statement_with_only_transfers_keeps_potential_operation(
         self,
         mock_camelot: MagicMock,
     ) -> None:
@@ -5737,7 +5835,13 @@ class TestOzonBankStatement(TestCase):
 
         result = _OzonBankParser(self.pdf_path).parse()
 
-        self.assertEqual(result.transactions, [])
+        self.assertEqual(len(result.transactions), 1)
+        transfer = result.transactions[0]
+        self.assertIsNone(transfer['category_name'])
+        self.assertEqual(transfer['amount'], Decimal('2600.00'))
+        self.assertEqual(transfer['description'], 'Перевод через СБП.')
+        self.assertEqual(transfer['source_ref'], '8269844786')
+        self.assertNotIn('parse_issue', transfer)
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_parses_format_with_processing_date_rows(
@@ -5779,37 +5883,180 @@ class TestOzonBankStatement(TestCase):
                     Decimal('-500.00'),
                     'aaaa1111-bbbb-2222-cccc3333',
                 ),
+                (None, Decimal('500.00'), 'T0000001'),
+                (None, None, 'T0000002'),
                 ('Чаевые Ozon', Decimal('-50.00'), 'dddd4444-eeee-'),
                 ('Возвраты Ozon', Decimal('12.34'), 'ffff5555-6666-'),
+                (None, Decimal('-9.00'), '7777aaaa-bbbb-'),
             ],
         )
+        self.assertEqual(
+            [item['description'] for item in result.transactions],
+            [
+                'Покупки Ozon',
+                'Иван',
+                'Иванович',
+                'Чаевые Ozon',
+                'Возвраты Ozon',
+                'Комиссия за смс-',
+            ],
+        )
+        # The processing-date row above stays a continuation, not a row.
+        self.assertEqual(
+            result.transactions[0]['source_ref'],
+            'aaaa1111-bbbb-2222-cccc3333',
+        )
+        self.assertEqual(result.transactions[2]['parse_issue'], 'unparsed')
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_unparsed_operation_error_names_row_and_missing_fields(
+    def test_missing_amount_operation_keeps_its_own_fragment(
         self,
         mock_camelot: MagicMock,
     ) -> None:
+        """An amountless operation is not glued to a neighbour's amount."""
         mock_table = MagicMock()
-        mock_table.page = '2'
         mock_table.df = pd.DataFrame(
             [
-                [
-                    '05.08.2026 10:00:00',
-                    '',
-                    'Ozon',
-                    '- 10.00 ₽',
-                ],
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['01.09.2026 11:00:00', 'DOC-B', 'Комиссия банка', ''],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
             ],
         )
         mock_camelot.read_pdf.return_value = [mock_table]
 
-        with self.assertRaises(BankStatementParseError) as ctx:
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertNotIn('parse_issue', first)
+        self.assertIsNone(middle['amount'])
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['description'], 'Комиссия банка')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
+        self.assertNotIn('parse_issue', last)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_malformed_date_operation_keeps_its_own_fragment(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A broken date never merges one amount into another observation."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['01.09.2026 10:00', 'DOC-B', 'Комиссия банка', '- 5.00 ₽'],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertIsNone(middle['date'])
+        self.assertEqual(middle['amount'], Decimal('-5.00'))
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_unparsed_row_stays_visible_without_blocking_others(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A row fragment is preserved; the next valid row still parses."""
+        mock_table = MagicMock()
+        mock_table.page = '2'
+        mock_table.df = pd.DataFrame(
+            [
+                ['05.08.2026 10:00:00', '', 'Ozon', '- 10.00 ₽'],
+                ['05.08.2026 11:00:00', '12345', 'Ozon', '- 20.00 ₽'],
+                ['05.08.2026 12:00:00', '12346', 'Ozon', '- ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        missing_document = result.transactions[0]
+        self.assertEqual(missing_document['parse_issue'], 'unparsed')
+        self.assertIsNone(missing_document['source_ref'])
+        self.assertEqual(missing_document['amount'], Decimal('-10.00'))
+        valid = result.transactions[1]
+        self.assertNotIn('parse_issue', valid)
+        self.assertEqual(valid['source_ref'], '12345')
+        unreadable_amount = result.transactions[2]
+        self.assertEqual(unreadable_amount['parse_issue'], 'unparsed')
+        self.assertIsNone(unreadable_amount['amount'])
+        self.assertEqual(unreadable_amount['source_ref'], '12346')
+        self.assertEqual(
+            [item['row_position'] for item in result.transactions],
+            [0, 1, 2],
+        )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_repeated_document_number_keeps_both_rows(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A reused document number never merges away a real operation."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-1', 'Ozon', '- 100.00 ₽'],
+                ['02.09.2026 10:00:00', 'DOC-1', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 2)
+        self.assertEqual(
+            [item['source_ref'] for item in result.transactions],
+            ['DOC-1', 'DOC-1'],
+        )
+        self.assertEqual(
+            [item['row_position'] for item in result.transactions],
+            [0, 1],
+        )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_structure_without_operations_is_a_fatal_parse_error(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A file with no potential operation proves nothing and is fatal."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['05.08.2026 10:30:00', 'bbbb-2222-', '', ''],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with self.assertRaises(BankStatementParseError):
             _OzonBankParser(self.pdf_path).parse()
 
-        message = str(ctx.exception)
-        self.assertIn('стр. 2', message)
-        self.assertIn('05.08.2026 10:00:00', message)
-        self.assertIn('номер документа', message)
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_broken_table_is_a_fatal_parse_error(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        mock_camelot.read_pdf.side_effect = RuntimeError('broken table')
+
+        with self.assertRaises(BankStatementParseError):
+            _OzonBankParser(self.pdf_path).parse()
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -6151,6 +6398,31 @@ class TestBankStatementImportReliability(TestCase):
             parser.return_value.parse.return_value = StatementParseResult(
                 transactions=transactions,
                 bank='sberbank',
+                format_version=format_version,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+        return upload
+
+    def _ozon_upload(
+        self,
+        transactions: list[dict[str, Any]],
+        *,
+        file_hash: str = '',
+        format_version: int = 2,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/ozon.pdf',
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=transactions,
+                bank='ozon',
                 format_version=format_version,
             )
             process_bank_statement_task.apply(args=[upload.pk])
@@ -7271,3 +7543,368 @@ class TestBankStatementImportReliability(TestCase):
         )
         post()
         mock_task.delay.assert_called_once_with(upload.pk)
+
+    def test_ozon_known_category_posts_row_and_movement_once(self) -> None:
+        """A known local Ozon purpose posts one linked movement, once."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        row_data = {
+            'date': timezone.now(),
+            'amount': Decimal('-100.00'),
+            'description': 'Покупки Ozon',
+            'source_ref': 'OZ-1',
+            'source_ref_strength': 'weak',
+            'category_name': 'Покупки Ozon',
+            'source': 'ozon',
+            'row_position': 0,
+        }
+        upload = self._ozon_upload([row_data])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        self.assertEqual(upload.imported_count, 1)
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        classifier.classify.assert_not_called()
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=0,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            needs_transfer_count=0,
+            failed_count=0,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[row_data],
+                bank='ozon',
+                format_version=2,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        self.account.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(
+            BankStatementRow.objects.filter(upload=upload).count(),
+            1,
+        )
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_ozon_unknown_purpose_and_transfer_need_decision(self) -> None:
+        """Unknown purposes and transfers stay visible and move no money."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        upload = self._ozon_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-30.00'),
+                    'description': 'Комиссия за смс-',
+                    'source_ref': 'OZ-2',
+                    'source_ref_strength': 'weak',
+                    'category_name': None,
+                    'source': 'ozon',
+                    'row_position': 0,
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('2600.00'),
+                    'description': 'Перевод через СБП. Отправитель: А. П.',
+                    'source_ref': 'OZ-3',
+                    'source_ref_strength': 'weak',
+                    'category_name': None,
+                    'source': 'ozon',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 2)
+        self.assertEqual(
+            set(rows.values_list('decision', flat=True)),
+            {BankStatementRow.Decision.AWAITING_MARKUP},
+        )
+        self.assertFalse(rows.exclude(transaction__isnull=True).exists())
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(
+            set(rows.values_list('description', flat=True)),
+            {
+                'Комиссия за смс-',
+                'Перевод через СБП. Отправитель: А. П.',
+            },
+        )
+        classifier.classify.assert_not_called()
+
+    def test_ozon_repeated_document_number_keeps_both_unresolved(self) -> None:
+        """A reused document number neither merges nor posts either row."""
+        moment = timezone.now()
+        self._ozon_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-10.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Покупки Ozon',
+                    'source': 'ozon',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment,
+                    'amount': Decimal('-20.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Покупки Ozon',
+                    'source': 'ozon',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        self.account.refresh_from_db()
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            2,
+        )
+
+    def test_ozon_row_error_does_not_block_other_rows(self) -> None:
+        """A recoverable row error stays visible and other rows still post."""
+        upload = self._ozon_upload(
+            [
+                {
+                    'date': None,
+                    'amount': None,
+                    'description': 'Фрагмент Ozon без суммы',
+                    'source_ref': None,
+                    'parse_issue': 'unparsed',
+                    'row_position': 0,
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'OZ-4',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Покупки Ozon',
+                    'source': 'ozon',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            1,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_ozon_same_file_position_is_exact_duplicate(self) -> None:
+        """File hash, stable format, position and fields prove a repeat."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Покупки Ozon',
+            type=TransactionType.EXPENSE,
+        )
+        canonical_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/canonical-ozon.pdf',
+            file_hash='canonical-ozon-hash',
+        )
+        canonical_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=moment,
+            source_ref='OZ-EXACT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=2,
+        )
+        canonical_row = BankStatementRow.objects.create(
+            upload=canonical_upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('100.00'),
+            source_ref='OZ-EXACT',
+            source_row_position=0,
+            transaction=canonical_transaction,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        upload = self._ozon_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'OZ-EXACT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Покупки Ozon',
+                    'source': 'ozon',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(row.canonical_row, canonical_row)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_ozon_without_balance_does_not_claim_zero_or_coverage(self) -> None:
+        """A missing balance and period are not filled with zero."""
+        upload = self._ozon_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'OZ-5',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Покупки Ozon',
+                    'source': 'ozon',
+                    'row_position': 0,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+
+    def test_ozon_empty_parse_is_not_completed(self) -> None:
+        """An empty Ozon parse does not prove that there are no rows."""
+        upload = self._ozon_upload([])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
+
+    def test_ozon_real_statement_imports_known_and_keeps_transfers(
+        self,
+    ) -> None:
+        """Real PDF: known rows post, 4 real twins and 18 transfers wait.
+
+        Four same-day pairs share amount and purpose but have different
+        times and documents (two purchases, one tip, one refund), so the
+        policy leaves them unresolved instead of merging two real
+        operations. The printed totals are not used to force a post.
+        """
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'ozon-real.pdf',
+                OZON_FIXTURE.read_bytes(),
+                content_type='application/pdf',
+            ),
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(upload.total_transactions, 56)
+        self.assertEqual(upload.income_count, 8)
+        self.assertEqual(upload.expense_count, 26)
+        self.assertEqual(upload.skipped_count, 4)
+        self.assertEqual(Transaction.objects.count(), 34)
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 56)
+        self.assertEqual(
+            rows.filter(decision=BankStatementRow.Decision.NEW).count(),
+            34,
+        )
+        self.assertEqual(
+            rows.filter(decision=BankStatementRow.Decision.PENDING).count(),
+            4,
+        )
+        self.assertFalse(
+            rows.filter(
+                decision=BankStatementRow.Decision.PENDING,
+                candidate__isnull=True,
+            ).exists(),
+        )
+        self.assertEqual(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            18,
+        )
+        self.assertFalse(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            )
+            .exclude(description__startswith='Перевод')
+            .exists(),
+        )
+        self.assertEqual(self.account.balance, Decimal('-21025.20'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertIsNone(upload.statement_closing_balance)
+        classifier.classify.assert_not_called()
