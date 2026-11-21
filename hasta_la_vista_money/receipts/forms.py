@@ -78,7 +78,6 @@ _PRODUCT_LINE_ERRORS: dict[ProductLineError, tuple[str, StrOrPromise]] = {
     ),
 }
 
-_OBJECTS_ATTR = 'objects'
 
 _INPUT_CLASSES = (
     'w-full rounded-xl border border-gray-300 dark:border-gray-600 '
@@ -106,8 +105,8 @@ _READONLY_CLASSES = (
 )
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
-_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
+_receipt_manager = cast('ReceiptManager', Receipt.objects)
 
 
 class ReceiptFilter(django_filters.FilterSet):

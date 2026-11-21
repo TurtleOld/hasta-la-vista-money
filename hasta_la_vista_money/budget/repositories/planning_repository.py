@@ -5,6 +5,7 @@ including filtering by user, date, type, and category.
 """
 
 from datetime import date
+from typing import cast
 
 from django.db.models import QuerySet
 
@@ -12,9 +13,7 @@ from hasta_la_vista_money.budget.models import Planning, PlanningManager
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_planning_manager: PlanningManager = getattr(Planning, _OBJECTS_ATTR)
+_planning_manager = cast('PlanningManager', Planning.objects)
 
 
 class PlanningRepository:

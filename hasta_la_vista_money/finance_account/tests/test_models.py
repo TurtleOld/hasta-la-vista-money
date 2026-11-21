@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from decimal import Decimal
+from typing import cast
 
 from django.test import TestCase
 from django.utils import timezone
@@ -21,9 +22,7 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class TestAccountModel(TestCase):

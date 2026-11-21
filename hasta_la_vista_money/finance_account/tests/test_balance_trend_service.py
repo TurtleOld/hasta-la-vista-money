@@ -37,9 +37,6 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _noon(day: date) -> datetime:
     return timezone.make_aware(datetime.combine(day, time(12)))
 
@@ -55,7 +52,7 @@ def _points(trend: 'BalanceTrendData') -> dict[str, Decimal]:
     }
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class BalanceTrendServiceTests(TestCase):

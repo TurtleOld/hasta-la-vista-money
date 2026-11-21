@@ -5,7 +5,7 @@ including filtering, aggregation, and CRUD operations.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
@@ -18,9 +18,7 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_receipt_manager: ReceiptManager = getattr(Receipt, _OBJECTS_ATTR)
+_receipt_manager = cast('ReceiptManager', Receipt.objects)
 
 
 class ReceiptRepository:

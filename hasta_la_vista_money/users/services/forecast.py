@@ -2,7 +2,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 from decimal import Decimal
 from statistics import pstdev
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
@@ -15,16 +15,16 @@ from hasta_la_vista_money.core.calendar_days import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import PaymentSchedule
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class CashflowForecastDict(TypedDict):

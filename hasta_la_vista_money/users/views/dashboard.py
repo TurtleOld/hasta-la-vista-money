@@ -35,7 +35,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -62,11 +61,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
 logger = structlog.get_logger(__name__)
-
-
-_OBJECTS_ATTR = 'objects'
 
 
 def _views_module() -> Any:
@@ -86,7 +83,7 @@ def _dashboard_currency(request: HttpRequest, user: User) -> str:
     return get_analytics_currency(request, [user], remember=False).currency
 
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class TransactionDict(TypedDict):

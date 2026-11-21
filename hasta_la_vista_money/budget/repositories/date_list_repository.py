@@ -5,15 +5,14 @@ including filtering by user and date.
 """
 
 from datetime import date
+from typing import cast
 
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.budget.models import DateList, DateListManager
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_datelist_manager: DateListManager = getattr(DateList, _OBJECTS_ATTR)
+_datelist_manager = cast('DateListManager', DateList.objects)
 
 
 class DateListRepository:

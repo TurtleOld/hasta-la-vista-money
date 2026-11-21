@@ -52,9 +52,6 @@ else:
 # split in a dedicated cleanup.
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _seed_starter_product_categories(user: UserType) -> None:
     ProductCategoryRepository().seed_starter_categories(user)
 
@@ -72,7 +69,7 @@ JPEG_BYTES = _image_bytes('JPEG')
 PNG_BYTES = _image_bytes('PNG')
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class TestReceipt(TestCase):

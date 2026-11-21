@@ -47,11 +47,9 @@ logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
 
 
-_OBJECTS_ATTR = 'objects'
+_seller_manager = cast('SellerManager', Seller.objects)
 
-_seller_manager: SellerManager = getattr(Seller, _OBJECTS_ATTR)
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class ReceiptCreateView(

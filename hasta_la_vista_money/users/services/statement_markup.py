@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Final
+from typing import TYPE_CHECKING, Final, cast
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -39,7 +39,6 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -76,15 +75,16 @@ from hasta_la_vista_money.users.services.statement_retention_policy import (
     row_has_bank_data,
 )
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
+
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
     {RosDorBankRowKind.C2C, RosDorBankRowKind.OWN_C2C},
 )
 
 
-_OBJECTS_ATTR = 'objects'
-
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class StatementMarkupConflictError(ValueError):
@@ -675,7 +675,6 @@ class StatementMarkupService:
         note_financial_change(
             coverage_service=self._coverage_service,
             changes=[(account, bank_calendar_date or moment)],
-            moments=[bank_calendar_date or moment],
         )
         return created
 
@@ -744,7 +743,6 @@ class StatementMarkupService:
                 (locked[source.pk], changed_at),
                 (locked[target.pk], changed_at),
             ],
-            moments=[changed_at],
         )
         return transfer
 

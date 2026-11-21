@@ -32,12 +32,10 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 
-_OBJECTS_ATTR = 'objects'
-
 ACCOUNT_LABEL = 'finance_account.Account'
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class AccountArchiveDeleteBase(TestCase):

@@ -1,6 +1,7 @@
 """Tests for the receipts API validator."""
 
 from decimal import Decimal
+from typing import cast
 
 from django.test import TestCase
 
@@ -14,9 +15,7 @@ from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class TestReceiptAPIValidatorAccountSelection(TestCase):

@@ -57,9 +57,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.views import AuthRequest
 
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class TestAccountView(TestCase):

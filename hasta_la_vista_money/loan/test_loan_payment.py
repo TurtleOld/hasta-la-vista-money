@@ -1,6 +1,7 @@
 """Tests for posting a loan payment as a financial movement."""
 
 from decimal import Decimal
+from typing import cast
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -20,9 +21,7 @@ from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_feed import list_operations
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class PostLoanPaymentTest(TestCase):

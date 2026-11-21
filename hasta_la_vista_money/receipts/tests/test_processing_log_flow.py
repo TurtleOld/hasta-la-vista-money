@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 from django.test import Client, TestCase
@@ -34,8 +34,6 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
-
 _SEND_TASK = (
     'hasta_la_vista_money.receipts.services.receipt_processing_service.'
     'current_app.send_task'
@@ -65,7 +63,7 @@ def _payload() -> dict[str, Any]:
     }
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class ReceiptProcessingLogTaskTests(TestCase):

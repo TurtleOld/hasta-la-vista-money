@@ -34,9 +34,7 @@ else:
     UserType = get_user_model()
 
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class TestAccountServices(TestCase):

@@ -1,6 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.test import TestCase
 from django.utils import timezone
@@ -18,12 +18,11 @@ if TYPE_CHECKING:
 else:
     UserType = get_user_model()
 
-_OBJECTS_ATTR = 'objects'
 
 FORMS = (ScanQRForm, UploadImageForm)
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class UploadFormsDefaultAccountTests(TestCase):

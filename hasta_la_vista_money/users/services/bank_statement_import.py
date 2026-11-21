@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import structlog
 from django.db import IntegrityError, transaction
@@ -123,9 +123,7 @@ REUPLOAD_REQUIRED_MESSAGE: Final[Promise] = _(
 )
 
 
-_OBJECTS_ATTR = 'objects'
-
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class StatementGenerationExpiredError(Exception):
@@ -1400,7 +1398,6 @@ class BankStatementImportService:
                         note_financial_change(
                             coverage_service=self.coverage_service,
                             changes=[(upload.account, changed_at)],
-                            moments=[changed_at],
                         )
                         if type_value == TransactionType.INCOME:
                             income_count += 1

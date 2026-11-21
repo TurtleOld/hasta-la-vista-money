@@ -18,6 +18,7 @@ from core.protocols.services import AccountServiceProtocol
 
 if TYPE_CHECKING:
     from config.containers import ApplicationContainer
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
@@ -52,7 +53,6 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     receipt_balance_delta,
 )
 from hasta_la_vista_money.services.views import collect_info_receipt
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -107,9 +107,7 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
 # ---------------------------------------------------------------------------
 
 
-_OBJECTS_ATTR = 'objects'
-
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 _transfermoneylog_manager = cast(
     'TransferMoneyLogQuerySet',
     TransferMoneyLog.objects,

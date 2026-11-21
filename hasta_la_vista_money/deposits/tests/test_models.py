@@ -23,9 +23,6 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _make_deposit(user: 'User') -> Deposit:
     bank = Bank.objects.get(code='SBERBANK')
     account = _account_manager.create_deposit(
@@ -42,7 +39,7 @@ def _make_deposit(user: 'User') -> Deposit:
     )
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class DepositTermRateKindTests(TestCase):

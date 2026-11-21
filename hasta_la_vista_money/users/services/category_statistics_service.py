@@ -1,7 +1,7 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import Avg, Count, F, Q, QuerySet, Sum, Window
 from django.db.models.functions import RowNumber, TruncMonth
@@ -17,7 +17,6 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -29,12 +28,13 @@ from hasta_la_vista_money.users.services.monthly_statistics_service import (
     _date_to_aware,
 )
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
 UNCATEGORIZED_CATEGORY_LABEL = 'Без категории'
 
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 def _category_ids(keys: list[str], prefix: str) -> list[int]:

@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, Required
+from typing import TYPE_CHECKING, Any, Required, cast
 from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
@@ -20,7 +20,6 @@ from hasta_la_vista_money.core.calendar_days import (
     calendar_month,
     filter_calendar_range,
 )
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -34,9 +33,10 @@ from hasta_la_vista_money.users.services.groups import (
     readable_users,
 )
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class MonthDataDict(TypedDict, total=False):

@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 from django.db.models import Sum
 from django.utils import timezone
@@ -6,16 +6,16 @@ from django.utils import timezone
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.calendar_days import filter_calendar_from
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class NotificationDict(TypedDict):

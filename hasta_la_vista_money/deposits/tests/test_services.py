@@ -61,9 +61,6 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _sberbank() -> Bank:
     bank, _ = Bank.objects.get_or_create(
         code='SBERBANK',
@@ -72,7 +69,7 @@ def _sberbank() -> Bank:
     return bank
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class DepositServiceIntegrationTests(TestCase):

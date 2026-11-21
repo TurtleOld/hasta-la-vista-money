@@ -30,9 +30,6 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _deposit_date_widget() -> forms.DateInput:
     return forms.DateInput(
         format=constants.HTML5_DATE_INPUT_FORMAT,
@@ -62,7 +59,7 @@ def _parse_html5_date(token: str) -> date:
     raise ValidationError(message)
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class ReverseDepositEventForm(forms.Form):

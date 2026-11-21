@@ -6,7 +6,7 @@ including trend calculation, period comparison, and drill-down data.
 
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from django.core.cache import cache
@@ -22,7 +22,6 @@ from hasta_la_vista_money.core.calendar_days import (
 from hasta_la_vista_money.deposits.reporting import (
     actual_interest_totals_for_periods,
 )
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -37,9 +36,10 @@ from hasta_la_vista_money.users.utils.date_utils import (
     get_period_dates,
 )
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 def calculate_linear_trend(

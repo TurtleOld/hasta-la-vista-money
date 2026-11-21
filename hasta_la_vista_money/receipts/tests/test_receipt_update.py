@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import cast
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -14,9 +15,7 @@ from hasta_la_vista_money.users.typing_helpers import get_user_model
 User = get_user_model()
 
 
-_OBJECTS_ATTR = 'objects'
-
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class ReceiptBalanceDeltaTest(TestCase):

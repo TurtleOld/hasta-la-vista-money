@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Callable
 from datetime import timedelta
 from decimal import Decimal
+from typing import cast
 
 from django.contrib.auth.models import Group
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -192,9 +193,6 @@ OWN_ONLY_SURFACES = frozenset(
 )
 
 
-_OBJECTS_ATTR = 'objects'
-
-
 def _project_url_names(
     patterns: list[URLPattern | URLResolver],
     namespace: str = '',
@@ -215,7 +213,7 @@ def _project_url_names(
     return names
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class AccessPolicyTest(TestCase):

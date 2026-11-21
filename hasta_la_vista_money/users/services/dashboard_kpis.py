@@ -4,7 +4,7 @@ from calendar import monthrange
 from collections.abc import Iterable
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict, cast
 
 from django.db.models import Sum
 from django.utils import timezone
@@ -17,16 +17,16 @@ from hasta_la_vista_money.deposits.reporting import (
     signed_adjustment_income,
     signed_interest,
 )
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class DashboardKpiDict(TypedDict):

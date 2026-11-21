@@ -465,7 +465,7 @@ def _previous_month_range(value: date) -> tuple[date, date]:
     return start, _end_of_month(start)
 
 
-_account_manager: AccountManager = getattr(Account, _OBJECTS_ATTR)
+_account_manager = cast('AccountManager', Account.objects)
 
 
 class FinancesView(LoginRequiredMixin, TemplateView):
@@ -478,7 +478,7 @@ class FinancesView(LoginRequiredMixin, TemplateView):
 
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/partials/_finances_results.html']
-        return [getattr(self, 'template_name', '')]
+        return [self.template_name]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build combined finances context."""
@@ -1889,7 +1889,7 @@ class AccountView(
         """Return partial template for HTMX requests (group filter)."""
         if self.request.headers.get('HX-Request') == 'true':
             return ['finance_account/_account_dashboard_partial.html']
-        return [getattr(self, 'template_name', '')]
+        return [self.template_name]
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user or group.

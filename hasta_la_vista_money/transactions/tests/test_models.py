@@ -2,13 +2,12 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
@@ -17,9 +16,10 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class TransactionQuerySetTest(TestCase):

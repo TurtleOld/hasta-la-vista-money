@@ -6,7 +6,7 @@ expenses; without it the queryset spans both.
 """
 
 from datetime import date, datetime, time
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
@@ -19,16 +19,16 @@ from hasta_la_vista_money.core.calendar_days import (
     filter_calendar_to,
 )
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
 )
 from hasta_la_vista_money.users.models import User
 
-_OBJECTS_ATTR = 'objects'
+if TYPE_CHECKING:
+    from hasta_la_vista_money.transactions.managers import TransactionQuerySet
 
-_transaction_manager: TransactionQuerySet = getattr(Transaction, _OBJECTS_ATTR)
+_transaction_manager = cast('TransactionQuerySet', Transaction.objects)
 
 
 class TransactionRepository:
