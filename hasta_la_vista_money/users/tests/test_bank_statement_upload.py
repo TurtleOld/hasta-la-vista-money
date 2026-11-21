@@ -53,6 +53,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _OzonBankParser,
     _RaiffeisenBankParser,
     _SberbankParser,
+    sberbank_local_category,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
@@ -3478,16 +3479,16 @@ class TestBankStatementProcessIntegration(TestCase):
         return_value='Выписка по счёту кредитной карты',
     )
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
-    def test_reimport_skips_existing_by_source_ref(
+    def test_reimport_of_same_upload_keeps_one_movement(
         self,
         mock_camelot: MagicMock,
         mock_detect: MagicMock,
     ) -> None:
-        """Re-importing the same Sberbank PDF skips already-loaded ops.
+        """Re-importing the same Sberbank file does not double the money.
 
-        Uses authcode (source_ref) as the dedup key: the second call must
-        report 0 new income/expense and 2 skipped, without changing the
-        account balance.
+        A reused auth code is not an identity on its own: the proof here is
+        the same upload, file hash, parser format and row position. The
+        unknown credit row stays unresolved in both runs.
         """
         mock_df = pd.DataFrame(
             [
@@ -3512,25 +3513,42 @@ class TestBankStatementProcessIntegration(TestCase):
         mock_camelot.read_pdf.return_value = [mock_table]
 
         first_upload = self._create_upload('statement-1.pdf')
+        BankStatementUpload.objects.filter(pk=first_upload.pk).update(
+            file_hash='statement-hash',
+        )
         first = process_bank_statement_task.apply(
             args=[first_upload.pk],
         ).get()
-        self.assertEqual(first['income_count'], 1)
+        self.assertEqual(first['income_count'], 0)
         self.assertEqual(first['expense_count'], 1)
         self.assertEqual(first['skipped_count'], 0)
 
         balance_after_first = Account.objects.get(pk=self.account.pk).balance
 
-        second_upload = self._create_upload('statement-2.pdf')
+        BankStatementUpload.objects.filter(pk=first_upload.pk).update(
+            processed_transactions=0,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            needs_transfer_count=0,
+            status=BankStatementUpload.Status.PROCESSING,
+        )
         second = process_bank_statement_task.apply(
-            args=[second_upload.pk],
+            args=[first_upload.pk],
         ).get()
         self.assertEqual(second['income_count'], 0)
         self.assertEqual(second['expense_count'], 0)
-        self.assertEqual(second['skipped_count'], 2)
 
         balance_after_second = Account.objects.get(pk=self.account.pk).balance
         self.assertEqual(balance_after_first, balance_after_second)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(upload=first_upload).count(),
+            2,
+        )
 
     @patch(
         'hasta_la_vista_money.users.services.bank_statement.'
@@ -3691,18 +3709,20 @@ class TestBankStatementProcessIntegration(TestCase):
         first = process_bank_statement_task.apply(
             args=[first_upload.pk],
         ).get()
-        self.assertEqual(
-            first['income_count'] + first['expense_count'],
-            2,
-        )
+        self.assertEqual(first['expense_count'], 1)
+        self.assertEqual(first['income_count'], 0)
 
         second_upload = self._create_upload('statement-2.pdf')
         second = process_bank_statement_task.apply(
             args=[second_upload.pk],
         ).get()
-        self.assertEqual(second['skipped_count'], 2)
+        self.assertEqual(second['skipped_count'], 1)
         self.assertEqual(second['expense_count'], 1)
         self.assertEqual(second['income_count'], 0)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
 
 
 class TestBankStatementEdgeCases(TestCase):
@@ -4491,6 +4511,8 @@ class TestSberbankParser(TestCase):
         t = transactions[0]
         self.assertEqual(t['description'], 'Транспорт')
         self.assertEqual(t['amount'], Decimal('-73.00'))
+        self.assertEqual(t['source_ref_strength'], 'weak')
+        self.assertEqual(t['category_name'], 'Транспорт')
 
     def test_parse_table_income_with_plus_sign(self) -> None:
         """Top-ups (income) prefixed with '+' are positive."""
@@ -4511,8 +4533,8 @@ class TestSberbankParser(TestCase):
         self.assertEqual(transactions[0]['amount'], Decimal('50546.00'))
         self.assertGreater(transactions[0]['amount'], 0)
 
-    def test_parse_table_skips_zero_amount(self) -> None:
-        """Rows where amount cannot be extracted are skipped."""
+    def test_parse_table_keeps_unparsed_amount_as_error_fragment(self) -> None:
+        """A dated row without a readable amount stays visible, not dropped."""
         parser = self._make_parser()
         df = self._make_df(
             [
@@ -4521,7 +4543,11 @@ class TestSberbankParser(TestCase):
             ],
         )
         transactions = parser._parse_table(df)
-        self.assertEqual(len(transactions), 0)
+        self.assertEqual(len(transactions), 1)
+        self.assertIsNone(transactions[0]['amount'])
+        self.assertTrue(transactions[0]['parse_issue'])
+        self.assertEqual(transactions[0]['source_ref'], '123')
+        self.assertEqual(transactions[0]['source_ref_strength'], 'weak')
 
     def test_parse_table_multiple_transactions(self) -> None:
         """Multiple consecutive two-row transactions are all parsed."""
@@ -4729,6 +4755,77 @@ class TestSberbankParser(TestCase):
         transactions = parser._parse_table(df)
         self.assertEqual(len(transactions), 1)
         self.assertIsNone(transactions[0]['source_ref'])
+
+    def test_authcode_without_date_is_not_an_identity(self) -> None:
+        """A bare auth code without bank date/context is not a reference."""
+        parser = self._make_parser()
+        row = pd.Series(['869838', 'MOSCOW STRELKA', '', ''])
+        self.assertIsNone(parser._extract_authcode(row))
+
+    def test_local_category_is_closed_and_directional(self) -> None:
+        """Only known expense labels map; unknown and credit rows do not."""
+        self.assertEqual(
+            sberbank_local_category('Транспорт', 'expense'),
+            'Транспорт',
+        )
+        self.assertIsNone(
+            sberbank_local_category('Покупка в MAGNIT', 'expense'),
+        )
+        self.assertIsNone(sberbank_local_category('Транспорт', 'income'))
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_parse_keeps_repeated_authcode_rows(
+        self,
+        mock_camelot: MagicMock,
+        mock_extract_text: MagicMock,
+    ) -> None:
+        """A reused auth code never merges away a second bank operation."""
+        parser = self._make_parser()
+        mock_table = MagicMock()
+        mock_table.df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '18.02.2026 20:20',
+                    'Рестораны и кафе',
+                    '3 276,00 ₽',
+                    '53 534,93 ₽',
+                ],
+                ['18.02.2026 / 869838', 'SUSHI VOK', '', ''],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        transactions = parser.parse().transactions
+
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(
+            [t['source_ref'] for t in transactions],
+            ['869838', '869838'],
+        )
+        self.assertEqual([t['row_position'] for t in transactions], [0, 1])
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_parse_wraps_fatal_file_error(
+        self,
+        mock_camelot: MagicMock,
+        mock_extract_text: MagicMock,
+    ) -> None:
+        """A broken file is one fatal parse error, not a partial statement."""
+        parser = self._make_parser()
+        mock_camelot.read_pdf.side_effect = RuntimeError('broken table')
+
+        with self.assertRaises(BankStatementParseError):
+            parser.parse()
 
 
 class TestStatementParseResult(TestCase):
@@ -6121,6 +6218,32 @@ class TestBankStatementImportReliability(TestCase):
             process_bank_statement_task.apply(args=[upload.pk])
         return upload
 
+    def _sberbank_upload(
+        self,
+        transactions: list[dict[str, Any]],
+        *,
+        account: Account | None = None,
+        file_hash: str = '',
+        format_version: int = 2,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=account or self.account,
+            pdf_file='bank_statements/sberbank.pdf',
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=transactions,
+                bank='sberbank',
+                format_version=format_version,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+        return upload
+
     def test_raiffeisen_known_category_posts_row_and_movement(self) -> None:
         """A known local category posts exactly one linked movement."""
         classifier = MagicMock()
@@ -6273,6 +6396,325 @@ class TestBankStatementImportReliability(TestCase):
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
         classifier.classify.assert_not_called()
+
+    def test_sberbank_known_category_posts_row_and_movement(self) -> None:
+        """A known local category posts one linked movement, once."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        moment = timezone.now()
+        row_data = {
+            'date': moment,
+            'amount': Decimal('-73.00'),
+            'description': 'Транспорт',
+            'source_ref': '869838',
+            'source_ref_strength': 'weak',
+            'category_name': 'Транспорт',
+            'row_position': 0,
+        }
+        upload = self._sberbank_upload([row_data])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('927.00'))
+        self.assertEqual(upload.imported_count, 1)
+        classifier.classify.assert_not_called()
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=0,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            needs_transfer_count=0,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[row_data],
+                bank='sberbank',
+                format_version=2,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        self.account.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(
+            BankStatementRow.objects.filter(upload=upload).count(),
+            1,
+        )
+        self.assertEqual(self.account.balance, Decimal('927.00'))
+
+    def test_sberbank_unknown_category_awaits_markup(self) -> None:
+        """An unknown category stays unresolved and moves no money."""
+        upload = self._sberbank_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Покупка в MAGNIT',
+                    'source_ref': 'A-1',
+                    'source_ref_strength': 'weak',
+                    'category_name': None,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_sberbank_credit_income_is_needs_transfer_not_income(self) -> None:
+        """A positive credit-card row is an unperformed repayment."""
+        credit_account = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+        )
+        upload = self._sberbank_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('50546.00'),
+                    'description': 'Перевод на карту',
+                    'source_ref': 'A-2',
+                    'source_ref_strength': 'weak',
+                    'category_name': None,
+                },
+            ],
+            account=credit_account,
+        )
+
+        upload.refresh_from_db()
+        credit_account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEEDS_TRANSFER)
+        self.assertIsNone(row.transaction)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(credit_account.balance, Decimal('1000.00'))
+        self.assertEqual(upload.income_count, 0)
+        self.assertEqual(upload.needs_transfer_count, 1)
+
+    def test_sberbank_repeated_authcode_keeps_both_rows_unresolved(
+        self,
+    ) -> None:
+        """A reused auth code neither merges nor posts either operation."""
+        moment = timezone.now()
+        self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-10.00'),
+                    'description': 'Транспорт',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Транспорт',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment,
+                    'amount': Decimal('-20.00'),
+                    'description': 'Транспорт',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Транспорт',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        self.account.refresh_from_db()
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            2,
+        )
+
+    def test_sberbank_row_error_does_not_block_other_rows(self) -> None:
+        """A recoverable row error stays visible and other rows still post."""
+        upload = self._sberbank_upload(
+            [
+                {
+                    'date': None,
+                    'amount': None,
+                    'description': 'Фрагмент без суммы',
+                    'source_ref': 'A-3',
+                    'parse_issue': 'unsupported',
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-73.00'),
+                    'description': 'Транспорт',
+                    'source_ref': 'A-4',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Транспорт',
+                    'row_position': 1,
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            1,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertEqual(self.account.balance, Decimal('927.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_sberbank_empty_parse_is_not_completed(self) -> None:
+        """An empty Sberbank parse does not prove that there are no rows."""
+        upload = self._sberbank_upload([])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
+
+    def test_sberbank_same_file_position_is_exact_duplicate(self) -> None:
+        """File hash, stable format, position and fields prove a repeat."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        canonical_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/canonical.pdf',
+            file_hash='canonical-hash',
+        )
+        canonical_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('73.00'),
+            date=moment,
+            source_ref='A-EXACT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=2,
+        )
+        canonical_row = BankStatementRow.objects.create(
+            upload=canonical_upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('73.00'),
+            source_ref='A-EXACT',
+            source_row_position=0,
+            transaction=canonical_transaction,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        upload = self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-73.00'),
+                    'description': 'Транспорт',
+                    'source_ref': 'A-EXACT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Транспорт',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(row.canonical_row, canonical_row)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_sberbank_parser_drift_is_not_exact(self) -> None:
+        """A different parser format mapping requires manual reassignment."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('73.00'),
+            date=moment,
+            source_ref='A-DRIFT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=1,
+        )
+        upload = self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-73.00'),
+                    'description': 'Транспорт',
+                    'source_ref': 'A-DRIFT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Транспорт',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+            format_version=2,
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
 
     def test_empty_parse_is_not_completed(self) -> None:
         """An empty parse does not prove that the statement has no rows."""
