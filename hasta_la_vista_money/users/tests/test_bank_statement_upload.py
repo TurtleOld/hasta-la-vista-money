@@ -1,7 +1,7 @@
 """Tests for bank statement upload functionality."""
 
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
@@ -12,6 +12,7 @@ import pandas as pd
 from celery.exceptions import Retry
 from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
+from django.core.files import File
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, OperationalError
 from django.test import Client, TestCase
@@ -63,6 +64,10 @@ from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 if TYPE_CHECKING:
     from django.http import HttpResponseRedirect
+
+RAIFFEISEN_REAL_FIXTURE = (
+    Path(__file__).parent / 'fixtures' / 'raiffeisen_statement.pdf'
+)
 
 
 class TestBankStatementUploadView(TestCase):
@@ -629,6 +634,31 @@ class TestBankStatementReconciliationView(TestCase):
             response,
             f'value="{self.row.candidates.get().pk}" checked required',
         )
+
+    def test_markup_page_shows_unknown_row_without_moving_money(self) -> None:
+        """An unknown bank row stays visible and changes no money."""
+        unknown = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            description='Неизвестная операция Райффайзена',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+        response = self.client.get(
+            reverse(
+                'finance_account:bank_statement_markup',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, unknown.description)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
 
     def test_linked_decision_is_idempotent_and_keeps_balance(self) -> None:
         url = reverse(
@@ -4094,6 +4124,311 @@ class TestRaiffeisenBankParser(TestCase):
         amount = parser._extract_amount_from_row(row)
         self.assertEqual(amount, Decimal('-37177.01'))
 
+    def test_unsupported_row_is_kept_as_visible_fragment(self) -> None:
+        """A transaction row without date or amount is not dropped."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                ['1', '', '', '', '', 'Неизвестная операция', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['parse_issue'],
+            'unsupported',
+        )
+        self.assertIsNone(transactions[0]['date'])
+        self.assertIsNone(transactions[0]['amount'])
+        self.assertEqual(
+            transactions[0]['description'],
+            'Неизвестная операция',
+        )
+
+    def test_known_description_gets_local_category(self) -> None:
+        """Closed local rules categorize a salary credit without AI."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                [
+                    '1',
+                    '28.12.2025 11:10',
+                    'ZP1',
+                    '+ 1 500,00 ₽',
+                    '',
+                    'Зачисление заработной платы',
+                    '',
+                ],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['category_name'],
+            'Заработная плата',
+        )
+
+    def test_unknown_description_has_no_local_category(self) -> None:
+        """A merchant payment has no closed local category."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                [
+                    '1',
+                    '28.12.2025 11:10',
+                    '',
+                    '',
+                    '- 13,20 ₽',
+                    'Оплата в MAGNIT',
+                    '',
+                ],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertIsNone(transactions[0]['category_name'])
+
+    def test_repeated_document_number_keeps_both_rows(self) -> None:
+        """A repeated document number is not an identity for dropping rows."""
+        first = {
+            'date': datetime(2025, 12, 1, 10, tzinfo=UTC),
+            'amount': Decimal('-10.00'),
+            'description': 'Первая операция',
+            'source_ref': 'DUP-1',
+        }
+        second = {
+            'date': datetime(2025, 12, 2, 10, tzinfo=UTC),
+            'amount': Decimal('-20.00'),
+            'description': 'Вторая операция',
+            'source_ref': 'DUP-1',
+        }
+
+        result = _dedup_transactions(
+            [first, second],
+            merge_repeated_refs=False,
+        )
+
+        self.assertEqual(len(result), 2)
+
+    def test_fully_identical_rows_with_repeated_ref_stay_visible(self) -> None:
+        """Identical rows are not merged when the reference is not proof."""
+        row = {
+            'date': datetime(2025, 12, 1, 10, tzinfo=UTC),
+            'amount': Decimal('-10.00'),
+            'description': 'Комиссия',
+            'source_ref': 'DUP-2',
+        }
+
+        result = _dedup_transactions(
+            [row.copy(), row.copy()],
+            merge_repeated_refs=False,
+        )
+
+        self.assertEqual(len(result), 2)
+
+    def test_local_category_respects_direction(self) -> None:
+        """An expense row never gets an income-only local category."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                [
+                    '1',
+                    '28.12.2025 11:10',
+                    '',
+                    '',
+                    '- 1 000,00 ₽',
+                    'Оплата труда подрядчику',
+                    '',
+                ],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertIsNone(transactions[0]['category_name'])
+
+    def test_compact_cash_does_not_categorize_next_row(self) -> None:
+        """A cash row's tail never categorizes the following operation."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                ['', '', '', ''],
+                ['01.02.2026 18:14', '', '', ''],
+                ['1\n72', '+ 2 000,00 ₽', 'Перевод средств', ''],
+                ['', '', 'Выдача наличных средств', ''],
+                ['23.01.2026 17:22', '', '', ''],
+                ['311345 73', '- 120 000,00 ₽', 'банкомат', ''],
+                ['', '', '', ''],
+                ['20.01.2026 00:00', '', '', ''],
+                ['999\n74', '- 10,00 ₽', 'Оплата покупки', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 3)
+        by_position = {
+            transaction['row_position']: transaction
+            for transaction in transactions
+        }
+        self.assertEqual(by_position[72]['category_name'], None)
+        self.assertEqual(by_position[73]['category_name'], 'Наличные')
+        self.assertEqual(by_position[74]['category_name'], None)
+        self.assertEqual(by_position[73]['source_ref'], '311345')
+
+    def test_compact_row_without_amount_stays_visible(self) -> None:
+        """A document row without amount becomes a visible fragment."""
+        parser = self._make_parser()
+        df = pd.DataFrame(
+            [
+                ['1\n1', '', 'Неизвестная операция', ''],
+                ['', '', '', ''],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['parse_issue'],
+            'unsupported',
+        )
+        self.assertIsNone(transactions[0]['amount'])
+        self.assertEqual(transactions[0]['row_position'], 1)
+
+    def test_real_statement_matches_bank_summary(self) -> None:
+        """Real anonymized statement parses all rows and printed totals."""
+        result = _RaiffeisenBankParser(
+            RAIFFEISEN_REAL_FIXTURE,
+        ).parse()
+
+        income = sum(
+            transaction['amount']
+            for transaction in result.transactions
+            if transaction['amount'] > 0
+        )
+        expense = sum(
+            -transaction['amount']
+            for transaction in result.transactions
+            if transaction['amount'] < 0
+        )
+        self.assertEqual(len(result.transactions), 138)
+        self.assertEqual(income, Decimal('613390.25'))
+        self.assertEqual(expense, Decimal('619845.17'))
+        self.assertEqual(
+            result.account_number,
+            '68509471470637308180',
+        )
+        self.assertEqual(result.period_start, date(2025, 11, 20))
+        self.assertEqual(
+            result.closing_balance_date,
+            date(2026, 11, 20),
+        )
+        self.assertEqual(result.closing_balance, Decimal('0.00'))
+
+        positions = sorted(
+            transaction['row_position'] for transaction in result.transactions
+        )
+        self.assertEqual(positions, list(range(1, 139)))
+        refs = [
+            transaction['source_ref']
+            for transaction in result.transactions
+            if transaction['source_ref']
+        ]
+        self.assertEqual(len(refs), 125)
+        self.assertEqual(len(set(refs)), 125)
+        self.assertEqual(
+            sum(
+                1
+                for transaction in result.transactions
+                if not transaction['source_ref']
+            ),
+            13,
+        )
+        self.assertFalse(
+            any(
+                transaction.get('parse_issue')
+                for transaction in result.transactions
+            ),
+        )
+        categories = [
+            transaction['category_name'] for transaction in result.transactions
+        ]
+        self.assertEqual(categories.count(None), 137)
+        self.assertEqual(categories.count('Наличные'), 1)
+
+        by_position = {
+            transaction['row_position']: transaction
+            for transaction in result.transactions
+        }
+        self.assertEqual(
+            (
+                by_position[1]['date'].date(),
+                by_position[1]['amount'],
+                by_position[1]['source_ref'],
+            ),
+            (date(2026, 10, 14), Decimal('-5001.00'), '930579'),
+        )
+        self.assertEqual(
+            (
+                by_position[19]['date'].date(),
+                by_position[19]['amount'],
+                by_position[19]['source_ref'],
+            ),
+            (date(2026, 5, 23), Decimal('3000.00'), '875409'),
+        )
+        self.assertEqual(
+            (
+                by_position[73]['amount'],
+                by_position[73]['source_ref'],
+                by_position[73]['category_name'],
+            ),
+            (Decimal('-120000.00'), '311345', 'Наличные'),
+        )
+        self.assertEqual(
+            (
+                by_position[138]['date'].date(),
+                by_position[138]['amount'],
+                by_position[138]['source_ref'],
+            ),
+            (date(2025, 11, 20), Decimal('-1000.00'), '77289'),
+        )
+        transfers = [
+            transaction
+            for transaction in result.transactions
+            if 'перевод' in transaction['description'].casefold()
+        ]
+        self.assertTrue(transfers)
+        self.assertTrue(
+            all(
+                transaction['category_name'] is None
+                for transaction in transfers
+            ),
+        )
+        self.assertIn('1080.00 NQWMXBV', by_position[20]['description'])
+        self.assertNotIn('1080.00 NQWMXBV', by_position[21]['description'])
+        self.assertIn('Перевод с номера', by_position[21]['description'])
+        self.assertIn(
+            '14334414337310000610',
+            by_position[39]['description'],
+        )
+        self.assertNotIn(
+            '14334414337310000610',
+            by_position[38]['description'],
+        )
+        self.assertIn('Оплата услуг', by_position[32]['description'])
+        self.assertIn(
+            'Номер перевода 5223682132',
+            by_position[32]['description'],
+        )
+
 
 class TestSberbankParser(TestCase):
     """Unit tests for the Sberbank credit card statement parser."""
@@ -4348,8 +4683,10 @@ class TestSberbankParser(TestCase):
                     '12 851,05',
                 ],
                 [
-                    '03.04.2026\n311925\n'
-                    'Moscow Aliexpress. Операция по карте ****1234',
+                    (
+                        '03.04.2026\n311925\n'
+                        'Moscow Aliexpress. Операция по карте ****1234'
+                    ),
                     '',
                     '',
                 ],
@@ -4366,8 +4703,10 @@ class TestSberbankParser(TestCase):
         parser = self._make_parser()
         row = pd.Series(
             [
-                '03.04.2026\n311925\n'
-                'Moscow Aliexpress. Операция по карте ****1234',
+                (
+                    '03.04.2026\n311925\n'
+                    'Moscow Aliexpress. Операция по карте ****1234'
+                ),
                 '',
                 '',
             ],
@@ -5499,7 +5838,7 @@ class TestOzonBankStatement(TestCase):
                 7,
                 25,
                 10,
-                tzinfo=timezone.get_current_timezone(),
+                tzinfo=UTC,
             ),
         )
         mock_table = MagicMock()
@@ -5756,6 +6095,651 @@ class TestBankStatementImportReliability(TestCase):
 
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+
+    def _raiffeisen_upload(
+        self,
+        transactions: list[dict[str, Any]],
+        *,
+        file_hash: str = '',
+        format_version: int = 1,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/raiffeisen.pdf',
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=transactions,
+                bank='raiffeisen',
+                format_version=format_version,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+        return upload
+
+    def test_raiffeisen_known_category_posts_row_and_movement(self) -> None:
+        """A known local category posts exactly one linked movement."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('1500.00'),
+                    'description': 'Зачисление заработной платы',
+                    'source_ref': 'R-1',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Заработная плата',
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 1)
+        row = rows.get()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('2500.00'))
+        self.assertEqual(upload.imported_count, 1)
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        classifier.classify.assert_not_called()
+
+    def test_raiffeisen_unknown_category_awaits_markup(self) -> None:
+        """An unknown category keeps the row unresolved and moves no money."""
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'R-2',
+                    'source_ref_strength': 'weak',
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_raiffeisen_repeated_ref_is_unresolved(self) -> None:
+        """A repeated document number never proves a new unambiguous row."""
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-10.00'),
+                    'description': 'Снятие наличных',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Наличные',
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-20.00'),
+                    'description': 'Снятие наличных',
+                    'source_ref': 'REPEATED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Наличные',
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            2,
+        )
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+    def test_raiffeisen_row_error_does_not_block_other_rows(self) -> None:
+        """A recoverable row error stays visible and other rows still post."""
+        classifier = MagicMock()
+        ApplicationContainer.users.category_classifier.override(classifier)
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': None,
+                    'amount': None,
+                    'description': 'Неизвестная операция',
+                    'parse_issue': 'unsupported',
+                },
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-3',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                },
+            ],
+        )
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            1,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        classifier.classify.assert_not_called()
+
+    def test_empty_parse_is_not_completed(self) -> None:
+        """An empty parse does not prove that the statement has no rows."""
+        upload = self._raiffeisen_upload([])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
+
+    def test_repeated_import_is_idempotent(self) -> None:
+        """Re-running the import does not create a second movement."""
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-4',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                },
+            ],
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        self.account.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(BankStatementRow.objects.count(), 1)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+
+    def test_repeated_import_is_idempotent_after_cursor_reset(self) -> None:
+        """A reset import cursor does not post the same row twice."""
+        moment = timezone.now()
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-6',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='cursor-file',
+        )
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=0,
+        )
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        self.account.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 1)
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 1)
+        row = rows.get()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertIsNone(row.canonical_row)
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+
+    def test_known_row_does_not_post_over_existing_unresolved(self) -> None:
+        """A known local category never posts over an unresolved repeat."""
+        moment = timezone.now()
+        self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-50.00'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'SHARED',
+                    'source_ref_strength': 'weak',
+                    'row_position': 0,
+                },
+            ],
+        )
+        self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-50.00'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'SHARED',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+        )
+
+        self.account.refresh_from_db()
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            2,
+        )
+
+    def test_autopost_links_existing_open_row(self) -> None:
+        """An open row at the same position is linked, not left behind."""
+        moment = timezone.now()
+        upload = self._create_upload()
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=None,
+            transaction_date=None,
+            amount=None,
+            description='',
+            source_row_position=0,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[
+                    {
+                        'date': moment,
+                        'amount': Decimal('-13.20'),
+                        'description': 'Комиссия за обслуживание',
+                        'source_ref': 'R-7',
+                        'source_ref_strength': 'weak',
+                        'category_name': 'Комиссия банка',
+                        'row_position': 0,
+                    },
+                ],
+                bank='raiffeisen',
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(row.transaction)
+        self.assertEqual(row.amount, Decimal('13.20'))
+        self.assertEqual(row.transaction_date, moment)
+        self.assertEqual(row.transaction_type, TransactionType.EXPENSE)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_duplicate_identical_rows_stay_visible(self) -> None:
+        """Two identical rows with one reference both stay unresolved."""
+        moment = timezone.now()
+        entry = {
+            'date': moment,
+            'amount': Decimal('-13.20'),
+            'description': 'Комиссия за обслуживание',
+            'source_ref': 'SAME',
+            'source_ref_strength': 'weak',
+            'category_name': 'Комиссия банка',
+            'row_position': 0,
+        }
+        second = {**entry, 'row_position': 1}
+        self._raiffeisen_upload([entry, second])
+
+        self.account.refresh_from_db()
+        self.assertFalse(Transaction.objects.exists())
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            2,
+        )
+
+    def test_weak_ref_same_file_proves_visible_exact_duplicate(self) -> None:
+        """Same file hash, position and format prove one visible duplicate."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Комиссия банка',
+            type=TransactionType.EXPENSE,
+        )
+        canonical_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/canonical.pdf',
+            file_hash='canonical-hash',
+        )
+        canonical_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('13.20'),
+            date=moment,
+            source_ref='R-EXACT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=1,
+        )
+        canonical_row = BankStatementRow.objects.create(
+            upload=canonical_upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('13.20'),
+            source_ref='R-EXACT',
+            source_row_position=0,
+            transaction=canonical_transaction,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-EXACT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(row.canonical_row, canonical_row)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_weak_ref_parser_drift_is_not_exact(self) -> None:
+        """A different parser mapping requires manual reassignment."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Комиссия банка',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('13.20'),
+            date=moment,
+            source_ref='R-DRIFT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=1,
+        )
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-DRIFT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+            format_version=2,
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_position_mismatch_is_a_conflict(self) -> None:
+        """A different amount at the same position is not an exact repeat."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Комиссия банка',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('99.00'),
+            date=moment,
+            source_ref='R-CONFLICT',
+            source_file_hash='same-file',
+            source_row_position=0,
+            source_format_version=1,
+        )
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-CONFLICT',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='same-file',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_weak_ref_other_file_is_not_exact(self) -> None:
+        """A different file hash never proves a duplicate by position."""
+        moment = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Комиссия банка',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('13.20'),
+            date=moment,
+            source_ref='R-FILE',
+            source_file_hash='file-a',
+            source_row_position=0,
+            source_format_version=1,
+        )
+        upload = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-FILE',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='file-b',
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertTrue(row.candidates.exists())
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_two_identical_purchases_keep_both_rows(self) -> None:
+        """Two real identical purchases both post and stay visible."""
+        moment = timezone.now()
+        self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-P1',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-P2',
+                    'source_ref_strength': 'weak',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 1,
+                },
+            ],
+            file_hash='purchases',
+        )
+
+        self.account.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(self.account.balance, Decimal('973.60'))
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                decision=BankStatementRow.Decision.NEW,
+            ).count(),
+            2,
+        )
+
+    def test_real_raiffeisen_statement_posts_only_local_category(self) -> None:
+        """Real statement posts only the known cash row and keeps 137 rows."""
+        with RAIFFEISEN_REAL_FIXTURE.open('rb') as pdf:
+            upload = BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file=File(pdf, name='raiffeisen.pdf'),
+            )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(upload.total_transactions, 138)
+        self.assertEqual(upload.processed_transactions, 138)
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(self.account.balance, Decimal('-119000.00'))
+        self.assertEqual(
+            self.account.account_number,
+            '68509471470637308180',
+        )
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('0.00'),
+        )
+        self.assertIsNone(upload.balance_discrepancy)
+        rows = BankStatementRow.objects.filter(upload=upload)
+        self.assertEqual(rows.count(), 138)
+        self.assertEqual(
+            rows.filter(
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            ).count(),
+            137,
+        )
+        posted = rows.get(
+            decision=BankStatementRow.Decision.NEW,
+        )
+        self.assertEqual(posted.source_row_position, 73)
+        self.assertEqual(posted.amount, Decimal('120000.00'))
+        self.assertIsNotNone(posted.transaction)
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
+    def test_raiffeisen_fatal_file_error_fails_visible_without_money(
+        self,
+        parser: MagicMock,
+    ) -> None:
+        """A broken file is visible, posts nothing and is not complete."""
+        parser.return_value.parse.side_effect = BankStatementParseError(
+            'broken file',
+        )
+        upload = self._create_upload()
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.failed_count, 1)
+        self.assertTrue(upload.error_message)
+        self.assertFalse(Transaction.objects.exists())
+        self.assertFalse(BankStatementRow.objects.exists())
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_deterministic_error_fails_without_retry(

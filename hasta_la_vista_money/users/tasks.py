@@ -111,6 +111,7 @@ def process_bank_statement_task(
         result = service.import_statement(upload)
 
         upload.account.refresh_from_db(fields=['balance'])
+        empty_parse = upload.total_transactions == 0
         awaiting_markup = BankStatementRow.objects.filter(
             upload=upload,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
@@ -124,7 +125,14 @@ def process_bank_statement_task(
         )
         _store_statement_balance(upload, result)
 
-        if unresolved:
+        if empty_parse:
+            upload.error_message = str(
+                _(
+                    'В выписке не удалось выделить ни одной операции; '
+                    'полнота не подтверждена.',
+                ),
+            )
+        if empty_parse or unresolved:
             upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         else:
             upload.status = BankStatementUpload.Status.COMPLETED
@@ -134,6 +142,7 @@ def process_bank_statement_task(
                 'status',
                 'progress',
                 'updated_at',
+                'error_message',
                 'statement_closing_balance',
                 'balance_currency',
                 'balance_moment',
