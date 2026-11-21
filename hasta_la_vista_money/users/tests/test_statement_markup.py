@@ -1347,8 +1347,12 @@ class StatementBulkMarkupTest(StatementMarkupFixture):
 class StatementRowExclusionTest(StatementMarkupFixture):
     """Exclusion, undo and legacy skip behavior of a RosDorBank row."""
 
-    def _exclude(self, row: BankStatementRow, code: str = EXCLUSION_CODE):
-        return self.service.exclude(row.pk, self.user.pk, code)
+    def _exclude(
+        self,
+        row: BankStatementRow,
+        code: str = EXCLUSION_CODE,
+    ) -> None:
+        self.service.exclude(row.pk, self.user.pk, code)
 
     def test_deferred_row_does_not_move_money_and_stays_a_problem(self) -> None:
         deferred = self._row(1)
