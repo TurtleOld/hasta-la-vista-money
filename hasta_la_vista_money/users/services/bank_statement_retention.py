@@ -98,6 +98,10 @@ class BankStatementRetentionService:
             upload.statement_closing_balance = None
             upload.account_balance_after = None
             upload.balance_discrepancy = None
+            upload.balance_is_actual = False
+            upload.balance_reason = (
+                BankStatementUpload.BalanceReason.BANK_DATA_CLEANED
+            )
             upload.error_message = ''
             upload.celery_task_id = ''
             upload.status = (
@@ -117,6 +121,8 @@ class BankStatementRetentionService:
                     'statement_closing_balance',
                     'account_balance_after',
                     'balance_discrepancy',
+                    'balance_is_actual',
+                    'balance_reason',
                     'error_message',
                     'celery_task_id',
                 ],

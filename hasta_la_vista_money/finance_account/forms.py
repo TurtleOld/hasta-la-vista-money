@@ -52,7 +52,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import BankStatementUpload, User
 
 
 class AddAccountForm(BaseAccountForm, DateFieldMixin):
@@ -593,6 +593,15 @@ class ManualCoverageForm(Form):
                 _('Конец периода не может быть раньше начала.'),
             )
         return cleaned
+
+
+class BalanceExplanationForm(Form):
+    """Owner explanation of a balance discrepancy by an approved code."""
+
+    code = ChoiceField(
+        label=_('Объяснение расхождения'),
+        choices=BankStatementUpload.ExplanationCode.choices,
+    )
 
 
 class RepaymentTransferLinkForm(Form):

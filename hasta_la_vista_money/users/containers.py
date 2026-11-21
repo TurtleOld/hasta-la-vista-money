@@ -11,11 +11,15 @@ from hasta_la_vista_money.finance_account.repositories import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.protocols import (
+    BalanceHistoryServiceProtocol,
+)
 from hasta_la_vista_money.users.protocols.services import (
     AccountingControlServiceProtocol,
     BankStatementImportServiceProtocol,
     BankStatementReconciliationServiceProtocol,
     BankStatementRetentionServiceProtocol,
+    StatementBalanceVerificationServiceProtocol,
     StatementCoverageServiceProtocol,
     StatementMarkupServiceProtocol,
     StatementRowLinkServiceProtocol,
@@ -46,6 +50,9 @@ from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
     ExternalModelCategoryClassifier,
     NoopClassifier,
+)
+from hasta_la_vista_money.users.services.statement_balance_verification import (
+    StatementBalanceVerificationService,
 )
 from hasta_la_vista_money.users.services.statement_coverage import (
     StatementCoverageService,
@@ -102,6 +109,10 @@ def _build_classifier() -> CategoryClassifier:
 class UsersContainer(containers.DeclarativeContainer):
     """DI-контейнер для приложения users."""
 
+    balance_history_service: providers.Dependency[
+        BalanceHistoryServiceProtocol
+    ] = providers.Dependency()
+
     statistics_repository = providers.Singleton(StatisticsRepository)
 
     user_statistics_service: providers.Factory[
@@ -134,11 +145,19 @@ class UsersContainer(containers.DeclarativeContainer):
         coverage_repository=statement_coverage_repository,
     )
 
+    statement_balance_verification_service: providers.Factory[
+        StatementBalanceVerificationServiceProtocol
+    ] = providers.Factory(
+        StatementBalanceVerificationService,
+        balance_history_service=balance_history_service,
+    )
+
     accounting_control_service: providers.Factory[
         AccountingControlServiceProtocol
     ] = providers.Factory(
         AccountingControlService,
         coverage_service=statement_coverage_service,
+        balance_verification_service=statement_balance_verification_service,
     )
 
     statement_row_link_service: providers.Factory[
@@ -166,6 +185,7 @@ class UsersContainer(containers.DeclarativeContainer):
             TransferMoneyLogRepository,
         ),
         statement_row_repository=statement_row_repository,
+        balance_verification_service=statement_balance_verification_service,
     )
 
     bank_statement_import_service: providers.Factory[
