@@ -129,6 +129,7 @@ class UsersContainer(containers.DeclarativeContainer):
         transfer_log_repository=providers.Singleton(
             TransferMoneyLogRepository,
         ),
+        statement_row_repository=statement_row_repository,
     )
 
     bank_statement_import_service: providers.Factory[

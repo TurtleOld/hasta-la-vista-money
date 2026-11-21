@@ -1,0 +1,46 @@
+{% load i18n %}
+{% if exclusions %}
+    <section class="composer-card">
+        <div class="composer-hd">
+            <h2>{% translate 'Оговорки полноты' %}</h2>
+        </div>
+        <p class="markup-hint">{% translate 'Исключённые строки не являются открытыми проблемами, но не доказывают полноту учёта.' %}</p>
+        {% for row in exclusions %}
+            <div class="markup-row">
+                <div class="min-w-0">
+                    <div class="finances-row-title">{{ row.description }}</div>
+                    <div class="finances-row-sub">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_exclusion_code_display }} · {{ row.decided_at|date:'d.m.Y H:i' }}</div>
+                    {% for audit in row.decision_audits.all %}
+                        <div class="finances-row-sub">{{ audit.created_at|date:'d.m.Y H:i' }} · {{ audit.actor.username|default:'—' }} · {% if audit.previous_decision == 'skipped' %}{% translate 'Отмена исключения' %}{% else %}{{ audit.get_decision_display }}{% endif %}{% if audit.exclusion_code %} · {{ audit.get_exclusion_code_display }}{% endif %}</div>
+                    {% endfor %}
+                </div>
+                <div class="finances-row-amount">{{ row.amount|floatformat:2 }} ₽</div>
+                <form method="post" action="{% url 'finance_account:bank_statement_markup_undo_exclusion' row.upload_id row.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="finances-button finances-button-secondary">{% translate 'Отменить исключение' %}</button>
+                </form>
+            </div>
+        {% endfor %}
+    </section>
+{% endif %}
+{% if legacy_skips %}
+    <section class="composer-card">
+        <div class="composer-hd">
+            <h2>{% translate 'Требует проверки' %}</h2>
+        </div>
+        <p class="markup-hint">{% translate 'Пропущенные строки без утверждённой причины не считаются исключением.' %}</p>
+        {% for row in legacy_skips %}
+            <div class="markup-row">
+                <div class="min-w-0">
+                    <div class="finances-row-title">{{ row.description }}</div>
+                    <div class="finances-row-sub">{{ row.transaction_date|date:'d.m.Y' }} · {{ row.get_decision_display }}</div>
+                </div>
+                <div class="finances-row-amount">{{ row.amount|floatformat:2 }} ₽</div>
+                <form method="post" action="{% url 'finance_account:bank_statement_markup_undo_exclusion' row.upload_id row.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="finances-button finances-button-secondary">{% translate 'Вернуть в обработку' %}</button>
+                </form>
+            </div>
+        {% endfor %}
+    </section>
+{% endif %}

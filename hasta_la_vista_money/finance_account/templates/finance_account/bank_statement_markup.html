@@ -27,7 +27,7 @@
                 <h1>{% translate 'Разметка выписки' %}</h1>
                 <span class="meta">{{ upload.account.name_account }} · {% translate 'строк' %}: {{ page_obj.paginator.count }}</span>
             </div>
-            <p class="markup-hint">{% translate 'Выберите категории или отметьте строки для пропуска, затем нажмите «Провести». Остаток счёта меняется сразу при проводке.' %}</p>
+            <p class="markup-hint">{% translate 'Выберите категории или утверждённую причину исключения, затем нажмите «Провести». Остаток счёта меняется сразу при проводке.' %}</p>
 
             {% if messages %}
                 <div class="markup-messages">
@@ -112,9 +112,15 @@
                                     {% endfor %}
                                 </select>
                             {% endif %}
+                            <select name="exclude-{{ row.pk }}" class="markup-select" aria-label="{% translate 'Исключить с причиной…' %}">
+                                <option value="">{% translate 'Не исключать…' %}</option>
+                                {% for value, label in exclusion_codes %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
                             <label class="markup-check-all">
-                                <input type="checkbox" name="skip-{{ row.pk }}"{% if item.duplicate %} checked{% endif %}>
-                                {% translate 'Пропустить' %}
+                                <input type="checkbox" name="defer-{{ row.pk }}"{% if item.duplicate %} checked{% endif %}>
+                                {% translate 'Отложить' %}
                             </label>
                         </div>
                     </div>
@@ -128,6 +134,8 @@
                     </div>
                 {% endif %}
             </form>
+
+            {% include 'finance_account/partials/_statement_exclusions.html' %}
 
             {% if page_obj.has_other_pages %}
                 <nav class="finances-pagination" aria-label="{% translate 'Пагинация' %}">
