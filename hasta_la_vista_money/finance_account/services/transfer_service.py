@@ -124,6 +124,25 @@ class TransferService:
                 amount=amount,
                 exchange_date=exchange_date,
                 notes=notes or '',
+                source_fingerprint=(
+                    row.source_fingerprint if row is not None else ''
+                ),
+                source_fingerprint_key_version=(
+                    row.source_fingerprint_key_version
+                    if row is not None
+                    else ''
+                ),
+                source_fingerprint_format_version=(
+                    row.source_fingerprint_format_version
+                    if row is not None
+                    else 0
+                ),
+                source_file_hash=(
+                    (row.upload.file_hash or None) if row is not None else None
+                ),
+                source_row_position=(
+                    row.source_row_position if row is not None else None
+                ),
             )
             if row is not None:
                 self.statement_row_links.close_repayment_row(row, transfer)

@@ -149,6 +149,24 @@ def main() -> int:
 
     for migration_path in migration_paths:
         app_label, migration_name = to_migration_key(migration_path)
+        migration = loader.disk_migrations[(app_label, migration_name)]
+        merge_parents = [
+            dependency_name
+            for dependency_app, dependency_name in migration.dependencies
+            if dependency_app == app_label
+        ]
+        if len(merge_parents) > 1:
+            if migration.operations:
+                msg = (
+                    'Merge migration with operations cannot be checked '
+                    f'as a linear history: {app_label}.{migration_name}'
+                )
+                raise RuntimeError(msg)
+            sys.stdout.write(
+                'Skipped empty merge migration '
+                f'{app_label}.{migration_name} (no operations).\n',
+            )
+            continue
         previous_migration = get_previous_migration(
             loader,
             (app_label, migration_name),

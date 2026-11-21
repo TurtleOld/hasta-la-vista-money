@@ -1750,6 +1750,16 @@ class BankStatementImportService:
                 source_format_version=format_version,
             ).first()
         if row is None:
+            # An unstamped position is missing evidence, not proven parser
+            # drift: the same upload replay may restore it in place and
+            # stamp the current format. A recorded different format stays
+            # a conflict for manual reassignment.
+            row = rows.filter(
+                source_row_position=row_position,
+                source_format_version=0,
+                source_fingerprint='',
+            ).first()
+        if row is None:
             stale = rows.filter(source_row_position=row_position).first()
             if stale is not None:
                 BankStatementRow.objects.filter(pk=stale.pk).update(

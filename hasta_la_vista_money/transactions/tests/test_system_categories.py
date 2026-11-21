@@ -138,16 +138,20 @@ class SystemCategoryMigrationTest(TransactionTestCase):
     ]
 
     def setUp(self) -> None:
-        self.executor = MigrationExecutor(transaction.get_connection())
-        self.executor.migrate(self.migrate_from)
-        old_apps = self.executor.loader.project_state(self.migrate_from).apps
-        self.old_category = old_apps.get_model('transactions', 'Category')
         post_save.disconnect(seed_system_categories_for_new_user, sender=User)
+        # Create the row while every later users column still exists: the
+        # transactions target also unapplies users migrations that depend on
+        # it, and the historical user state then lacks newer NOT NULL
+        # columns.
         self.user = User.objects.create_user(
             username='migration-user',
             password=TEST_PASSWORD,
             theme='auto',
         )
+        self.executor = MigrationExecutor(transaction.get_connection())
+        self.executor.migrate(self.migrate_from)
+        old_apps = self.executor.loader.project_state(self.migrate_from).apps
+        self.old_category = old_apps.get_model('transactions', 'Category')
 
     def tearDown(self) -> None:
         self.executor = MigrationExecutor(transaction.get_connection())

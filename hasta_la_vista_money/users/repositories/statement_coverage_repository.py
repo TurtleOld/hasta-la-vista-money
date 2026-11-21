@@ -26,6 +26,7 @@ class StatementCoverageRepository:
         return (
             StatementPeriodCoverage.objects.filter(
                 account_id=account_id,
+                is_actual=True,
                 period_start__lte=period_end,
                 period_end__gte=period_start,
             )
@@ -43,7 +44,28 @@ class StatementCoverageRepository:
         author: User | None,
         upload: BankStatementUpload | None = None,
     ) -> StatementPeriodCoverage:
-        """Create or reuse a coverage record for the same bounds."""
+        """Create or reuse a coverage record for the same bounds.
+
+        A repeated parse of the same statement whose explicit period changed
+        supersedes the previous bounds of that upload. The old record stays
+        for history with an actuality flag and a revision reason; only
+        actual coverage is summarised.
+        """
+        if upload is not None:
+            StatementPeriodCoverage.objects.filter(
+                account_id=account_id,
+                upload=upload,
+                source=source,
+                is_actual=True,
+            ).exclude(
+                period_start=period_start,
+                period_end=period_end,
+            ).update(
+                is_actual=False,
+                revision_reason=(
+                    StatementPeriodCoverage.RevisionReason.PERIOD_REVISED
+                ),
+            )
         coverage, _ = StatementPeriodCoverage.objects.get_or_create(
             account_id=account_id,
             upload=upload,

@@ -65,6 +65,10 @@ _STATEMENT_AUDIT_KINDS: Final = frozenset(
         AuditOperationKind.STATEMENT_IMPORT,
         AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
         AuditOperationKind.STATEMENT_MARKUP,
+        # A transfer created to close a statement repayment row is still a
+        # bank copy; only exact provenance below can reach it, so manual
+        # transfers stay untouched.
+        AuditOperationKind.TRANSFER,
     },
 )
 
@@ -240,8 +244,10 @@ class BankStatementRetentionService:
         fingerprint, or the same (upload file hash, row position) pair, so
         those safe technical keys recover the link without guessing from a
         weak reference or an amount. A fingerprint shared with another
-        upload is the same observed operation there too, so it is not used
-        to reach that upload's audit records.
+        upload is not trusted on its own; the exact file-hash/position and
+        account composite still reaches the copy proved to belong to this
+        upload, so sharing never blocks cleanup forever and never scrubs
+        another upload's records.
         """
         transaction_ids: set[int] = set()
         transfer_ids: set[int] = set()
@@ -382,13 +388,17 @@ def _is_statement_audit_copy(
     diff = entry.diff if isinstance(entry.diff, dict) else {}
     if provenance.fingerprints & _audit_values(diff, 'source_fingerprint'):
         return True
-    return bool(
+    if not (
         provenance.file_hash
         and provenance.row_positions
         & _audit_values(diff, 'source_row_position')
         and provenance.file_hash in _audit_values(diff, 'source_file_hash')
-        and provenance.account_id in _audit_values(diff, 'account_id'),
-    )
+    ):
+        return False
+    accounts = _audit_values(diff, 'account_id')
+    accounts.update(_audit_values(diff, 'from_account_id'))
+    accounts.update(_audit_values(diff, 'to_account_id'))
+    return provenance.account_id in accounts
 
 
 def _int_or_none(value: str) -> int | None:

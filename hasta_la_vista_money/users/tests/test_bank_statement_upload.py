@@ -9528,3 +9528,155 @@ class TestBankStatementImportReliability(TestCase):
             ),
         )
         self.assertNotContains(response, 'пересекается')
+
+    def test_real_bank_adapters_keep_policy_replay_retention_and_privacy(
+        self,
+    ) -> None:
+        """Real Raiffeisen, Sberbank and Ozon runs share the same invariants.
+
+        Only demonstrated facts are asserted: parsed row counts, no invented
+        money on replay, explicit-only coverage, balance "not checked" when
+        bank metadata is unconfirmed, and cleanup that keeps positions,
+        decisions and fingerprints without bank amounts.
+        """
+        cases = (
+            (RAIFFEISEN_REAL_FIXTURE, 'raiffeisen', 138),
+            (SBERBANK_FIXTURE, 'sberbank', 6),
+            (OZON_FIXTURE, 'ozon', 56),
+        )
+        for fixture, bank, expected_rows in cases:
+            with self.subTest(bank=bank):
+                account = Account.objects.create(
+                    user=self.user,
+                    name_account=f'{bank} acceptance',
+                    balance=Decimal('1000.00'),
+                    currency='RUB',
+                    type_account=(
+                        constants.ACCOUNT_TYPE_CREDIT_CARD
+                        if bank == 'sberbank'
+                        else constants.ACCOUNT_TYPE_DEBIT_CARD
+                    ),
+                )
+                with fixture.open('rb') as pdf:
+                    upload = BankStatementUpload.objects.create(
+                        user=self.user,
+                        account=account,
+                        pdf_file=File(pdf, name=f'{bank}.pdf'),
+                    )
+
+                process_bank_statement_task.apply(args=[upload.pk])
+                upload.refresh_from_db()
+                account.refresh_from_db()
+                self.assertEqual(upload.statement_bank, bank)
+                self.assertEqual(upload.total_transactions, expected_rows)
+                self.assertEqual(upload.failed_count, 0)
+                rows = upload.statement_rows
+                self.assertEqual(rows.count(), expected_rows)
+                self.assertNotEqual(
+                    upload.status,
+                    BankStatementUpload.Status.COMPLETED,
+                )
+                self.assertTrue(
+                    rows.exclude(source_fingerprint='').exists(),
+                )
+                if (
+                    upload.balance_type
+                    == BankStatementUpload.BalanceType.UNKNOWN
+                ):
+                    self.assertEqual(
+                        upload.balance_result,
+                        BankStatementUpload.BalanceResult.NOT_CHECKED,
+                    )
+                coverage = StatementPeriodCoverage.objects.filter(
+                    upload=upload,
+                )
+                if upload.statement_period_from is not None:
+                    self.assertTrue(coverage.filter(is_actual=True).exists())
+                else:
+                    self.assertFalse(coverage.exists())
+
+                movements_before = Transaction.objects.filter(
+                    account=account,
+                ).count()
+                balance_before = account.balance
+                positions_before = {
+                    int(position)
+                    for position in rows.exclude(
+                        source_row_position=None,
+                    ).values_list('source_row_position', flat=True)
+                    if position is not None
+                }
+                self.assertTrue(
+                    ApplicationContainer()
+                    .users.bank_statement_import_service()
+                    .prepare_known_replay(
+                        upload,
+                        SimpleUploadedFile(
+                            f'{bank}-replay.pdf',
+                            fixture.read_bytes(),
+                            content_type='application/pdf',
+                        ),
+                    ),
+                )
+                process_bank_statement_task.apply(args=[upload.pk])
+                upload.refresh_from_db()
+                account.refresh_from_db()
+                after_positions = {
+                    int(position)
+                    for position in upload.statement_rows.exclude(
+                        source_row_position=None,
+                    ).values_list('source_row_position', flat=True)
+                    if position is not None
+                }
+                self.assertEqual(
+                    upload.statement_rows.count(),
+                    expected_rows,
+                    msg=(
+                        f'extra={sorted(after_positions - positions_before)} '
+                        f'lost={sorted(positions_before - after_positions)}'
+                    ),
+                )
+                self.assertEqual(
+                    Transaction.objects.filter(account=account).count(),
+                    movements_before,
+                )
+                self.assertEqual(account.balance, balance_before)
+                self.assertEqual(
+                    {
+                        int(position)
+                        for position in upload.statement_rows.exclude(
+                            source_row_position=None,
+                        ).values_list('source_row_position', flat=True)
+                        if position is not None
+                    },
+                    positions_before,
+                )
+
+                BankStatementUpload.objects.filter(pk=upload.pk).update(
+                    expires_at=timezone.now(),
+                )
+                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+                upload.refresh_from_db()
+                self.assertEqual(upload.pdf_file.name, '')
+                self.assertIsNotNone(upload.retention_cleaned_at)
+                self.assertFalse(
+                    upload.statement_rows.exclude(amount=None).exists(),
+                )
+                self.assertTrue(
+                    upload.statement_rows.exclude(
+                        source_fingerprint='',
+                    ).exists(),
+                )
+                self.assertFalse(
+                    Transaction.objects.filter(
+                        account=account,
+                        amount=Decimal(0),
+                    ).exists(),
+                )
+                if upload.statement_period_from is not None:
+                    self.assertTrue(
+                        StatementPeriodCoverage.objects.filter(
+                            upload=upload,
+                            is_actual=True,
+                        ).exists(),
+                    )
