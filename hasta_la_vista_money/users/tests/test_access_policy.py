@@ -47,6 +47,7 @@ GROUP_READ_SURFACES = frozenset(
         'budget:income_table',
         'budget:list',
         'deposits:detail',
+        'finance_account:accounting_control',
         'finance_account:by_group',
         'finance_account:list',
         'finances',
