@@ -1131,7 +1131,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-order-user'
+            username='migration-order-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1239,7 +1239,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-user'
+            username='migration-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1595,6 +1595,7 @@ class CoverageRevisionTest(TestCase):
             account=self.account,
             pdf_file='statement.pdf',
             file_hash='revision-file',
+            total_transactions=1,
         )
         self.service = ApplicationContainer().users.statement_coverage_service()
 

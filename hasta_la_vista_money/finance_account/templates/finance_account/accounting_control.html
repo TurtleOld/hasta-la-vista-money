@@ -142,7 +142,7 @@
                     {% for interval in control.coverage.intervals %}
                         <div class="control-row">
                             <span>{{ interval.period_start|date:'d.m.Y' }} — {{ interval.period_end|date:'d.m.Y' }}</span>
-                            <span class="finances-row-sub">{{ interval.source_label }}{% if interval.author %} · {{ interval.author.username }}{% endif %}{% if interval.has_no_rows %} · {% translate 'Строк нет' %}{% endif %}</span>
+                            <span class="finances-row-sub">{{ interval.source_label }}{% if interval.author %} · {{ interval.author.username }}{% endif %}</span>
                         </div>
                     {% endfor %}
                     {% for gap in control.coverage.gaps %}

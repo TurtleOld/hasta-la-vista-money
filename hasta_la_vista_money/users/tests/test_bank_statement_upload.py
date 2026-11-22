@@ -719,6 +719,7 @@ class TestBankStatementReconciliationView(TestCase):
             account=self.account,
             pdf_file='bank_statements/reconciliation.pdf',
             status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            total_transactions=1,
         )
         self.row = BankStatementRow.objects.create(
             upload=self.upload,
@@ -2354,7 +2355,21 @@ class TestBankStatementUploadHistory(TestCase):
         parser_class: MagicMock,
     ) -> None:
         parser_class.return_value.parse.return_value = StatementParseResult(
-            transactions=[],
+            transactions=[
+                {
+                    'date': datetime(
+                        2026,
+                        3,
+                        10,
+                        tzinfo=timezone.get_current_timezone(),
+                    ),
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупка',
+                    'source_ref': '1-10.03.2026',
+                    'source': 'rosdorbank',
+                    'kind': 'card',
+                },
+            ],
             period_start=date(2026, 3, 1),
             period_end=date(2026, 3, 31),
             requires_markup=True,
@@ -2378,6 +2393,50 @@ class TestBankStatementUploadHistory(TestCase):
             StatementPeriodCoverage.Source.BANK_STATEMENT,
         )
         self.assertEqual(coverage.author, self.user)
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
+    def test_import_does_not_publish_coverage_for_empty_parse(
+        self,
+        parser_class: MagicMock,
+    ) -> None:
+        """A zero-row parse keeps its bounds but proves no coverage."""
+        parser_class.return_value.parse.return_value = StatementParseResult(
+            transactions=[],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+            requires_markup=True,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/empty-period.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        ApplicationContainer().users.bank_statement_import_service().import_statement(
+            upload,
+        )
+        upload.refresh_from_db()
+
+        self.assertEqual(upload.statement_period_from, date(2026, 3, 1))
+        self.assertEqual(upload.statement_period_to, date(2026, 3, 31))
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(upload=upload).exists(),
+        )
+        summary = (
+            ApplicationContainer()
+            .users.statement_coverage_service()
+            .summary(
+                self.account,
+                date(2026, 3, 1),
+                date(2026, 3, 31),
+            )
+        )
+        self.assertEqual(summary.state, 'unknown')
+        self.assertEqual(summary.intervals, ())
 
 
 class TestBankStatementParser(TestCase):
