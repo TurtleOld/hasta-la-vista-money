@@ -7275,6 +7275,8 @@ class TestBankStatementImportReliability(TestCase):
         account: Account | None = None,
         file_hash: str = '',
         format_version: int = 2,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BankStatementUpload:
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -7290,6 +7292,8 @@ class TestBankStatementImportReliability(TestCase):
                 transactions=transactions,
                 bank='sberbank',
                 format_version=format_version,
+                period_start=period_start,
+                period_end=period_end,
             )
             process_bank_statement_task.apply(args=[upload.pk])
         return upload
@@ -9778,6 +9782,77 @@ class TestBankStatementImportReliability(TestCase):
             ),
         )
         self.assertNotContains(response, 'пересекается')
+
+    def test_overlapping_sberbank_period_publishes_coverage(self) -> None:
+        """Sberbank reconciliation still proves the later explicit period."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'S-COVERAGE',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='sberbank-coverage-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        second = self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'S-COVERAGE',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment + timedelta(days=1),
+                    'amount': Decimal('-40.00'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'S-COVERAGE-NEW',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Продукты',
+                    'row_position': 1,
+                },
+            ],
+            file_hash='sberbank-coverage-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+        second.refresh_from_db()
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+
+        coverage = StatementPeriodCoverage.objects.filter(
+            upload=second,
+            is_actual=True,
+        )
+        self.assertEqual(coverage.count(), 1)
+        record = coverage.get()
+        self.assertEqual(record.period_start, date(2026, 1, 15))
+        self.assertEqual(record.period_end, date(2026, 2, 15))
+
+        summary = (
+            ApplicationContainer()
+            .users.statement_coverage_service()
+            .summary(
+                self.account,
+                date(2026, 1, 1),
+                date(2026, 2, 15),
+            )
+        )
+        self.assertEqual(summary.state, 'covered')
+        self.assertEqual(summary.gaps, ())
 
     def test_real_bank_adapters_keep_policy_replay_retention_and_privacy(
         self,

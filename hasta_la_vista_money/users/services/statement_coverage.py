@@ -76,17 +76,23 @@ class StatementCoverageService:
     ) -> StatementPeriodCoverage | None:
         """Record the explicit period of a parsed statement.
 
+        A reparse without usable bounds retires this upload's previous
+        confirmation instead of leaving a stale interval actual.
+
         Args:
             upload: Parsed statement upload.
             period_start: Explicit statement start, if the parser found one.
             period_end: Explicit statement end, if the parser found one.
 
         Returns:
-            The recorded coverage, or ``None`` for an unknown period.
+            The recorded coverage, or ``None`` when the period is unusable.
         """
-        if period_start is None or period_end is None:
-            return None
-        if period_end < period_start:
+        if (
+            period_start is None
+            or period_end is None
+            or period_end < period_start
+        ):
+            self._coverage_repository.retire_without_bounds(upload)
             return None
         return self._coverage_repository.record(
             account_id=upload.account_id,

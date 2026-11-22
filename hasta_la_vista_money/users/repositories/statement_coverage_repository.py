@@ -84,3 +84,32 @@ class StatementCoverageRepository:
             coverage.is_actual = True
             coverage.revision_reason = ''
         return coverage
+
+    def retire_without_bounds(
+        self,
+        upload: BankStatementUpload,
+    ) -> int:
+        """Stop confirming an upload's bounds when a reparse proves none.
+
+        A repeated parse can lose the explicit period or produce invalid
+        bounds. The earlier record no longer proves that interval, so it
+        keeps its history but stops being actual. Only the records of this
+        upload are touched; manual confirmations and other uploads remain.
+
+        Args:
+            upload: Upload whose latest parse has no usable period.
+
+        Returns:
+            Number of coverage records moved out of actual coverage.
+        """
+        return StatementPeriodCoverage.objects.filter(
+            account_id=upload.account_id,
+            upload=upload,
+            source=StatementPeriodCoverage.Source.BANK_STATEMENT,
+            is_actual=True,
+        ).update(
+            is_actual=False,
+            revision_reason=(
+                StatementPeriodCoverage.RevisionReason.PERIOD_REVISED
+            ),
+        )
