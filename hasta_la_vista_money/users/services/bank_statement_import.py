@@ -407,6 +407,12 @@ class BankStatementImportService:
             == BankStatementUpload.ProcessingMode.RECONCILIATION
         )
 
+        self.coverage_service.record_statement_period(
+            upload,
+            parse_result.period_start,
+            parse_result.period_end,
+        )
+
         logger.info(
             'bank_statement_transactions_found',
             upload_id=upload.pk,
@@ -432,12 +438,6 @@ class BankStatementImportService:
                     period_from=parse_result.period_start,
                     period_to=parse_result.period_end,
                     mode=upload.processing_mode,
-                )
-            if parse_result.requires_markup:
-                self.coverage_service.record_statement_period(
-                    upload,
-                    parse_result.period_start,
-                    parse_result.period_end,
                 )
             return StatementImportResult(
                 income_count=0,
@@ -471,11 +471,6 @@ class BankStatementImportService:
             )
             upload.refresh_from_db()
 
-        self.coverage_service.record_statement_period(
-            upload,
-            parse_result.period_start,
-            parse_result.period_end,
-        )
         return StatementImportResult(
             income_count=income_count,
             expense_count=expense_count,
