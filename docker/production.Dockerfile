@@ -43,10 +43,10 @@ RUN apt-get update && \
 
 RUN pip install uv==0.7.13
 
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv lock && uv sync --locked --no-dev --no-install-project
+    uv sync --locked --no-dev --no-install-project
 
 COPY manage.py ./
 COPY config/ ./config/
