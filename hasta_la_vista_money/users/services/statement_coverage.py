@@ -75,9 +75,11 @@ class StatementCoverageService:
     ) -> StatementPeriodCoverage | None:
         """Record the explicit period of a parsed statement.
 
-        A statement with no extracted operations proves neither an empty
-        period nor that every operation was read; its bounds stay on the
-        upload for traceability.
+        A reparse without usable bounds retires this upload's previous
+        confirmation instead of leaving a stale interval actual. A statement
+        with no extracted operations proves neither an empty period nor that
+        every operation was read; its bounds stay on the upload for
+        traceability.
 
         Args:
             upload: Parsed statement upload.
@@ -85,12 +87,15 @@ class StatementCoverageService:
             period_end: Explicit statement end, if the parser found one.
 
         Returns:
-            The recorded coverage, or ``None`` for an unknown period or a
-            parse without extracted operations.
+            The recorded coverage, or ``None`` when the period is unusable or
+            the parse extracted no operations.
         """
-        if period_start is None or period_end is None:
-            return None
-        if period_end < period_start:
+        if (
+            period_start is None
+            or period_end is None
+            or period_end < period_start
+        ):
+            self._coverage_repository.retire_without_bounds(upload)
             return None
         if upload.total_transactions == 0:
             return None
