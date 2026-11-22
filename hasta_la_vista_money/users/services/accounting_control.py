@@ -48,6 +48,8 @@ class UploadControl:
     data_available: bool
     data_label: str
     awaiting_markup: int
+    requires_legacy_review: bool
+    legacy_review_label: str
 
 
 @dataclass(frozen=True)
@@ -212,9 +214,10 @@ class AccountingControlService:
             balance_checks=balance_checks,
             adapter_note=str(
                 _(
-                    'Адаптеры этого среза: РосДорБанк. Райффайзен, Сбербанк, '
-                    'Ozon и generic не покрыты этим срезом и требуют '
-                    'проверки.',
+                    'Поддержаны выписки Райффайзена, Сбербанка, Ozon и '
+                    'РосДорБанка, а также табличные выписки без банковской '
+                    'идентичности. Незнакомый формат требует ручной '
+                    'проверки: полнота автоматически не заявляется.',
                 ),
             ),
         )
@@ -335,6 +338,21 @@ class AccountingControlService:
             and upload.retention_cleaned_at is None
         )
         has_markup_rows = bool(getattr(upload, 'has_markup_rows', False))
+        requires_legacy_review = (
+            upload.legacy_review_state
+            == BankStatementUpload.LegacyReviewState.REQUIRES_REVIEW
+        )
+        if requires_legacy_review:
+            reason = (
+                upload.get_legacy_review_reason_display()
+                if upload.legacy_review_reason
+                else _('Причина не установлена')
+            )
+            legacy_label = _('Требует проверки: %(reason)s') % {
+                'reason': reason,
+            }
+        else:
+            legacy_label = ''
         return UploadControl(
             upload=upload,
             has_markup_rows=has_markup_rows,
@@ -350,4 +368,6 @@ class AccountingControlService:
                 else _('Данные очищены или срок истёк'),
             ),
             awaiting_markup=int(awaiting_by_upload.get(upload.pk, 0)),
+            requires_legacy_review=requires_legacy_review,
+            legacy_review_label=str(legacy_label),
         )

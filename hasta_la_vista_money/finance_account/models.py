@@ -338,8 +338,14 @@ class StatementPeriodCoverage(models.Model):
     rows and never proves a balance check.
     """
 
-    # shortcut: ADR-0018 coverage actuality and revision reason stay
-    # unimplemented in ticket 09; ticket 11 keeps that acceptance gap.
+    # ADR-0018 coverage actuality and revision reason are part of the
+    # coverage measurement only: they never resolve rows or prove balance.
+    class RevisionReason(models.TextChoices):
+        PERIOD_REVISED = (
+            'period_revised',
+            _('Период пересмотрен повторным разбором'),
+        )
+
     class Source(models.TextChoices):
         BANK_STATEMENT = 'bank_statement', _('Период банковской выписки')
         MANUAL_CONFIRMATION = (
@@ -362,6 +368,13 @@ class StatementPeriodCoverage(models.Model):
     period_start = models.DateField(verbose_name=_('Начало периода'))
     period_end = models.DateField(verbose_name=_('Конец периода'))
     source = models.CharField(max_length=32, choices=Source.choices)
+    is_actual = models.BooleanField(default=True)
+    revision_reason = models.CharField(
+        max_length=40,
+        choices=RevisionReason.choices,
+        blank=True,
+        default='',
+    )
     author = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -477,6 +490,31 @@ class TransferMoneyLog(TimeStampedModel):
         blank=True,
         verbose_name=_('Примечания'),
         help_text=_('Дополнительная информация о переводе'),
+    )
+    # Safe technical provenance of a statement-origin bank copy. It stays
+    # after cleanup and is never a guess from a weak reference or amount.
+    source_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+    )
+    source_fingerprint_key_version = models.CharField(
+        max_length=32,
+        blank=True,
+        default='',
+    )
+    source_fingerprint_format_version = models.PositiveIntegerField(
+        default=0,
+    )
+    source_format_version = models.PositiveIntegerField(default=0)
+    source_file_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+    )
+    source_row_position = models.PositiveIntegerField(
+        blank=True,
+        null=True,
     )
 
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()

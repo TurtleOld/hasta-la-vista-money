@@ -677,6 +677,14 @@ class StatementMarkupService:
             amount=row.amount,
             exchange_date=self._moment(row.transaction_date),
             notes=row.description,
+            source_fingerprint=row.source_fingerprint,
+            source_fingerprint_key_version=(row.source_fingerprint_key_version),
+            source_fingerprint_format_version=(
+                row.source_fingerprint_format_version
+            ),
+            source_format_version=row.source_format_version,
+            source_file_hash=upload.file_hash or None,
+            source_row_position=row.source_row_position,
         )
 
     def _counterparty(

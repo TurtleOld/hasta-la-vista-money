@@ -1,6 +1,6 @@
 """Statement identity, canonical duplicates, and atomic balance behaviour."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier, Thread
 from typing import Any, cast
@@ -16,11 +16,13 @@ from django.utils import timezone
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    StatementPeriodCoverage,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.transactions.commands import UpdateTransactionCommand
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -1575,3 +1577,583 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             BankStatementRow.objects.get(pk=row.pk).decision,
             BankStatementRow.Decision.NEW,
         )
+
+
+class CoverageRevisionTest(TestCase):
+    """ADR-0018 coverage actuality stays inside the coverage measurement."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+            file_hash='revision-file',
+        )
+        self.service = ApplicationContainer().users.statement_coverage_service()
+
+    def test_changed_statement_period_revises_previous_coverage(self) -> None:
+        first = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        second = self.service.record_statement_period(
+            self.upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        if first is None or second is None:
+            self.fail('an explicit period must record coverage')
+        first.refresh_from_db()
+
+        self.assertFalse(first.is_actual)
+        self.assertEqual(
+            first.revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        self.assertTrue(second.is_actual)
+
+        summary = self.service.summary(
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 2, 28),
+        )
+        self.assertEqual(len(summary.intervals), 1)
+        self.assertEqual(summary.intervals[0].period_start, date(2026, 2, 1))
+        self.assertEqual(len(summary.gaps), 1)
+        self.assertEqual(summary.gaps[0].period_start, date(2026, 1, 1))
+        self.assertEqual(summary.gaps[0].period_end, date(2026, 1, 31))
+
+    def test_manual_confirmation_is_not_replaced_by_a_statement(self) -> None:
+        manual = self.service.confirm_manual(
+            self.user,
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        self.service.record_statement_period(
+            self.upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        manual.refresh_from_db()
+        self.assertTrue(manual.is_actual)
+        self.assertEqual(manual.revision_reason, '')
+
+    def test_returning_period_reactivates_exact_record(self) -> None:
+        first = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        second = self.service.record_statement_period(
+            self.upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        if first is None or second is None:
+            self.fail('an explicit period must record coverage')
+        repeated = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        if repeated is None:
+            self.fail('a repeated explicit period must record coverage')
+
+        self.assertEqual(repeated.pk, first.pk)
+        self.assertTrue(repeated.is_actual)
+        self.assertEqual(repeated.revision_reason, '')
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertTrue(first.is_actual)
+        self.assertFalse(second.is_actual)
+        self.assertEqual(
+            second.revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        summary = self.service.summary(
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 2, 28),
+        )
+        self.assertEqual(len(summary.intervals), 1)
+        self.assertEqual(summary.intervals[0].period_start, date(2026, 1, 1))
+        self.assertEqual(summary.intervals[0].period_end, date(2026, 1, 31))
+        self.assertEqual(len(summary.gaps), 1)
+        self.assertEqual(summary.gaps[0].period_start, date(2026, 2, 1))
+
+
+class LegacyCompatibilityMigrationTest(TransactionTestCase):
+    """The expand/backfill marks only unproved legacy completeness."""
+
+    migrate_from = [('users', '0029_merge_statement_branches')]
+    migrate_to = [
+        (
+            'users',
+            '0030_bankstatementupload_legacy_review_reason_and_more',
+        ),
+    ]
+
+    def tearDown(self) -> None:
+        executor = MigrationExecutor(transaction.get_connection())
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_backfill_marks_review_without_inventing_rows_or_money(
+        self,
+    ) -> None:
+        executor = MigrationExecutor(transaction.get_connection())
+        executor.migrate(self.migrate_from)
+        old_apps = executor.loader.project_state(self.migrate_from).apps
+        user = User.objects.create_user(username='legacy-migration-user')
+        account = Account.objects.create(
+            user=user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        upload_model = old_apps.get_model('users', 'BankStatementUpload')
+        row_model = old_apps.get_model('users', 'BankStatementRow')
+
+        no_evidence = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='completed.pdf',
+            status='completed',
+            total_transactions=5,
+        )
+        empty_parse = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='empty.pdf',
+            status='completed',
+            total_transactions=0,
+        )
+        legacy_skip = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='skipped.pdf',
+            status='completed_with_unresolved',
+            total_transactions=1,
+        )
+        row_model.objects.create(
+            upload_id=legacy_skip.pk,
+            source_row_position=1,
+            transaction_type='expense',
+            transaction_date=WHEN,
+            amount=Decimal('10.00'),
+            decision='skipped',
+        )
+        with_row = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='pending.pdf',
+            status='completed',
+            total_transactions=1,
+        )
+        row_model.objects.create(
+            upload_id=with_row.pk,
+            source_row_position=1,
+            transaction_type='expense',
+            transaction_date=WHEN,
+            amount=Decimal('10.00'),
+            decision='pending',
+        )
+        cleaned = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='cleaned.pdf',
+            status='completed',
+            total_transactions=3,
+            statement_closing_balance=Decimal('500.00'),
+            balance_discrepancy=Decimal('5.00'),
+            retention_cleaned_at=WHEN,
+        )
+        pending = upload_model.objects.create(
+            user_id=user.pk,
+            account_id=account.pk,
+            pdf_file='pending-run.pdf',
+            status='pending',
+            total_transactions=0,
+        )
+        transactions_before = Transaction.objects.count()
+        coverage_before = StatementPeriodCoverage.objects.count()
+
+        executor = MigrationExecutor(transaction.get_connection())
+        executor.migrate(self.migrate_to)
+
+        self.assertEqual(
+            BankStatementUpload.objects.get(
+                pk=no_evidence.pk,
+            ).legacy_review_reason,
+            BankStatementUpload.LegacyReviewReason.NO_ROW_EVIDENCE,
+        )
+        self.assertEqual(
+            BankStatementUpload.objects.get(
+                pk=empty_parse.pk,
+            ).legacy_review_reason,
+            BankStatementUpload.LegacyReviewReason.NO_ROW_EVIDENCE,
+        )
+        skipped_upload = BankStatementUpload.objects.get(pk=legacy_skip.pk)
+        self.assertEqual(
+            skipped_upload.legacy_review_state,
+            BankStatementUpload.LegacyReviewState.REQUIRES_REVIEW,
+        )
+        self.assertEqual(
+            skipped_upload.legacy_review_reason,
+            BankStatementUpload.LegacyReviewReason.LEGACY_SKIPPED_ROWS,
+        )
+        self.assertEqual(
+            BankStatementUpload.objects.get(pk=with_row.pk).legacy_review_state,
+            BankStatementUpload.LegacyReviewState.NOT_REQUIRED,
+        )
+        cleaned_upload = BankStatementUpload.objects.get(pk=cleaned.pk)
+        self.assertEqual(
+            cleaned_upload.legacy_review_state,
+            BankStatementUpload.LegacyReviewState.REQUIRES_REVIEW,
+        )
+        self.assertEqual(
+            cleaned_upload.legacy_review_reason,
+            BankStatementUpload.LegacyReviewReason.NO_ROW_EVIDENCE,
+        )
+        self.assertEqual(cleaned_upload.retention_cleaned_at, WHEN)
+        self.assertEqual(cleaned_upload.pdf_file.name, 'cleaned.pdf')
+        self.assertEqual(cleaned_upload.total_transactions, 3)
+        self.assertEqual(
+            cleaned_upload.statement_closing_balance,
+            Decimal('500.00'),
+        )
+        self.assertEqual(
+            cleaned_upload.balance_discrepancy,
+            Decimal('5.00'),
+        )
+        self.assertEqual(
+            BankStatementUpload.objects.get(pk=pending.pk).legacy_review_state,
+            BankStatementUpload.LegacyReviewState.NOT_REQUIRED,
+        )
+        self.assertEqual(BankStatementRow.objects.count(), 2)
+        self.assertEqual(Transaction.objects.count(), transactions_before)
+        self.assertEqual(
+            StatementPeriodCoverage.objects.count(),
+            coverage_before,
+        )
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('1000.00'))
+
+
+class LegacyReviewVisibilityTest(TestCase):
+    """An unproved legacy run is visible without proving coverage."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+
+    def test_accounting_control_marks_legacy_review_separately(self) -> None:
+        BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='legacy.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+            total_transactions=4,
+            statement_closing_balance=Decimal('500.00'),
+            income_count=2,
+            expense_count=2,
+            legacy_review_state=(
+                BankStatementUpload.LegacyReviewState.REQUIRES_REVIEW
+            ),
+            legacy_review_reason=(
+                BankStatementUpload.LegacyReviewReason.NO_ROW_EVIDENCE
+            ),
+        )
+        today = timezone.localdate()
+        summary = (
+            ApplicationContainer()
+            .users.accounting_control_service()
+            .build(
+                self.account,
+                today.replace(day=1),
+                today,
+            )
+        )
+
+        self.assertEqual(len(summary.uploads), 1)
+        control = summary.uploads[0]
+        self.assertTrue(control.requires_legacy_review)
+        self.assertIn('Требует проверки', control.legacy_review_label)
+        self.assertEqual(summary.coverage.state, 'unknown')
+        self.assertEqual(summary.rows.resolved, 0)
+        self.assertFalse(summary.balance.checked)
+        self.assertIn('ручной', summary.adapter_note)
+        self.assertNotIn('HMAC', summary.adapter_note)
+        self.assertNotIn('фикстур', summary.adapter_note)
+        self.assertNotIn('production', summary.adapter_note)
+
+
+class TransferAuditProvenanceRetentionTest(TestCase):
+    """A deleted statement transfer keeps only its safe audit identity."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='РосДорБанк',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+            account_number='40817810000000000001',
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+            file_hash='file-a',
+            expires_at=timezone.now() + timedelta(days=30),
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.row = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            description='ПЕРЕВОД СЕБЕ',
+            source_row_position=7,
+            source_fingerprint='fingerprint-shared',
+            source_fingerprint_key_version='k1',
+            source_fingerprint_format_version=1,
+            source_format_version=2,
+            kind='own_c2c',
+            counterparty_account='40817810000000000001',
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+    def test_cleanup_scrubs_only_proved_statement_transfer_copy(self) -> None:
+        markup = ApplicationContainer().users.statement_markup_service()
+        markup.post_transfer(self.row.pk, self.user.pk, None)
+        self.row.refresh_from_db()
+        statement_transfer = self.row.transfer
+        if statement_transfer is None:
+            self.fail('markup did not create a statement transfer')
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        independent = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=self.other,
+            amount=Decimal('25.00'),
+            user=self.user,
+            exchange_date=WHEN,
+            notes='Независимый перевод',
+        )
+        legacy_audit = AuditLog.objects.create(
+            user=self.user,
+            model_name='finance_account.TransferMoneyLog',
+            object_pk='999999',
+            object_name='Легаси',
+            action=AuditLog.Action.CREATE,
+            diff={
+                'created': {
+                    'amount': '77.00',
+                    'notes': 'Старый легаси-перевод',
+                },
+            },
+            kind=None,
+        )
+        foreign_audit = AuditLog.objects.create(
+            user=self.user,
+            model_name='finance_account.TransferMoneyLog',
+            object_pk='888888',
+            object_name='Другой',
+            action=AuditLog.Action.CREATE,
+            diff={
+                'created': {
+                    'amount': '55.00',
+                    'exchange_date': WHEN.isoformat(),
+                    'notes': 'Другая выписка',
+                    'source_fingerprint': 'fingerprint-shared',
+                    'source_file_hash': 'file-b',
+                    'source_row_position': 7,
+                    'from_account_id': self.other.pk,
+                },
+            },
+            kind=AuditOperationKind.TRANSFER,
+        )
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.other,
+            pdf_file='other.pdf',
+            file_hash='file-b',
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        BankStatementRow.objects.create(
+            upload=other_upload,
+            source_row_position=7,
+            source_fingerprint='fingerprint-shared',
+            kind='own_c2c',
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+        transfer_service.delete_transfer(
+            transfer_id=statement_transfer.pk,
+            user=self.user,
+        )
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+
+        copies = AuditLog.objects.filter(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(statement_transfer.pk),
+        )
+        self.assertTrue(copies.exists())
+        for entry in copies:
+            payload = entry.diff.get('created') or entry.diff.get('deleted')
+            if not isinstance(payload, dict):
+                self.fail('statement transfer audit copy lost its payload')
+            self.assertNotIn('amount', payload)
+            self.assertNotIn('notes', payload)
+            self.assertNotIn('exchange_date', payload)
+            self.assertEqual(
+                payload['source_fingerprint'],
+                'fingerprint-shared',
+            )
+            self.assertEqual(payload['source_file_hash'], 'file-a')
+            self.assertEqual(payload['source_row_position'], 7)
+            self.assertEqual(payload['source_format_version'], 2)
+
+        independent_copy = AuditLog.objects.filter(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(independent.pk),
+            action=AuditLog.Action.CREATE,
+        ).get()
+        self.assertEqual(independent_copy.diff['created']['amount'], '25.00')
+        self.assertEqual(
+            independent_copy.diff['created']['notes'],
+            'Независимый перевод',
+        )
+        legacy_audit.refresh_from_db()
+        foreign_audit.refresh_from_db()
+        self.assertEqual(legacy_audit.diff['created']['amount'], '77.00')
+        self.assertEqual(
+            legacy_audit.diff['created']['notes'],
+            'Старый легаси-перевод',
+        )
+        self.assertEqual(foreign_audit.diff['created']['amount'], '55.00')
+        row = BankStatementRow.objects.get(pk=self.row.pk)
+        self.assertIsNone(row.amount)
+        self.assertEqual(row.description, '')
+        self.assertEqual(row.source_fingerprint, 'fingerprint-shared')
+        self.assertEqual(row.source_row_position, 7)
+
+    def test_repayment_transfer_keeps_statement_provenance(self) -> None:
+        """A transfer closing a repayment row carries safe bank identity."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.other,
+            pdf_file='repayment.pdf',
+            file_hash='file-c',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('300.00'),
+            source_row_position=9,
+            source_fingerprint='repayment-fingerprint',
+            source_fingerprint_key_version='k2',
+            source_fingerprint_format_version=1,
+            source_format_version=3,
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=self.other,
+                amount=Decimal('300.00'),
+                user=self.user,
+                exchange_date=WHEN,
+                statement_row_id=row.pk,
+            )
+        )
+
+        self.assertEqual(
+            transfer.source_fingerprint,
+            'repayment-fingerprint',
+        )
+        self.assertEqual(transfer.source_fingerprint_key_version, 'k2')
+        self.assertEqual(transfer.source_fingerprint_format_version, 1)
+        self.assertEqual(transfer.source_format_version, 3)
+        self.assertEqual(transfer.source_file_hash, 'file-c')
+        self.assertEqual(transfer.source_row_position, 9)
+
+    def test_balance_metadata_survives_cleanup_without_amounts(self) -> None:
+        upload = self.upload
+        upload.balance_currency = 'RUB'
+        upload.balance_type = BankStatementUpload.BalanceType.CLOSING_DAY
+        upload.balance_bank_date = date(2026, 1, 31)
+        upload.balance_result = BankStatementUpload.BalanceResult.DISCREPANCY
+        upload.balance_is_actual = True
+        upload.balance_reason = ''
+        upload.balance_explanation_code = (
+            BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE
+        )
+        upload.balance_explained_at = timezone.now()
+        upload.balance_explained_by = self.user
+        upload.statement_closing_balance = Decimal('100.00')
+        upload.account_balance_after = Decimal('90.00')
+        upload.balance_discrepancy = Decimal('10.00')
+        upload.save()
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+
+        self.assertEqual(upload.balance_currency, 'RUB')
+        self.assertEqual(
+            upload.balance_type,
+            BankStatementUpload.BalanceType.CLOSING_DAY,
+        )
+        self.assertEqual(upload.balance_bank_date, date(2026, 1, 31))
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        self.assertEqual(
+            upload.balance_explanation_code,
+            BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE,
+        )
+        self.assertEqual(upload.balance_explained_by, self.user)
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.BANK_DATA_CLEANED,
+        )
+        self.assertFalse(upload.balance_is_actual)

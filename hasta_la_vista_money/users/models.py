@@ -222,6 +222,20 @@ class BankStatementUpload(Model):
         IMPORT = 'import', _('Импорт')
         RECONCILIATION = 'reconciliation', _('Сверка')
 
+    class LegacyReviewState(TextChoices):
+        NOT_REQUIRED = 'not_required', _('Проверка не требуется')
+        REQUIRES_REVIEW = 'requires_review', _('Требует проверки')
+
+    class LegacyReviewReason(TextChoices):
+        NO_ROW_EVIDENCE = (
+            'no_row_evidence',
+            _('Нет построчных доказательств обработки'),
+        )
+        LEGACY_SKIPPED_ROWS = (
+            'legacy_skipped_rows',
+            _('Легаси-пропуски без подтверждённой причины'),
+        )
+
     user = ForeignKey(
         User,
         on_delete=CASCADE,
@@ -321,6 +335,17 @@ class BankStatementUpload(Model):
     )
     error_message = TextField(blank=True, default='')
     celery_task_id = CharField(max_length=255, blank=True, default='')
+    legacy_review_state = CharField(
+        max_length=20,
+        choices=LegacyReviewState.choices,
+        default=LegacyReviewState.NOT_REQUIRED,
+    )
+    legacy_review_reason = CharField(
+        max_length=40,
+        choices=LegacyReviewReason.choices,
+        blank=True,
+        default='',
+    )
     expires_at = DateTimeField(default=bank_statement_expires_at)
     retention_cleaned_at = DateTimeField(blank=True, null=True)
     created_at = DateTimeField(auto_now_add=True)

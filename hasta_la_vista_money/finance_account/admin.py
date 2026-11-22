@@ -59,4 +59,14 @@ class TransferMoneyLogAdmin(
     list_select_related = ('user', 'from_account', 'to_account')
     search_fields = ('user__username',)
     date_hierarchy = 'exchange_date'
-    readonly_fields = ('from_account', 'to_account', 'amount')
+    readonly_fields = (
+        'from_account',
+        'to_account',
+        'amount',
+        'source_fingerprint',
+        'source_fingerprint_key_version',
+        'source_fingerprint_format_version',
+        'source_format_version',
+        'source_file_hash',
+        'source_row_position',
+    )
