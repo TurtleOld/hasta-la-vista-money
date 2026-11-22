@@ -118,9 +118,11 @@ class StatementBalanceVerificationService:
     def verify(self, upload: BankStatementUpload) -> BankStatementUpload:
         """Recompute and store the balance result for one upload.
 
-        Missing confirmed currency, bank semantics, balance or moment
-        produce ``NOT_CHECKED`` with no amounts. The account currency is
-        never copied into the statement currency.
+        A failed comparison keeps the last proven result and its amounts,
+        marks it stale and records why it cannot be confirmed now. Only an
+        upload without a proven result becomes ``NOT_CHECKED`` with no
+        amounts. The account currency is never copied into the statement
+        currency.
 
         Args:
             upload: Statement upload whose closing balance is checked.
@@ -184,12 +186,17 @@ class StatementBalanceVerificationService:
         explanation_code = upload.balance_explanation_code
         explained_at = upload.balance_explained_at
         explained_by = upload.balance_explained_by
-        if (
-            not reason
-            and closing is not None
-            and currency
-            and moment is not None
-        ):
+        if reason:
+            # An impossible comparison is not evidence that a proven result
+            # vanished: keep the snapshot, mark it stale and record the cause.
+            result = upload.balance_result
+            proven = result != BankStatementUpload.BalanceResult.NOT_CHECKED
+            ledger = upload.account_balance_after if proven else None
+            discrepancy = upload.balance_discrepancy if proven else None
+            explanation_code = upload.balance_explanation_code if proven else ''
+            explained_at = upload.balance_explained_at if proven else None
+            explained_by = upload.balance_explained_by if proven else None
+        elif closing is not None and currency and moment is not None:
             ledger = self._balance_history_service.balance_at(
                 account,
                 moment,
@@ -219,7 +226,8 @@ class StatementBalanceVerificationService:
             balance_result=result,
             balance_checked_at=now,
             balance_is_actual=(
-                result != BankStatementUpload.BalanceResult.NOT_CHECKED
+                not reason
+                and result != BankStatementUpload.BalanceResult.NOT_CHECKED
             ),
             balance_reason=reason,
             account_balance_after=ledger,
