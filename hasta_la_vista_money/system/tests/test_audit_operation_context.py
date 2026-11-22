@@ -132,6 +132,7 @@ class AuditOperationKindTests(TestCase):
             'statement_import',
             'statement_import_resolution',
             'statement_markup',
+            'statement_retention',
         }
         self.assertEqual(
             {value for value, _ in AuditOperationKind.choices},

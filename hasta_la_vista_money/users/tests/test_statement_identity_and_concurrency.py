@@ -9,6 +9,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connections, transaction
 from django.db.migrations.executor import MigrationExecutor
+from django.db.models import Model
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
@@ -1126,15 +1127,19 @@ class SharedMovementMigrationTest(TransactionTestCase):
 
     def test_unresolved_links_are_released_in_any_order(self) -> None:
         executor = MigrationExecutor(transaction.get_connection())
-        executor.migrate(self.migrate_from)
-        old_apps = executor.loader.project_state(self.migrate_from).apps
-        user = User.objects.create_user(username='migration-order-user')
-        account = Account.objects.create(
+        old_apps = executor.migrate(self.migrate_from).apps
+        user = old_apps.get_model('users', 'User').objects.create(
+            username='migration-order-user'
+        )
+        account_model = old_apps.get_model('finance_account', 'Account')
+        category_model = old_apps.get_model('transactions', 'Category')
+        movement_model = old_apps.get_model('transactions', 'Transaction')
+        account = account_model.objects.create(
             user=user,
             name_account='Основной',
             balance=Decimal('1000.00'),
         )
-        category = Category.objects.create(
+        category = category_model.objects.create(
             user=user,
             name='Продукты',
             type=TransactionType.EXPENSE,
@@ -1149,8 +1154,8 @@ class SharedMovementMigrationTest(TransactionTestCase):
         )
         row_model = old_apps.get_model('users', 'BankStatementRow')
 
-        def movement() -> Transaction:
-            return Transaction.objects.create(
+        def movement() -> Model:
+            movement_obj: Model = movement_model.objects.create(
                 user=user,
                 account=account,
                 category=category,
@@ -1158,9 +1163,10 @@ class SharedMovementMigrationTest(TransactionTestCase):
                 amount=Decimal('100.00'),
                 date=WHEN,
             )
+            return movement_obj
 
         def row(
-            movement_obj: Transaction,
+            movement_obj: Model,
             position: int,
             decision: str,
         ) -> Any:
@@ -1229,20 +1235,24 @@ class SharedMovementMigrationTest(TransactionTestCase):
 
     def test_shared_movement_becomes_repeat_or_pending(self) -> None:
         executor = MigrationExecutor(transaction.get_connection())
-        executor.migrate(self.migrate_from)
-        old_apps = executor.loader.project_state(self.migrate_from).apps
-        user = User.objects.create_user(username='migration-user')
-        account = Account.objects.create(
+        old_apps = executor.migrate(self.migrate_from).apps
+        user = old_apps.get_model('users', 'User').objects.create(
+            username='migration-user'
+        )
+        account_model = old_apps.get_model('finance_account', 'Account')
+        category_model = old_apps.get_model('transactions', 'Category')
+        movement_model = old_apps.get_model('transactions', 'Transaction')
+        account = account_model.objects.create(
             user=user,
             name_account='Основной',
             balance=Decimal('1000.00'),
         )
-        category = Category.objects.create(
+        category = category_model.objects.create(
             user=user,
             name='Продукты',
             type=TransactionType.EXPENSE,
         )
-        movement = Transaction.objects.create(
+        movement = movement_model.objects.create(
             user=user,
             account=account,
             category=category,
@@ -1286,7 +1296,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
             amount=Decimal('50.00'),
             decision='linked',
         )
-        foreign_account = Account.objects.create(
+        foreign_account = account_model.objects.create(
             user=user,
             name_account='Другой',
             balance=Decimal('0.00'),
