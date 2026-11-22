@@ -70,6 +70,7 @@ dev = [
 [dependency-groups]
 dev = [
     "coverage>=7.3.2",
+    "tblib>=3.2.2",
     "myst-parser>=4.0.0",
     "flower>=2.0.1",
     "pre-commit>=4.0.0",

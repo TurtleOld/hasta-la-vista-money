@@ -256,6 +256,16 @@ OZON_AMOUNT_COL = 3
 # camelot stream cuts Ozon tables after tall cells; a wide edge keeps
 # the whole page in one table.
 OZON_TABLE_EDGE_TOL = 500
+# A wrapped document continues on the next row as a short numeric tail;
+# longer or non-numeric values are complete documents of a new operation.
+OZON_DOCUMENT_TAIL_MAX_DIGITS = 2
+OZON_TABLE_HEADERS = frozenset(
+    {
+        'Дата операции',
+        'Документ',
+        'Назначение платежа',
+    },
+)
 
 OZON_PURCHASE_CATEGORY = 'Покупки Ozon'
 OZON_REFUND_CATEGORY = 'Возвраты Ozon'
@@ -1918,10 +1928,6 @@ class _OzonBankParser(BaseBankStatementParser):
     # visible and treats the document number as a weak hint.
     format_version = 2
 
-    _operation_start_pattern = re.compile(
-        r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}\b',
-    )
-
     def parse(self) -> StatementParseResult:
         """Parse every potential Ozon operation into a traceable row."""
         try:
@@ -2003,26 +2009,43 @@ class _OzonBankParser(BaseBankStatementParser):
     def _is_operation_start(self, row: pd.Series) -> bool:
         """Return whether the row begins a new potential operation.
 
-        An amount cell always begins a row, even when its date or amount
-        cannot be read: gluing it to the previous operation would mix two
-        financial observations. A dated row with its own complete document
-        and purpose but no amount is an ambiguous fragment, so it starts
-        its own row instead of silently extending a neighbour. A
-        processing-date continuation has no purpose or only a document
-        fragment and stays part of the operation above.
+        A readable amount begins a row even when its date cannot be read:
+        gluing it to the previous operation would mix two financial
+        observations. A row with its own document and purpose is an
+        ambiguous fragment even when its date cannot be read, so it starts
+        its own row instead of silently extending a neighbour. Table
+        headers are not operations. A continuation has no purpose, only a
+        document fragment ending in ``-``, or a short numeric document
+        tail under a row without its own date.
+
+        Args:
+            row: One extracted table row.
+
+        Returns:
+            Whether the row starts its own traceable operation.
         """
         if (
             self._extract_ozon_amount(self._cell(row, OZON_AMOUNT_COL))
             is not None
         ):
             return True
-        if not self._operation_start_pattern.match(
-            self._cell(row, OZON_DATE_COL),
-        ):
-            return False
+        date = self._cell(row, OZON_DATE_COL)
         document = self._cell(row, OZON_DOCUMENT_COL)
         purpose = self._cell(row, OZON_DESCRIPTION_COL)
-        return bool(document and purpose and not document.endswith('-'))
+        if (
+            date in OZON_TABLE_HEADERS
+            or document in OZON_TABLE_HEADERS
+            or purpose in OZON_TABLE_HEADERS
+        ):
+            return False
+        if not (document and purpose and not document.endswith('-')):
+            return False
+        is_document_tail = (
+            not date
+            and document.isdigit()
+            and len(document) <= OZON_DOCUMENT_TAIL_MAX_DIGITS
+        )
+        return not is_document_tail
 
     def _parse_operation(
         self,

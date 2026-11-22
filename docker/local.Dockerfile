@@ -28,13 +28,12 @@ WORKDIR /app
 RUN mkdir -p /opt/venv && \
     chown -R appuser:appuser /app /opt/venv
 
-COPY --chown=appuser:appuser pyproject.toml ./
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
 
 USER appuser
 
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=1000,gid=1000 \
-    UV_CACHE_DIR=/tmp/uv-cache uv lock && \
-    UV_CACHE_DIR=/tmp/uv-cache uv sync --dev
+    UV_CACHE_DIR=/tmp/uv-cache uv sync --dev --locked
 
 COPY --chown=appuser:appuser . .
 

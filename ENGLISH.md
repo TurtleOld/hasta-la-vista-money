@@ -267,7 +267,7 @@ make export-api-schema   # export OpenAPI schema
 
 ### Note on uv.lock
 
-`uv.lock` is not stored in the repository — it is generated automatically during Docker image builds and when running `make install`. To update dependencies: `uv lock --upgrade`.
+`uv.lock` is stored in the repository: CI and Docker images install dependencies with `uv sync --locked` without re-resolving versions. To update dependencies: `uv lock --upgrade` and commit `uv.lock` together with `pyproject.toml`.
 
 ---
 
