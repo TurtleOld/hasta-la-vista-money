@@ -38,6 +38,7 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
+    BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
     User,
@@ -1720,8 +1721,14 @@ class BankStatementImportService:
         the same stable position only within the same parser/format
         version. A stale position from another mapping is detached so the
         row can be reassigned instead of silently merged. Only blank bank
-        fields are filled: decision, movement, transfer, candidate and
-        canonical links stay exactly as they were.
+        fields are filled: movement, transfer, candidate and canonical
+        links stay exactly as they were.
+
+        A row expired by retention has no user decision behind it, so
+        restoring its bank data reopens it for manual resolution: a parsed
+        row becomes pending, an unparsed fragment awaits markup. The
+        transition is written to the decision history without posting
+        money. Every real decision is kept as is.
         """
         rows = BankStatementRow.objects.select_for_update().filter(
             upload=upload,
@@ -1815,8 +1822,22 @@ class BankStatementImportService:
                 source_fingerprint_key_version=fingerprint.key_version,
                 source_fingerprint_format_version=(fingerprint.format_version),
             )
+        reopen = row.decision == BankStatementRow.Decision.EXPIRED
+        if reopen:
+            payload['decision'] = (
+                BankStatementRow.Decision.AWAITING_MARKUP
+                if _is_unparsed(trans)
+                else BankStatementRow.Decision.PENDING
+            )
+            payload['decided_at'] = None
         BankStatementRow.objects.filter(pk=row.pk).update(**payload)
         row.refresh_from_db()
+        if reopen:
+            BankStatementDecisionAudit.objects.create(
+                row=row,
+                decision=row.decision,
+                previous_decision=BankStatementRow.Decision.EXPIRED,
+            )
         return row
 
     def _has_unresolved_observation(
