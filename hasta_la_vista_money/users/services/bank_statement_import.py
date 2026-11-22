@@ -1534,7 +1534,10 @@ class BankStatementImportService:
         When fingerprint keys are usable, rows already proven on the
         account become exact duplicate observations. Without usable keys
         every row is saved for manual resolution: a missing key never
-        turns into "the operation does not exist" or auto-posting.
+        turns into "the operation does not exist" or auto-posting. A weak
+        bank reference cannot prove a cross-file repeat, so it never
+        suppresses a row even when another upload holds the same
+        unresolved observation.
 
         In reconciliation mode an existing row of this same upload is
         restored from the re-uploaded file in place, keeping its decision,
@@ -1554,6 +1557,7 @@ class BankStatementImportService:
                 position = (
                     idx if source_position is None else int(source_position)
                 )
+                source_ref_strength = _reference_strength(bank, trans)
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1590,12 +1594,15 @@ class BankStatementImportService:
                             else True
                         ),
                         format_version=format_version,
-                        source_ref_strength=_reference_strength(bank, trans),
+                        source_ref_strength=source_ref_strength,
                     )
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
                         continue
-                    if self._has_unresolved_observation(
+                    if (
+                        bank not in WEAK_REFERENCE_BANKS
+                        or source_ref_strength == 'strong'
+                    ) and self._has_unresolved_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
