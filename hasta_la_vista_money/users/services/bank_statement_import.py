@@ -38,6 +38,7 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
+    BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
     User,
@@ -1534,7 +1535,10 @@ class BankStatementImportService:
         When fingerprint keys are usable, rows already proven on the
         account become exact duplicate observations. Without usable keys
         every row is saved for manual resolution: a missing key never
-        turns into "the operation does not exist" or auto-posting.
+        turns into "the operation does not exist" or auto-posting. A weak
+        bank reference cannot prove a cross-file repeat, so it never
+        suppresses a row even when another upload holds the same
+        unresolved observation.
 
         In reconciliation mode an existing row of this same upload is
         restored from the re-uploaded file in place, keeping its decision,
@@ -1554,6 +1558,7 @@ class BankStatementImportService:
                 position = (
                     idx if source_position is None else int(source_position)
                 )
+                source_ref_strength = _reference_strength(bank, trans)
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1590,12 +1595,15 @@ class BankStatementImportService:
                             else True
                         ),
                         format_version=format_version,
-                        source_ref_strength=_reference_strength(bank, trans),
+                        source_ref_strength=source_ref_strength,
                     )
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
                         continue
-                    if self._has_unresolved_observation(
+                    if (
+                        bank not in WEAK_REFERENCE_BANKS
+                        or source_ref_strength == 'strong'
+                    ) and self._has_unresolved_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
@@ -1720,8 +1728,14 @@ class BankStatementImportService:
         the same stable position only within the same parser/format
         version. A stale position from another mapping is detached so the
         row can be reassigned instead of silently merged. Only blank bank
-        fields are filled: decision, movement, transfer, candidate and
-        canonical links stay exactly as they were.
+        fields are filled: movement, transfer, candidate and canonical
+        links stay exactly as they were.
+
+        A row expired by retention has no user decision behind it, so
+        restoring its bank data reopens it for manual resolution: a parsed
+        row becomes pending, an unparsed fragment awaits markup. The
+        transition is written to the decision history without posting
+        money. Every real decision is kept as is.
         """
         rows = BankStatementRow.objects.select_for_update().filter(
             upload=upload,
@@ -1815,8 +1829,22 @@ class BankStatementImportService:
                 source_fingerprint_key_version=fingerprint.key_version,
                 source_fingerprint_format_version=(fingerprint.format_version),
             )
+        reopen = row.decision == BankStatementRow.Decision.EXPIRED
+        if reopen:
+            payload['decision'] = (
+                BankStatementRow.Decision.AWAITING_MARKUP
+                if _is_unparsed(trans)
+                else BankStatementRow.Decision.PENDING
+            )
+            payload['decided_at'] = None
         BankStatementRow.objects.filter(pk=row.pk).update(**payload)
         row.refresh_from_db()
+        if reopen:
+            BankStatementDecisionAudit.objects.create(
+                row=row,
+                decision=row.decision,
+                previous_decision=BankStatementRow.Decision.EXPIRED,
+            )
         return row
 
     def _has_unresolved_observation(
