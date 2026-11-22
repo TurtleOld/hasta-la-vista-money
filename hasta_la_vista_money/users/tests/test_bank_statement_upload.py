@@ -9053,10 +9053,29 @@ class TestBankStatementImportReliability(TestCase):
                 for row in upload.statement_rows.all()
             }
             self.assertEqual(sorted(after), list(range(1, 139)))
+            expected = {
+                position: (
+                    row_pk,
+                    (
+                        BankStatementRow.Decision.PENDING
+                        if decision == BankStatementRow.Decision.EXPIRED
+                        else decision
+                    ),
+                    transaction_id,
+                )
+                for position, (row_pk, decision, transaction_id) in (
+                    current.items()
+                )
+            }
             self.assertEqual(
                 {position: values[:3] for position, values in after.items()},
-                current,
+                expected,
             )
+            if cleaned:
+                self.assertEqual(
+                    upload.status,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                )
             self.assertEqual(Transaction.objects.count(), 1)
             self.account.refresh_from_db()
             self.assertEqual(self.account.balance, Decimal('-119000.00'))
@@ -9069,7 +9088,7 @@ class TestBankStatementImportReliability(TestCase):
             )
 
     def test_cleaned_partial_fragment_is_restored_by_replay(self) -> None:
-        """An explicit replay restores a cleaned unparsed fragment in place."""
+        """A replay restores a cleaned fragment and reopens it for markup."""
         parse_result = StatementParseResult(
             transactions=[
                 {
@@ -9132,11 +9151,139 @@ class TestBankStatementImportReliability(TestCase):
         row = rows.get()
         self.assertEqual(row.pk, row_pk)
         self.assertEqual(row.source_row_position, 7)
-        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.decided_at)
         self.assertEqual(row.description, 'Неизвестная операция')
         self.assertIsNone(row.amount)
         self.assertIsNone(row.transaction_date)
         self.assertFalse(Transaction.objects.exists())
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        audit = row.decision_audits.get()
+        self.assertEqual(
+            audit.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertIsNone(audit.actor)
+
+        excluded = (
+            ApplicationContainer()
+            .users.statement_markup_service()
+            .exclude(
+                row.pk,
+                self.user.pk,
+                (BankStatementRow.ExclusionCode.NON_FINANCIAL_BANK_RECORD),
+            )
+        )
+
+        self.assertEqual(excluded.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_cleaned_pending_row_is_reopened_by_replay(self) -> None:
+        """A replay reopens a cleaned pending row for manual resolution."""
+        moment = datetime(2026, 2, 3, 10, tzinfo=UTC)
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reopen.pdf',
+            file_hash='reopen-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('13.20'),
+            description='Комиссия за обслуживание',
+            source_ref='G-REOPEN',
+            source_row_position=0,
+            source_format_version=1,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        row_pk = row.pk
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertIsNone(row.amount)
+        self.assertEqual(row.description, '')
+
+        parse_result = StatementParseResult(
+            transactions=[
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'G-REOPEN',
+                    'source_ref_strength': 'weak',
+                    'row_position': 0,
+                },
+            ],
+            bank='generic',
+            format_version=1,
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+        for _attempt in (1, 2):
+            self.assertTrue(
+                service.prepare_known_replay(
+                    upload,
+                    SimpleUploadedFile(
+                        'reopen.pdf',
+                        b'%PDF-1.4 replay',
+                        content_type='application/pdf',
+                    ),
+                ),
+            )
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementParser',
+            ) as parser:
+                parser.return_value.parse.return_value = parse_result
+                process_bank_statement_task.apply(args=[upload.pk])
+            upload.refresh_from_db()
+            row.refresh_from_db()
+            self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+            self.assertIsNone(row.decided_at)
+            self.assertEqual(row.amount, Decimal('13.20'))
+            self.assertEqual(row.description, 'Комиссия за обслуживание')
+            self.assertEqual(
+                upload.status,
+                BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            )
+            self.assertEqual(Transaction.objects.count(), 0)
+
+        self.assertEqual(row.pk, row_pk)
+        self.assertEqual(row.decision_audits.count(), 1)
+        audit = row.decision_audits.get()
+        self.assertEqual(audit.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertIsNone(audit.actor)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+        decided = BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        self.assertEqual(decided.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(Transaction.objects.count(), 1)
 
     def _replay_parse_result(
         self,
