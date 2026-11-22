@@ -6752,6 +6752,71 @@ class TestOzonBankStatement(TestCase):
         self.assertEqual(last['source_ref'], 'DOC-C')
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_unreadable_date_and_amount_keeps_own_fragment(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A purpose and document survive an unreadable date and amount.
+
+        The fragment must not extend the previous operation: its purpose
+        and document would otherwise distort the neighbour's row and the
+        separate observation would disappear.
+        """
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['н/д', 'DOC-B', 'Комиссия банка', '- ₽'],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertEqual(first['description'], 'Покупки Ozon')
+        self.assertNotIn('parse_issue', first)
+        self.assertIsNone(middle['date'])
+        self.assertIsNone(middle['amount'])
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['description'], 'Комиссия банка')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
+        self.assertNotIn('parse_issue', last)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_ambiguous_fragment_before_first_operation_is_kept(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A fragment above the first operation is not silently dropped."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['', 'DOC-B', 'Комиссия банка', ''],
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 2)
+        fragment, operation = result.transactions
+        self.assertEqual(fragment['parse_issue'], 'unparsed')
+        self.assertEqual(fragment['source_ref'], 'DOC-B')
+        self.assertEqual(fragment['description'], 'Комиссия банка')
+        self.assertIsNone(fragment['amount'])
+        self.assertEqual(operation['amount'], Decimal('-100.00'))
+        self.assertEqual(operation['source_ref'], 'DOC-A')
+        self.assertNotIn('parse_issue', operation)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_unparsed_row_stays_visible_without_blocking_others(
         self,
         mock_camelot: MagicMock,
