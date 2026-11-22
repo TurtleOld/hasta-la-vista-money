@@ -121,8 +121,10 @@ class BudgetCurrencyTest(TestCase):
         response = self.client.get(reverse('budget:list'), {'currency': 'USD'})
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-        self.assertContains(response, '2222')
-        self.assertNotContains(response, '1111')
+        # Cache-busting hashes are random hex and may contain a bare
+        # four-digit amount, so match the rendered limit value.
+        self.assertContains(response, 'value="2222,00"')
+        self.assertNotContains(response, 'value="1111,00"')
 
     def test_limit_form_lets_user_change_currency(self) -> None:
         self.client.force_login(self.user)

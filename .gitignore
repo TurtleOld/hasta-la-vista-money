@@ -237,11 +237,11 @@ logs/
 
 .cursor/
 
-uv.lock
-
 .kilo/
 
 .codegraph/
+
+.kandev/
 
 docs/superpowers/**
 

@@ -195,6 +195,9 @@ class StatementIdentityImportTest(TestCase):
         *,
         format_version: int = 1,
         strength: str = 'strong',
+        bank: str = SYNTHETIC_BANK,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> object:
         for entry in transactions:
             entry.setdefault('source_ref_strength', strength)
@@ -204,8 +207,10 @@ class StatementIdentityImportTest(TestCase):
         ) as parser:
             parser.return_value.parse.return_value = StatementParseResult(
                 transactions=transactions,
-                bank=SYNTHETIC_BANK,
+                bank=bank,
                 format_version=format_version,
+                period_start=period_start,
+                period_end=period_end,
             )
             return self.import_service.import_statement(upload)
 
@@ -403,6 +408,123 @@ class StatementIdentityImportTest(TestCase):
         row = BankStatementRow.objects.get(upload=second)
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
         self.assertIsNotNone(row.candidate)
+
+    def test_cross_file_weak_reference_keeps_unresolved_observation(
+        self,
+    ) -> None:
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 31)
+        first = self._upload('sber-first.pdf', file_hash='sber-first-file')
+        first_entries: list[dict[str, object]] = [
+            {
+                'date': WHEN,
+                'amount': Decimal('-500.00'),
+                'description': 'Перевод',
+                'source_ref': '654321',
+                'category_name': None,
+                'row_position': 0,
+            },
+        ]
+        self._import(
+            first,
+            first_entries,
+            bank='sberbank',
+            strength='weak',
+            period_start=period_start,
+            period_end=period_end,
+        )
+        unresolved = BankStatementRow.objects.get(upload=first)
+        self.assertEqual(
+            unresolved.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(unresolved.transaction)
+
+        second = self._upload('sber-second.pdf', file_hash='sber-second-file')
+        second_entries: list[dict[str, object]] = [
+            {
+                'date': WHEN,
+                'amount': Decimal('-500.00'),
+                'description': 'Перевод',
+                'source_ref': '654321',
+                'category_name': None,
+                'row_position': 0,
+            },
+            {
+                'date': WHEN,
+                'amount': Decimal('-10.00'),
+                'description': 'Контрольная операция',
+                'source_ref': '999999',
+                'category_name': None,
+                'row_position': 1,
+            },
+        ]
+        self._import(
+            second,
+            second_entries,
+            bank='sberbank',
+            strength='weak',
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+        second.refresh_from_db()
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        rows = list(second.statement_rows.order_by('source_row_position'))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            [row.source_ref for row in rows],
+            ['654321', '999999'],
+        )
+        for row in rows:
+            self.assertEqual(
+                row.decision,
+                BankStatementRow.Decision.AWAITING_MARKUP,
+            )
+            self.assertIsNone(row.transaction)
+            self.assertIsNone(row.candidate)
+        self.assertEqual(
+            rows[0].source_fingerprint,
+            unresolved.source_fingerprint,
+        )
+        unresolved.refresh_from_db()
+        self.assertEqual(
+            unresolved.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(unresolved.transaction)
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload__account=self.account,
+            ).count(),
+            3,
+        )
+        self.assertEqual(second.skipped_count, 0)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            0,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+        self._import(
+            second,
+            second_entries,
+            bank='sberbank',
+            strength='weak',
+            period_start=period_start,
+            period_end=period_end,
+        )
+        second.refresh_from_db()
+        self.assertEqual(second.statement_rows.count(), 2)
+        self.assertEqual(second.skipped_count, 0)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            0,
+        )
 
     def test_legacy_resolved_row_becomes_the_canonical_row(self) -> None:
         canonical_upload = self._upload('legacy-row.pdf')
