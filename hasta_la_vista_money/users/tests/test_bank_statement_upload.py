@@ -2345,6 +2345,44 @@ class TestBankStatementUploadHistory(TestCase):
         self.assertContains(response, 'оговорки полноты')
         self.assertContains(response, 'Нефинансовая запись банка')
 
+    def test_control_shows_duplicate_observations_as_separate_outcome(
+        self,
+    ) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-duplicate.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        canonical = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('20.00'),
+            description='Кофе',
+            source_ref='control-duplicate-1',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('20.00'),
+            description='Кофе',
+            source_ref='control-duplicate-2',
+            source_row_position=2,
+            decision=BankStatementRow.Decision.DUPLICATE,
+            canonical_row=canonical,
+        )
+
+        response = self._control_response()
+
+        control = response.context['control']
+        self.assertEqual(control.rows.resolved, 1)
+        self.assertEqual(control.rows.duplicates, 1)
+        self.assertContains(response, 'Точные дубли')
+
     @patch(
         'hasta_la_vista_money.users.services.bank_statement_import.'
         'BankStatementParser',

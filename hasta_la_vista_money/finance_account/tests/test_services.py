@@ -633,6 +633,38 @@ class TestAccountServices(TestCase):
         self.assertFalse(control.balance.checked)
         self.assertEqual(control.balance.label, 'Не проверено')
 
+    def test_control_counts_duplicate_observations_as_separate_outcome(
+        self,
+    ) -> None:
+        upload = self._upload(total_transactions=2)
+        canonical = self._row(
+            upload,
+            1,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        duplicate = self._row(
+            upload,
+            2,
+            decision=BankStatementRow.Decision.DUPLICATE,
+        )
+        duplicate.canonical_row = canonical
+        duplicate.save(update_fields=['canonical_row'])
+        transactions_before = Transaction.objects.count()
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        self.assertEqual(control.rows.resolved, 1)
+        self.assertEqual(control.rows.duplicates, 1)
+        self.assertEqual(
+            control.rows.resolved + control.rows.duplicates,
+            2,
+        )
+        self.assertEqual(Transaction.objects.count(), transactions_before)
+
     def test_control_does_not_treat_availability_or_adapter_as_coverage(
         self,
     ) -> None:
