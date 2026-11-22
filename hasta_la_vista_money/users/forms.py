@@ -135,6 +135,25 @@ class RegisterByInviteForm(UserCreationForm[User]):
 class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
+    statement_retention_days = forms.IntegerField(
+        required=False,
+        min_value=constants.STATEMENT_RETENTION_DAYS_MIN,
+        max_value=constants.STATEMENT_RETENTION_DAYS_MAX,
+        label=_('Хранить банковские данные, дней'),
+        help_text=_(
+            'Срок фиксируется при каждой новой загрузке выписки. '
+            'Изменение не переписывает уже назначенные сроки.',
+        ),
+        widget=forms.NumberInput(
+            attrs={
+                'class': FORM_CONTROL_CLASS,
+                'min': constants.STATEMENT_RETENTION_DAYS_MIN,
+                'max': constants.STATEMENT_RETENTION_DAYS_MAX,
+                'step': 1,
+            },
+        ),
+    )
+
     def clean_timezone_name(self) -> str:
         """Reject any value outside the canonical IANA timezone list."""
         timezone_name = str(self.cleaned_data.get('timezone_name', ''))
@@ -144,6 +163,13 @@ class UpdateUserForm(ModelForm[User]):
             )
         return timezone_name
 
+    def clean_statement_retention_days(self) -> int:
+        """Keep the fixed term when an older client omits the field."""
+        value = self.cleaned_data.get('statement_retention_days')
+        if value is None:
+            return self.instance.statement_retention_days
+        return int(value)
+
     class Meta:
         model: ClassVar[type[User]] = User
         fields: ClassVar[list[str]] = [
@@ -152,6 +178,7 @@ class UpdateUserForm(ModelForm[User]):
             'first_name',
             'last_name',
             'timezone_name',
+            'statement_retention_days',
         ]
         labels: ClassVar[dict[str, Any]] = {
             'username': _('Имя пользователя'),

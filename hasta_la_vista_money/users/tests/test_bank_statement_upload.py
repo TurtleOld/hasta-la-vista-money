@@ -26,15 +26,21 @@ from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
 from hasta_la_vista_money.finance_account.models import (
     Account,
     StatementPeriodCoverage,
+    TransferMoneyLog,
 )
 from hasta_la_vista_money.system.audit_registry import STATEMENT_IMPORT_LABEL
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
+from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_statement_import import (
+    record_statement_import_summary,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
     Transaction,
     TransactionType,
 )
+from hasta_la_vista_money.users.forms import UpdateUserForm
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementRow,
@@ -173,6 +179,119 @@ class TestBankStatementUploadView(TestCase):
         messages = list(get_messages(response.wsgi_request))
         # Check that there's a success message
         self.assertTrue(len(messages) > 0)
+
+    def test_profile_form_stores_statement_retention_days(self) -> None:
+        """The user chooses the term; the model rejects impossible terms."""
+        form = UpdateUserForm(
+            instance=self.user,
+            data={
+                'username': self.user.username,
+                'email': self.user.email,
+                'first_name': self.user.first_name,
+                'last_name': self.user.last_name,
+                'timezone_name': self.user.timezone_name,
+                'statement_retention_days': 45,
+            },
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        form.save()
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.statement_retention_days, 45)
+
+        for invalid in (0, 366):
+            with self.subTest(days=invalid):
+                invalid_form = UpdateUserForm(
+                    instance=self.user,
+                    data={
+                        'username': self.user.username,
+                        'email': self.user.email,
+                        'first_name': self.user.first_name,
+                        'last_name': self.user.last_name,
+                        'timezone_name': self.user.timezone_name,
+                        'statement_retention_days': invalid,
+                    },
+                )
+                self.assertFalse(invalid_form.is_valid())
+                self.assertIn(
+                    'statement_retention_days',
+                    invalid_form.errors,
+                )
+
+    @patch(
+        'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
+    )
+    def test_upload_fixes_retention_and_changed_preference_is_not_retroactive(
+        self,
+        mock_task: MagicMock,
+    ) -> None:
+        """A new upload fixes the current choice; a replay gets a new term."""
+        mock_task.delay.return_value = MagicMock(id='test-task-id')
+        pdf_content = b'%PDF-1.4 retention preference statement'
+        pdf_file = SimpleUploadedFile(
+            'retention-preference.pdf',
+            pdf_content,
+            content_type='application/pdf',
+        )
+        self.assertEqual(self.user.statement_retention_days, 30)
+        self.user.statement_retention_days = 60
+        self.user.save(update_fields=['statement_retention_days'])
+        before_upload = timezone.now()
+
+        self.client.post(
+            self.upload_url,
+            {'account': self.account.pk, 'pdf_file': pdf_file},
+        )
+
+        upload = BankStatementUpload.objects.get()
+        self.assertGreaterEqual(
+            upload.expires_at,
+            before_upload + timedelta(days=60) - timedelta(seconds=5),
+        )
+        self.assertLessEqual(
+            upload.expires_at,
+            timezone.now() + timedelta(days=60) + timedelta(seconds=5),
+        )
+        fixed_deadline = upload.expires_at
+
+        self.user.statement_retention_days = 7
+        self.user.save(update_fields=['statement_retention_days'])
+        upload.refresh_from_db()
+        self.assertEqual(upload.expires_at, fixed_deadline)
+
+        upload.status = BankStatementUpload.Status.COMPLETED
+        upload.save(update_fields=['status'])
+        before_replay = timezone.now()
+        self.client.post(
+            self.upload_url,
+            {
+                'account': self.account.pk,
+                'pdf_file': SimpleUploadedFile(
+                    'renamed-retention-preference.pdf',
+                    pdf_content,
+                    content_type='application/pdf',
+                ),
+            },
+        )
+        upload.refresh_from_db()
+
+        self.assertIsNone(upload.retention_cleaned_at)
+        self.assertGreaterEqual(
+            upload.expires_at,
+            before_replay + timedelta(days=7) - timedelta(seconds=5),
+        )
+        self.assertLessEqual(
+            upload.expires_at,
+            timezone.now() + timedelta(days=7) + timedelta(seconds=5),
+        )
+        self.assertEqual(
+            BankStatementRetentionService(
+                BankStatementReconciliationService(),
+            ).cleanup_expired(),
+            0,
+        )
+        upload.refresh_from_db()
+        self.assertIsNone(upload.retention_cleaned_at)
 
     @patch(
         'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
@@ -1179,29 +1298,46 @@ class TestBankStatementReconciliationView(TestCase):
                 content_type='application/pdf',
             ),
         )
+        second = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'second-retention.pdf',
+                b'%PDF-1.4 second statement',
+                content_type='application/pdf',
+            ),
+        )
         deadline = timezone.now()
-        self.upload.expires_at = deadline
-        self.upload.save(update_fields=['expires_at'])
+        BankStatementUpload.objects.filter(
+            pk__in=[self.upload.pk, second.pk],
+        ).update(expires_at=deadline)
         storage = self.upload.pdf_file.storage
+        retry_file_name = self.upload.pdf_file.name
         retention_service = BankStatementRetentionService(
             BankStatementReconciliationService(),
         )
+        real_delete = storage.delete
 
-        with (
-            patch.object(
-                storage,
-                'delete',
-                side_effect=OSError('storage unavailable'),
-            ),
-            self.assertRaises(OSError),
+        def fail_only_retry_file(name: str) -> None:
+            if name == retry_file_name:
+                raise OSError('storage unavailable')
+            real_delete(name)
+
+        with patch.object(
+            storage,
+            'delete',
+            side_effect=fail_only_retry_file,
         ):
-            retention_service.cleanup_expired(deadline)
+            cleaned = retention_service.cleanup_expired(deadline)
 
+        self.assertEqual(cleaned, 1)
         self.upload.refresh_from_db()
         self.row.refresh_from_db()
         self.assertIsNone(self.upload.retention_cleaned_at)
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
         self.assertEqual(Transaction.objects.count(), 1)
+        second.refresh_from_db()
+        self.assertIsNotNone(second.retention_cleaned_at)
 
         cleaned = retention_service.cleanup_expired(deadline)
 
@@ -1209,6 +1345,250 @@ class TestBankStatementReconciliationView(TestCase):
         self.row.refresh_from_db()
         self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_retention_anonymizes_only_statement_audit_copies(self) -> None:
+        """Bank copies in audit are scrubbed; independent audit is untouched."""
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            statement_movement = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=self.category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('77.00'),
+                date=timezone.now(),
+                description='Секретный банковский магазин',
+                source_ref='secret-bank-ref',
+            )
+            self.account.balance -= Decimal('77.00')
+            self.account.save(update_fields=['balance'])
+            record_statement_import_summary(
+                user=self.user,
+                account=self.account,
+                created=1,
+                skipped_duplicates=0,
+                period_from=date(2026, 11, 1),
+                period_to=date(2026, 11, 30),
+            )
+        independent_movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('15.00'),
+            date=timezone.now(),
+            description='Ручная покупка',
+        )
+        independent_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(independent_movement.pk),
+        )
+        independent_diff = independent_audit.diff
+        balance_audit = (
+            AuditLog.objects.filter(
+                model_name='finance_account.Account',
+                object_pk=str(self.account.pk),
+                kind=AuditOperationKind.STATEMENT_IMPORT,
+            )
+            .order_by('-pk')
+            .first()
+        )
+        if balance_audit is None:
+            self.fail('The statement import balance audit entry is missing')
+        balance_diff = balance_audit.diff
+
+        self.row.transaction = statement_movement
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.source_fingerprint = 'safe-fingerprint'
+        self.row.source_fingerprint_key_version = 'k2'
+        self.row.save(
+            update_fields=[
+                'transaction',
+                'decision',
+                'source_fingerprint',
+                'source_fingerprint_key_version',
+            ],
+        )
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(deadline)
+
+        statement_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(statement_movement.pk),
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        created_values = statement_audit.diff['created']
+        for field in ('amount', 'date', 'description', 'source_ref'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, created_values)
+        self.assertIn('type', created_values)
+        self.assertIn('account_id', created_values)
+
+        independent_audit.refresh_from_db()
+        self.assertEqual(independent_audit.diff, independent_diff)
+        balance_audit.refresh_from_db()
+        self.assertEqual(balance_audit.diff, balance_diff)
+
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(self.row.transaction, statement_movement)
+        self.assertEqual(self.row.source_fingerprint, 'safe-fingerprint')
+        self.assertEqual(self.row.source_fingerprint_key_version, 'k2')
+        self.assertEqual(Transaction.objects.count(), 3)
+
+        retention_audit = AuditLog.objects.get(
+            kind=AuditOperationKind.STATEMENT_RETENTION,
+        )
+        self.assertEqual(retention_audit.user, self.user)
+        retention_text = str(retention_audit.diff)
+        for bank_value in ('77.00', 'Секретный', 'secret-bank-ref'):
+            with self.subTest(value=bank_value):
+                self.assertNotIn(bank_value, retention_text)
+
+    def test_cleanup_does_not_reach_shared_fingerprint_of_other_upload(
+        self,
+    ) -> None:
+        """A repeated observation in another upload keeps its own audit."""
+        self.row.source_fingerprint = 'shared-fingerprint'
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.transaction = self.candidate
+        self.row.save(
+            update_fields=[
+                'source_fingerprint',
+                'decision',
+                'transaction',
+            ],
+        )
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/shared-fingerprint.pdf',
+            file_hash='shared-fingerprint-file',
+        )
+        BankStatementRow.objects.create(
+            upload=other_upload,
+            source_row_position=0,
+            source_ref='shared-bank-ref',
+            source_fingerprint='shared-fingerprint',
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('120.00'),
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        other_audit = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk='999999',
+            action=AuditLog.Action.CREATE,
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+            diff={
+                'v': 2,
+                'created': {
+                    'amount': '120.00',
+                    'description': 'Секретная операция другой выписки',
+                    'source_fingerprint': 'shared-fingerprint',
+                },
+            },
+        )
+        other_diff = other_audit.diff
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(deadline)
+
+        other_audit.refresh_from_db()
+        self.assertEqual(other_audit.diff, other_diff)
+        other_upload.refresh_from_db()
+        self.assertIsNone(other_upload.retention_cleaned_at)
+
+    def test_cleanup_does_not_mix_equal_transaction_and_transfer_pks(
+        self,
+    ) -> None:
+        """Same numeric pk in two models must not scrub another upload."""
+        other_account = Account.objects.create(
+            user=self.user,
+            name_account='Второй счёт',
+            balance=Decimal('500.00'),
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_MARKUP):
+            transfer = TransferMoneyLog.objects.create(
+                pk=self.candidate.pk,
+                user=self.user,
+                from_account=self.account,
+                to_account=other_account,
+                amount=Decimal('90.00'),
+                exchange_date=timezone.now(),
+                notes='Секретный перевод другой выписки',
+            )
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/other-transfer.pdf',
+        )
+        other_row = BankStatementRow.objects.create(
+            upload=other_upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('90.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        transfer_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer.pk),
+            kind=AuditOperationKind.STATEMENT_MARKUP,
+        )
+        transfer_diff = transfer_audit.diff
+        transaction_audit = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk=str(self.candidate.pk),
+            action=AuditLog.Action.CREATE,
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+            diff={
+                'v': 2,
+                'created': {
+                    'amount': '120.00',
+                    'description': 'Секретная транзакция',
+                    'source_ref': 'secret-transaction-ref',
+                },
+            },
+        )
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.transaction = self.candidate
+        self.row.save(update_fields=['decision', 'transaction'])
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(deadline)
+
+        transaction_audit.refresh_from_db()
+        created = transaction_audit.diff['created']
+        for field in ('amount', 'description', 'source_ref'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, created)
+        transfer_audit.refresh_from_db()
+        self.assertEqual(transfer_audit.diff, transfer_diff)
+        other_row.refresh_from_db()
+        self.assertEqual(
+            other_row.decision,
+            BankStatementRow.Decision.TRANSFERRED,
+        )
+        self.assertEqual(other_row.transfer, transfer)
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
 
     def test_pending_decision_after_deadline_creates_no_transaction(
         self,
@@ -8818,6 +9198,173 @@ class TestBankStatementImportReliability(TestCase):
             ).count(),
             2,
         )
+
+    def test_cleanup_scrubs_audit_copy_after_safe_delete(self) -> None:
+        """A deleted statement movement loses its FK, not its provenance."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/deleted-audit.pdf',
+            file_hash='deleted-audit-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=7,
+            source_ref='bank-deleted-row-ref',
+            source_fingerprint='deleted-fingerprint',
+            source_fingerprint_key_version='k1',
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное банковское описание',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное банковское описание',
+                source_ref='bank-deleted-row-ref',
+                source_file_hash=upload.file_hash,
+                source_row_position=7,
+                source_fingerprint='deleted-fingerprint',
+                source_fingerprint_key_version='k1',
+            )
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        independent = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=timezone.now(),
+            description='Ручная операция',
+        )
+        independent_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(independent.pk),
+        )
+        independent_diff = independent_audit.diff
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+
+        ApplicationContainer().transactions.transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+
+        self.assertFalse(
+            Transaction.objects.filter(pk=transaction.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertIsNone(row.transaction)
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction.pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        delete_diff = delete_audit.diff
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+
+        statement_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction.pk),
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        created = statement_audit.diff['created']
+        for field in ('amount', 'date', 'description', 'source_ref'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, created)
+        self.assertEqual(
+            created['source_fingerprint'],
+            'deleted-fingerprint',
+        )
+        independent_audit.refresh_from_db()
+        self.assertEqual(independent_audit.diff, independent_diff)
+        delete_audit.refresh_from_db()
+        self.assertEqual(delete_audit.diff, delete_diff)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_cleanup_uses_file_hash_and_position_after_safe_delete(
+        self,
+    ) -> None:
+        """A deleted movement without a fingerprint keeps its file position."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/deleted-position-audit.pdf',
+            file_hash='deleted-position-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=8,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('10.00'),
+            description='Второе секретное описание',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('10.00'),
+                date=timezone.now(),
+                description='Второе секретное описание',
+                source_file_hash=upload.file_hash,
+                source_row_position=8,
+            )
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('990.00')
+        self.account.save(update_fields=['balance'])
+
+        ApplicationContainer().transactions.transaction_service().delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+
+        statement_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction.pk),
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        created = statement_audit.diff['created']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, created)
+        self.assertEqual(created['source_file_hash'], upload.file_hash)
+        self.assertEqual(created['source_row_position'], 8)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
 
     def test_known_file_replay_does_not_recreate_deleted_movement(
         self,

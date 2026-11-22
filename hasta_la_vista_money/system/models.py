@@ -39,6 +39,10 @@ class AuditOperationKind(models.TextChoices):
         _('Разбор нерешённых строк'),
     )
     STATEMENT_MARKUP = 'statement_markup', _('Разметка выписки')
+    STATEMENT_RETENTION = (
+        'statement_retention',
+        _('Очистка банковских данных'),
+    )
 
 
 class AuditLog(models.Model):

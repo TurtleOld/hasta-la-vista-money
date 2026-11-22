@@ -126,6 +126,49 @@ class ProfileTimezoneUiTest(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.timezone_name, 'Asia/Tokyo')
 
+    def test_ajax_save_accepts_statement_retention_days(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('users:update_user', kwargs={'pk': self.user.pk}),
+            {
+                'username': self.user.username,
+                'email': self.user.email or 'user@example.com',
+                'first_name': self.user.first_name,
+                'last_name': self.user.last_name,
+                'timezone_name': self.user.timezone_name,
+                'statement_retention_days': 45,
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.statement_retention_days, 45)
+
+    def test_ajax_save_without_retention_keeps_existing_value(self) -> None:
+        self.user.statement_retention_days = 60
+        self.user.save(update_fields=['statement_retention_days'])
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('users:update_user', kwargs={'pk': self.user.pk}),
+            {
+                'username': self.user.username,
+                'email': self.user.email or 'user@example.com',
+                'first_name': self.user.first_name,
+                'last_name': self.user.last_name,
+                'timezone_name': self.user.timezone_name,
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.statement_retention_days, 60)
+
     def test_ajax_save_rejects_unknown_timezone(self) -> None:
         self.client.force_login(self.user)
 

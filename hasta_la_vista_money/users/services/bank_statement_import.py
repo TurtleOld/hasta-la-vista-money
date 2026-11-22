@@ -295,7 +295,9 @@ class BankStatementImportService:
             locked.account_balance_after = None
             locked.balance_discrepancy = None
             locked.error_message = ''
-            locked.expires_at = bank_statement_expires_at()
+            locked.expires_at = bank_statement_expires_at(
+                days=locked.user.statement_retention_days,
+            )
             locked.retention_cleaned_at = None
             locked.save(
                 update_fields=[

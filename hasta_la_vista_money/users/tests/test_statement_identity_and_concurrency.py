@@ -1,6 +1,6 @@
 """Statement identity, canonical duplicates, and atomic balance behaviour."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier, Thread
 from typing import Any, cast
@@ -9,6 +9,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connections, transaction
 from django.db.migrations.executor import MigrationExecutor
+from django.db.models import Model
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
@@ -1126,15 +1127,19 @@ class SharedMovementMigrationTest(TransactionTestCase):
 
     def test_unresolved_links_are_released_in_any_order(self) -> None:
         executor = MigrationExecutor(transaction.get_connection())
-        executor.migrate(self.migrate_from)
-        old_apps = executor.loader.project_state(self.migrate_from).apps
-        user = User.objects.create_user(username='migration-order-user')
-        account = Account.objects.create(
+        old_apps = executor.migrate(self.migrate_from).apps
+        user = old_apps.get_model('users', 'User').objects.create(
+            username='migration-order-user'
+        )
+        account_model = old_apps.get_model('finance_account', 'Account')
+        category_model = old_apps.get_model('transactions', 'Category')
+        movement_model = old_apps.get_model('transactions', 'Transaction')
+        account = account_model.objects.create(
             user=user,
             name_account='Основной',
             balance=Decimal('1000.00'),
         )
-        category = Category.objects.create(
+        category = category_model.objects.create(
             user=user,
             name='Продукты',
             type=TransactionType.EXPENSE,
@@ -1149,8 +1154,8 @@ class SharedMovementMigrationTest(TransactionTestCase):
         )
         row_model = old_apps.get_model('users', 'BankStatementRow')
 
-        def movement() -> Transaction:
-            return Transaction.objects.create(
+        def movement() -> Model:
+            movement_obj: Model = movement_model.objects.create(
                 user=user,
                 account=account,
                 category=category,
@@ -1158,9 +1163,10 @@ class SharedMovementMigrationTest(TransactionTestCase):
                 amount=Decimal('100.00'),
                 date=WHEN,
             )
+            return movement_obj
 
         def row(
-            movement_obj: Transaction,
+            movement_obj: Model,
             position: int,
             decision: str,
         ) -> Any:
@@ -1229,20 +1235,24 @@ class SharedMovementMigrationTest(TransactionTestCase):
 
     def test_shared_movement_becomes_repeat_or_pending(self) -> None:
         executor = MigrationExecutor(transaction.get_connection())
-        executor.migrate(self.migrate_from)
-        old_apps = executor.loader.project_state(self.migrate_from).apps
-        user = User.objects.create_user(username='migration-user')
-        account = Account.objects.create(
+        old_apps = executor.migrate(self.migrate_from).apps
+        user = old_apps.get_model('users', 'User').objects.create(
+            username='migration-user'
+        )
+        account_model = old_apps.get_model('finance_account', 'Account')
+        category_model = old_apps.get_model('transactions', 'Category')
+        movement_model = old_apps.get_model('transactions', 'Transaction')
+        account = account_model.objects.create(
             user=user,
             name_account='Основной',
             balance=Decimal('1000.00'),
         )
-        category = Category.objects.create(
+        category = category_model.objects.create(
             user=user,
             name='Продукты',
             type=TransactionType.EXPENSE,
         )
-        movement = Transaction.objects.create(
+        movement = movement_model.objects.create(
             user=user,
             account=account,
             category=category,
@@ -1286,7 +1296,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
             amount=Decimal('50.00'),
             decision='linked',
         )
-        foreign_account = Account.objects.create(
+        foreign_account = account_model.objects.create(
             user=user,
             name_account='Другой',
             balance=Decimal('0.00'),
@@ -1421,6 +1431,97 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_cleanup_and_replay_race_keeps_one_movement(self) -> None:
+        """Cleanup and an explicit replay never resurrect deleted money."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'race.pdf',
+                b'%PDF-1.4 race statement',
+                content_type='application/pdf',
+            ),
+            file_hash='race-file',
+            status=BankStatementUpload.Status.COMPLETED,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def cleanup() -> None:
+            try:
+                barrier.wait(timeout=3)
+                ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def replay() -> None:
+            try:
+                barrier.wait(timeout=3)
+                ApplicationContainer().users.bank_statement_import_service().prepare_known_replay(
+                    upload,
+                    SimpleUploadedFile(
+                        'race.pdf',
+                        b'%PDF-1.4 race statement',
+                        content_type='application/pdf',
+                    ),
+                )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=cleanup), Thread(target=replay)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        for error in errors:
+            if error is not None:
+                self.fail(f'Cleanup or replay failed unexpectedly: {error}')
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.transaction_id, movement.pk)
+        upload.refresh_from_db()
+        self.assertIsNone(upload.retention_cleaned_at)
+        self.assertGreater(upload.expires_at, timezone.now())
+        self.assertTrue(bool(upload.pdf_file))
 
     def test_concurrent_decisions_create_one_movement(self) -> None:
         upload = BankStatementUpload.objects.create(

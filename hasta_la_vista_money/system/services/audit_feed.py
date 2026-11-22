@@ -97,6 +97,9 @@ _KIND_TITLES: Final[dict[str, Any]] = {
     AuditOperationKind.STATEMENT_IMPORT_RESOLUTION: _(
         'Разбор нерешённых строк',
     ),
+    AuditOperationKind.STATEMENT_RETENTION: _(
+        'Очистка банковских данных',
+    ),
 }
 
 # ACCOUNT_EDIT has no money effect of its own, so unlike a receipt or a
