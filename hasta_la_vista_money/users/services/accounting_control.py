@@ -60,6 +60,7 @@ class RowResolution:
     pending: int
     needs_transfer: int
     resolved: int
+    duplicates: int
     legacy_skips: int
     expired: int
 
@@ -160,6 +161,10 @@ class AccountingControlService:
                 filter=Q(decision=BankStatementRow.Decision.NEEDS_TRANSFER),
             ),
             resolved=Count('pk', filter=Q(decision__in=RESOLVED_DECISIONS)),
+            duplicates=Count(
+                'pk',
+                filter=Q(decision=BankStatementRow.Decision.DUPLICATE),
+            ),
             legacy_skips=Count(
                 'pk',
                 filter=Q(decision=BankStatementRow.Decision.SKIPPED)
@@ -201,6 +206,7 @@ class AccountingControlService:
                 pending=int(row_counts['pending'] or 0),
                 needs_transfer=int(row_counts['needs_transfer'] or 0),
                 resolved=int(row_counts['resolved'] or 0),
+                duplicates=int(row_counts['duplicates'] or 0),
                 legacy_skips=int(row_counts['legacy_skips'] or 0),
                 expired=int(row_counts['expired'] or 0),
             ),
