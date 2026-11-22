@@ -131,6 +131,8 @@ class StatementImportResult:
         closing_balance_moment: Точный момент остатка, если банк его даёт.
         closing_balance_currency: Подтверждённая валюта остатка.
         closing_balance_semantics: Подтверждённая семантика остатка.
+        stopped: Прогон остановлен, потому что очистка удалила данные,
+            истёк срок хранения или загрузку уже ведёт другой прогон.
     """
 
     income_count: int
@@ -142,6 +144,7 @@ class StatementImportResult:
     closing_balance_moment: datetime | None = None
     closing_balance_currency: str | None = None
     closing_balance_semantics: str | None = None
+    stopped: bool = False
 
 
 @dataclass(frozen=True)
@@ -377,31 +380,42 @@ class BankStatementImportService:
         parser = BankStatementParser(upload.pdf_file.path)
         parse_result = parser.parse()
         transactions = parse_result.transactions
-        if parse_result.account_number:
-            with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
-                self._match_account(upload, parse_result.account_number)
+        run_id = upload.celery_task_id
+        with transaction.atomic():
+            active = self._lock_current_run(upload.pk, run_id)
+            if active is None:
+                return self._stopped_result()
+            upload = active
+            if parse_result.account_number:
+                with audit_operation(
+                    kind=AuditOperationKind.STATEMENT_IMPORT,
+                ):
+                    self._match_account(
+                        upload,
+                        parse_result.account_number,
+                    )
 
-        upload.total_transactions = len(transactions)
-        upload.statement_bank = parse_result.bank
-        upload.statement_period_from = parse_result.period_start
-        upload.statement_period_to = parse_result.period_end
-        upload.save(
-            update_fields=[
-                'total_transactions',
-                'statement_bank',
-                'statement_period_from',
-                'statement_period_to',
-            ],
-        )
-        if (
-            upload.processing_mode
-            != BankStatementUpload.ProcessingMode.RECONCILIATION
-            and self.has_overlapping_period(upload)
-        ):
-            upload.processing_mode = (
-                BankStatementUpload.ProcessingMode.RECONCILIATION
+            upload.total_transactions = len(transactions)
+            upload.statement_bank = parse_result.bank
+            upload.statement_period_from = parse_result.period_start
+            upload.statement_period_to = parse_result.period_end
+            upload.save(
+                update_fields=[
+                    'total_transactions',
+                    'statement_bank',
+                    'statement_period_from',
+                    'statement_period_to',
+                ],
             )
-            upload.save(update_fields=['processing_mode'])
+            if (
+                upload.processing_mode
+                != BankStatementUpload.ProcessingMode.RECONCILIATION
+                and self.has_overlapping_period(upload)
+            ):
+                upload.processing_mode = (
+                    BankStatementUpload.ProcessingMode.RECONCILIATION
+                )
+                upload.save(update_fields=['processing_mode'])
         reconciliation = (
             upload.processing_mode
             == BankStatementUpload.ProcessingMode.RECONCILIATION
@@ -416,13 +430,16 @@ class BankStatementImportService:
         unsafe_identity = self._fingerprints_are_unsafe(upload)
         if reconciliation or parse_result.requires_markup or unsafe_identity:
             with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
-                self._save_markup_rows(
+                stopped = self._save_markup_rows(
                     upload,
                     transactions,
                     parse_result,
                     recognize_known=not unsafe_identity,
                     restore_existing=reconciliation,
+                    run_id=run_id,
                 )
+                if stopped:
+                    return self._stopped_result()
                 upload.refresh_from_db()
                 record_statement_import_summary(
                     user=upload.user,
@@ -463,12 +480,21 @@ class BankStatementImportService:
                 expense_count,
                 skipped_count,
                 needs_transfer_count,
+                stopped,
             ) = self._process_transactions(
                 upload=upload,
                 transactions=transactions,
                 existing_categories=existing_categories,
                 parse_result=parse_result,
+                run_id=run_id,
             )
+            if stopped:
+                return self._stopped_result(
+                    income_count=income_count,
+                    expense_count=expense_count,
+                    skipped_count=skipped_count,
+                    needs_transfer_count=needs_transfer_count,
+                )
             upload.refresh_from_db()
 
         self.coverage_service.record_statement_period(
@@ -488,13 +514,31 @@ class BankStatementImportService:
             closing_balance_semantics=parse_result.closing_balance_semantics,
         )
 
+    def _stopped_result(
+        self,
+        income_count: int = 0,
+        expense_count: int = 0,
+        skipped_count: int = 0,
+        needs_transfer_count: int = 0,
+    ) -> StatementImportResult:
+        """Return a result without bank details after the run has stopped."""
+        return StatementImportResult(
+            income_count=income_count,
+            expense_count=expense_count,
+            skipped_count=skipped_count,
+            needs_transfer_count=needs_transfer_count,
+            closing_balance=None,
+            stopped=True,
+        )
+
     def _process_transactions(
         self,
         upload: BankStatementUpload,
         transactions: list[dict[str, Any]],
         existing_categories: list[str],
         parse_result: StatementParseResult | None = None,
-    ) -> tuple[int, int, int, int]:
+        run_id: str | None = None,
+    ) -> tuple[int, int, int, int, bool]:
         """Создать транзакции из разобранных записей выписки.
 
         Положительные строки кредитного счёта не становятся доходом:
@@ -509,11 +553,16 @@ class BankStatementImportService:
             transactions: Список разобранных операций.
             existing_categories: Актуальный список категорий пользователя.
             parse_result: Результат разбора с банком и версией формата.
+            run_id: Идентификатор активного прогона; по умолчанию берётся
+                из загрузки.
 
         Returns:
             Кортеж ``(income_count, expense_count, skipped_count,
-            needs_transfer_count)``.
+            needs_transfer_count, stopped)``. ``stopped`` означает, что
+            очистка, срок хранения или новый прогон запретили запись.
         """
+        run_id = run_id or upload.celery_task_id
+        stopped = False
         income_count = upload.income_count
         expense_count = upload.expense_count
         skipped_count = upload.skipped_count
@@ -622,7 +671,11 @@ class BankStatementImportService:
                 )
 
             with transaction.atomic():
-                upload = self._lock_upload(upload.pk)
+                active = self._lock_current_run(upload.pk, run_id)
+                if active is None:
+                    stopped = True
+                    break
+                upload = active
                 if upload.processed_transactions > idx:
                     income_count = upload.income_count
                     expense_count = upload.expense_count
@@ -869,16 +922,43 @@ class BankStatementImportService:
                     progress=upload.progress,
                 )
 
-        record_statement_import_summary(
-            user=upload.user,
-            account=upload.account,
-            created=income_count + expense_count,
-            skipped_duplicates=skipped_count,
-            period_from=period_from,
-            period_to=period_to,
-            mode=upload.processing_mode,
+        if not stopped:
+            record_statement_import_summary(
+                user=upload.user,
+                account=upload.account,
+                created=income_count + expense_count,
+                skipped_duplicates=skipped_count,
+                period_from=period_from,
+                period_to=period_to,
+                mode=upload.processing_mode,
+            )
+        return (
+            income_count,
+            expense_count,
+            skipped_count,
+            needs_transfer_count,
+            stopped,
         )
-        return income_count, expense_count, skipped_count, needs_transfer_count
+
+    def _lock_current_run(
+        self,
+        upload_id: int,
+        run_id: str,
+    ) -> BankStatementUpload | None:
+        """Lock the upload and keep it only while this run may write.
+
+        Cleanup takes the same lock, clears the run id and marks the data
+        cleaned. A resumed worker that re-reads the row after that must
+        stop instead of restoring bank details or posting newer rows.
+        """
+        upload = self._lock_upload(upload_id)
+        if (
+            upload.retention_cleaned_at is not None
+            or upload.expires_at <= timezone.now()
+            or upload.celery_task_id != run_id
+        ):
+            return None
+        return upload
 
     def _lock_upload(self, upload_id: int) -> BankStatementUpload:
         """Lock the upload row: Celery retries and manual actions serialize."""
@@ -1528,7 +1608,8 @@ class BankStatementImportService:
         *,
         recognize_known: bool,
         restore_existing: bool = False,
-    ) -> None:
+        run_id: str | None = None,
+    ) -> bool:
         """Save rows awaiting user markup; none of them is posted.
 
         When fingerprint keys are usable, rows already proven on the
@@ -1540,12 +1621,19 @@ class BankStatementImportService:
         restored from the re-uploaded file in place, keeping its decision,
         movement, transfer and candidate links. A new row during a replay
         is still only saved for resolution, never posted.
+
+        Returns:
+            ``True`` when the run had to stop because cleanup, the
+            retention deadline or another run already owns the upload.
         """
         bank = parse_result.bank
         format_version = parse_result.format_version
+        run_id = run_id or upload.celery_task_id
         with transaction.atomic():
-            upload = self._lock_upload(upload.pk)
-            upload = self._lock_account(upload)
+            active = self._lock_current_run(upload.pk, run_id)
+            if active is None:
+                return True
+            upload = self._lock_account(active)
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
             replay = restore_existing and upload.statement_rows.exists()
@@ -1703,6 +1791,7 @@ class BankStatementImportService:
                     'updated_at',
                 ],
             )
+        return False
 
     def _restore_existing_row(
         self,
