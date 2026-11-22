@@ -33,7 +33,6 @@ class CoverageInterval:
     source_label: str
     upload: BankStatementUpload | None
     author: User | None
-    has_no_rows: bool
 
 
 @dataclass(frozen=True)
@@ -77,7 +76,10 @@ class StatementCoverageService:
         """Record the explicit period of a parsed statement.
 
         A reparse without usable bounds retires this upload's previous
-        confirmation instead of leaving a stale interval actual.
+        confirmation instead of leaving a stale interval actual. A statement
+        with no extracted operations proves neither an empty period nor that
+        every operation was read; its bounds stay on the upload for
+        traceability.
 
         Args:
             upload: Parsed statement upload.
@@ -85,7 +87,8 @@ class StatementCoverageService:
             period_end: Explicit statement end, if the parser found one.
 
         Returns:
-            The recorded coverage, or ``None`` when the period is unusable.
+            The recorded coverage, or ``None`` when the period is unusable or
+            the parse extracted no operations.
         """
         if (
             period_start is None
@@ -93,6 +96,8 @@ class StatementCoverageService:
             or period_end < period_start
         ):
             self._coverage_repository.retire_without_bounds(upload)
+            return None
+        if upload.total_transactions == 0:
             return None
         return self._coverage_repository.record(
             account_id=upload.account_id,
@@ -156,13 +161,19 @@ class StatementCoverageService:
         Returns:
             Coverage state, intervals and gaps.
         """
+        # An interval recorded from a zero-row parse proves nothing and must
+        # not be published, including records left by older imports.
+        coverages = self._coverage_repository.for_account(
+            account.pk,
+            period_start,
+            period_end,
+        ).exclude(
+            source=StatementPeriodCoverage.Source.BANK_STATEMENT,
+            upload__total_transactions=0,
+        )
         intervals = tuple(
             self._interval(coverage, period_start, period_end)
-            for coverage in self._coverage_repository.for_account(
-                account.pk,
-                period_start,
-                period_end,
-            )
+            for coverage in coverages
         )
         gaps = self._gaps(intervals, period_start, period_end)
         if not intervals:
@@ -190,11 +201,6 @@ class StatementCoverageService:
         """Clip one coverage record to the selected period."""
         start = max(coverage.period_start, period_start)
         end = min(coverage.period_end, period_end)
-        has_no_rows = (
-            coverage.source == StatementPeriodCoverage.Source.BANK_STATEMENT
-            and coverage.upload is not None
-            and coverage.upload.total_transactions == 0
-        )
         return CoverageInterval(
             period_start=start,
             period_end=end,
@@ -202,7 +208,6 @@ class StatementCoverageService:
             source_label=str(coverage.get_source_display()),
             upload=coverage.upload,
             author=coverage.author,
-            has_no_rows=has_no_rows,
         )
 
     @staticmethod

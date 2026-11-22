@@ -1717,6 +1717,7 @@ class CoverageRevisionTest(TestCase):
             account=self.account,
             pdf_file='statement.pdf',
             file_hash='revision-file',
+            total_transactions=1,
         )
         self.service = ApplicationContainer().users.statement_coverage_service()
 
