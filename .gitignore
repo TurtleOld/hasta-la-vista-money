@@ -241,6 +241,8 @@ logs/
 
 .codegraph/
 
+.kandev/
+
 docs/superpowers/**
 
 kilo.jsonc
