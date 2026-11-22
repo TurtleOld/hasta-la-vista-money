@@ -9,6 +9,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   reviewdog:
     if: github.event_name == 'pull_request'
@@ -101,24 +105,29 @@ jobs:
           version: "0.11.32"
           enable-cache: true
 
-      - name: Generate uv.lock
-        run: uv lock
-
       - name: Install ruff
+        if: matrix.python-version == '3.12'
         uses: astral-sh/ruff-action@d7f6ad639a4c5114cf48e4459cc6fad582915895
         with:
           version: "0.15.4"
-      - run: ruff check .
-      - run: ruff format --check .
+
+      - name: Run ruff check
+        if: matrix.python-version == '3.12'
+        run: ruff check .
+
+      - name: Run ruff format check
+        if: matrix.python-version == '3.12'
+        run: ruff format --check .
 
       - name: Install dependencies
-        run: |
-          uv venv .venv && uv pip install -e . --group dev
+        run: uv sync --locked
 
       - name: Run mypy
+        if: matrix.python-version == '3.12'
         run: uv run mypy .
 
       - name: Check migrations are up-to-date
+        if: matrix.python-version == '3.12'
         run: uv run python manage.py makemigrations --check --dry-run
 
       - name: Fetch base branch for migration diff
@@ -143,9 +152,11 @@ jobs:
           ${{ steps.changed-migrations.outputs.files }}
 
       - name: Run check
+        if: matrix.python-version == '3.12'
         run: uv run python manage.py check
 
       - name: Run deploy check
+        if: matrix.python-version == '3.12'
         run: >-
           uv run python manage.py check --deploy --tag security
           --fail-level WARNING
@@ -208,6 +219,8 @@ jobs:
       - name: Build production image
         run: >-
           docker buildx build --file ${{ matrix.image.dockerfile }} --load
+          --cache-from type=gha,scope=${{ matrix.image.name }}
+          --cache-to type=gha,mode=max,scope=${{ matrix.image.name }}
           --tag ${{ matrix.image.name }}:${{ github.sha }} .
 
       - name: Smoke test production container startup
