@@ -184,7 +184,7 @@ class BankStatementImportService:
             classifier: Категоризатор операций.
             account_repository: Репозиторий счетов.
             statement_row_repository: Репозиторий строк выписки.
-            identity_service: Сервис отпечатков операций.
+            identity_service: Сервис безопасной идентичности строк.
             coverage_service: Сервис покрытия периода выписки.
         """
         self.classifier = classifier
@@ -433,11 +433,12 @@ class BankStatementImportService:
                     period_to=parse_result.period_end,
                     mode=upload.processing_mode,
                 )
-            self.coverage_service.record_statement_period(
-                upload,
-                parse_result.period_start,
-                parse_result.period_end,
-            )
+            if parse_result.requires_markup:
+                self.coverage_service.record_statement_period(
+                    upload,
+                    parse_result.period_start,
+                    parse_result.period_end,
+                )
             return StatementImportResult(
                 income_count=0,
                 expense_count=0,

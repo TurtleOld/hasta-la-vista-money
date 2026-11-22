@@ -132,11 +132,10 @@ def process_bank_statement_task(
                     'полнота не подтверждена.',
                 ),
             )
-        upload.status = _completion_status(
-            upload,
-            empty_parse=empty_parse,
-            awaiting_markup=awaiting_markup,
-        )
+        if empty_parse or unresolved:
+            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        else:
+            upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
         upload.save(
             update_fields=[
@@ -212,30 +211,6 @@ def process_bank_statement_task(
         )
         _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
         raise
-
-
-def _completion_status(
-    upload: BankStatementUpload,
-    *,
-    empty_parse: bool,
-    awaiting_markup: bool,
-) -> str:
-    """Return the status of a finished run without claiming false coverage.
-
-    A pending duplicate or an unperformed credit-card repayment still needs
-    a user decision, so the run is not complete yet.
-    """
-    if empty_parse or awaiting_markup:
-        return BankStatementUpload.Status.AWAITING_CONFIRMATION
-    if BankStatementRow.objects.filter(
-        upload=upload,
-        decision__in={
-            BankStatementRow.Decision.PENDING,
-            BankStatementRow.Decision.NEEDS_TRANSFER,
-        },
-    ).exists():
-        return BankStatementUpload.Status.AWAITING_CONFIRMATION
-    return BankStatementUpload.Status.COMPLETED
 
 
 def _mark_upload_failed(upload_id: int, message: str) -> None:

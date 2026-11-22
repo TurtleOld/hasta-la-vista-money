@@ -168,10 +168,6 @@ class BankStatementUpload(Model):
         )
         FAILED = 'failed', _('Ошибка')
 
-    class ProcessingMode(TextChoices):
-        IMPORT = 'import', _('Импорт')
-        RECONCILIATION = 'reconciliation', _('Сверка')
-
     class BalanceResult(TextChoices):
         NOT_CHECKED = 'not_checked', _('Не проверено')
         MATCHED = 'matched', _('Совпадает')
@@ -221,6 +217,10 @@ class BankStatementUpload(Model):
             'CONSCIOUS_INCOMPLETE_ACCOUNTING',
             _('Осознанно неполный учёт'),
         )
+
+    class ProcessingMode(TextChoices):
+        IMPORT = 'import', _('Импорт')
+        RECONCILIATION = 'reconciliation', _('Сверка')
 
     class LegacyReviewState(TextChoices):
         NOT_REQUIRED = 'not_required', _('Проверка не требуется')

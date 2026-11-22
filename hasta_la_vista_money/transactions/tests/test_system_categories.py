@@ -3,7 +3,6 @@
 from django.contrib import admin
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
-from django.db.models.signals import post_save
 from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -15,9 +14,6 @@ from hasta_la_vista_money.transactions.models import (
     Category,
     SystemCategoryKind,
     TransactionType,
-)
-from hasta_la_vista_money.transactions.services.signals import (
-    seed_system_categories_for_new_user,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -138,30 +134,21 @@ class SystemCategoryMigrationTest(TransactionTestCase):
     ]
 
     def setUp(self) -> None:
-        post_save.disconnect(seed_system_categories_for_new_user, sender=User)
-        # Create the row while every later users column still exists: the
-        # transactions target also unapplies users migrations that depend on
-        # it, and the historical user state then lacks newer NOT NULL
-        # columns.
-        self.user = User.objects.create_user(
-            username='migration-user',
-            password=TEST_PASSWORD,
-            theme='auto',
-        )
-        self.executor = MigrationExecutor(transaction.get_connection())
-        self.executor.migrate(self.migrate_from)
-        old_apps = self.executor.loader.project_state(self.migrate_from).apps
+        self.addCleanup(self._restore_schema)
+        executor = MigrationExecutor(transaction.get_connection())
+        old_apps = executor.migrate(self.migrate_from).apps
         self.old_category = old_apps.get_model('transactions', 'Category')
+        self.user = old_apps.get_model('users', 'User').objects.create(
+            username='migration-user',
+        )
 
-    def tearDown(self) -> None:
-        self.executor = MigrationExecutor(transaction.get_connection())
-        self.executor.migrate(self.executor.loader.graph.leaf_nodes())
-        post_save.connect(seed_system_categories_for_new_user, sender=User)
+    def _restore_schema(self) -> None:
+        executor = MigrationExecutor(transaction.get_connection())
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def _migrate(self) -> type[Category]:
-        self.executor = MigrationExecutor(transaction.get_connection())
-        self.executor.migrate(self.migrate_to)
-        apps = self.executor.loader.project_state(self.migrate_to).apps
+        executor = MigrationExecutor(transaction.get_connection())
+        apps = executor.migrate(self.migrate_to).apps
         return apps.get_model('transactions', 'Category')
 
     def test_legacy_category_becomes_system_oldest_wins(self) -> None:
