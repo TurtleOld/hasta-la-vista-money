@@ -2346,6 +2346,44 @@ class TestBankStatementUploadHistory(TestCase):
         self.assertContains(response, 'оговорки полноты')
         self.assertContains(response, 'Нефинансовая запись банка')
 
+    def test_control_shows_duplicate_observations_as_separate_outcome(
+        self,
+    ) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-duplicate.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        canonical = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('20.00'),
+            description='Кофе',
+            source_ref='control-duplicate-1',
+            source_row_position=1,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('20.00'),
+            description='Кофе',
+            source_ref='control-duplicate-2',
+            source_row_position=2,
+            decision=BankStatementRow.Decision.DUPLICATE,
+            canonical_row=canonical,
+        )
+
+        response = self._control_response()
+
+        control = response.context['control']
+        self.assertEqual(control.rows.resolved, 1)
+        self.assertEqual(control.rows.duplicates, 1)
+        self.assertContains(response, 'Точные дубли')
+
     @patch(
         'hasta_la_vista_money.users.services.bank_statement_import.'
         'BankStatementParser',
@@ -6811,6 +6849,71 @@ class TestOzonBankStatement(TestCase):
         self.assertEqual(last['source_ref'], 'DOC-C')
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_unreadable_date_and_amount_keeps_own_fragment(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A purpose and document survive an unreadable date and amount.
+
+        The fragment must not extend the previous operation: its purpose
+        and document would otherwise distort the neighbour's row and the
+        separate observation would disappear.
+        """
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['н/д', 'DOC-B', 'Комиссия банка', '- ₽'],
+                ['01.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, middle, last = result.transactions
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertEqual(first['description'], 'Покупки Ozon')
+        self.assertNotIn('parse_issue', first)
+        self.assertIsNone(middle['date'])
+        self.assertIsNone(middle['amount'])
+        self.assertEqual(middle['source_ref'], 'DOC-B')
+        self.assertEqual(middle['description'], 'Комиссия банка')
+        self.assertEqual(middle['parse_issue'], 'unparsed')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
+        self.assertEqual(last['source_ref'], 'DOC-C')
+        self.assertNotIn('parse_issue', last)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_ambiguous_fragment_before_first_operation_is_kept(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A fragment above the first operation is not silently dropped."""
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                ['', 'DOC-B', 'Комиссия банка', ''],
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 2)
+        fragment, operation = result.transactions
+        self.assertEqual(fragment['parse_issue'], 'unparsed')
+        self.assertEqual(fragment['source_ref'], 'DOC-B')
+        self.assertEqual(fragment['description'], 'Комиссия банка')
+        self.assertIsNone(fragment['amount'])
+        self.assertEqual(operation['amount'], Decimal('-100.00'))
+        self.assertEqual(operation['source_ref'], 'DOC-A')
+        self.assertNotIn('parse_issue', operation)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_unparsed_row_stays_visible_without_blocking_others(
         self,
         mock_camelot: MagicMock,
@@ -9074,10 +9177,29 @@ class TestBankStatementImportReliability(TestCase):
                 for row in upload.statement_rows.all()
             }
             self.assertEqual(sorted(after), list(range(1, 139)))
+            expected = {
+                position: (
+                    row_pk,
+                    (
+                        BankStatementRow.Decision.PENDING
+                        if decision == BankStatementRow.Decision.EXPIRED
+                        else decision
+                    ),
+                    transaction_id,
+                )
+                for position, (row_pk, decision, transaction_id) in (
+                    current.items()
+                )
+            }
             self.assertEqual(
                 {position: values[:3] for position, values in after.items()},
-                current,
+                expected,
             )
+            if cleaned:
+                self.assertEqual(
+                    upload.status,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                )
             self.assertEqual(Transaction.objects.count(), 1)
             self.account.refresh_from_db()
             self.assertEqual(self.account.balance, Decimal('-119000.00'))
@@ -9090,7 +9212,7 @@ class TestBankStatementImportReliability(TestCase):
             )
 
     def test_cleaned_partial_fragment_is_restored_by_replay(self) -> None:
-        """An explicit replay restores a cleaned unparsed fragment in place."""
+        """A replay restores a cleaned fragment and reopens it for markup."""
         parse_result = StatementParseResult(
             transactions=[
                 {
@@ -9153,11 +9275,139 @@ class TestBankStatementImportReliability(TestCase):
         row = rows.get()
         self.assertEqual(row.pk, row_pk)
         self.assertEqual(row.source_row_position, 7)
-        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.decided_at)
         self.assertEqual(row.description, 'Неизвестная операция')
         self.assertIsNone(row.amount)
         self.assertIsNone(row.transaction_date)
         self.assertFalse(Transaction.objects.exists())
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        audit = row.decision_audits.get()
+        self.assertEqual(
+            audit.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertIsNone(audit.actor)
+
+        excluded = (
+            ApplicationContainer()
+            .users.statement_markup_service()
+            .exclude(
+                row.pk,
+                self.user.pk,
+                (BankStatementRow.ExclusionCode.NON_FINANCIAL_BANK_RECORD),
+            )
+        )
+
+        self.assertEqual(excluded.decision, BankStatementRow.Decision.SKIPPED)
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_cleaned_pending_row_is_reopened_by_replay(self) -> None:
+        """A replay reopens a cleaned pending row for manual resolution."""
+        moment = datetime(2026, 2, 3, 10, tzinfo=UTC)
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reopen.pdf',
+            file_hash='reopen-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=BankStatementRow.TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('13.20'),
+            description='Комиссия за обслуживание',
+            source_ref='G-REOPEN',
+            source_row_position=0,
+            source_format_version=1,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        row_pk = row.pk
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertIsNone(row.amount)
+        self.assertEqual(row.description, '')
+
+        parse_result = StatementParseResult(
+            transactions=[
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'G-REOPEN',
+                    'source_ref_strength': 'weak',
+                    'row_position': 0,
+                },
+            ],
+            bank='generic',
+            format_version=1,
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+        for _attempt in (1, 2):
+            self.assertTrue(
+                service.prepare_known_replay(
+                    upload,
+                    SimpleUploadedFile(
+                        'reopen.pdf',
+                        b'%PDF-1.4 replay',
+                        content_type='application/pdf',
+                    ),
+                ),
+            )
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementParser',
+            ) as parser:
+                parser.return_value.parse.return_value = parse_result
+                process_bank_statement_task.apply(args=[upload.pk])
+            upload.refresh_from_db()
+            row.refresh_from_db()
+            self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+            self.assertIsNone(row.decided_at)
+            self.assertEqual(row.amount, Decimal('13.20'))
+            self.assertEqual(row.description, 'Комиссия за обслуживание')
+            self.assertEqual(
+                upload.status,
+                BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            )
+            self.assertEqual(Transaction.objects.count(), 0)
+
+        self.assertEqual(row.pk, row_pk)
+        self.assertEqual(row.decision_audits.count(), 1)
+        audit = row.decision_audits.get()
+        self.assertEqual(audit.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertIsNone(audit.actor)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+        decided = BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        self.assertEqual(decided.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(Transaction.objects.count(), 1)
 
     def _replay_parse_result(
         self,
