@@ -270,7 +270,7 @@ make export-api-schema   # экспорт OpenAPI схемы
 
 ### Важно: uv.lock
 
-`uv.lock` не хранится в репозитории — генерируется автоматически при сборке Docker-образов и при `make install`. Для обновления зависимостей: `uv lock --upgrade`.
+`uv.lock` хранится в репозитории: CI и Docker-образы ставят зависимости через `uv sync --locked` без повторного разрешения версий. Для обновления зависимостей: `uv lock --upgrade` и коммит `uv.lock` вместе с `pyproject.toml`.
 
 ---
 
