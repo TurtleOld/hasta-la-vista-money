@@ -1,5 +1,6 @@
 """Statement identity, canonical duplicates, and atomic balance behaviour."""
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier, Thread
@@ -39,6 +40,11 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
 )
+from hasta_la_vista_money.users.services.bank_statement_import import (
+    FALLBACK_CATEGORY,
+    BankStatementImportService,
+    StatementImportResult,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     ReconciliationDecisionConflictError,
@@ -48,12 +54,16 @@ from hasta_la_vista_money.users.services.statement_identity import (
     StatementFingerprintUnavailableError,
     StatementIdentityService,
 )
+from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 WHEN = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
 KEYS = {'k1': 'first-test-secret', 'k2': 'second-test-secret'}
 # Explicit synthetic namespace: production banks keep their own policy and
 # the generic bank has no bank identity to fingerprint.
 SYNTHETIC_BANK = 'synthetic-test'
+# The import classifies a row before its write transaction, so acting on
+# the second call pauses the run with the first row already posted.
+PAUSE_BEFORE_SECOND_ROW = 2
 
 
 class StatementFingerprintTest(TestCase):
@@ -735,6 +745,218 @@ class StatementIdentityImportTest(TestCase):
         self.assertEqual(
             row.decision,
             BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+
+@override_settings(
+    STATEMENT_FINGERPRINT_KEYS=KEYS,
+    STATEMENT_FINGERPRINT_ACTIVE_KEY='k2',
+)
+class StaleRunAfterRetentionTest(TestCase):
+    """A run that resumes after retention must not write bank data again."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.service = (
+            ApplicationContainer().users.bank_statement_import_service()
+        )
+
+    def _upload(self) -> BankStatementUpload:
+        return BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash='paused-file',
+            pdf_file=SimpleUploadedFile(
+                'paused.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            status=BankStatementUpload.Status.PROCESSING,
+            celery_task_id='run-a',
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+    def _transactions(self) -> list[dict[str, object]]:
+        return [
+            {
+                'date': WHEN,
+                'amount': Decimal('-100.00'),
+                'description': 'Продукты',
+                'source_ref': 'row-1',
+                'row_position': 0,
+            },
+            {
+                'date': WHEN,
+                'amount': Decimal('-200.00'),
+                'description': 'Продукты',
+                'source_ref': 'row-2',
+                'row_position': 1,
+            },
+        ]
+
+    def _import_with_pause(
+        self,
+        upload: BankStatementUpload,
+        pause: Callable[[], None],
+    ) -> object:
+        """Import two rows and act once the first row is already posted."""
+        calls = 0
+
+        def classify(
+            _service: object,
+            _description: str,
+            _type_value: str,
+            _existing_categories: list[str],
+        ) -> str:
+            nonlocal calls
+            calls += 1
+            if calls == PAUSE_BEFORE_SECOND_ROW:
+                pause()
+            return FALLBACK_CATEGORY
+
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementParser',
+            ) as parser,
+            patch.object(
+                BankStatementImportService,
+                '_classify_category',
+                new=classify,
+            ),
+        ):
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=self._transactions(),
+                bank=SYNTHETIC_BANK,
+            )
+            return self.service.import_statement(upload)
+
+    def _assert_only_first_row_posted(self) -> None:
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_cleanup_stops_the_remaining_rows_of_a_resumed_run(self) -> None:
+        upload = self._upload()
+
+        def cleanup() -> None:
+            container = ApplicationContainer()
+            container.users.bank_statement_retention_service().cleanup_expired(
+                now=upload.expires_at + timedelta(minutes=1),
+            )
+
+        self._import_with_pause(upload, cleanup)
+
+        self._assert_only_first_row_posted()
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertIsNone(upload.statement_closing_balance)
+
+    def test_new_active_run_stops_the_previous_run(self) -> None:
+        upload = self._upload()
+
+        def start_new_run() -> None:
+            BankStatementUpload.objects.filter(pk=upload.pk).update(
+                celery_task_id='run-b',
+            )
+
+        self._import_with_pause(upload, start_new_run)
+
+        self._assert_only_first_row_posted()
+
+    def test_passed_deadline_stops_the_run_without_cleanup(self) -> None:
+        upload = self._upload()
+
+        def expire() -> None:
+            BankStatementUpload.objects.filter(pk=upload.pk).update(
+                expires_at=timezone.now() - timedelta(seconds=1),
+            )
+
+        self._import_with_pause(upload, expire)
+
+        self._assert_only_first_row_posted()
+
+
+class FinalizationAfterRetentionTest(TestCase):
+    """The worker's last write must not restore cleaned bank balances."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+    def test_finalization_does_not_restore_balance_of_a_cleaned_upload(
+        self,
+    ) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash='paused-file',
+            pdf_file=SimpleUploadedFile(
+                'paused.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+        original_import = BankStatementImportService.import_statement
+
+        def import_then_clean(
+            service: BankStatementImportService,
+            target: BankStatementUpload,
+        ) -> StatementImportResult:
+            result = original_import(service, target)
+            ApplicationContainer().users.bank_statement_retention_service().cleanup_expired(
+                now=upload.expires_at + timedelta(minutes=1),
+            )
+            return result
+
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementParser',
+            ) as parser,
+            patch.object(
+                BankStatementImportService,
+                'import_statement',
+                new=import_then_clean,
+            ),
+        ):
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[
+                    {
+                        'date': WHEN,
+                        'amount': Decimal('-100.00'),
+                        'description': 'Продукты',
+                        'source_ref': 'row-1',
+                        'row_position': 0,
+                    },
+                ],
+                bank=SYNTHETIC_BANK,
+                closing_balance=Decimal('900.00'),
+            )
+            process_bank_statement_task.apply(args=[upload.pk]).get()
+
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertIsNone(upload.statement_closing_balance)
+        self.assertIsNone(upload.account_balance_after)
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.BANK_DATA_CLEANED,
         )
 
 
