@@ -342,7 +342,7 @@ class TestAccountServices(TestCase):
         )
 
     def test_explicit_statement_period_records_coverage(self) -> None:
-        upload = self._upload()
+        upload = self._upload(total_transactions=1)
         service = self.container.users.statement_coverage_service()
 
         coverage = service.record_statement_period(
@@ -371,6 +371,46 @@ class TestAccountServices(TestCase):
             'Период банковской выписки',
         )
         self.assertEqual(summary.gaps, ())
+
+    def test_zero_row_parse_does_not_record_coverage(self) -> None:
+        upload = self._upload(total_transactions=0)
+        service = self.container.users.statement_coverage_service()
+
+        coverage = service.record_statement_period(
+            upload,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+        summary = service.summary(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        self.assertIsNone(coverage)
+        self.assertEqual(summary.state, 'unknown')
+        self.assertEqual(summary.intervals, ())
+
+    def test_legacy_zero_row_coverage_is_not_published(self) -> None:
+        upload = self._upload(total_transactions=0)
+        StatementPeriodCoverage.objects.create(
+            account=self.account1,
+            upload=upload,
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+            source=StatementPeriodCoverage.Source.BANK_STATEMENT,
+            author=self.user1,
+        )
+        service = self.container.users.statement_coverage_service()
+
+        summary = service.summary(
+            self.account1,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+
+        self.assertEqual(summary.state, 'unknown')
+        self.assertEqual(summary.intervals, ())
 
     def test_coverage_is_not_derived_from_row_dates(self) -> None:
         upload = self._upload(total_transactions=1)
@@ -465,13 +505,15 @@ class TestAccountServices(TestCase):
         self.assertEqual(control.rows.awaiting_markup, 1)
         self.assertFalse(control.balance.checked)
 
-    def test_coverage_distinguishes_unknown_partial_and_empty(self) -> None:
+    def test_coverage_distinguishes_unknown_partial_and_unproved_empty(
+        self,
+    ) -> None:
         service = self.container.users.statement_coverage_service()
         period = (date(2026, 5, 1), date(2026, 5, 20))
 
         unknown = service.summary(self.account1, *period)
         empty_upload = self._upload(total_transactions=0)
-        service.record_statement_period(
+        recorded = service.record_statement_period(
             empty_upload,
             date(2026, 5, 1),
             date(2026, 5, 20),
@@ -490,11 +532,12 @@ class TestAccountServices(TestCase):
         )
 
         self.assertEqual(unknown.state, 'unknown')
-        self.assertEqual(empty.state, 'covered')
-        self.assertTrue(empty.intervals[0].has_no_rows)
+        self.assertIsNone(recorded)
+        self.assertEqual(empty.state, 'unknown')
+        self.assertEqual(empty.intervals, ())
         self.assertEqual(partial.state, 'partial')
         self.assertEqual(len(partial.gaps), 1)
-        self.assertEqual(partial.gaps[0].period_start, date(2026, 5, 21))
+        self.assertEqual(partial.gaps[0].period_start, date(2026, 5, 1))
         self.assertEqual(partial.gaps[0].period_end, date(2026, 5, 23))
 
     def test_control_includes_unknown_period_upload_by_historical_rows(

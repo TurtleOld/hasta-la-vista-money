@@ -4,7 +4,8 @@ from typing import Any
 
 import structlog
 from celery import shared_task
-from django.db import InterfaceError, OperationalError
+from django.db import InterfaceError, OperationalError, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
@@ -54,6 +55,103 @@ def _store_statement_balance(
         upload.balance_type = BankStatementUpload.BalanceType.CLOSING_DAY
     else:
         upload.balance_type = BankStatementUpload.BalanceType.UNKNOWN
+
+
+def _statement_result_counts(
+    result: StatementImportResult,
+) -> dict[str, int]:
+    """Return the public task counters for one import result."""
+    return {
+        'income_count': result.income_count,
+        'expense_count': result.expense_count,
+        'skipped_count': result.skipped_count,
+        'needs_transfer_count': result.needs_transfer_count,
+        'total_count': result.income_count + result.expense_count,
+    }
+
+
+def _lock_active_run(
+    upload_id: int,
+    run_id: str | None,
+) -> BankStatementUpload | None:
+    """Lock the upload and keep it only while this worker owns the run.
+
+    Cleanup takes the same lock, clears the run id and marks the bank data
+    cleaned. A worker that resumes afterwards must not write the balance
+    or status back, so the caller finalizes only a non-null result.
+    """
+    upload = (
+        BankStatementUpload.objects.select_for_update()
+        .select_related('account', 'user')
+        .get(pk=upload_id)
+    )
+    if (
+        upload.retention_cleaned_at is not None
+        or upload.expires_at <= timezone.now()
+        or upload.celery_task_id != str(run_id or '')
+    ):
+        return None
+    return upload
+
+
+def _finalize_upload(
+    upload_id: int,
+    run_id: str | None,
+    result: StatementImportResult,
+    container: ApplicationContainer,
+) -> BankStatementUpload | None:
+    """Store the run outcome only while this worker still owns the upload."""
+    with transaction.atomic():
+        upload = _lock_active_run(upload_id, run_id)
+        if upload is None:
+            return None
+        upload.account.refresh_from_db(fields=['balance'])
+        empty_parse = upload.total_transactions == 0
+        awaiting_markup = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        ).exists()
+        pending = BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+        ).exists()
+        unresolved = (
+            awaiting_markup or pending or result.needs_transfer_count > 0
+        )
+        _store_statement_balance(upload, result)
+
+        if empty_parse:
+            upload.error_message = str(
+                _(
+                    'В выписке не удалось выделить ни одной операции; '
+                    'полнота не подтверждена.',
+                ),
+            )
+        if empty_parse or unresolved:
+            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        else:
+            upload.status = BankStatementUpload.Status.COMPLETED
+        upload.progress = 100
+        upload.save(
+            update_fields=[
+                'status',
+                'progress',
+                'updated_at',
+                'error_message',
+                'statement_closing_balance',
+                'balance_currency',
+                'balance_moment',
+                'balance_bank_date',
+                'balance_type',
+            ],
+        )
+        if result.closing_balance is not None and not unresolved:
+            balance_service = (
+                container.users.statement_balance_verification_service()
+            )
+            upload = balance_service.verify(upload)
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
+    return upload
 
 
 cleanup_expired_bank_statements = shared_task(
@@ -109,53 +207,26 @@ def process_bank_statement_task(
         container = ApplicationContainer()
         service = container.users.bank_statement_import_service()
         result = service.import_statement(upload)
-
-        upload.account.refresh_from_db(fields=['balance'])
-        empty_parse = upload.total_transactions == 0
-        awaiting_markup = BankStatementRow.objects.filter(
-            upload=upload,
-            decision=BankStatementRow.Decision.AWAITING_MARKUP,
-        ).exists()
-        pending = BankStatementRow.objects.filter(
-            upload=upload,
-            decision=BankStatementRow.Decision.PENDING,
-        ).exists()
-        unresolved = (
-            awaiting_markup or pending or result.needs_transfer_count > 0
-        )
-        _store_statement_balance(upload, result)
-
-        if empty_parse:
-            upload.error_message = str(
-                _(
-                    'В выписке не удалось выделить ни одной операции; '
-                    'полнота не подтверждена.',
-                ),
+        if result.stopped:
+            logger.info(
+                'bank_statement_run_stopped_after_retention',
+                upload_id=upload_id,
             )
-        if empty_parse or unresolved:
-            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
-        else:
-            upload.status = BankStatementUpload.Status.COMPLETED
-        upload.progress = 100
-        upload.save(
-            update_fields=[
-                'status',
-                'progress',
-                'updated_at',
-                'error_message',
-                'statement_closing_balance',
-                'balance_currency',
-                'balance_moment',
-                'balance_bank_date',
-                'balance_type',
-            ],
+            return _statement_result_counts(result)
+
+        finalized = _finalize_upload(
+            upload_id,
+            self.request.id,
+            result,
+            container,
         )
-        if result.closing_balance is not None and not unresolved:
-            balance_service = (
-                container.users.statement_balance_verification_service()
+        if finalized is None:
+            logger.info(
+                'bank_statement_finalization_skipped',
+                upload_id=upload_id,
             )
-            upload = balance_service.verify(upload)
-        BankStatementReconciliationService.refresh_outcome_counts(upload)
+            return _statement_result_counts(result)
+        upload = finalized
 
         logger.info(
             'bank_statement_task_completed',
@@ -166,13 +237,7 @@ def process_bank_statement_task(
             discrepancy=str(upload.balance_discrepancy),
         )
 
-        return {
-            'income_count': result.income_count,
-            'expense_count': result.expense_count,
-            'skipped_count': result.skipped_count,
-            'needs_transfer_count': result.needs_transfer_count,
-            'total_count': result.income_count + result.expense_count,
-        }
+        return _statement_result_counts(result)
 
     except BankStatementUpload.DoesNotExist:
         logger.exception(
