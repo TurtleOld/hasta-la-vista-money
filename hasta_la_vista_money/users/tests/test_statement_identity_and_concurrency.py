@@ -1304,7 +1304,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-order-user'
+            username='migration-order-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1412,7 +1412,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-user'
+            username='migration-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1768,6 +1768,7 @@ class CoverageRevisionTest(TestCase):
             account=self.account,
             pdf_file='statement.pdf',
             file_hash='revision-file',
+            total_transactions=1,
         )
         self.service = ApplicationContainer().users.statement_coverage_service()
 
@@ -1862,6 +1863,36 @@ class CoverageRevisionTest(TestCase):
         self.assertEqual(summary.intervals[0].period_end, date(2026, 1, 31))
         self.assertEqual(len(summary.gaps), 1)
         self.assertEqual(summary.gaps[0].period_start, date(2026, 2, 1))
+
+    def test_unknown_reparsed_period_stops_confirming_previous_bounds(
+        self,
+    ) -> None:
+        """A parse without explicit bounds retires the old confirmation."""
+        first = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        if first is None:
+            self.fail('an explicit period must record coverage')
+
+        self.assertIsNone(
+            self.service.record_statement_period(self.upload, None, None),
+        )
+
+        first.refresh_from_db()
+        self.assertFalse(first.is_actual)
+        self.assertEqual(
+            first.revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        summary = self.service.summary(
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        self.assertEqual(summary.state, 'unknown')
+        self.assertFalse(summary.intervals)
 
 
 class LegacyCompatibilityMigrationTest(TransactionTestCase):

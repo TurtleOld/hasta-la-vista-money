@@ -719,6 +719,7 @@ class TestBankStatementReconciliationView(TestCase):
             account=self.account,
             pdf_file='bank_statements/reconciliation.pdf',
             status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            total_transactions=1,
         )
         self.row = BankStatementRow.objects.create(
             upload=self.upload,
@@ -2392,7 +2393,21 @@ class TestBankStatementUploadHistory(TestCase):
         parser_class: MagicMock,
     ) -> None:
         parser_class.return_value.parse.return_value = StatementParseResult(
-            transactions=[],
+            transactions=[
+                {
+                    'date': datetime(
+                        2026,
+                        3,
+                        10,
+                        tzinfo=timezone.get_current_timezone(),
+                    ),
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупка',
+                    'source_ref': '1-10.03.2026',
+                    'source': 'rosdorbank',
+                    'kind': 'card',
+                },
+            ],
             period_start=date(2026, 3, 1),
             period_end=date(2026, 3, 31),
             requires_markup=True,
@@ -2416,6 +2431,50 @@ class TestBankStatementUploadHistory(TestCase):
             StatementPeriodCoverage.Source.BANK_STATEMENT,
         )
         self.assertEqual(coverage.author, self.user)
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
+    def test_import_does_not_publish_coverage_for_empty_parse(
+        self,
+        parser_class: MagicMock,
+    ) -> None:
+        """A zero-row parse keeps its bounds but proves no coverage."""
+        parser_class.return_value.parse.return_value = StatementParseResult(
+            transactions=[],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 3, 31),
+            requires_markup=True,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/empty-period.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        ApplicationContainer().users.bank_statement_import_service().import_statement(
+            upload,
+        )
+        upload.refresh_from_db()
+
+        self.assertEqual(upload.statement_period_from, date(2026, 3, 1))
+        self.assertEqual(upload.statement_period_to, date(2026, 3, 31))
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(upload=upload).exists(),
+        )
+        summary = (
+            ApplicationContainer()
+            .users.statement_coverage_service()
+            .summary(
+                self.account,
+                date(2026, 3, 1),
+                date(2026, 3, 31),
+            )
+        )
+        self.assertEqual(summary.state, 'unknown')
+        self.assertEqual(summary.intervals, ())
 
 
 class TestBankStatementParser(TestCase):
@@ -7275,6 +7334,8 @@ class TestBankStatementImportReliability(TestCase):
         account: Account | None = None,
         file_hash: str = '',
         format_version: int = 2,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BankStatementUpload:
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -7290,6 +7351,8 @@ class TestBankStatementImportReliability(TestCase):
                 transactions=transactions,
                 bank='sberbank',
                 format_version=format_version,
+                period_start=period_start,
+                period_end=period_end,
             )
             process_bank_statement_task.apply(args=[upload.pk])
         return upload
@@ -9778,6 +9841,112 @@ class TestBankStatementImportReliability(TestCase):
             ),
         )
         self.assertNotContains(response, 'пересекается')
+
+    def test_overlapping_sberbank_period_publishes_coverage(self) -> None:
+        """Sberbank reconciliation still proves the later explicit period."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'S-COVERAGE',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='sberbank-coverage-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        second = self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'S-COVERAGE',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment + timedelta(days=1),
+                    'amount': Decimal('-40.00'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'S-COVERAGE-NEW',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Продукты',
+                    'row_position': 1,
+                },
+            ],
+            file_hash='sberbank-coverage-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+        second.refresh_from_db()
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+
+        coverage = StatementPeriodCoverage.objects.filter(
+            upload=second,
+            is_actual=True,
+        )
+        self.assertEqual(coverage.count(), 1)
+        record = coverage.get()
+        self.assertEqual(record.period_start, date(2026, 1, 15))
+        self.assertEqual(record.period_end, date(2026, 2, 15))
+
+        summary = (
+            ApplicationContainer()
+            .users.statement_coverage_service()
+            .summary(
+                self.account,
+                date(2026, 1, 1),
+                date(2026, 2, 15),
+            )
+        )
+        self.assertEqual(summary.state, 'covered')
+        self.assertEqual(summary.gaps, ())
+
+    def test_overlapping_empty_parse_does_not_publish_coverage(self) -> None:
+        """A zero-row reconciliation parse proves no new coverage."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        self._sberbank_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'S-EMPTY-FIRST',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='sberbank-empty-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        second = self._sberbank_upload(
+            [],
+            file_hash='sberbank-empty-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+        second.refresh_from_db()
+
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(upload=second).exists(),
+        )
 
     def test_real_bank_adapters_keep_policy_replay_retention_and_privacy(
         self,
