@@ -1612,9 +1612,11 @@ class BankStatementImportService:
         account become exact duplicate observations. Without usable keys
         every row is saved for manual resolution: a missing key never
         turns into "the operation does not exist" or auto-posting. A weak
-        bank reference cannot prove a cross-file repeat, so it never
-        suppresses a row even when another upload holds the same
-        unresolved observation.
+        or ambiguous bank reference cannot prove a cross-file repeat, so
+        it never suppresses a row or becomes an exact duplicate, even when
+        another upload holds the same unresolved observation. The repeated
+        observation stays unresolved until a proven match or a user
+        decision.
 
         In reconciliation mode an existing row of this same upload is
         restored from the re-uploaded file in place, keeping its decision,
@@ -1628,6 +1630,13 @@ class BankStatementImportService:
         bank = parse_result.bank
         format_version = parse_result.format_version
         run_id = run_id or upload.celery_task_id
+        ambiguous_refs = {
+            ref
+            for ref, count in Counter(
+                trans.get('source_ref') for trans in transactions
+            ).items()
+            if ref and count > 1
+        }
         with transaction.atomic():
             active = self._lock_current_run(upload.pk, run_id)
             if active is None:
@@ -1659,7 +1668,10 @@ class BankStatementImportService:
                 if _is_unparsed(trans):
                     new_rows[position] = trans
                     continue
-                if recognize_known:
+                if (
+                    recognize_known
+                    and trans.get('source_ref') not in ambiguous_refs
+                ):
                     exact = self._find_exact_observation(
                         upload=upload,
                         bank=bank,
@@ -1682,22 +1694,6 @@ class BankStatementImportService:
                     )
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
-                        continue
-                    if (
-                        bank not in WEAK_REFERENCE_BANKS
-                        or source_ref_strength == 'strong'
-                    ) and self._has_unresolved_observation(
-                        upload=upload,
-                        bank=bank,
-                        source_ref=trans.get('source_ref'),
-                        type_value=(
-                            TransactionType.INCOME
-                            if trans['amount'] > 0
-                            else TransactionType.EXPENSE
-                        ),
-                        amount=abs(trans['amount']),
-                        trans_date=trans['date'],
-                    ):
                         continue
                 new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
