@@ -116,6 +116,31 @@ def _reference_strength(bank: str, trans: dict[str, Any]) -> str:
     return str(trans.get('source_ref_strength') or 'weak')
 
 
+def _effective_reference_strength(
+    bank: str,
+    trans: dict[str, Any],
+    ambiguous_refs: set[str],
+) -> str:
+    """Return the proof level after accounting for repeated references.
+
+    A reference that appears more than once in one parsed file is
+    ambiguous inside that file. It stays a hint even when the adapter
+    reports a strong identifier, so neither import nor manual markup may
+    merge those observations automatically.
+
+    Args:
+        bank: Bank/format code of the parse result.
+        trans: One parsed statement row.
+        ambiguous_refs: References repeated inside the current file.
+
+    Returns:
+        ``'weak'`` or ``'strong'``.
+    """
+    if trans.get('source_ref') in ambiguous_refs:
+        return 'weak'
+    return _reference_strength(bank, trans)
+
+
 @dataclass(frozen=True)
 class StatementImportResult:
     """Итог одного прогона импорта банковской выписки.
@@ -581,6 +606,11 @@ class BankStatementImportService:
             parse_result.format_version if parse_result is not None else 1
         )
         uses_local_categories = bank in LOCAL_CATEGORY_BANKS
+        if ambiguous_refs:
+            BankStatementRow.objects.filter(
+                upload=upload,
+                source_ref__in=ambiguous_refs,
+            ).update(source_ref_strength='weak')
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:
@@ -600,7 +630,11 @@ class BankStatementImportService:
             trans_date = trans.get('date')
             unparsed = _is_unparsed(trans)
             source_ref = trans.get('source_ref')
-            source_ref_strength = _reference_strength(bank, trans)
+            source_ref_strength = _effective_reference_strength(
+                bank,
+                trans,
+                ambiguous_refs,
+            )
             row_position = trans.get('row_position', idx)
             source = trans.get('source')
             abs_amount = abs(amount) if amount is not None else None
@@ -719,6 +753,7 @@ class BankStatementImportService:
                         row_position=row_position,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     failed_count += 1
                 elif is_credit_income:
@@ -728,6 +763,7 @@ class BankStatementImportService:
                         row_position=row_position,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     needs_transfer_count += 1
                 elif exact is not None and exact.conflict:
@@ -738,6 +774,7 @@ class BankStatementImportService:
                         type_value=type_value,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                 elif exact is not None:
                     saved = self._save_duplicate_row(
@@ -748,6 +785,7 @@ class BankStatementImportService:
                         observation=exact,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     if saved.decision == BankStatementRow.Decision.DUPLICATE:
                         skipped_count += 1
@@ -1301,6 +1339,7 @@ class BankStatementImportService:
         observation: ExactObservation,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Record an exact repeat without touching money."""
         fingerprint = self._fingerprint(
@@ -1308,7 +1347,8 @@ class BankStatementImportService:
             bank=bank,
             source_ref=trans.get('source_ref'),
         )
-        source_ref_strength = _reference_strength(bank, trans)
+        if source_ref_strength is None:
+            source_ref_strength = _reference_strength(bank, trans)
         if observation.legacy:
             self._backfill_legacy_fingerprint(
                 row=observation.row,
@@ -1398,6 +1438,7 @@ class BankStatementImportService:
         type_value: str,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Store a row whose parser/format mapping drifted for reassignment."""
         return self._save_observation_row(
@@ -1412,7 +1453,11 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
-            source_ref_strength=_reference_strength(bank, trans),
+            source_ref_strength=(
+                source_ref_strength
+                if source_ref_strength is not None
+                else _reference_strength(bank, trans)
+            ),
         )
 
     @staticmethod
@@ -1431,7 +1476,7 @@ class BankStatementImportService:
         source_ref_strength: str = 'weak',
     ) -> BankStatementRow:
         """Create one row that records an observation without money."""
-        row, _created = BankStatementRow.objects.get_or_create(
+        row, created = BankStatementRow.objects.get_or_create(
             upload=upload,
             source_row_position=row_position,
             defaults={
@@ -1466,6 +1511,11 @@ class BankStatementImportService:
                 'decision': decision,
             },
         )
+        if not created and row.source_ref_strength != source_ref_strength:
+            BankStatementRow.objects.filter(pk=row.pk).update(
+                source_ref_strength=source_ref_strength,
+            )
+            row.source_ref_strength = source_ref_strength
         return row
 
     def _save_unparsed_row(
@@ -1476,6 +1526,7 @@ class BankStatementImportService:
         row_position: int,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Record a row fragment that cannot be posted or fully parsed."""
         amount = trans.get('amount')
@@ -1498,7 +1549,11 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
-            source_ref_strength=_reference_strength(bank, trans),
+            source_ref_strength=(
+                source_ref_strength
+                if source_ref_strength is not None
+                else _reference_strength(bank, trans)
+            ),
         )
 
     def _save_autopost_row(
@@ -1655,6 +1710,11 @@ class BankStatementImportService:
             if active is None:
                 return True
             upload = self._lock_account(active)
+            if ambiguous_refs:
+                BankStatementRow.objects.filter(
+                    upload=upload,
+                    source_ref__in=ambiguous_refs,
+                ).update(source_ref_strength='weak')
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
             replay = restore_existing and upload.statement_rows.exists()
@@ -1663,7 +1723,11 @@ class BankStatementImportService:
                 position = (
                     idx if source_position is None else int(source_position)
                 )
-                source_ref_strength = _reference_strength(bank, trans)
+                source_ref_strength = _effective_reference_strength(
+                    bank,
+                    trans,
+                    ambiguous_refs,
+                )
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1676,6 +1740,7 @@ class BankStatementImportService:
                     bank=bank,
                     fingerprint=fingerprint,
                     format_version=format_version,
+                    source_ref_strength=source_ref_strength,
                 ):
                     continue
                 if _is_unparsed(trans):
@@ -1741,7 +1806,11 @@ class BankStatementImportService:
                             trans.get('category_name') or '',
                         )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
-                        source_ref_strength=_reference_strength(bank, trans),
+                        source_ref_strength=_effective_reference_strength(
+                            bank,
+                            trans,
+                            ambiguous_refs,
+                        ),
                         source_row_position=position,
                         source_format_version=format_version,
                         source_fingerprint=(
@@ -1786,6 +1855,11 @@ class BankStatementImportService:
                     observation=exact,
                     bank=bank,
                     format_version=format_version,
+                    source_ref_strength=_effective_reference_strength(
+                        bank,
+                        trans,
+                        ambiguous_refs,
+                    ),
                 )
             upload.processed_transactions = len(transactions)
             upload.skipped_count = (
@@ -1815,6 +1889,7 @@ class BankStatementImportService:
         bank: str,
         fingerprint: StatementFingerprint | None,
         format_version: int,
+        source_ref_strength: str,
     ) -> BankStatementRow | None:
         """Restore one re-uploaded row in place, keeping its decisions.
 
@@ -1849,7 +1924,7 @@ class BankStatementImportService:
                     ).count()
                     == 1
                 )
-                if _reference_strength(bank, trans) == 'strong' or (
+                if source_ref_strength == 'strong' or (
                     stable_format and unique_reference
                 ):
                     row = candidate
@@ -1883,6 +1958,11 @@ class BankStatementImportService:
                 )
             return None
         if row.amount is not None and row.transaction_date is not None:
+            if row.source_ref_strength != source_ref_strength:
+                BankStatementRow.objects.filter(pk=row.pk).update(
+                    source_ref_strength=source_ref_strength,
+                )
+                row.source_ref_strength = source_ref_strength
             return row
         amount = trans.get('amount')
         trans_date = trans.get('date')
@@ -1891,7 +1971,7 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
             'source_ref': trans.get('source_ref') or None,
-            'source_ref_strength': _reference_strength(bank, trans),
+            'source_ref_strength': source_ref_strength,
             'source_format_version': format_version,
             'match_calendar_date': (
                 bool(trans.get('date_only')) if bank == 'raiffeisen' else True
@@ -1995,6 +2075,7 @@ class BankStatementImportService:
         row_position: int,
         bank: str = 'generic',
         format_version: int = 1,
+        source_ref_strength: str | None = None,
     ) -> None:
         """Save a credit-account credit as an unperformed repayment row."""
         fingerprint = self._fingerprint(
@@ -2002,6 +2083,8 @@ class BankStatementImportService:
             bank=bank,
             source_ref=trans.get('source_ref'),
         )
+        if source_ref_strength is None:
+            source_ref_strength = _reference_strength(bank, trans)
         BankStatementRow.objects.get_or_create(
             upload=upload,
             source_row_position=row_position,
@@ -2013,7 +2096,7 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
-                'source_ref_strength': _reference_strength(bank, trans),
+                'source_ref_strength': source_ref_strength,
                 'source_format_version': format_version,
                 'source_fingerprint': (
                     fingerprint.digest if fingerprint else ''

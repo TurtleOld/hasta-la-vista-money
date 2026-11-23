@@ -770,6 +770,103 @@ class StatementIdentityImportTest(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('0.00'))
 
+    def test_ambiguous_strong_reference_stays_weak_through_replay(self) -> None:
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 31)
+        entries: list[dict[str, object]] = [
+            {
+                'date': WHEN,
+                'amount': Decimal('-500.00'),
+                'description': 'Перевод',
+                'source_ref': 'ambiguous-strong-ref',
+                'category_name': None,
+                'row_position': position,
+            }
+            for position in range(2)
+        ]
+        first = self._upload(
+            'ambiguous-strong-first.pdf',
+            file_hash='ambiguous-strong-first-file',
+        )
+        self._import(
+            first,
+            entries,
+            bank='sberbank',
+            strength='strong',
+            period_start=period_start,
+            period_end=period_end,
+        )
+        first_rows = list(first.statement_rows.order_by('source_row_position'))
+        self.assertEqual(len(first_rows), 2)
+        self.assertEqual(
+            {row.source_ref_strength for row in first_rows},
+            {'weak'},
+        )
+
+        second = self._upload(
+            'ambiguous-strong-second.pdf',
+            file_hash='ambiguous-strong-second-file',
+        )
+        self._import(
+            second,
+            entries,
+            bank='sberbank',
+            strength='strong',
+            period_start=period_start,
+            period_end=period_end,
+        )
+        second.refresh_from_db()
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        rows = list(second.statement_rows.order_by('source_row_position'))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {row.source_ref_strength for row in rows},
+            {'weak'},
+        )
+
+        self._import(
+            second,
+            entries,
+            bank='sberbank',
+            strength='strong',
+            period_start=period_start,
+            period_end=period_end,
+        )
+        second.refresh_from_db()
+        rows = list(second.statement_rows.order_by('source_row_position'))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {row.source_ref_strength for row in rows},
+            {'weak'},
+        )
+        self.assertEqual(second.skipped_count, 0)
+
+        category = Category.objects.create(
+            user=self.user,
+            name='Переводы',
+            type=TransactionType.EXPENSE,
+        )
+        markup = ApplicationContainer().users.statement_markup_service()
+        for row in rows:
+            markup.post(row.pk, self.user.pk, category.pk)
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.assertEqual(
+            BankStatementRow.objects.filter(
+                upload=second,
+                transaction__isnull=False,
+            ).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('0.00'))
+
     def test_ambiguous_reference_is_not_an_exact_duplicate(self) -> None:
         canonical_upload = self._upload('ambiguous-canonical.pdf')
         canonical = self._canonical_row(
