@@ -780,6 +780,7 @@ class BankStatementImportService:
                             suggested_category=(
                                 row_category if category_name else ''
                             ),
+                            source_ref_strength=source_ref_strength,
                         )
                     else:
                         candidates = self._rank_probable_candidates(
@@ -870,6 +871,7 @@ class BankStatementImportService:
                                     format_version=format_version,
                                     transaction=created,
                                     suggested_category=row_category,
+                                    source_ref_strength=source_ref_strength,
                                 )
                             # Bank is source of truth: no funds check.
                             upload.account = (
@@ -1306,6 +1308,7 @@ class BankStatementImportService:
             bank=bank,
             source_ref=trans.get('source_ref'),
         )
+        source_ref_strength = _reference_strength(bank, trans)
         if observation.legacy:
             self._backfill_legacy_fingerprint(
                 row=observation.row,
@@ -1339,6 +1342,7 @@ class BankStatementImportService:
                     format_version=format_version,
                     decision=BankStatementRow.Decision.DUPLICATE,
                     canonical_row=canonical,
+                    source_ref_strength=source_ref_strength,
                 )
             # No canonical row exists yet: link the observation to the
             # proven movement instead of claiming a duplicate of nothing.
@@ -1351,6 +1355,7 @@ class BankStatementImportService:
                 format_version=format_version,
                 decision=BankStatementRow.Decision.LINKED,
                 transaction=observation.transaction,
+                source_ref_strength=source_ref_strength,
             )
         return self._save_observation_row(
             upload=upload,
@@ -1361,6 +1366,7 @@ class BankStatementImportService:
             format_version=format_version,
             decision=BankStatementRow.Decision.DUPLICATE,
             canonical_row=observation.row,
+            source_ref_strength=source_ref_strength,
         )
 
     @staticmethod
@@ -1406,6 +1412,7 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            source_ref_strength=_reference_strength(bank, trans),
         )
 
     @staticmethod
@@ -1421,6 +1428,7 @@ class BankStatementImportService:
         canonical_row: BankStatementRow | None = None,
         transaction: Transaction | None = None,
         suggested_category: str = '',
+        source_ref_strength: str = 'weak',
     ) -> BankStatementRow:
         """Create one row that records an observation without money."""
         row, _created = BankStatementRow.objects.get_or_create(
@@ -1441,6 +1449,7 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
+                'source_ref_strength': source_ref_strength,
                 'canonical_row': canonical_row,
                 'transaction': transaction,
                 'match_calendar_date': bool(trans.get('date_only')),
@@ -1489,6 +1498,7 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            source_ref_strength=_reference_strength(bank, trans),
         )
 
     def _save_autopost_row(
@@ -1502,6 +1512,7 @@ class BankStatementImportService:
         format_version: int,
         transaction: Transaction,
         suggested_category: str,
+        source_ref_strength: str = 'weak',
     ) -> BankStatementRow:
         """Link an auto-posted movement, including an existing open row."""
         row = self._save_observation_row(
@@ -1514,6 +1525,7 @@ class BankStatementImportService:
             decision=BankStatementRow.Decision.NEW,
             transaction=transaction,
             suggested_category=suggested_category,
+            source_ref_strength=source_ref_strength,
         )
         if (
             row.transaction_id == transaction.pk
@@ -1533,6 +1545,7 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
             source_ref=trans.get('source_ref') or None,
+            source_ref_strength=source_ref_strength,
             source_format_version=format_version,
             source_fingerprint=(fingerprint.digest if fingerprint else ''),
             source_fingerprint_key_version=(
@@ -1728,6 +1741,7 @@ class BankStatementImportService:
                             trans.get('category_name') or '',
                         )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
+                        source_ref_strength=_reference_strength(bank, trans),
                         source_row_position=position,
                         source_format_version=format_version,
                         source_fingerprint=(
@@ -1877,6 +1891,7 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
             'source_ref': trans.get('source_ref') or None,
+            'source_ref_strength': _reference_strength(bank, trans),
             'source_format_version': format_version,
             'match_calendar_date': (
                 bool(trans.get('date_only')) if bank == 'raiffeisen' else True
@@ -1998,6 +2013,7 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
+                'source_ref_strength': _reference_strength(bank, trans),
                 'source_format_version': format_version,
                 'source_fingerprint': (
                     fingerprint.digest if fingerprint else ''

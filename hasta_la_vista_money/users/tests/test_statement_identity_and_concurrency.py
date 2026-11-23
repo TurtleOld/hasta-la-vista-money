@@ -54,6 +54,9 @@ from hasta_la_vista_money.users.services.statement_identity import (
     StatementFingerprintUnavailableError,
     StatementIdentityService,
 )
+from hasta_la_vista_money.users.services.statement_markup import (
+    StatementMarkupConflictError,
+)
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 WHEN = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
@@ -634,6 +637,138 @@ class StatementIdentityImportTest(TestCase):
             Transaction.objects.filter(account=self.account).count(),
             0,
         )
+
+    def test_strong_observation_is_posted_once_from_markup(self) -> None:
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 31)
+        uploads = [
+            self._upload(
+                f'strong-post-{index}.pdf',
+                file_hash=f'strong-post-{index}-file',
+            )
+            for index in range(2)
+        ]
+        for upload in uploads:
+            self._import(
+                upload,
+                [
+                    {
+                        'date': WHEN,
+                        'amount': Decimal('-500.00'),
+                        'description': 'Перевод',
+                        'source_ref': 'strong-post-ref',
+                        'category_name': None,
+                        'row_position': 0,
+                    },
+                ],
+                bank='sberbank',
+                strength='strong',
+                period_start=period_start,
+                period_end=period_end,
+            )
+        rows = list(
+            BankStatementRow.objects.filter(
+                upload__in=uploads,
+            ).order_by('pk'),
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {row.source_ref_strength for row in rows},
+            {'strong'},
+        )
+        self.assertTrue(
+            all(
+                row.decision == BankStatementRow.Decision.AWAITING_MARKUP
+                for row in rows
+            ),
+        )
+        category = Category.objects.create(
+            user=self.user,
+            name='Переводы',
+            type=TransactionType.EXPENSE,
+        )
+        markup = ApplicationContainer().users.statement_markup_service()
+
+        markup.post(rows[0].pk, self.user.pk, category.pk)
+
+        with self.assertRaises(StatementMarkupConflictError):
+            markup.post(rows[1].pk, self.user.pk, category.pk)
+
+        rows[0].refresh_from_db()
+        rows[1].refresh_from_db()
+        self.assertEqual(rows[0].decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            rows[1].decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        movement = rows[0].transaction
+        if movement is None:
+            self.fail('posted row has no movement')
+        self.assertEqual(movement.source_ref, 'strong-post-ref')
+        self.assertTrue(movement.source_fingerprint)
+        self.assertEqual(movement.source_file_hash, 'strong-post-0-file')
+        self.assertEqual(movement.source_row_position, 0)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('500.00'))
+
+    def test_weak_repeated_reference_is_posted_independently(self) -> None:
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 31)
+        uploads = [
+            self._upload(
+                f'weak-post-{index}.pdf',
+                file_hash=f'weak-post-{index}-file',
+            )
+            for index in range(2)
+        ]
+        for upload in uploads:
+            self._import(
+                upload,
+                [
+                    {
+                        'date': WHEN,
+                        'amount': Decimal('-500.00'),
+                        'description': 'Перевод',
+                        'source_ref': 'weak-post-ref',
+                        'category_name': None,
+                        'row_position': 0,
+                    },
+                ],
+                bank='sberbank',
+                strength='weak',
+                period_start=period_start,
+                period_end=period_end,
+            )
+        rows = list(
+            BankStatementRow.objects.filter(
+                upload__in=uploads,
+            ).order_by('pk'),
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {row.source_ref_strength for row in rows},
+            {'weak'},
+        )
+        category = Category.objects.create(
+            user=self.user,
+            name='Переводы',
+            type=TransactionType.EXPENSE,
+        )
+        markup = ApplicationContainer().users.statement_markup_service()
+
+        for row in rows:
+            markup.post(row.pk, self.user.pk, category.pk)
+
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('0.00'))
 
     def test_ambiguous_reference_is_not_an_exact_duplicate(self) -> None:
         canonical_upload = self._upload('ambiguous-canonical.pdf')
@@ -1671,7 +1806,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
     migrate_from = [
         ('users', '0025_bankstatementdecisionaudit_exclusion_code_and_more'),
     ]
-    migrate_to = [('users', '0026_statement_identity_fingerprints')]
+    migrate_to = [('users', '0032_bankstatementrow_source_ref_strength')]
 
     def tearDown(self) -> None:
         executor = MigrationExecutor(transaction.get_connection())
@@ -1917,6 +2052,55 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             name_account='Основной',
             balance=Decimal('1000.00'),
             currency='RUB',
+        )
+
+    def _import_markup_pair(
+        self,
+        source_ref: str,
+        strength: str,
+    ) -> list[BankStatementRow]:
+        """Import two overlapping files that keep the same unresolved row."""
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 31)
+        uploads = []
+        for index in range(2):
+            upload = BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                file_hash=f'markup-race-{index}-{source_ref}',
+                pdf_file=SimpleUploadedFile(
+                    f'markup-race-{index}.pdf',
+                    b'%PDF-1.4 mock pdf',
+                ),
+            )
+            uploads.append(upload)
+            with patch(
+                'hasta_la_vista_money.users.services.'
+                'bank_statement_import.BankStatementParser',
+            ) as parser:
+                parser.return_value.parse.return_value = StatementParseResult(
+                    transactions=[
+                        {
+                            'date': WHEN,
+                            'amount': Decimal('-500.00'),
+                            'description': 'Перевод',
+                            'source_ref': source_ref,
+                            'source_ref_strength': strength,
+                            'category_name': None,
+                            'row_position': 0,
+                        },
+                    ],
+                    bank='sberbank',
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+                ApplicationContainer().users.bank_statement_import_service().import_statement(
+                    upload,
+                )
+        return list(
+            BankStatementRow.objects.filter(
+                upload__in=uploads,
+            ).order_by('pk'),
         )
 
     def test_concurrent_imports_of_one_observation_create_one_movement(
@@ -2217,6 +2401,76 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             [
                 BankStatementRow.Decision.NEW,
                 BankStatementRow.Decision.PENDING,
+            ],
+        )
+
+    def test_concurrent_markup_of_strong_observations_creates_one_movement(
+        self,
+    ) -> None:
+        rows = self._import_markup_pair(
+            source_ref='strong-markup-race',
+            strength='strong',
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(
+            all(
+                row.decision == BankStatementRow.Decision.AWAITING_MARKUP
+                for row in rows
+            ),
+        )
+        category = Category.objects.create(
+            user=self.user,
+            name='Переводы',
+            type=TransactionType.EXPENSE,
+        )
+        barrier = Barrier(2, timeout=5)
+        errors: list[Exception | None] = [None, None]
+
+        def run(index: int) -> None:
+            service = ApplicationContainer().users.statement_markup_service()
+            try:
+                barrier.wait(timeout=3)
+                service.post(rows[index].pk, self.user.pk, category.pk)
+            except Exception as exc:
+                errors[index] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=run, args=(index,)) for index in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        conflicts = [
+            error
+            for error in errors
+            if isinstance(error, StatementMarkupConflictError)
+        ]
+        unexpected = [
+            error
+            for error in errors
+            if error is not None
+            and not isinstance(error, StatementMarkupConflictError)
+        ]
+        self.assertEqual(unexpected, [])
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('500.00'))
+        decisions = sorted(
+            BankStatementRow.objects.filter(
+                pk__in=[row.pk for row in rows],
+            ).values_list('decision', flat=True),
+        )
+        self.assertEqual(
+            decisions,
+            [
+                BankStatementRow.Decision.AWAITING_MARKUP,
+                BankStatementRow.Decision.NEW,
             ],
         )
 

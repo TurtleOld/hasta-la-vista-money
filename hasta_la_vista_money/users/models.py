@@ -424,6 +424,7 @@ class BankStatementRow(Model):
     candidate_description = CharField(max_length=250, blank=True, default='')
     suggested_category = CharField(max_length=250, blank=True, default='')
     source_ref = CharField(max_length=64, blank=True, null=True)
+    source_ref_strength = CharField(max_length=10, blank=True, default='weak')
     source_fingerprint = CharField(max_length=64, blank=True, default='')
     source_fingerprint_key_version = CharField(
         max_length=32,
