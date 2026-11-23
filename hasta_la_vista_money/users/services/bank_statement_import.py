@@ -130,22 +130,42 @@ def _account_bank_name_tokens(name: str) -> set[str]:
     return tokens
 
 
+def _account_bank_identity(account_bank: Bank) -> str | None:
+    """Return a reliably recognized statement-adapter identity, if any.
+
+    A default bank, an arbitrary personal name and a name that fits several
+    known banks prove no identity. Only one recognized known bank counts.
+    """
+    if account_bank.code == BANK_DEFAULT:
+        return None
+    identity = STATEMENT_BANK_SYSTEM_IDENTITIES.get(account_bank.code)
+    if identity is not None:
+        return identity
+    tokens = _account_bank_name_tokens(account_bank.name)
+    identities = {
+        bank
+        for bank, aliases in STATEMENT_BANK_NAME_ALIASES.items()
+        if tokens & aliases
+    }
+    if len(identities) == 1:
+        return identities.pop()
+    return None
+
+
 def _account_bank_matches_statement(
     account_bank: Bank,
     statement_bank: str,
 ) -> bool:
-    """Return whether a confirmed account bank matches the detected bank.
+    """Return whether the statement bank is safe for the account bank.
 
-    A generic/unknown detected format and an unconfirmed default bank do
-    not prove any identity, so existing supported processing is kept.
+    A generic/unknown detected format and an unconfirmed or ambiguous
+    account bank prove no mismatch, so existing supported processing is
+    kept. Only a reliably recognized different bank blocks the import.
     """
-    aliases = STATEMENT_BANK_NAME_ALIASES.get(statement_bank)
-    if aliases is None or account_bank.code == BANK_DEFAULT:
+    if statement_bank not in STATEMENT_BANK_NAME_ALIASES:
         return True
-    identity = STATEMENT_BANK_SYSTEM_IDENTITIES.get(account_bank.code)
-    if identity is not None:
-        return identity == statement_bank
-    return bool(_account_bank_name_tokens(account_bank.name) & aliases)
+    identity = _account_bank_identity(account_bank)
+    return identity is None or identity == statement_bank
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:

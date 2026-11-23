@@ -10338,10 +10338,10 @@ class TestStatementBankVerification(TestCase):
 
         other = Account.objects.create(
             user=self.user,
-            name_account='Личный Т-Банк',
+            name_account='Личный Озон',
             balance=Decimal('1000.00'),
             currency='RUB',
-            bank=self._bank('user_tbank', 'Т-Банк'),
+            bank=self._bank('user_ozon_other', 'Озон Банк'),
         )
         failed = self._run_statement(
             bank='sberbank',
@@ -10350,6 +10350,40 @@ class TestStatementBankVerification(TestCase):
         )
         self.assertEqual(failed.status, BankStatementUpload.Status.FAILED)
         self.assertEqual(failed.account_id, other.pk)
+
+    def test_unknown_personal_bank_name_does_not_block_number_match(
+        self,
+    ) -> None:
+        """An unrecognized personal name proves no different bank."""
+        matched = Account.objects.create(
+            user=self.user,
+            name_account='Зарплатный счёт',
+            balance=Decimal('5000.00'),
+            currency='RUB',
+            bank=self._bank('user_salary', 'Зарплатный'),
+            account_number=self.OTHER_NUMBER,
+        )
+
+        upload = self._run_statement(
+            bank='sberbank',
+            account=self.account,
+            account_number=self.OTHER_NUMBER,
+        )
+
+        matched.refresh_from_db()
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.account_id, matched.pk)
+        self.assertEqual(matched.account_number, self.OTHER_NUMBER)
+        self.assertEqual(
+            Transaction.objects.filter(account=matched).count(),
+            1,
+        )
+        self.assertTrue(
+            StatementPeriodCoverage.objects.filter(
+                upload=upload,
+                is_actual=True,
+            ).exists(),
+        )
 
     def test_unconfirmed_account_bank_keeps_supported_processing(self) -> None:
         """Without a confirmed account bank the statement bank is ignored."""
