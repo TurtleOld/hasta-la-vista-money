@@ -1435,6 +1435,33 @@ class LinkedDateInvalidationTest(TestCase):
             ),
         )
 
+    def _verify_matched(self) -> None:
+        """Store a real matched check at the movement's own moment."""
+        self.upload.statement_closing_balance = Decimal('1000.00')
+        self.upload.balance_currency = 'RUB'
+        balance_type = BankStatementUpload.BalanceType
+        self.upload.balance_type = balance_type.EXACT_MOMENT
+        self.upload.balance_moment = WHEN
+        self.upload.balance_bank_date = WHEN.date()
+        self.upload.save(
+            update_fields=[
+                'statement_closing_balance',
+                'balance_currency',
+                'balance_type',
+                'balance_moment',
+                'balance_bank_date',
+            ],
+        )
+        users = ApplicationContainer().users
+        verification = users.statement_balance_verification_service()
+        verification.verify(self.upload)
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(self.upload.balance_is_actual)
+
     def test_date_change_invalidates_the_upload_check(self) -> None:
         self._update(
             category=self.category,
@@ -1444,6 +1471,30 @@ class LinkedDateInvalidationTest(TestCase):
         self.upload.refresh_from_db()
         self.assertIsNone(self.upload.account_balance_after)
         self.assertIsNone(self.upload.balance_discrepancy)
+
+    def test_date_change_marks_a_matched_check_stale(self) -> None:
+        self._verify_matched()
+
+        self._update(
+            category=self.category,
+            when=WHEN + timedelta(days=2),
+        )
+
+        self.upload.refresh_from_db()
+        self.assertFalse(self.upload.balance_is_actual)
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+        )
+        self.assertIsNone(self.upload.account_balance_after)
+        self.assertIsNone(self.upload.balance_discrepancy)
+        users = ApplicationContainer().users
+        verification = users.statement_balance_verification_service()
+        state = verification.describe(
+            verification.refresh_actuality(self.upload),
+        )
+        self.assertFalse(state.actual)
+        self.assertEqual(state.label, 'Требует перепроверки')
 
     def test_category_change_keeps_the_upload_check(self) -> None:
         self._update(category=self.other_category, when=WHEN)
@@ -1475,7 +1526,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-order-user'
+            username='migration-order-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1583,7 +1634,7 @@ class SharedMovementMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(transaction.get_connection())
         old_apps = executor.migrate(self.migrate_from).apps
         user = old_apps.get_model('users', 'User').objects.create(
-            username='migration-user'
+            username='migration-user',
         )
         account_model = old_apps.get_model('finance_account', 'Account')
         category_model = old_apps.get_model('transactions', 'Category')
@@ -1939,6 +1990,7 @@ class CoverageRevisionTest(TestCase):
             account=self.account,
             pdf_file='statement.pdf',
             file_hash='revision-file',
+            total_transactions=1,
         )
         self.service = ApplicationContainer().users.statement_coverage_service()
 
@@ -2033,6 +2085,36 @@ class CoverageRevisionTest(TestCase):
         self.assertEqual(summary.intervals[0].period_end, date(2026, 1, 31))
         self.assertEqual(len(summary.gaps), 1)
         self.assertEqual(summary.gaps[0].period_start, date(2026, 2, 1))
+
+    def test_unknown_reparsed_period_stops_confirming_previous_bounds(
+        self,
+    ) -> None:
+        """A parse without explicit bounds retires the old confirmation."""
+        first = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        if first is None:
+            self.fail('an explicit period must record coverage')
+
+        self.assertIsNone(
+            self.service.record_statement_period(self.upload, None, None),
+        )
+
+        first.refresh_from_db()
+        self.assertFalse(first.is_actual)
+        self.assertEqual(
+            first.revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        summary = self.service.summary(
+            self.account,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        self.assertEqual(summary.state, 'unknown')
+        self.assertFalse(summary.intervals)
 
 
 class LegacyCompatibilityMigrationTest(TransactionTestCase):
