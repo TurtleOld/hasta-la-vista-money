@@ -607,10 +607,20 @@ class BankStatementImportService:
         )
         uses_local_categories = bank in LOCAL_CATEGORY_BANKS
         if ambiguous_refs:
-            BankStatementRow.objects.filter(
-                upload=upload,
-                source_ref__in=ambiguous_refs,
-            ).update(source_ref_strength='weak')
+            with transaction.atomic():
+                active = self._lock_current_run(upload.pk, run_id)
+                if active is None:
+                    return (
+                        income_count,
+                        expense_count,
+                        skipped_count,
+                        needs_transfer_count,
+                        True,
+                    )
+                BankStatementRow.objects.filter(
+                    upload=active,
+                    source_ref__in=ambiguous_refs,
+                ).update(source_ref_strength='weak')
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:

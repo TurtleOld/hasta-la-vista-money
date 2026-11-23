@@ -1272,6 +1272,101 @@ class StaleRunAfterRetentionTest(TestCase):
 
         self._assert_only_first_row_posted()
 
+    def _ambiguous_rows(self, upload: BankStatementUpload) -> list[int]:
+        rows = [
+            BankStatementRow.objects.create(
+                upload=upload,
+                source_row_position=position,
+                transaction_type=BankStatementRow.TransactionType.EXPENSE,
+                transaction_date=WHEN,
+                amount=Decimal('100.00'),
+                description='Перевод',
+                source_ref='ambiguous-owner-ref',
+                source_ref_strength='strong',
+                decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            )
+            for position in range(2)
+        ]
+        return [row.pk for row in rows]
+
+    def _ambiguous_transactions(self) -> list[dict[str, object]]:
+        return [
+            {
+                'date': WHEN,
+                'amount': Decimal('-100.00'),
+                'description': 'Перевод',
+                'source_ref': 'ambiguous-owner-ref',
+                'source_ref_strength': 'strong',
+                'category_name': None,
+                'row_position': position,
+            }
+            for position in range(2)
+        ]
+
+    def test_stale_run_does_not_weaken_rows_of_the_new_owner(self) -> None:
+        upload = self._upload()
+        row_ids = self._ambiguous_rows(upload)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            celery_task_id='run-b',
+        )
+
+        result = self.service._process_transactions(
+            upload,
+            self._ambiguous_transactions(),
+            [],
+            StatementParseResult(
+                transactions=self._ambiguous_transactions(),
+                bank='sberbank',
+            ),
+            run_id='run-a',
+        )
+
+        self.assertTrue(result[4])
+        self.assertEqual(
+            set(
+                BankStatementRow.objects.filter(
+                    pk__in=row_ids,
+                ).values_list('source_ref_strength', flat=True),
+            ),
+            {'strong'},
+        )
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            0,
+        )
+
+    def test_resumed_run_weakens_already_processed_ambiguous_rows(self) -> None:
+        upload = self._upload()
+        row_ids = self._ambiguous_rows(upload)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            processed_transactions=2,
+        )
+
+        result = self.service._process_transactions(
+            upload,
+            self._ambiguous_transactions(),
+            [],
+            StatementParseResult(
+                transactions=self._ambiguous_transactions(),
+                bank='sberbank',
+            ),
+            run_id='run-a',
+        )
+
+        self.assertFalse(result[4])
+        self.assertEqual(
+            set(
+                BankStatementRow.objects.filter(
+                    pk__in=row_ids,
+                ).values_list('source_ref_strength', flat=True),
+            ),
+            {'weak'},
+        )
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            0,
+        )
+
 
 class FinalizationAfterRetentionTest(TestCase):
     """The worker's last write must not restore cleaned bank balances."""
