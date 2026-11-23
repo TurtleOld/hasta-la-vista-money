@@ -1098,39 +1098,92 @@ class TestAccountServices(TestCase):
         self.assertFalse(control.balance.checked)
         self.assertEqual(control.balance.label, 'Не проверено')
 
-    def test_currency_change_invalidates_balance_check(self) -> None:
+    def test_currency_change_keeps_last_proven_discrepancy_on_recheck(
+        self,
+    ) -> None:
         moment = timezone.now() - timedelta(days=2)
         upload = self._balance_upload(
-            closing=Decimal('1000.00'),
+            closing=Decimal('900.00'),
             moment=moment,
         )
         service = self.container.users.statement_balance_verification_service()
+        control_service = self.container.users.accounting_control_service()
         service.verify(upload)
-        Account.objects.filter(pk=self.account1.pk).update(currency='USD')
-
-        control = self.container.users.accounting_control_service().build(
+        before = control_service.build(
             self.account1,
             moment.date(),
             moment.date(),
         )
+        self.assertTrue(before.balance.blocks_final_reconciliation)
 
-        self.assertFalse(control.balance.actual)
-        self.assertEqual(
-            control.balance.reason,
-            BankStatementUpload.BalanceReason.CURRENCY_CHANGED,
-        )
+        Account.objects.filter(pk=self.account1.pk).update(currency='USD')
         service.verify(upload)
+
         upload.refresh_from_db()
         self.assertEqual(
             upload.balance_result,
-            BankStatementUpload.BalanceResult.NOT_CHECKED,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
         )
+        self.assertEqual(upload.account_balance_after, Decimal('1000.00'))
+        self.assertEqual(upload.balance_discrepancy, Decimal('-100.00'))
+        self.assertFalse(upload.balance_is_actual)
         self.assertEqual(
             upload.balance_reason,
             BankStatementUpload.BalanceReason.CURRENCY_MISMATCH,
         )
         self.assertEqual(upload.balance_currency, 'RUB')
-        self.assertIsNone(upload.balance_discrepancy)
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertFalse(control.balance.actual)
+        self.assertEqual(
+            control.balance.result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        self.assertEqual(
+            control.balance.reason,
+            BankStatementUpload.BalanceReason.CURRENCY_MISMATCH,
+        )
+        self.assertTrue(control.balance.blocks_final_reconciliation)
+
+    def test_unresolved_rows_do_not_erase_a_proven_discrepancy(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        control_service = self.container.users.accounting_control_service()
+        service.verify(upload)
+
+        self._row(upload, 1)
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        self.assertEqual(upload.account_balance_after, Decimal('1000.00'))
+        self.assertEqual(upload.balance_discrepancy, Decimal('-100.00'))
+        self.assertFalse(upload.balance_is_actual)
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.UNRESOLVED_ROWS,
+        )
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertEqual(
+            control.balance.result,
+            BankStatementUpload.BalanceResult.DISCREPANCY,
+        )
+        self.assertFalse(control.balance.actual)
+        self.assertTrue(control.balance.blocks_final_reconciliation)
 
     def test_retention_keeps_balance_metadata_without_sums(self) -> None:
         moment = timezone.now() - timedelta(days=2)
