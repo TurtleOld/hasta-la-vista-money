@@ -631,13 +631,10 @@ class StatementMarkupService:
 
     @staticmethod
     def _moment(statement_date: datetime) -> datetime:
-        # The statement has no time of day: use the moment of markup.
-        now = timezone.localtime()
-        return datetime.combine(
-            timezone.localtime(statement_date).date(),
-            now.time(),
-            tzinfo=now.tzinfo,
-        )
+        # The bank date is the operation date. The parser already normalizes
+        # a statement without a time to midnight, so keep that value as is:
+        # markup must not replace it with the time of the user's action.
+        return timezone.localtime(statement_date)
 
     def _create_transfer(
         self,

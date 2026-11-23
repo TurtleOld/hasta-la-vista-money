@@ -224,7 +224,15 @@ class StatementBalanceVerificationService:
 
         BankStatementUpload.objects.filter(pk=upload.pk).update(
             balance_result=result,
-            balance_checked_at=now,
+            # A failed recheck keeps the date of the last confirmed
+            # comparison instead of the time of the failed attempt.
+            balance_checked_at=(
+                upload.balance_checked_at
+                if reason
+                and upload.balance_result
+                != BankStatementUpload.BalanceResult.NOT_CHECKED
+                else now
+            ),
             balance_is_actual=(
                 not reason
                 and result != BankStatementUpload.BalanceResult.NOT_CHECKED
