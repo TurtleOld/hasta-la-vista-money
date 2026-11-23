@@ -189,15 +189,21 @@ class BankStatementUploadView(
                 should_start = replay_started
 
             if should_start:
+                run_id = (
+                    upload.celery_task_id
+                    if replay_started
+                    else _import_service(self.request).start_run(upload)
+                )
                 task_runner = cast(
                     'Any',
                     process_bank_statement_task,
                 )
-                task = task_runner.delay(upload.pk)
+                task = task_runner.delay(upload.pk, run_id)
                 logger.info(
                     'bank_statement_task_enqueued',
                     upload_id=upload.pk,
                     task_id=task.id,
+                    run_id=run_id,
                 )
             else:
                 messages.warning(

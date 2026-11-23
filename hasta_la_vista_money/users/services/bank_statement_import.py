@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any, cast
+from uuid import uuid4
 
 import structlog
 from django.db import IntegrityError, transaction
@@ -235,6 +236,43 @@ class BankStatementImportService:
             upload.refresh_from_db()
         return bool(restarted)
 
+    def start_run(self, upload: BankStatementUpload) -> str:
+        """Assign the run identifier before the task is published.
+
+        A previous delivery keeps its old identifier, so it can neither
+        claim the upload nor record a result or an error after this run
+        starts. The row is locked while the identifier changes.
+
+        Args:
+            upload: Upload that is about to be published to the queue.
+
+        Returns:
+            The new run identifier to pass to the task.
+        """
+        run_id = uuid4().hex
+        with transaction.atomic():
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload.pk,
+            )
+            locked.celery_task_id = run_id
+            locked.status = BankStatementUpload.Status.PENDING
+            locked.failed_count = 0
+            locked.error_message = ''
+            locked.save(
+                update_fields=[
+                    'celery_task_id',
+                    'status',
+                    'failed_count',
+                    'error_message',
+                    'updated_at',
+                ],
+            )
+        upload.celery_task_id = run_id
+        upload.status = BankStatementUpload.Status.PENDING
+        upload.failed_count = 0
+        upload.error_message = ''
+        return run_id
+
     def prepare_known_replay(
         self,
         upload: BankStatementUpload,
@@ -282,6 +320,7 @@ class BankStatementImportService:
             locked.processing_mode = (
                 BankStatementUpload.ProcessingMode.RECONCILIATION
             )
+            locked.celery_task_id = uuid4().hex
             locked.status = BankStatementUpload.Status.PENDING
             locked.progress = 0
             locked.total_transactions = 0
@@ -307,6 +346,7 @@ class BankStatementImportService:
                 update_fields=[
                     'pdf_file',
                     'processing_mode',
+                    'celery_task_id',
                     'status',
                     'progress',
                     'total_transactions',
@@ -426,6 +466,7 @@ class BankStatementImportService:
             upload,
             parse_result.period_start,
             parse_result.period_end,
+            run_id=run_id,
         )
 
         logger.info(
