@@ -125,11 +125,19 @@ class StatementRowRepository:
         self,
         movement: Transaction | TransferMoneyLog,
     ) -> None:
-        """Reset the statement checks affected by a date change."""
-        upload_ids = self._linked_rows(movement).values('upload_id')
-        BankStatementUpload.objects.filter(pk__in=upload_ids).update(
+        """Reset affected statement checks and mark them for rechecking."""
+        affected = BankStatementUpload.objects.filter(
+            pk__in=self._linked_rows(movement).values('upload_id'),
+        )
+        affected.update(
             account_balance_after=None,
             balance_discrepancy=None,
+        )
+        affected.filter(balance_is_actual=True).update(
+            balance_is_actual=False,
+            balance_reason=(
+                BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED
+            ),
         )
 
     @staticmethod
