@@ -20,6 +20,7 @@ from hasta_la_vista_money.system.audit_registry import (
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementDecisionAudit,
@@ -184,6 +185,7 @@ class BankStatementRetentionService:
                 match_calendar_date=False,
             )
             self._anonymize_audit_copies(upload, provenance)
+            self._clear_created_movement_references(provenance)
             upload.pdf_file = ''
             upload.retention_cleaned_at = now
             upload.statement_closing_balance = None
@@ -324,6 +326,24 @@ class BankStatementRetentionService:
             scrubbed = _scrub_diff(entry.diff)
             if scrubbed != entry.diff:
                 AuditLog.objects.filter(pk=entry.pk).update(diff=scrubbed)
+
+    @staticmethod
+    def _clear_created_movement_references(
+        provenance: _AuditProvenance,
+    ) -> None:
+        """Drop the raw bank reference from movements this upload created.
+
+        The provenance set only contains decisions that created money, so
+        a linked pre-existing movement keeps its own reference. A queryset
+        update bypasses the audit signal: the technical fingerprint, file
+        position and the financial record stay, only the bank identifier
+        is removed.
+        """
+        if not provenance.transaction_ids:
+            return
+        Transaction.objects.filter(
+            pk__in=provenance.transaction_ids,
+        ).update(source_ref=None)
 
     @staticmethod
     def _record_anonymization(
