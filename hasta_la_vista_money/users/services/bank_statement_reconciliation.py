@@ -40,6 +40,9 @@ from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
 )
+from hasta_la_vista_money.users.services.statement_completion import (
+    is_statement_complete,
+)
 
 
 class InvalidReconciliationDecisionError(ValueError):
@@ -233,10 +236,7 @@ class BankStatementReconciliationService:
             transfer=row.transfer,
         )
         self.refresh_outcome_counts(upload)
-        if not BankStatementRow.objects.filter(
-            upload=row.upload,
-            decision=BankStatementRow.Decision.PENDING,
-        ).exists():
+        if is_statement_complete(upload):
             upload.status = BankStatementUpload.Status.COMPLETED
             upload.save(update_fields=['status'])
         return row

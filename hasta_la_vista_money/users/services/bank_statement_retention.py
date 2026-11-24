@@ -29,16 +29,12 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
+from hasta_la_vista_money.users.services.statement_completion import (
+    UNRESOLVED_DECISIONS,
+    is_statement_complete,
+)
 
 logger = structlog.get_logger(__name__)
-
-_UNRESOLVED_DECISIONS: Final = frozenset(
-    {
-        BankStatementRow.Decision.PENDING,
-        BankStatementRow.Decision.NEEDS_TRANSFER,
-        BankStatementRow.Decision.AWAITING_MARKUP,
-    },
-)
 
 _CREATED_DECISIONS: Final = frozenset(
     {
@@ -141,8 +137,9 @@ class BankStatementRetentionService:
                 ),
             )
             unresolved_ids = [
-                row.pk for row in rows if row.decision in _UNRESOLVED_DECISIONS
+                row.pk for row in rows if row.decision in UNRESOLVED_DECISIONS
             ]
+            complete = is_statement_complete(upload)
             row_ids = [row.pk for row in rows]
             provenance = self._statement_audit_provenance(upload, rows)
 
@@ -201,7 +198,11 @@ class BankStatementRetentionService:
                 else (
                     BankStatementUpload.Status.FAILED
                     if upload.status == BankStatementUpload.Status.FAILED
-                    else BankStatementUpload.Status.COMPLETED
+                    else (
+                        BankStatementUpload.Status.COMPLETED
+                        if complete
+                        else BankStatementUpload.Status.AWAITING_CONFIRMATION
+                    )
                 )
             )
             upload.save(

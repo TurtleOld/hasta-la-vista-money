@@ -835,6 +835,72 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.upload.linked_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
 
+    def test_last_pending_decision_keeps_unresolved_upload_open(
+        self,
+    ) -> None:
+        url = reverse(
+            'finance_account:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+        candidate = BankStatementCandidate.objects.get(row=self.row)
+        for unresolved in (
+            BankStatementRow.Decision.AWAITING_MARKUP,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        ):
+            with self.subTest(unresolved=unresolved):
+                self.upload.statement_rows.exclude(pk=self.row.pk).delete()
+                BankStatementRow.objects.filter(pk=self.row.pk).update(
+                    decision=BankStatementRow.Decision.PENDING,
+                    transaction=None,
+                    transfer=None,
+                    decided_at=None,
+                )
+                BankStatementRow.objects.create(
+                    upload=self.upload,
+                    transaction_type=TransactionType.EXPENSE,
+                    transaction_date=timezone.now(),
+                    amount=Decimal('25.00'),
+                    description='Нерешённая строка',
+                    source_row_position=10,
+                    decision=unresolved,
+                )
+                BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+                    status=(BankStatementUpload.Status.AWAITING_CONFIRMATION),
+                )
+
+                response = self.client.post(
+                    url,
+                    {'decision': 'linked', 'candidate': candidate.pk},
+                )
+
+                self.assertEqual(response.status_code, 302)
+                self.upload.refresh_from_db()
+                self.assertEqual(
+                    self.upload.status,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                )
+
+    def test_retention_keeps_empty_parse_unconfirmed(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/empty-retention.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            total_transactions=0,
+            expires_at=timezone.now(),
+        )
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(timezone.now() + timedelta(seconds=1))
+
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
     def test_multiple_candidates_are_not_preselected(self) -> None:
         second = Transaction.objects.create(
             user=self.user,
