@@ -103,7 +103,7 @@ class RosDorBankUploadTest(TestCase):
             {'102-01.03.2026', '103-01.03.2026'},
         )
 
-    def test_overlapping_upload_skips_known_rows(self) -> None:
+    def test_overlapping_upload_keeps_unresolved_rows_as_trace(self) -> None:
         first = self._upload()
         BankStatementRow.objects.filter(
             upload=first,
@@ -117,16 +117,47 @@ class RosDorBankUploadTest(TestCase):
         second = self._upload()
 
         rows = BankStatementRow.objects.filter(upload=second)
+        self.assertEqual(rows.count(), 10)
         self.assertEqual(
-            list(rows.values_list('source_ref', flat=True)),
-            ['101-01.03.2026', '110-03.03.2026'],
+            set(rows.values_list('source_ref', flat=True)),
+            set(first.statement_rows.values_list('source_ref', flat=True)),
         )
-        repeated = rows.get(source_ref='101-01.03.2026')
         self.assertEqual(
-            repeated.decision,
-            BankStatementRow.Decision.AWAITING_MARKUP,
+            set(rows.values_list('decision', flat=True)),
+            {BankStatementRow.Decision.AWAITING_MARKUP},
         )
-        self.assertEqual(second.skipped_count, 8)
+        self.assertEqual(second.skipped_count, 0)
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
+        )
+        first.refresh_from_db()
+        self.assertEqual(
+            first.statement_rows.get(
+                source_ref='101-01.03.2026',
+            ).decision,
+            BankStatementRow.Decision.NEW,
+        )
+        self.assertEqual(
+            first.statement_rows.get(
+                source_ref='110-03.03.2026',
+            ).decision,
+            BankStatementRow.Decision.EXPIRED,
+        )
+
+        process_bank_statement_task.apply(args=[second.pk])
+
+        second.refresh_from_db()
+        self.assertEqual(second.statement_rows.count(), 10)
+        self.assertEqual(second.skipped_count, 0)
+        self.assertEqual(
+            set(
+                second.statement_rows.values_list('decision', flat=True),
+            ),
+            {BankStatementRow.Decision.AWAITING_MARKUP},
+        )
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
+        )
 
     def test_number_from_header_is_assigned_to_selected_account(self) -> None:
         self._upload()
@@ -187,5 +218,10 @@ class RosDorBankUploadTest(TestCase):
         cancel = second.statement_rows.get(source_ref='103-01.03.2026')
         self.assertEqual(
             cancel.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        debit = second.statement_rows.get(source_ref='102-01.03.2026')
+        self.assertEqual(
+            debit.decision,
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
