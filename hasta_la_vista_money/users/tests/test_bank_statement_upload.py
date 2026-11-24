@@ -22,9 +22,14 @@ from faker import Faker
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+)
 from hasta_la_vista_money.finance_account.forms import BankStatementUploadForm
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     StatementPeriodCoverage,
     TransferMoneyLog,
 )
@@ -10152,3 +10157,317 @@ class TestBankStatementImportReliability(TestCase):
                             is_actual=True,
                         ).exists(),
                     )
+
+
+class TestStatementBankVerification(TestCase):
+    """Detected statement bank must match the confirmed account bank."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    NUMBER = '40817810099910004312'
+    OTHER_NUMBER = '40817810099910004313'
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Счёт по умолчанию',
+            balance=Decimal('10000.00'),
+            currency='RUB',
+        )
+
+    def _bank(self, code: str, name: str, *, is_system: bool = False) -> Bank:
+        bank, _ = Bank.objects.get_or_create(
+            code=code,
+            defaults={
+                'name': name,
+                'is_system': is_system,
+                'user': None if is_system else self.user,
+            },
+        )
+        return bank
+
+    def _row(self) -> dict[str, Any]:
+        return {
+            'date': datetime(2026, 3, 10, 12, tzinfo=UTC),
+            'amount': Decimal('-100.00'),
+            'description': 'Комиссия за обслуживание',
+            'source_ref': 'TICKET06-1',
+            'source_ref_strength': 'strong',
+            'category_name': 'Комиссия банка',
+            'row_position': 0,
+        }
+
+    def _run_statement(
+        self,
+        *,
+        bank: str,
+        account: Account,
+        account_number: str | None = None,
+        transactions: list[dict[str, Any]] | None = None,
+        requires_markup: bool = False,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=account,
+            pdf_file='bank_statements/ticket06.pdf',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=(
+                    [self._row()] if transactions is None else transactions
+                ),
+                bank=bank,
+                account_number=account_number,
+                period_start=date(2026, 3, 1),
+                period_end=date(2026, 3, 31),
+                requires_markup=requires_markup,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+        upload.refresh_from_db()
+        return upload
+
+    def test_mismatched_bank_keeps_number_binding_coverage_and_money(
+        self,
+    ) -> None:
+        """A different confirmed bank changes nothing and posts nothing."""
+        self.account.bank = self._bank(
+            BANK_SBERBANK,
+            'Сбербанк',
+            is_system=True,
+        )
+        self.account.save(update_fields=['bank'])
+
+        upload = self._run_statement(
+            bank='raiffeisen',
+            account=self.account,
+            account_number=self.NUMBER,
+        )
+
+        self.account.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertIsNone(self.account.account_number)
+        self.assertEqual(upload.account_id, self.account.pk)
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(upload=upload).exists(),
+        )
+        self.assertFalse(
+            Transaction.objects.filter(account=self.account).exists(),
+        )
+        self.assertEqual(self.account.balance, Decimal('10000.00'))
+
+    def test_matching_system_bank_binds_number_and_posts(self) -> None:
+        """The same confirmed system bank supports number binding and money."""
+        self.account.bank = self._bank(
+            BANK_SBERBANK,
+            'Сбербанк',
+            is_system=True,
+        )
+        self.account.save(update_fields=['bank'])
+
+        upload = self._run_statement(
+            bank='sberbank',
+            account=self.account,
+            account_number=self.NUMBER,
+        )
+
+        self.account.refresh_from_db()
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(self.account.account_number, self.NUMBER)
+        self.assertTrue(
+            StatementPeriodCoverage.objects.filter(
+                upload=upload,
+                is_actual=True,
+            ).exists(),
+        )
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+
+    def test_account_found_by_number_checks_its_bank_before_rebinding(
+        self,
+    ) -> None:
+        """A bank mismatch never replaces the upload account."""
+        matched = Account.objects.create(
+            user=self.user,
+            name_account='Счёт Сбербанка',
+            balance=Decimal('5000.00'),
+            currency='RUB',
+            bank=self._bank(BANK_SBERBANK, 'Сбербанк', is_system=True),
+            account_number=self.OTHER_NUMBER,
+        )
+
+        upload = self._run_statement(
+            bank='raiffeisen',
+            account=self.account,
+            account_number=self.OTHER_NUMBER,
+        )
+
+        matched.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.account_id, self.account.pk)
+        self.assertEqual(matched.account_number, self.OTHER_NUMBER)
+        self.assertEqual(matched.balance, Decimal('5000.00'))
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(upload=upload).exists(),
+        )
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_account_found_by_number_with_same_bank_receives_statement(
+        self,
+    ) -> None:
+        """A matching number and bank still rebinds to the found account."""
+        matched = Account.objects.create(
+            user=self.user,
+            name_account='Счёт Сбербанка',
+            balance=Decimal('5000.00'),
+            currency='RUB',
+            bank=self._bank(BANK_SBERBANK, 'Сбербанк', is_system=True),
+            account_number=self.OTHER_NUMBER,
+        )
+
+        upload = self._run_statement(
+            bank='sberbank',
+            account=self.account,
+            account_number=self.OTHER_NUMBER,
+        )
+
+        matched.refresh_from_db()
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.account_id, matched.pk)
+        self.assertEqual(matched.account_number, self.OTHER_NUMBER)
+        self.assertEqual(
+            Transaction.objects.filter(account=matched).count(),
+            1,
+        )
+        self.assertTrue(
+            StatementPeriodCoverage.objects.filter(
+                upload=upload,
+                is_actual=True,
+            ).exists(),
+        )
+
+    def test_every_known_adapter_matches_a_confirmed_bank(self) -> None:
+        """All supported adapters accept an account of the same bank."""
+        cases = (
+            ('raiffeisen', BANK_RAIFFEISENBANK, 'Райффайзенбанк', True),
+            ('sberbank', BANK_SBERBANK, 'Сбербанк', True),
+            ('ozon', 'user_ozon', 'Озон Банк', False),
+            ('rosdorbank', 'user_rosdor', 'РосДорБанк', False),
+        )
+        for statement_bank, code, name, is_system in cases:
+            with self.subTest(bank=statement_bank):
+                account = Account.objects.create(
+                    user=self.user,
+                    name_account=f'Счёт {statement_bank}',
+                    balance=Decimal('1000.00'),
+                    currency='RUB',
+                    bank=self._bank(code, name, is_system=is_system),
+                )
+                upload = self._run_statement(
+                    bank=statement_bank,
+                    account=account,
+                    requires_markup=True,
+                )
+                self.assertNotEqual(
+                    upload.status,
+                    BankStatementUpload.Status.FAILED,
+                )
+                self.assertEqual(upload.account_id, account.pk)
+
+    def test_user_bank_names_are_compared_with_detected_bank(self) -> None:
+        """Personal banks match by name only when they name the same bank."""
+        matching = Account.objects.create(
+            user=self.user,
+            name_account='Личный Сбербанк',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+            bank=self._bank('user_sber', 'Мой Сбербанк'),
+        )
+        upload = self._run_statement(
+            bank='sberbank',
+            account=matching,
+            requires_markup=True,
+        )
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Личный Озон',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+            bank=self._bank('user_ozon_other', 'Озон Банк'),
+        )
+        failed = self._run_statement(
+            bank='sberbank',
+            account=other,
+            requires_markup=True,
+        )
+        self.assertEqual(failed.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(failed.account_id, other.pk)
+
+    def test_unknown_personal_bank_name_does_not_block_number_match(
+        self,
+    ) -> None:
+        """An unrecognized personal name proves no different bank."""
+        matched = Account.objects.create(
+            user=self.user,
+            name_account='Зарплатный счёт',
+            balance=Decimal('5000.00'),
+            currency='RUB',
+            bank=self._bank('user_salary', 'Зарплатный'),
+            account_number=self.OTHER_NUMBER,
+        )
+
+        upload = self._run_statement(
+            bank='sberbank',
+            account=self.account,
+            account_number=self.OTHER_NUMBER,
+        )
+
+        matched.refresh_from_db()
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.account_id, matched.pk)
+        self.assertEqual(matched.account_number, self.OTHER_NUMBER)
+        self.assertEqual(
+            Transaction.objects.filter(account=matched).count(),
+            1,
+        )
+        self.assertTrue(
+            StatementPeriodCoverage.objects.filter(
+                upload=upload,
+                is_actual=True,
+            ).exists(),
+        )
+
+    def test_unconfirmed_account_bank_keeps_supported_processing(self) -> None:
+        """Without a confirmed account bank the statement bank is ignored."""
+        upload = self._run_statement(bank='raiffeisen', account=self.account)
+
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+
+    def test_generic_statement_never_claims_a_confirmed_bank(self) -> None:
+        """A common format keeps its markup flow for a bank-specific account."""
+        self.account.bank = self._bank(
+            BANK_SBERBANK,
+            'Сбербанк',
+            is_system=True,
+        )
+        self.account.save(update_fields=['bank'])
+
+        upload = self._run_statement(
+            bank='generic',
+            account=self.account,
+            requires_markup=True,
+        )
+
+        self.assertNotEqual(upload.status, BankStatementUpload.Status.FAILED)
+        self.assertEqual(upload.statement_bank, 'generic')

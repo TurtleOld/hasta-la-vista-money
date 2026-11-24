@@ -1148,6 +1148,60 @@ class TestAccountServices(TestCase):
         )
         self.assertTrue(control.balance.blocks_final_reconciliation)
 
+    def test_failed_recheck_keeps_last_confirmed_comparison_date(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+        control_service = self.container.users.accounting_control_service()
+        service.verify(upload)
+        upload.refresh_from_db()
+        confirmed_at = upload.balance_checked_at
+
+        Account.objects.filter(pk=self.account1.pk).update(currency='USD')
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.balance_checked_at, confirmed_at)
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.CURRENCY_MISMATCH,
+        )
+        control = control_service.build(
+            self.account1,
+            moment.date(),
+            moment.date(),
+        )
+        self.assertFalse(control.balance.actual)
+        self.assertTrue(control.balance.blocks_final_reconciliation)
+
+    def test_successful_recheck_updates_comparison_date(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('1000.00'),
+            moment=moment,
+        )
+        old_checked_at = timezone.now() - timedelta(days=1)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            balance_checked_at=old_checked_at,
+        )
+        service = self.container.users.statement_balance_verification_service()
+
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertIsNotNone(upload.balance_checked_at)
+        if upload.balance_checked_at is None:
+            self.fail('successful comparison did not record its date')
+        self.assertGreater(upload.balance_checked_at, old_checked_at)
+        self.assertTrue(upload.balance_is_actual)
+
     def test_unresolved_rows_do_not_erase_a_proven_discrepancy(self) -> None:
         moment = timezone.now() - timedelta(days=2)
         upload = self._balance_upload(

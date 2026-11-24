@@ -23,7 +23,15 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_DEFAULT,
+    BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+)
+from hasta_la_vista_money.finance_account.models import (
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
@@ -88,6 +96,77 @@ LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
 # Banks whose reference is a hint: only file hash, stable format and
 # matching operation fields can prove an exact repeat.
 WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
+# System banks that unambiguously identify one supported statement adapter.
+STATEMENT_BANK_SYSTEM_IDENTITIES = {
+    BANK_SBERBANK: 'sberbank',
+    BANK_RAIFFEISENBANK: 'raiffeisen',
+}
+# Personal banks have no stable code, so a confirmed name token must name
+# the same bank the adapter detected.
+STATEMENT_BANK_NAME_ALIASES = {
+    'raiffeisen': frozenset(
+        {'raiffeisen', 'raiffaisen', 'райффайзен', 'райфайзен'},
+    ),
+    'sberbank': frozenset({'sber', 'сбер'}),
+    'ozon': frozenset({'ozon', 'озон'}),
+    'rosdorbank': frozenset({'rosdor', 'росдор'}),
+}
+BANK_NAME_SUFFIXES = ('банк', 'bank')
+
+
+def _account_bank_name_tokens(name: str) -> set[str]:
+    """Return normalized name tokens of a personal bank."""
+    words = ''.join(
+        char if char.isalnum() else ' ' for char in name.casefold()
+    ).split()
+    tokens: set[str] = set()
+    for word in words:
+        token = word
+        for suffix in BANK_NAME_SUFFIXES:
+            if token.endswith(suffix) and len(token) > len(suffix):
+                token = token[: -len(suffix)]
+                break
+        if token and token not in BANK_NAME_SUFFIXES:
+            tokens.add(token)
+    return tokens
+
+
+def _account_bank_identity(account_bank: Bank) -> str | None:
+    """Return a reliably recognized statement-adapter identity, if any.
+
+    A default bank, an arbitrary personal name and a name that fits several
+    known banks prove no identity. Only one recognized known bank counts.
+    """
+    if account_bank.code == BANK_DEFAULT:
+        return None
+    identity = STATEMENT_BANK_SYSTEM_IDENTITIES.get(account_bank.code)
+    if identity is not None:
+        return identity
+    tokens = _account_bank_name_tokens(account_bank.name)
+    identities = {
+        bank
+        for bank, aliases in STATEMENT_BANK_NAME_ALIASES.items()
+        if tokens & aliases
+    }
+    if len(identities) == 1:
+        return identities.pop()
+    return None
+
+
+def _account_bank_matches_statement(
+    account_bank: Bank,
+    statement_bank: str,
+) -> bool:
+    """Return whether the statement bank is safe for the account bank.
+
+    A generic/unknown detected format and an unconfirmed or ambiguous
+    account bank prove no mismatch, so existing supported processing is
+    kept. Only a reliably recognized different bank blocks the import.
+    """
+    if statement_bank not in STATEMENT_BANK_NAME_ALIASES:
+        return True
+    identity = _account_bank_identity(account_bank)
+    return identity is None or identity == statement_bank
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:
@@ -115,6 +194,31 @@ def _reference_strength(bank: str, trans: dict[str, Any]) -> str:
     if bank == 'generic':
         return 'weak'
     return str(trans.get('source_ref_strength') or 'weak')
+
+
+def _effective_reference_strength(
+    bank: str,
+    trans: dict[str, Any],
+    ambiguous_refs: set[str],
+) -> str:
+    """Return the proof level after accounting for repeated references.
+
+    A reference that appears more than once in one parsed file is
+    ambiguous inside that file. It stays a hint even when the adapter
+    reports a strong identifier, so neither import nor manual markup may
+    merge those observations automatically.
+
+    Args:
+        bank: Bank/format code of the parse result.
+        trans: One parsed statement row.
+        ambiguous_refs: References repeated inside the current file.
+
+    Returns:
+        ``'weak'`` or ``'strong'``.
+    """
+    if trans.get('source_ref') in ambiguous_refs:
+        return 'weak'
+    return _reference_strength(bank, trans)
 
 
 @dataclass(frozen=True)
@@ -427,6 +531,7 @@ class BankStatementImportService:
             if active is None:
                 return self._stopped_result()
             upload = active
+            self._verify_statement_bank(upload.account, parse_result.bank)
             if parse_result.account_number:
                 with audit_operation(
                     kind=AuditOperationKind.STATEMENT_IMPORT,
@@ -434,6 +539,7 @@ class BankStatementImportService:
                     self._match_account(
                         upload,
                         parse_result.account_number,
+                        parse_result.bank,
                     )
 
             upload.total_transactions = len(transactions)
@@ -622,6 +728,21 @@ class BankStatementImportService:
             parse_result.format_version if parse_result is not None else 1
         )
         uses_local_categories = bank in LOCAL_CATEGORY_BANKS
+        if ambiguous_refs:
+            with transaction.atomic():
+                active = self._lock_current_run(upload.pk, run_id)
+                if active is None:
+                    return (
+                        income_count,
+                        expense_count,
+                        skipped_count,
+                        needs_transfer_count,
+                        True,
+                    )
+                BankStatementRow.objects.filter(
+                    upload=active,
+                    source_ref__in=ambiguous_refs,
+                ).update(source_ref_strength='weak')
 
         for idx, trans in enumerate(transactions):
             if idx < resume_from:
@@ -641,7 +762,11 @@ class BankStatementImportService:
             trans_date = trans.get('date')
             unparsed = _is_unparsed(trans)
             source_ref = trans.get('source_ref')
-            source_ref_strength = _reference_strength(bank, trans)
+            source_ref_strength = _effective_reference_strength(
+                bank,
+                trans,
+                ambiguous_refs,
+            )
             row_position = trans.get('row_position', idx)
             source = trans.get('source')
             abs_amount = abs(amount) if amount is not None else None
@@ -760,6 +885,7 @@ class BankStatementImportService:
                         row_position=row_position,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     failed_count += 1
                 elif is_credit_income:
@@ -769,6 +895,7 @@ class BankStatementImportService:
                         row_position=row_position,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     needs_transfer_count += 1
                 elif exact is not None and exact.conflict:
@@ -779,6 +906,7 @@ class BankStatementImportService:
                         type_value=type_value,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                 elif exact is not None:
                     saved = self._save_duplicate_row(
@@ -789,6 +917,7 @@ class BankStatementImportService:
                         observation=exact,
                         bank=bank,
                         format_version=format_version,
+                        source_ref_strength=source_ref_strength,
                     )
                     if saved.decision == BankStatementRow.Decision.DUPLICATE:
                         skipped_count += 1
@@ -821,6 +950,7 @@ class BankStatementImportService:
                             suggested_category=(
                                 row_category if category_name else ''
                             ),
+                            source_ref_strength=source_ref_strength,
                         )
                     else:
                         candidates = self._rank_probable_candidates(
@@ -911,6 +1041,7 @@ class BankStatementImportService:
                                     format_version=format_version,
                                     transaction=created,
                                     suggested_category=row_category,
+                                    source_ref_strength=source_ref_strength,
                                 )
                             # Bank is source of truth: no funds check.
                             upload.account = (
@@ -1340,6 +1471,7 @@ class BankStatementImportService:
         observation: ExactObservation,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Record an exact repeat without touching money."""
         fingerprint = self._fingerprint(
@@ -1347,6 +1479,8 @@ class BankStatementImportService:
             bank=bank,
             source_ref=trans.get('source_ref'),
         )
+        if source_ref_strength is None:
+            source_ref_strength = _reference_strength(bank, trans)
         if observation.legacy:
             self._backfill_legacy_fingerprint(
                 row=observation.row,
@@ -1380,6 +1514,7 @@ class BankStatementImportService:
                     format_version=format_version,
                     decision=BankStatementRow.Decision.DUPLICATE,
                     canonical_row=canonical,
+                    source_ref_strength=source_ref_strength,
                 )
             # No canonical row exists yet: link the observation to the
             # proven movement instead of claiming a duplicate of nothing.
@@ -1392,6 +1527,7 @@ class BankStatementImportService:
                 format_version=format_version,
                 decision=BankStatementRow.Decision.LINKED,
                 transaction=observation.transaction,
+                source_ref_strength=source_ref_strength,
             )
         return self._save_observation_row(
             upload=upload,
@@ -1402,6 +1538,7 @@ class BankStatementImportService:
             format_version=format_version,
             decision=BankStatementRow.Decision.DUPLICATE,
             canonical_row=observation.row,
+            source_ref_strength=source_ref_strength,
         )
 
     @staticmethod
@@ -1433,6 +1570,7 @@ class BankStatementImportService:
         type_value: str,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Store a row whose parser/format mapping drifted for reassignment."""
         return self._save_observation_row(
@@ -1447,6 +1585,11 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            source_ref_strength=(
+                source_ref_strength
+                if source_ref_strength is not None
+                else _reference_strength(bank, trans)
+            ),
         )
 
     @staticmethod
@@ -1462,9 +1605,10 @@ class BankStatementImportService:
         canonical_row: BankStatementRow | None = None,
         transaction: Transaction | None = None,
         suggested_category: str = '',
+        source_ref_strength: str = 'weak',
     ) -> BankStatementRow:
         """Create one row that records an observation without money."""
-        row, _created = BankStatementRow.objects.get_or_create(
+        row, created = BankStatementRow.objects.get_or_create(
             upload=upload,
             source_row_position=row_position,
             defaults={
@@ -1482,6 +1626,7 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
+                'source_ref_strength': source_ref_strength,
                 'canonical_row': canonical_row,
                 'transaction': transaction,
                 'match_calendar_date': bool(trans.get('date_only')),
@@ -1498,6 +1643,11 @@ class BankStatementImportService:
                 'decision': decision,
             },
         )
+        if not created and row.source_ref_strength != source_ref_strength:
+            BankStatementRow.objects.filter(pk=row.pk).update(
+                source_ref_strength=source_ref_strength,
+            )
+            row.source_ref_strength = source_ref_strength
         return row
 
     def _save_unparsed_row(
@@ -1508,6 +1658,7 @@ class BankStatementImportService:
         row_position: int,
         bank: str,
         format_version: int,
+        source_ref_strength: str | None = None,
     ) -> BankStatementRow:
         """Record a row fragment that cannot be posted or fully parsed."""
         amount = trans.get('amount')
@@ -1530,6 +1681,11 @@ class BankStatementImportService:
             ),
             format_version=format_version,
             decision=BankStatementRow.Decision.AWAITING_MARKUP,
+            source_ref_strength=(
+                source_ref_strength
+                if source_ref_strength is not None
+                else _reference_strength(bank, trans)
+            ),
         )
 
     def _save_autopost_row(
@@ -1543,6 +1699,7 @@ class BankStatementImportService:
         format_version: int,
         transaction: Transaction,
         suggested_category: str,
+        source_ref_strength: str = 'weak',
     ) -> BankStatementRow:
         """Link an auto-posted movement, including an existing open row."""
         row = self._save_observation_row(
@@ -1555,6 +1712,7 @@ class BankStatementImportService:
             decision=BankStatementRow.Decision.NEW,
             transaction=transaction,
             suggested_category=suggested_category,
+            source_ref_strength=source_ref_strength,
         )
         if (
             row.transaction_id == transaction.pk
@@ -1574,6 +1732,7 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
             source_ref=trans.get('source_ref') or None,
+            source_ref_strength=source_ref_strength,
             source_format_version=format_version,
             source_fingerprint=(fingerprint.digest if fingerprint else ''),
             source_fingerprint_key_version=(
@@ -1589,16 +1748,37 @@ class BankStatementImportService:
         row.refresh_from_db()
         return row
 
+    def _verify_statement_bank(
+        self,
+        account: Account,
+        statement_bank: str,
+    ) -> None:
+        """Reject a statement whose detected bank is another confirmed bank.
+
+        Raises:
+            BankStatementParseError: The account bank is confirmed and does
+                not match the detected statement bank.
+        """
+        if _account_bank_matches_statement(account.bank, statement_bank):
+            return
+        raise BankStatementParseError(
+            _(
+                'Банк выписки не совпадает с банком выбранного счёта.',
+            ),
+        )
+
     def _match_account(
         self,
         upload: BankStatementUpload,
         account_number: str,
+        statement_bank: str,
     ) -> None:
         """Pick the account by the statement number or record the number.
 
         Raises:
             BankStatementParseError: The selected account has another
-                number, or the number cannot be recorded.
+                number, the number cannot be recorded, or the found account
+                belongs to another confirmed bank.
         """
         account = upload.account
         if account.account_number == account_number:
@@ -1628,6 +1808,7 @@ class BankStatementImportService:
             raise BankStatementParseError(
                 _('Архивный счёт или счёт вклада недоступен для импорта.'),
             )
+        self._verify_statement_bank(matched, statement_bank)
         upload.account = matched
         try:
             with transaction.atomic():
@@ -1653,9 +1834,11 @@ class BankStatementImportService:
         account become exact duplicate observations. Without usable keys
         every row is saved for manual resolution: a missing key never
         turns into "the operation does not exist" or auto-posting. A weak
-        bank reference cannot prove a cross-file repeat, so it never
-        suppresses a row even when another upload holds the same
-        unresolved observation.
+        or ambiguous bank reference cannot prove a cross-file repeat, so
+        it never suppresses a row or becomes an exact duplicate, even when
+        another upload holds the same unresolved observation. The repeated
+        observation stays unresolved until a proven match or a user
+        decision.
 
         In reconciliation mode an existing row of this same upload is
         restored from the re-uploaded file in place, keeping its decision,
@@ -1669,20 +1852,37 @@ class BankStatementImportService:
         bank = parse_result.bank
         format_version = parse_result.format_version
         run_id = run_id or upload.celery_task_id
+        ambiguous_refs = {
+            ref
+            for ref, count in Counter(
+                trans.get('source_ref') for trans in transactions
+            ).items()
+            if ref and count > 1
+        }
         with transaction.atomic():
             active = self._lock_current_run(upload.pk, run_id)
             if active is None:
                 return True
             upload = self._lock_account(active)
+            if ambiguous_refs:
+                BankStatementRow.objects.filter(
+                    upload=upload,
+                    source_ref__in=ambiguous_refs,
+                ).update(source_ref_strength='weak')
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
+            repeated_positions: set[int] = set()
             replay = restore_existing and upload.statement_rows.exists()
             for idx, trans in enumerate(transactions):
                 source_position = trans.get('row_position')
                 position = (
                     idx if source_position is None else int(source_position)
                 )
-                source_ref_strength = _reference_strength(bank, trans)
+                source_ref_strength = _effective_reference_strength(
+                    bank,
+                    trans,
+                    ambiguous_refs,
+                )
                 fingerprint = self._fingerprint(
                     upload=upload,
                     bank=bank,
@@ -1695,12 +1895,16 @@ class BankStatementImportService:
                     bank=bank,
                     fingerprint=fingerprint,
                     format_version=format_version,
+                    source_ref_strength=source_ref_strength,
                 ):
                     continue
                 if _is_unparsed(trans):
                     new_rows[position] = trans
                     continue
-                if recognize_known:
+                if (
+                    recognize_known
+                    and trans.get('source_ref') not in ambiguous_refs
+                ):
                     exact = self._find_exact_observation(
                         upload=upload,
                         bank=bank,
@@ -1724,10 +1928,7 @@ class BankStatementImportService:
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
                         continue
-                    if (
-                        bank not in WEAK_REFERENCE_BANKS
-                        or source_ref_strength == 'strong'
-                    ) and self._has_unresolved_observation(
+                    if self._has_unresolved_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
@@ -1739,11 +1940,17 @@ class BankStatementImportService:
                         amount=abs(trans['amount']),
                         trans_date=trans['date'],
                     ):
-                        continue
+                        # Keep the separate unresolved trace for every
+                        # bank, but never auto-pair a repeat observation
+                        # with a new cancel from another upload.
+                        repeated_positions.add(position)
                 new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
             # mark up.
-            cancelled = _mutual_cancel_positions(new_rows)
+            cancelled = _mutual_cancel_positions(
+                new_rows,
+                excluded_positions=repeated_positions,
+            )
             rows = []
             for position, trans in new_rows.items():
                 amount = trans.get('amount')
@@ -1773,6 +1980,11 @@ class BankStatementImportService:
                             trans.get('category_name') or '',
                         )[: constants.TWO_HUNDRED_FIFTY],
                         source_ref=trans.get('source_ref'),
+                        source_ref_strength=_effective_reference_strength(
+                            bank,
+                            trans,
+                            ambiguous_refs,
+                        ),
                         source_row_position=position,
                         source_format_version=format_version,
                         source_fingerprint=(
@@ -1817,6 +2029,11 @@ class BankStatementImportService:
                     observation=exact,
                     bank=bank,
                     format_version=format_version,
+                    source_ref_strength=_effective_reference_strength(
+                        bank,
+                        trans,
+                        ambiguous_refs,
+                    ),
                 )
             upload.processed_transactions = len(transactions)
             upload.skipped_count = (
@@ -1846,6 +2063,7 @@ class BankStatementImportService:
         bank: str,
         fingerprint: StatementFingerprint | None,
         format_version: int,
+        source_ref_strength: str,
     ) -> BankStatementRow | None:
         """Restore one re-uploaded row in place, keeping its decisions.
 
@@ -1880,7 +2098,7 @@ class BankStatementImportService:
                     ).count()
                     == 1
                 )
-                if _reference_strength(bank, trans) == 'strong' or (
+                if source_ref_strength == 'strong' or (
                     stable_format and unique_reference
                 ):
                     row = candidate
@@ -1914,6 +2132,11 @@ class BankStatementImportService:
                 )
             return None
         if row.amount is not None and row.transaction_date is not None:
+            if row.source_ref_strength != source_ref_strength:
+                BankStatementRow.objects.filter(pk=row.pk).update(
+                    source_ref_strength=source_ref_strength,
+                )
+                row.source_ref_strength = source_ref_strength
             return row
         amount = trans.get('amount')
         trans_date = trans.get('date')
@@ -1922,6 +2145,7 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
             'source_ref': trans.get('source_ref') or None,
+            'source_ref_strength': source_ref_strength,
             'source_format_version': format_version,
             'match_calendar_date': (
                 bool(trans.get('date_only')) if bank == 'raiffeisen' else True
@@ -2025,6 +2249,7 @@ class BankStatementImportService:
         row_position: int,
         bank: str = 'generic',
         format_version: int = 1,
+        source_ref_strength: str | None = None,
     ) -> None:
         """Save a credit-account credit as an unperformed repayment row."""
         fingerprint = self._fingerprint(
@@ -2032,6 +2257,8 @@ class BankStatementImportService:
             bank=bank,
             source_ref=trans.get('source_ref'),
         )
+        if source_ref_strength is None:
+            source_ref_strength = _reference_strength(bank, trans)
         BankStatementRow.objects.get_or_create(
             upload=upload,
             source_row_position=row_position,
@@ -2043,6 +2270,7 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
+                'source_ref_strength': source_ref_strength,
                 'source_format_version': format_version,
                 'source_fingerprint': (
                     fingerprint.digest if fingerprint else ''
@@ -2285,10 +2513,22 @@ class BankStatementImportService:
         return candidate.description or str(candidate.category.name)
 
 
-def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
-    """Pair each cancel with a debit of the same device owner and amount."""
+def _mutual_cancel_positions(
+    rows: dict[int, dict[str, Any]],
+    *,
+    excluded_positions: set[int] | None = None,
+) -> set[int]:
+    """Pair each cancel with a debit of the same device owner and amount.
+
+    A position listed in ``excluded_positions`` is a repeat observation of
+    an earlier upload, so automatic cancellation must leave both sides for
+    the user instead of closing them silently.
+    """
+    skipped = excluded_positions or set()
     debits: dict[tuple[str, Decimal], list[int]] = {}
     for idx, trans in rows.items():
+        if idx in skipped:
+            continue
         if trans.get('kind') == RosDorBankRowKind.CARD and trans['amount'] < 0:
             debits.setdefault(
                 (trans['description'], -trans['amount']),
@@ -2296,6 +2536,8 @@ def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
             ).append(idx)
     positions: set[int] = set()
     for idx, trans in rows.items():
+        if idx in skipped:
+            continue
         if trans.get('kind') != RosDorBankRowKind.CANCEL:
             continue
         matches = debits.get((trans['description'], trans['amount']))
