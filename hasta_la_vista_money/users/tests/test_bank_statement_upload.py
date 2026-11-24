@@ -9603,7 +9603,9 @@ class TestBankStatementImportReliability(TestCase):
                 bank='generic',
                 format_version=2,
             )
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
 
         upload.refresh_from_db()
         expired.refresh_from_db()
