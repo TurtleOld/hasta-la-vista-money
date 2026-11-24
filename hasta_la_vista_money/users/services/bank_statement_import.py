@@ -22,7 +22,15 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_DEFAULT,
+    BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+)
+from hasta_la_vista_money.finance_account.models import (
+    Bank,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
@@ -87,6 +95,77 @@ LOCAL_CATEGORY_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
 # Banks whose reference is a hint: only file hash, stable format and
 # matching operation fields can prove an exact repeat.
 WEAK_REFERENCE_BANKS = frozenset({'raiffeisen', 'sberbank', 'ozon', 'generic'})
+# System banks that unambiguously identify one supported statement adapter.
+STATEMENT_BANK_SYSTEM_IDENTITIES = {
+    BANK_SBERBANK: 'sberbank',
+    BANK_RAIFFEISENBANK: 'raiffeisen',
+}
+# Personal banks have no stable code, so a confirmed name token must name
+# the same bank the adapter detected.
+STATEMENT_BANK_NAME_ALIASES = {
+    'raiffeisen': frozenset(
+        {'raiffeisen', 'raiffaisen', 'райффайзен', 'райфайзен'},
+    ),
+    'sberbank': frozenset({'sber', 'сбер'}),
+    'ozon': frozenset({'ozon', 'озон'}),
+    'rosdorbank': frozenset({'rosdor', 'росдор'}),
+}
+BANK_NAME_SUFFIXES = ('банк', 'bank')
+
+
+def _account_bank_name_tokens(name: str) -> set[str]:
+    """Return normalized name tokens of a personal bank."""
+    words = ''.join(
+        char if char.isalnum() else ' ' for char in name.casefold()
+    ).split()
+    tokens: set[str] = set()
+    for word in words:
+        token = word
+        for suffix in BANK_NAME_SUFFIXES:
+            if token.endswith(suffix) and len(token) > len(suffix):
+                token = token[: -len(suffix)]
+                break
+        if token and token not in BANK_NAME_SUFFIXES:
+            tokens.add(token)
+    return tokens
+
+
+def _account_bank_identity(account_bank: Bank) -> str | None:
+    """Return a reliably recognized statement-adapter identity, if any.
+
+    A default bank, an arbitrary personal name and a name that fits several
+    known banks prove no identity. Only one recognized known bank counts.
+    """
+    if account_bank.code == BANK_DEFAULT:
+        return None
+    identity = STATEMENT_BANK_SYSTEM_IDENTITIES.get(account_bank.code)
+    if identity is not None:
+        return identity
+    tokens = _account_bank_name_tokens(account_bank.name)
+    identities = {
+        bank
+        for bank, aliases in STATEMENT_BANK_NAME_ALIASES.items()
+        if tokens & aliases
+    }
+    if len(identities) == 1:
+        return identities.pop()
+    return None
+
+
+def _account_bank_matches_statement(
+    account_bank: Bank,
+    statement_bank: str,
+) -> bool:
+    """Return whether the statement bank is safe for the account bank.
+
+    A generic/unknown detected format and an unconfirmed or ambiguous
+    account bank prove no mismatch, so existing supported processing is
+    kept. Only a reliably recognized different bank blocks the import.
+    """
+    if statement_bank not in STATEMENT_BANK_NAME_ALIASES:
+        return True
+    identity = _account_bank_identity(account_bank)
+    return identity is None or identity == statement_bank
 
 
 def _is_unparsed(trans: dict[str, Any]) -> bool:
@@ -412,6 +491,7 @@ class BankStatementImportService:
             if active is None:
                 return self._stopped_result()
             upload = active
+            self._verify_statement_bank(upload.account, parse_result.bank)
             if parse_result.account_number:
                 with audit_operation(
                     kind=AuditOperationKind.STATEMENT_IMPORT,
@@ -419,6 +499,7 @@ class BankStatementImportService:
                     self._match_account(
                         upload,
                         parse_result.account_number,
+                        parse_result.bank,
                     )
 
             upload.total_transactions = len(transactions)
@@ -1626,16 +1707,37 @@ class BankStatementImportService:
         row.refresh_from_db()
         return row
 
+    def _verify_statement_bank(
+        self,
+        account: Account,
+        statement_bank: str,
+    ) -> None:
+        """Reject a statement whose detected bank is another confirmed bank.
+
+        Raises:
+            BankStatementParseError: The account bank is confirmed and does
+                not match the detected statement bank.
+        """
+        if _account_bank_matches_statement(account.bank, statement_bank):
+            return
+        raise BankStatementParseError(
+            _(
+                'Банк выписки не совпадает с банком выбранного счёта.',
+            ),
+        )
+
     def _match_account(
         self,
         upload: BankStatementUpload,
         account_number: str,
+        statement_bank: str,
     ) -> None:
         """Pick the account by the statement number or record the number.
 
         Raises:
             BankStatementParseError: The selected account has another
-                number, or the number cannot be recorded.
+                number, the number cannot be recorded, or the found account
+                belongs to another confirmed bank.
         """
         account = upload.account
         if account.account_number == account_number:
@@ -1665,6 +1767,7 @@ class BankStatementImportService:
             raise BankStatementParseError(
                 _('Архивный счёт или счёт вклада недоступен для импорта.'),
             )
+        self._verify_statement_bank(matched, statement_bank)
         upload.account = matched
         try:
             with transaction.atomic():
