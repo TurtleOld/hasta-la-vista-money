@@ -50,6 +50,8 @@ class UploadControl:
     awaiting_markup: int
     requires_legacy_review: bool
     legacy_review_label: str
+    empty_parse: bool
+    empty_parse_label: str
 
 
 @dataclass(frozen=True)
@@ -309,11 +311,14 @@ class AccountingControlService:
             )
         )
         explicit_period = queryset.filter(
-            period_coverages__period_start__lte=period_end,
-            period_coverages__period_end__gte=period_start,
+            statement_period_from__isnull=False,
+            statement_period_to__isnull=False,
+            statement_period_from__lte=period_end,
+            statement_period_to__gte=period_start,
         )
         unknown_period = queryset.filter(
-            period_coverages__isnull=True,
+            Q(statement_period_from__isnull=True)
+            | Q(statement_period_to__isnull=True),
         ).filter(
             Q(created_at__date__range=(period_start, period_end))
             | Q(
@@ -359,6 +364,12 @@ class AccountingControlService:
             }
         else:
             legacy_label = ''
+        empty_parse = upload.total_transactions == 0 and upload.status in {
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            BankStatementUpload.Status.COMPLETED,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+            BankStatementUpload.Status.FAILED,
+        }
         return UploadControl(
             upload=upload,
             has_markup_rows=has_markup_rows,
@@ -376,4 +387,13 @@ class AccountingControlService:
             awaiting_markup=int(awaiting_by_upload.get(upload.pk, 0)),
             requires_legacy_review=requires_legacy_review,
             legacy_review_label=str(legacy_label),
+            empty_parse=empty_parse,
+            empty_parse_label=str(
+                _(
+                    'Пустой разбор: операции не найдены, покрытие не '
+                    'подтверждено.',
+                )
+                if empty_parse
+                else '',
+            ),
         )

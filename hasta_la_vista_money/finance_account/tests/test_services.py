@@ -304,12 +304,16 @@ class TestAccountServices(TestCase):
         *,
         total_transactions: int = 0,
         account: Account | None = None,
+        statement_period_from: date | None = None,
+        statement_period_to: date | None = None,
     ) -> BankStatementUpload:
         return BankStatementUpload.objects.create(
             user=self.user1,
             account=account or self.account1,
             pdf_file='bank_statements/control.pdf',
             total_transactions=total_transactions,
+            statement_period_from=statement_period_from,
+            statement_period_to=statement_period_to,
         )
 
     def _row(
@@ -580,6 +584,158 @@ class TestAccountServices(TestCase):
 
         self.assertEqual(control.uploads, ())
 
+    def test_control_shows_empty_statement_by_its_upload_period(self) -> None:
+        upload = self._upload(
+            total_transactions=0,
+            statement_period_from=date(2026, 1, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            created_at=datetime(
+                2026,
+                2,
+                15,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(len(control.uploads), 1)
+        item = control.uploads[0]
+        self.assertEqual(item.upload.pk, upload.pk)
+        self.assertTrue(item.empty_parse)
+        self.assertIn('Пустой разбор', item.empty_parse_label)
+        self.assertEqual(control.coverage.state, 'unknown')
+        self.assertEqual(control.coverage.intervals, ())
+
+    def test_control_uses_upload_period_after_revision_and_keeps_history(
+        self,
+    ) -> None:
+        upload = self._upload(
+            total_transactions=1,
+            statement_period_from=date(2026, 1, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        upload.statement_closing_balance = Decimal('900.00')
+        upload.balance_discrepancy = Decimal('10.00')
+        upload.save(
+            update_fields=[
+                'statement_closing_balance',
+                'balance_discrepancy',
+            ],
+        )
+        coverage_service = self.container.users.statement_coverage_service()
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        upload.statement_period_from = date(2026, 2, 1)
+        upload.statement_period_to = date(2026, 2, 28)
+        upload.save(
+            update_fields=[
+                'statement_period_from',
+                'statement_period_to',
+            ],
+        )
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        history = list(
+            StatementPeriodCoverage.objects.filter(
+                upload=upload,
+            ).order_by('period_start'),
+        )
+        control_service = self.container.users.accounting_control_service()
+
+        january = control_service.build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        february = control_service.build(
+            self.account1,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+
+        self.assertEqual(len(history), 2)
+        self.assertFalse(history[0].is_actual)
+        self.assertEqual(
+            history[0].revision_reason,
+            StatementPeriodCoverage.RevisionReason.PERIOD_REVISED,
+        )
+        self.assertTrue(history[1].is_actual)
+        self.assertEqual(january.uploads, ())
+        self.assertEqual(january.balance_checks, ())
+        self.assertFalse(january.balance.checked)
+        self.assertEqual(len(february.uploads), 1)
+        self.assertEqual(february.coverage.state, 'covered')
+        self.assertEqual(
+            february.coverage.intervals[0].period_start,
+            date(2026, 2, 1),
+        )
+
+    def test_retention_cleanup_keeps_actual_statement_and_manual_coverage(
+        self,
+    ) -> None:
+        upload = self._upload(
+            total_transactions=1,
+            statement_period_from=date(2026, 1, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        coverage_service = self.container.users.statement_coverage_service()
+        statement_coverage = coverage_service.record_statement_period(
+            upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        if statement_coverage is None:
+            self.fail('statement period was not recorded')
+        manual_coverage = coverage_service.confirm_manual(
+            self.user1,
+            self.account1,
+            date(2025, 12, 1),
+            date(2025, 12, 31),
+        )
+        upload.expires_at = timezone.now() - timedelta(seconds=1)
+        upload.save(update_fields=['expires_at'])
+
+        self.container.users.bank_statement_retention_service().cleanup_expired()
+        statement_coverage.refresh_from_db()
+        manual_coverage.refresh_from_db()
+        statement_summary = coverage_service.summary(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+        manual_summary = coverage_service.summary(
+            self.account1,
+            date(2025, 12, 1),
+            date(2025, 12, 31),
+        )
+
+        self.assertTrue(statement_coverage.is_actual)
+        self.assertEqual(statement_coverage.revision_reason, '')
+        self.assertTrue(manual_coverage.is_actual)
+        self.assertEqual(
+            manual_coverage.source,
+            StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+        )
+        self.assertEqual(manual_coverage.author, self.user1)
+        self.assertEqual(statement_summary.state, 'covered')
+        self.assertEqual(manual_summary.state, 'covered')
+
     def test_coverage_gaps_handle_maximum_date(self) -> None:
         service = self.container.users.statement_coverage_service()
         service.confirm_manual(
@@ -746,7 +902,13 @@ class TestAccountServices(TestCase):
         balance_type: str = BankStatementUpload.BalanceType.EXACT_MOMENT,
         bank_date: date | None = None,
     ) -> BankStatementUpload:
-        upload = self._upload(account=account, total_transactions=1)
+        period = moment.date() if moment is not None else bank_date
+        upload = self._upload(
+            account=account,
+            total_transactions=1,
+            statement_period_from=period,
+            statement_period_to=period,
+        )
         upload.statement_closing_balance = closing
         upload.balance_moment = moment
         upload.balance_bank_date = bank_date or (
@@ -763,17 +925,11 @@ class TestAccountServices(TestCase):
                 'balance_type',
             ],
         )
-        if moment is not None:
+        if period is not None:
             self.container.users.statement_coverage_service().record_statement_period(
                 upload,
-                moment.date(),
-                moment.date(),
-            )
-        elif bank_date is not None:
-            self.container.users.statement_coverage_service().record_statement_period(
-                upload,
-                bank_date,
-                bank_date,
+                period,
+                period,
             )
         return upload
 
