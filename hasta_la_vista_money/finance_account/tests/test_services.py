@@ -686,6 +686,137 @@ class TestAccountServices(TestCase):
             date(2026, 2, 1),
         )
 
+    def test_control_treats_reversed_upload_period_as_unknown(self) -> None:
+        upload = self._upload(
+            total_transactions=1,
+            statement_period_from=date(2026, 5, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            created_at=datetime(
+                2026,
+                6,
+                15,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        self._row(
+            upload,
+            1,
+            transaction_date=datetime(
+                2026,
+                2,
+                10,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+
+        self.assertEqual(len(control.uploads), 1)
+        self.assertEqual(control.uploads[0].upload.pk, upload.pk)
+
+    def test_control_does_not_select_reversed_period_as_explicit(self) -> None:
+        upload = self._upload(
+            total_transactions=1,
+            statement_period_from=date(2026, 5, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            created_at=datetime(
+                2026,
+                7,
+                15,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 6, 30),
+        )
+
+        self.assertEqual(control.uploads, ())
+
+    def test_control_keeps_legacy_upload_with_actual_coverage_only(
+        self,
+    ) -> None:
+        upload = self._upload(total_transactions=1)
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            created_at=datetime(
+                2026,
+                3,
+                15,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        coverage_service = self.container.users.statement_coverage_service()
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+
+        control_service = self.container.users.accounting_control_service()
+        february = control_service.build(
+            self.account1,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+        coverage_service.record_statement_period(
+            upload,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+        revised_february = control_service.build(
+            self.account1,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+        )
+
+        self.assertEqual(len(february.uploads), 1)
+        self.assertEqual(february.coverage.state, 'covered')
+        self.assertEqual(revised_february.uploads, ())
+
+    def test_control_does_not_label_failed_parse_as_empty(self) -> None:
+        upload = self._upload(
+            total_transactions=0,
+            statement_period_from=date(2026, 1, 1),
+            statement_period_to=date(2026, 1, 31),
+        )
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            created_at=datetime(
+                2026,
+                2,
+                15,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            status=BankStatementUpload.Status.FAILED,
+        )
+
+        control = self.container.users.accounting_control_service().build(
+            self.account1,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+        )
+
+        self.assertEqual(len(control.uploads), 1)
+        self.assertFalse(control.uploads[0].empty_parse)
+        self.assertEqual(control.uploads[0].empty_parse_label, '')
+
     def test_retention_cleanup_keeps_actual_statement_and_manual_coverage(
         self,
     ) -> None:

@@ -9,10 +9,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from hasta_la_vista_money.finance_account.models import (
+    StatementPeriodCoverage,
+)
 from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
@@ -310,16 +313,30 @@ class AccountingControlService:
                 ),
             )
         )
+        valid_upload_period = (
+            Q(statement_period_from__isnull=False)
+            & Q(statement_period_to__isnull=False)
+            & Q(statement_period_from__lte=F('statement_period_to'))
+        )
         explicit_period = queryset.filter(
-            statement_period_from__isnull=False,
-            statement_period_to__isnull=False,
+            valid_upload_period,
             statement_period_from__lte=period_end,
             statement_period_to__gte=period_start,
         )
-        unknown_period = queryset.filter(
-            Q(statement_period_from__isnull=True)
-            | Q(statement_period_to__isnull=True),
-        ).filter(
+        # Older uploads may predate the stored bounds. Only their actual
+        # bank statement confirmation keeps them in the historical report;
+        # a revised, non-actual interval never does.
+        legacy_coverage_period = queryset.filter(
+            ~valid_upload_period,
+            period_coverages__is_actual=True,
+            period_coverages__source=(
+                StatementPeriodCoverage.Source.BANK_STATEMENT
+            ),
+            period_coverages__upload__isnull=False,
+            period_coverages__period_start__lte=period_end,
+            period_coverages__period_end__gte=period_start,
+        )
+        unknown_period = queryset.filter(~valid_upload_period).filter(
             Q(created_at__date__range=(period_start, period_end))
             | Q(
                 statement_rows__transaction_date__date__range=(
@@ -333,7 +350,7 @@ class AccountingControlService:
             ),
         )
         return list(
-            (explicit_period | unknown_period)
+            (explicit_period | legacy_coverage_period | unknown_period)
             .distinct()
             .order_by('-created_at'),
         )
@@ -368,7 +385,6 @@ class AccountingControlService:
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
             BankStatementUpload.Status.COMPLETED,
             BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
-            BankStatementUpload.Status.FAILED,
         }
         return UploadControl(
             upload=upload,
