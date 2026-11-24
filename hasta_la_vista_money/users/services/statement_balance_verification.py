@@ -30,7 +30,7 @@ from hasta_la_vista_money.system.services.audit_context import (
 )
 from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.services.statement_completion import (
-    has_unresolved_rows,
+    has_open_rows,
 )
 
 if TYPE_CHECKING:
@@ -161,7 +161,7 @@ class StatementBalanceVerificationService:
         currency = upload.balance_currency
         kind = upload.balance_type
         moment = self._comparison_moment(upload)
-        unresolved = has_unresolved_rows(upload)
+        unresolved = has_open_rows(upload)
         reason = ''
         if unresolved:
             reason = BankStatementUpload.BalanceReason.UNRESOLVED_ROWS

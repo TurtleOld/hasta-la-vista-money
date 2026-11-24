@@ -4,6 +4,10 @@ Completion depends on saved row decisions and on a non-empty parse. A
 resolved row alone is not enough: every decision that still needs the
 owner keeps the statement open, and an empty parse never proves that the
 statement had no operations.
+
+Retention turns unresolved rows into ``EXPIRED``. That state stays open:
+the cleanup kept no bank payload to resolve, so only a proven replay or a
+new file can close it.
 """
 
 from typing import Final
@@ -22,21 +26,22 @@ UNRESOLVED_DECISIONS: Final = frozenset(
         BankStatementRow.Decision.NEEDS_TRANSFER,
     },
 )
+OPEN_DECISIONS: Final = UNRESOLVED_DECISIONS | {
+    BankStatementRow.Decision.EXPIRED,
+}
 
 
-def unresolved_rows(
-    upload: BankStatementUpload,
-) -> QuerySet[BankStatementRow]:
-    """Return rows whose decision still needs the owner's action."""
+def open_rows(upload: BankStatementUpload) -> QuerySet[BankStatementRow]:
+    """Return rows that still block calling the statement complete."""
     return BankStatementRow.objects.filter(
         upload=upload,
-        decision__in=UNRESOLVED_DECISIONS,
+        decision__in=OPEN_DECISIONS,
     )
 
 
-def has_unresolved_rows(upload: BankStatementUpload) -> bool:
-    """Return whether the upload keeps any unresolved saved row."""
-    return unresolved_rows(upload).exists()
+def has_open_rows(upload: BankStatementUpload) -> bool:
+    """Return whether the upload keeps any row that still blocks closure."""
+    return open_rows(upload).exists()
 
 
 def is_statement_complete(upload: BankStatementUpload) -> bool:
@@ -46,6 +51,6 @@ def is_statement_complete(upload: BankStatementUpload) -> bool:
     return (
         has_evidence
         and not rows.filter(
-            decision__in=UNRESOLVED_DECISIONS,
+            decision__in=OPEN_DECISIONS,
         ).exists()
     )

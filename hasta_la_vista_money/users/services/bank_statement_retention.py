@@ -30,6 +30,7 @@ from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
 from hasta_la_vista_money.users.services.statement_completion import (
+    OPEN_DECISIONS,
     UNRESOLVED_DECISIONS,
     is_statement_complete,
 )
@@ -139,6 +140,9 @@ class BankStatementRetentionService:
             unresolved_ids = [
                 row.pk for row in rows if row.decision in UNRESOLVED_DECISIONS
             ]
+            open_ids = [
+                row.pk for row in rows if row.decision in OPEN_DECISIONS
+            ]
             complete = is_statement_complete(upload)
             row_ids = [row.pk for row in rows]
             provenance = self._statement_audit_provenance(upload, rows)
@@ -194,7 +198,7 @@ class BankStatementRetentionService:
             upload.celery_task_id = ''
             upload.status = (
                 BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
-                if unresolved_ids
+                if open_ids
                 else (
                     BankStatementUpload.Status.FAILED
                     if upload.status == BankStatementUpload.Status.FAILED

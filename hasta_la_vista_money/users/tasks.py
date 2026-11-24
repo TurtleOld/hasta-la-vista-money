@@ -21,7 +21,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
 from hasta_la_vista_money.users.services.statement_completion import (
-    has_unresolved_rows,
+    has_open_rows,
     is_statement_complete,
 )
 
@@ -120,7 +120,7 @@ def _finalize_upload(
         upload.account.refresh_from_db(fields=['balance'])
         empty_parse = upload.total_transactions == 0
         complete = is_statement_complete(upload)
-        unresolved = has_unresolved_rows(upload)
+        unresolved = has_open_rows(upload)
         _store_statement_balance(upload, result)
 
         if empty_parse:

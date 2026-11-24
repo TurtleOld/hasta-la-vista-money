@@ -9537,6 +9537,82 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(decided.decision, BankStatementRow.Decision.NEW)
         self.assertEqual(Transaction.objects.count(), 1)
 
+    def test_partial_replay_keeps_expired_rows_open(self) -> None:
+        """A replay that restores fewer rows keeps the expired one open."""
+        moment = timezone.now()
+        known = {
+            'date': moment,
+            'amount': Decimal('-13.20'),
+            'description': 'Комиссия за обслуживание',
+            'source_ref': None,
+            'category_name': 'Комиссия банка',
+            'row_position': 0,
+        }
+        unknown = {
+            'date': moment,
+            'amount': Decimal('-25.00'),
+            'description': 'Оплата в MAGNIT',
+            'source_ref': None,
+            'category_name': None,
+            'row_position': 1,
+        }
+        upload = self._generic_upload(
+            [known, unknown],
+            file_hash='partial-replay',
+        )
+        upload.refresh_from_db()
+        expired = upload.statement_rows.get(source_row_position=1)
+        self.assertEqual(
+            expired.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        expired.refresh_from_db()
+        self.assertEqual(expired.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'partial-replay.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[known],
+                bank='generic',
+                format_version=2,
+            )
+            process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        expired.refresh_from_db()
+        self.assertEqual(expired.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
     def _replay_parse_result(
         self,
         moment: datetime,
