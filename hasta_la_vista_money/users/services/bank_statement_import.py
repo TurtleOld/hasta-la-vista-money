@@ -1727,6 +1727,7 @@ class BankStatementImportService:
                 ).update(source_ref_strength='weak')
             new_rows: dict[int, dict[str, Any]] = {}
             duplicates: list[tuple[dict[str, Any], int, ExactObservation]] = []
+            repeated_positions: set[int] = set()
             replay = restore_existing and upload.statement_rows.exists()
             for idx, trans in enumerate(transactions):
                 source_position = trans.get('row_position')
@@ -1783,14 +1784,7 @@ class BankStatementImportService:
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
                         continue
-                    # A bank-owned weak reference keeps the old suppression
-                    # for its unresolved repeats. An explicitly strong ref
-                    # keeps its own row instead, and weak banks already keep
-                    # every cross-file observation.
-                    if (
-                        bank not in WEAK_REFERENCE_BANKS
-                        and source_ref_strength != 'strong'
-                    ) and self._has_unresolved_observation(
+                    if self._has_unresolved_observation(
                         upload=upload,
                         bank=bank,
                         source_ref=trans.get('source_ref'),
@@ -1802,11 +1796,17 @@ class BankStatementImportService:
                         amount=abs(trans['amount']),
                         trans_date=trans['date'],
                     ):
-                        continue
+                        # Keep the separate unresolved trace for every
+                        # bank, but never auto-pair a repeat observation
+                        # with a new cancel from another upload.
+                        repeated_positions.add(position)
                 new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
             # mark up.
-            cancelled = _mutual_cancel_positions(new_rows)
+            cancelled = _mutual_cancel_positions(
+                new_rows,
+                excluded_positions=repeated_positions,
+            )
             rows = []
             for position, trans in new_rows.items():
                 amount = trans.get('amount')
@@ -2369,10 +2369,22 @@ class BankStatementImportService:
         return candidate.description or str(candidate.category.name)
 
 
-def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
-    """Pair each cancel with a debit of the same device owner and amount."""
+def _mutual_cancel_positions(
+    rows: dict[int, dict[str, Any]],
+    *,
+    excluded_positions: set[int] | None = None,
+) -> set[int]:
+    """Pair each cancel with a debit of the same device owner and amount.
+
+    A position listed in ``excluded_positions`` is a repeat observation of
+    an earlier upload, so automatic cancellation must leave both sides for
+    the user instead of closing them silently.
+    """
+    skipped = excluded_positions or set()
     debits: dict[tuple[str, Decimal], list[int]] = {}
     for idx, trans in rows.items():
+        if idx in skipped:
+            continue
         if trans.get('kind') == RosDorBankRowKind.CARD and trans['amount'] < 0:
             debits.setdefault(
                 (trans['description'], -trans['amount']),
@@ -2380,6 +2392,8 @@ def _mutual_cancel_positions(rows: dict[int, dict[str, Any]]) -> set[int]:
             ).append(idx)
     positions: set[int] = set()
     for idx, trans in rows.items():
+        if idx in skipped:
+            continue
         if trans.get('kind') != RosDorBankRowKind.CANCEL:
             continue
         matches = debits.get((trans['description'], trans['amount']))
