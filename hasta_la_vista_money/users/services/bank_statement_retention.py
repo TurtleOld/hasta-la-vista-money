@@ -8,10 +8,12 @@ fingerprints and the independent financial audit stay untouched.
 """
 
 from datetime import datetime
+from functools import partial
 from typing import Any, Final, NamedTuple
 
 import structlog
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from hasta_la_vista_money.system.audit_registry import (
@@ -97,15 +99,19 @@ class BankStatementRetentionService:
     def cleanup_expired(self, now: datetime | None = None) -> int:
         """Clean every expired upload once and return the cleaned count.
 
-        Each upload is isolated: a storage error on one leaves that upload
-        untouched for a later retry while the remaining uploads are still
-        cleaned.
+        Already cleaned uploads are revisited only to finish a PDF deletion
+        that failed earlier. Each upload is isolated: a storage error keeps
+        that path queued for a later run while the remaining uploads are
+        still cleaned.
         """
         deadline = now or timezone.now()
         upload_ids = list(
             BankStatementUpload.objects.filter(
-                expires_at__lte=deadline,
-                retention_cleaned_at__isnull=True,
+                Q(
+                    expires_at__lte=deadline,
+                    retention_cleaned_at__isnull=True,
+                )
+                | ~Q(retention_pending_pdf_paths=[]),
             ).values_list('pk', flat=True),
         )
         cleaned = 0
@@ -119,9 +125,11 @@ class BankStatementRetentionService:
 
         The deadline is re-read after the upload lock: a replay that
         attached the file and fixed a new deadline first wins and this run
-        does nothing. The PDF is deleted only after that check and before
-        the upload is marked cleaned, so a replay either happens before
-        cleanup or restores everything in one later run.
+        does not clean its bank data. The PDF path is queued in the same
+        transaction and deleted only after a successful commit, so a
+        rollback keeps both the file and the database consistent. A failed
+        storage delete leaves the path queued for a later run without
+        touching the cleaned bank data or writing another audit entry.
         """
         with transaction.atomic():
             upload = (
@@ -129,110 +137,164 @@ class BankStatementRetentionService:
                 .select_related('account', 'user')
                 .get(pk=upload_id)
             )
-            if upload.retention_cleaned_at is not None:
-                return False
-            if upload.expires_at > now:
-                return False
-            rows = list(
-                BankStatementRow.objects.select_for_update().filter(
-                    upload=upload,
-                ),
-            )
-            unresolved_ids = [
-                row.pk for row in rows if row.decision in UNRESOLVED_DECISIONS
-            ]
-            open_ids = [
-                row.pk for row in rows if row.decision in OPEN_DECISIONS
-            ]
-            complete = is_statement_complete(upload)
-            row_ids = [row.pk for row in rows]
-            provenance = self._statement_audit_provenance(upload, rows)
-
-            file_name = upload.pdf_file.name
-            if file_name:
-                try:
-                    upload.pdf_file.storage.delete(file_name)
-                except Exception:
-                    # This upload stays expired for a later retry; the rest
-                    # of the batch must still be cleaned.
-                    logger.exception(
-                        'bank_statement_retention_storage_failed',
-                        upload_id=upload.pk,
-                    )
-                    return False
-
-            if unresolved_ids:
-                BankStatementRow.objects.filter(
-                    pk__in=unresolved_ids,
-                ).update(
-                    decision=BankStatementRow.Decision.EXPIRED,
-                    decided_at=now,
+            cleaned = False
+            if upload.retention_cleaned_at is None and upload.expires_at <= now:
+                cleaned = self._clean_bank_data(upload, now)
+            if upload.retention_pending_pdf_paths:
+                transaction.on_commit(
+                    partial(self._delete_pending_pdfs, upload.pk),
                 )
-            BankStatementCandidate.objects.filter(row_id__in=row_ids).delete()
-            # The technical row position is not bank payload: it is the
-            # stable key a known-file replay uses to restore this row.
-            BankStatementRow.objects.filter(pk__in=row_ids).update(
-                transaction_type=None,
-                transaction_date=None,
-                amount=None,
-                description='',
-                candidate_description='',
-                suggested_category='',
-                merchant_key='',
-                counterparty_account='',
-                source_ref=None,
-                candidate=None,
-                kind='',
-                match_calendar_date=False,
+            return cleaned
+
+    def _clean_bank_data(
+        self,
+        upload: BankStatementUpload,
+        now: datetime,
+    ) -> bool:
+        """Remove one upload's bank payload inside its transaction."""
+        rows = list(
+            BankStatementRow.objects.select_for_update().filter(
+                upload=upload,
+            ),
+        )
+        unresolved_ids = [
+            row.pk for row in rows if row.decision in UNRESOLVED_DECISIONS
+        ]
+        open_ids = [row.pk for row in rows if row.decision in OPEN_DECISIONS]
+        complete = is_statement_complete(upload)
+        row_ids = [row.pk for row in rows]
+        provenance = self._statement_audit_provenance(upload, rows)
+
+        file_name = upload.pdf_file.name
+        pending_paths = list(upload.retention_pending_pdf_paths or [])
+        if file_name and file_name not in pending_paths:
+            pending_paths.append(file_name)
+
+        if unresolved_ids:
+            BankStatementRow.objects.filter(
+                pk__in=unresolved_ids,
+            ).update(
+                decision=BankStatementRow.Decision.EXPIRED,
+                decided_at=now,
             )
-            self._anonymize_audit_copies(upload, provenance)
-            self._clear_created_movement_references(provenance)
-            upload.pdf_file = ''
-            upload.retention_cleaned_at = now
-            upload.statement_closing_balance = None
-            upload.account_balance_after = None
-            upload.balance_discrepancy = None
-            upload.balance_is_actual = False
-            upload.balance_reason = (
-                BankStatementUpload.BalanceReason.BANK_DATA_CLEANED
-            )
-            upload.error_message = ''
-            upload.celery_task_id = ''
-            upload.status = (
-                BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
-                if open_ids
+        BankStatementCandidate.objects.filter(row_id__in=row_ids).delete()
+        # The technical row position is not bank payload: it is the
+        # stable key a known-file replay uses to restore this row.
+        BankStatementRow.objects.filter(pk__in=row_ids).update(
+            transaction_type=None,
+            transaction_date=None,
+            amount=None,
+            description='',
+            candidate_description='',
+            suggested_category='',
+            merchant_key='',
+            counterparty_account='',
+            source_ref=None,
+            candidate=None,
+            kind='',
+            match_calendar_date=False,
+        )
+        self._anonymize_audit_copies(upload, provenance)
+        self._clear_created_movement_references(provenance)
+        upload.pdf_file = ''
+        upload.retention_pending_pdf_paths = pending_paths
+        upload.retention_cleaned_at = now
+        upload.statement_closing_balance = None
+        upload.account_balance_after = None
+        upload.balance_discrepancy = None
+        upload.balance_is_actual = False
+        upload.balance_reason = (
+            BankStatementUpload.BalanceReason.BANK_DATA_CLEANED
+        )
+        upload.error_message = ''
+        upload.celery_task_id = ''
+        upload.status = (
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
+            if open_ids
+            else (
+                BankStatementUpload.Status.FAILED
+                if upload.status == BankStatementUpload.Status.FAILED
                 else (
-                    BankStatementUpload.Status.FAILED
-                    if upload.status == BankStatementUpload.Status.FAILED
-                    else (
-                        BankStatementUpload.Status.COMPLETED
-                        if complete
-                        else BankStatementUpload.Status.AWAITING_CONFIRMATION
-                    )
+                    BankStatementUpload.Status.COMPLETED
+                    if complete
+                    else BankStatementUpload.Status.AWAITING_CONFIRMATION
                 )
             )
-            upload.save(
-                update_fields=[
-                    'pdf_file',
-                    'retention_cleaned_at',
-                    'status',
-                    'statement_closing_balance',
-                    'account_balance_after',
-                    'balance_discrepancy',
-                    'balance_is_actual',
-                    'balance_reason',
-                    'error_message',
-                    'celery_task_id',
-                ],
-            )
-            self._record_anonymization(
-                upload,
-                len(rows),
-                len(unresolved_ids),
-                now,
-            )
-            self.reconciliation_service.refresh_outcome_counts(upload)
+        )
+        upload.save(
+            update_fields=[
+                'pdf_file',
+                'retention_pending_pdf_paths',
+                'retention_cleaned_at',
+                'status',
+                'statement_closing_balance',
+                'account_balance_after',
+                'balance_discrepancy',
+                'balance_is_actual',
+                'balance_reason',
+                'error_message',
+                'celery_task_id',
+            ],
+        )
+        self._record_anonymization(
+            upload,
+            len(rows),
+            len(unresolved_ids),
+            now,
+        )
+        self.reconciliation_service.refresh_outcome_counts(upload)
         return True
+
+    def _delete_pending_pdfs(self, upload_id: int) -> None:
+        """Delete queued PDF paths and keep only the failed ones queued.
+
+        The deletion runs after the cleanup transaction commits. Paths are
+        removed one by one from a stored outbox, so a process restart or a
+        repeated cleanup resumes the same work without touching the already
+        cleaned bank data or writing another audit entry. A snapshot is
+        taken before deleting, and only the paths actually deleted are
+        removed from the current outbox, so a path appended by a concurrent
+        cleanup survives.
+        """
+        upload = (
+            BankStatementUpload.objects.filter(pk=upload_id)
+            .only('retention_pending_pdf_paths')
+            .first()
+        )
+        if upload is None:
+            return
+        storage = upload.pdf_file.storage
+        deleted: set[str] = set()
+        for path in list(upload.retention_pending_pdf_paths or []):
+            try:
+                storage.delete(path)
+            except Exception:
+                logger.exception(
+                    'bank_statement_retention_storage_failed',
+                    upload_id=upload_id,
+                    file_name=path,
+                )
+                continue
+            deleted.add(path)
+        if not deleted:
+            return
+        with transaction.atomic():
+            locked = (
+                BankStatementUpload.objects.select_for_update()
+                .filter(pk=upload_id)
+                .only('retention_pending_pdf_paths')
+                .first()
+            )
+            if locked is None:
+                return
+            remaining = [
+                path
+                for path in (locked.retention_pending_pdf_paths or [])
+                if path not in deleted
+            ]
+            BankStatementUpload.objects.filter(pk=upload_id).update(
+                retention_pending_pdf_paths=remaining,
+            )
 
     @staticmethod
     def _statement_audit_provenance(

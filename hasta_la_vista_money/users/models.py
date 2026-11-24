@@ -348,6 +348,9 @@ class BankStatementUpload(Model):
     )
     expires_at = DateTimeField(default=bank_statement_expires_at)
     retention_cleaned_at = DateTimeField(blank=True, null=True)
+    # Paths whose bank data is already cleaned. Deletion is retried after
+    # a storage failure without restoring the statement.
+    retention_pending_pdf_paths = JSONField(default=list, blank=True)
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 

@@ -765,6 +765,25 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertIsNotNone(row.source_row_position)
         self.assertFalse(row.candidates.exists())
 
+    def assert_reuploaded_after_retention(
+        self,
+        task: MagicMock,
+        response: Any,
+        deadline: datetime,
+    ) -> None:
+        """Assert a replay reopens only the cleaned upload's file."""
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(BankStatementUpload.objects.count(), 1)
+        task.delay.assert_called_once()
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertGreater(self.upload.expires_at, deadline)
+        self.assertTrue(bool(self.upload.pdf_file))
+
     def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
         response = self.client.get(
             reverse(
@@ -1310,8 +1329,10 @@ class TestBankStatementReconciliationView(TestCase):
         )
         self.assertEqual(before_count, 0)
         self.assertTrue(storage.exists(file_name))
-        first_count = retention_service.cleanup_expired(deadline)
-        second_count = retention_service.cleanup_expired(deadline)
+        with self.captureOnCommitCallbacks(execute=True):
+            first_count = retention_service.cleanup_expired(deadline)
+        with self.captureOnCommitCallbacks(execute=True):
+            second_count = retention_service.cleanup_expired(deadline)
 
         self.assertEqual(first_count, 1)
         self.assertEqual(second_count, 0)
@@ -1352,19 +1373,9 @@ class TestBankStatementReconciliationView(TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(BankStatementUpload.objects.count(), 1)
-        task.delay.assert_called_once()
-        self.upload.refresh_from_db()
-        self.assertEqual(
-            self.upload.processing_mode,
-            BankStatementUpload.ProcessingMode.RECONCILIATION,
-        )
-        self.assertIsNone(self.upload.retention_cleaned_at)
-        self.assertGreater(self.upload.expires_at, deadline)
-        self.assertTrue(bool(self.upload.pdf_file))
+        self.assert_reuploaded_after_retention(task, response, deadline)
 
-    def test_cleanup_failure_keeps_pending_row_and_can_be_retried(
+    def test_cleanup_failure_isolated_per_upload_and_can_be_retried(
         self,
     ) -> None:
         self.upload.pdf_file.save(
@@ -1384,6 +1395,7 @@ class TestBankStatementReconciliationView(TestCase):
                 content_type='application/pdf',
             ),
         )
+        second_file_name = second.pdf_file.name
         deadline = timezone.now()
         BankStatementUpload.objects.filter(
             pk__in=[self.upload.pk, second.pk],
@@ -1400,28 +1412,314 @@ class TestBankStatementReconciliationView(TestCase):
                 raise OSError('storage unavailable')
             real_delete(name)
 
-        with patch.object(
-            storage,
-            'delete',
-            side_effect=fail_only_retry_file,
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=fail_only_retry_file,
+            ),
+            self.captureOnCommitCallbacks(execute=True),
         ):
             cleaned = retention_service.cleanup_expired(deadline)
 
-        self.assertEqual(cleaned, 1)
+        self.assertEqual(cleaned, 2)
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertTrue(storage.exists(retry_file_name))
+        second.refresh_from_db()
+        self.assertIsNotNone(second.retention_cleaned_at)
+        self.assertFalse(storage.exists(second_file_name))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            cleaned = retention_service.cleanup_expired(deadline)
+
+        self.assertEqual(cleaned, 0)
+        self.row.refresh_from_db()
+        self.assertFalse(storage.exists(retry_file_name))
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_cleanup_rollback_keeps_pdf_and_database_state(self) -> None:
+        """A failed cleanup transaction must not delete the stored PDF."""
+        pdf_content = b'%PDF-1.4 rollback statement'
+        self.upload.pdf_file.save(
+            'rollback-retention.pdf',
+            SimpleUploadedFile(
+                'rollback-retention.pdf',
+                pdf_content,
+                content_type='application/pdf',
+            ),
+        )
+        file_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+        audit_count = AuditLog.objects.filter(
+            kind=AuditOperationKind.STATEMENT_RETENTION,
+        ).count()
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+
+        with (
+            patch.object(
+                BankStatementRetentionService,
+                '_record_anonymization',
+                side_effect=RuntimeError('forced rollback'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            retention_service.cleanup_expired(deadline)
+
         self.upload.refresh_from_db()
         self.row.refresh_from_db()
         self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.upload.pdf_file.name, file_name)
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [])
+        self.assertTrue(storage.exists(file_name))
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
-        self.assertEqual(Transaction.objects.count(), 1)
-        second.refresh_from_db()
-        self.assertIsNotNone(second.retention_cleaned_at)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                kind=AuditOperationKind.STATEMENT_RETENTION,
+            ).count(),
+            audit_count,
+        )
 
-        cleaned = retention_service.cleanup_expired(deadline)
+    def test_storage_error_retries_pdf_deletion_without_repeating_cleanup(
+        self,
+    ) -> None:
+        """A cleaned upload keeps only its PDF path for a later retry."""
+        pdf_content = b'%PDF-1.4 storage error statement'
+        self.upload.pdf_file.save(
+            'storage-error-retention.pdf',
+            SimpleUploadedFile(
+                'storage-error-retention.pdf',
+                pdf_content,
+                content_type='application/pdf',
+            ),
+        )
+        file_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
 
-        self.assertEqual(cleaned, 1)
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            first_count = retention_service.cleanup_expired(deadline)
+
+        self.assertEqual(first_count, 1)
+        self.upload.refresh_from_db()
         self.row.refresh_from_db()
+        cleaned_at = self.upload.retention_cleaned_at
+        self.assertIsNotNone(cleaned_at)
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [file_name])
         self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                kind=AuditOperationKind.STATEMENT_RETENTION,
+            ).count(),
+            1,
+        )
+        self.assertTrue(storage.exists(file_name))
+
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            repeated_count = retention_service.cleanup_expired(deadline)
+        self.assertEqual(repeated_count, 0)
+        self.assertTrue(storage.exists(file_name))
+
+        restarted_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            retry_count = restarted_service.cleanup_expired(
+                deadline + timedelta(seconds=1),
+            )
+
+        self.assertEqual(retry_count, 0)
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertFalse(storage.exists(file_name))
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [])
+        self.assertEqual(self.upload.retention_cleaned_at, cleaned_at)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                kind=AuditOperationKind.STATEMENT_RETENTION,
+            ).count(),
+            1,
+        )
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_pending_deletion_after_reupload_keeps_the_new_pdf(self) -> None:
+        """A retried delete of the old file must not touch a new upload."""
+        old_content = b'%PDF-1.4 old retention statement'
+        self.upload.pdf_file.save(
+            'old-retention.pdf',
+            SimpleUploadedFile(
+                'old-retention.pdf',
+                old_content,
+                content_type='application/pdf',
+            ),
+        )
+        old_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        deadline = timezone.now()
+        self.upload.file_hash = sha256(old_content).hexdigest()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['file_hash', 'expires_at'])
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            retention_service.cleanup_expired(deadline)
+
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [old_name])
+
+        new_content = b'%PDF-1.4 reuploaded statement'
+        replayed = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            replayed.prepare_known_replay(
+                self.upload,
+                SimpleUploadedFile(
+                    'new-retention.pdf',
+                    new_content,
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        self.upload.refresh_from_db()
+        new_name = self.upload.pdf_file.name
+        self.assertNotEqual(new_name, old_name)
+        self.assertTrue(storage.exists(new_name))
+        self.assertIsNone(self.upload.retention_cleaned_at)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            retry_count = retention_service.cleanup_expired(
+                deadline + timedelta(seconds=1),
+            )
+
+        self.assertEqual(retry_count, 0)
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertFalse(storage.exists(old_name))
+        self.assertTrue(storage.exists(new_name))
+        self.assertEqual(self.upload.pdf_file.name, new_name)
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [])
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                kind=AuditOperationKind.STATEMENT_RETENTION,
+            ).count(),
+            1,
+        )
+
+    def test_reupload_during_pending_delete_keeps_the_new_pdf(self) -> None:
+        """A re-upload racing a queued old delete survives that delete."""
+        old_content = b'%PDF-1.4 racing old statement'
+        self.upload.pdf_file.save(
+            'racing-old.pdf',
+            SimpleUploadedFile(
+                'racing-old.pdf',
+                old_content,
+                content_type='application/pdf',
+            ),
+        )
+        old_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        deadline = timezone.now()
+        self.upload.file_hash = sha256(old_content).hexdigest()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['file_hash', 'expires_at'])
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            retention_service.cleanup_expired(deadline)
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [old_name])
+
+        new_name: str | None = None
+        real_delete = storage.delete
+
+        def reupload_before_delete(name: str) -> None:
+            nonlocal new_name
+            if name == old_name:
+                replayed = (
+                    ApplicationContainer().users.bank_statement_import_service()
+                )
+                replayed.prepare_known_replay(
+                    self.upload,
+                    SimpleUploadedFile(
+                        'racing-new.pdf',
+                        b'%PDF-1.4 racing new statement',
+                        content_type='application/pdf',
+                    ),
+                )
+                self.upload.refresh_from_db()
+                new_name = self.upload.pdf_file.name
+            real_delete(name)
+
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=reupload_before_delete,
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            retry_count = retention_service.cleanup_expired(
+                deadline + timedelta(seconds=1),
+            )
+
+        self.assertEqual(retry_count, 0)
+        self.upload.refresh_from_db()
+        if new_name is None:
+            self.fail('The re-upload did not attach a new file')
+        self.assertNotEqual(new_name, old_name)
+        self.assertFalse(storage.exists(old_name))
+        self.assertTrue(storage.exists(new_name))
+        self.assertEqual(self.upload.pdf_file.name, new_name)
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.upload.retention_pending_pdf_paths, [])
 
     def test_retention_anonymizes_only_statement_audit_copies(self) -> None:
         """Bank copies in audit are scrubbed; independent audit is untouched."""
