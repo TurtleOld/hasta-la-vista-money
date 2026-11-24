@@ -48,6 +48,7 @@ from hasta_la_vista_money.transactions.models import (
 from hasta_la_vista_money.users.forms import UpdateUserForm
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
+    BankStatementDecisionAudit,
     BankStatementRow,
     BankStatementUpload,
     FamilyGroupMembership,
@@ -1458,6 +1459,156 @@ class TestBankStatementReconciliationView(TestCase):
         for bank_value in ('77.00', 'Секретный', 'secret-bank-ref'):
             with self.subTest(value=bank_value):
                 self.assertNotIn(bank_value, retention_text)
+
+    def test_cleanup_clears_source_ref_of_created_movement_only(self) -> None:
+        """Retention removes the raw bank ref from the created movement."""
+        self.upload.file_hash = 'retention-created-file'
+        self.upload.save(update_fields=['file_hash'])
+        created = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('120.00'),
+            date=self.candidate.date,
+            description='Банковская покупка',
+            source_ref='new-source',
+            source_fingerprint='created-fingerprint',
+            source_fingerprint_key_version='k2',
+            source_file_hash=self.upload.file_hash,
+            source_row_position=0,
+        )
+        self.row.transaction = created
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.source_fingerprint = 'created-fingerprint'
+        self.row.source_fingerprint_key_version = 'k2'
+        self.row.save(
+            update_fields=[
+                'transaction',
+                'decision',
+                'source_fingerprint',
+                'source_fingerprint_key_version',
+            ],
+        )
+        linked = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('50.00'),
+            date=self.candidate.date,
+            description='Уже существующая операция',
+            source_ref='linked-bank-ref',
+        )
+        BankStatementRow.objects.create(
+            upload=self.upload,
+            source_row_position=1,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=self.candidate.date,
+            amount=Decimal('50.00'),
+            description='Связанная строка',
+            source_ref='linked-row-ref',
+            transaction=linked,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        foreign = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('30.00'),
+            date=self.candidate.date,
+            description='Ручная операция',
+            source_ref='manual-bank-ref',
+        )
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(deadline)
+
+        created.refresh_from_db()
+        linked.refresh_from_db()
+        foreign.refresh_from_db()
+        self.assertIsNone(created.source_ref)
+        self.assertEqual(created.source_fingerprint, 'created-fingerprint')
+        self.assertEqual(created.source_fingerprint_key_version, 'k2')
+        self.assertEqual(created.source_file_hash, self.upload.file_hash)
+        self.assertEqual(created.source_row_position, 0)
+        self.assertEqual(linked.source_ref, 'linked-bank-ref')
+        self.assertEqual(foreign.source_ref, 'manual-bank-ref')
+
+    def test_cleanup_keeps_legacy_decision_and_independent_audit(
+        self,
+    ) -> None:
+        """An old movement without fingerprints keeps its decision history."""
+        legacy = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('120.00'),
+            date=self.candidate.date,
+            description='Старая банковская покупка',
+            source_ref='legacy-bank-ref',
+        )
+        self.row.transaction = legacy
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.source_ref = 'legacy-bank-ref'
+        self.row.source_fingerprint = ''
+        self.row.save(
+            update_fields=[
+                'transaction',
+                'decision',
+                'source_ref',
+                'source_fingerprint',
+            ],
+        )
+        decision_audit = BankStatementDecisionAudit.objects.create(
+            row=self.row,
+            decision=BankStatementRow.Decision.NEW,
+            previous_decision=BankStatementRow.Decision.PENDING,
+            transaction=legacy,
+        )
+        independent = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('10.00'),
+            date=self.candidate.date,
+            description='Независимая ручная операция',
+        )
+        independent_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(independent.pk),
+        )
+        independent_diff = independent_audit.diff
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(deadline)
+
+        legacy.refresh_from_db()
+        decision_audit.refresh_from_db()
+        self.assertIsNone(legacy.source_ref)
+        self.assertEqual(legacy.source_fingerprint, '')
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(self.row.transaction, legacy)
+        self.assertEqual(decision_audit.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            decision_audit.previous_decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertEqual(decision_audit.transaction, legacy)
+        independent_audit.refresh_from_db()
+        self.assertEqual(independent_audit.diff, independent_diff)
 
     def test_cleanup_does_not_reach_shared_fingerprint_of_other_upload(
         self,
@@ -10157,6 +10308,240 @@ class TestBankStatementImportReliability(TestCase):
                             is_actual=True,
                         ).exists(),
                     )
+
+    def test_known_file_replay_after_cleanup_keeps_single_movement(
+        self,
+    ) -> None:
+        """A retained known file replays without a second movement."""
+        moment = datetime(2026, 2, 1, 10, tzinfo=UTC)
+        parse_result = self._replay_parse_result(moment, source_ref='R-KEEP')
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/replay-keep.pdf',
+            file_hash='replay-keep-file',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(args=[upload.pk])
+        row = BankStatementRow.objects.get(upload=upload)
+        movement = cast('Transaction', row.transaction)
+        fingerprint = movement.source_fingerprint
+        self.assertEqual(movement.source_ref, 'R-KEEP')
+        self.assertTrue(fingerprint)
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        movement.refresh_from_db()
+        self.assertIsNone(movement.source_ref)
+        self.assertEqual(movement.source_fingerprint, fingerprint)
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'replay-keep.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
+
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        movement.refresh_from_db()
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(row.transaction, movement)
+        self.assertEqual(row.source_ref, 'R-KEEP')
+        self.assertIsNone(movement.source_ref)
+        self.assertEqual(movement.source_fingerprint, fingerprint)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+
+    def test_overlapping_statement_after_cleanup_creates_no_movement(
+        self,
+    ) -> None:
+        """A retained first statement still proves the overlap."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        first = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-RETAINED',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='retained-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        first.refresh_from_db()
+        first_row = BankStatementRow.objects.get(upload=first)
+        self.assertEqual(first_row.decision, BankStatementRow.Decision.NEW)
+        movement = cast('Transaction', first_row.transaction)
+
+        BankStatementUpload.objects.filter(pk=first.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        movement.refresh_from_db()
+        self.assertIsNone(movement.source_ref)
+        self.assertTrue(movement.source_fingerprint)
+
+        second = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-RETAINED',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+                {
+                    'date': moment + timedelta(days=1),
+                    'amount': Decimal('-40.00'),
+                    'description': 'Оплата в MAGNIT',
+                    'source_ref': 'R-OVERLAP-NEW',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Продукты',
+                    'row_position': 1,
+                },
+            ],
+            file_hash='retained-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+
+        second.refresh_from_db()
+        known = BankStatementRow.objects.get(
+            upload=second,
+            source_ref='R-RETAINED',
+        )
+        new = BankStatementRow.objects.get(
+            upload=second,
+            source_ref='R-OVERLAP-NEW',
+        )
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertEqual(known.decision, BankStatementRow.Decision.DUPLICATE)
+        self.assertEqual(known.canonical_row, first_row)
+        self.assertEqual(
+            new.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+
+    def test_legacy_retained_overlap_without_fingerprint_stays_manual(
+        self,
+    ) -> None:
+        """A legacy movement without technical proof stays for manual review."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        first = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-LEGACY',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='legacy-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        first_row = BankStatementRow.objects.get(upload=first)
+        movement = cast('Transaction', first_row.transaction)
+        Transaction.objects.filter(pk=movement.pk).update(
+            source_fingerprint='',
+            source_fingerprint_key_version='',
+            source_fingerprint_format_version=0,
+            source_format_version=0,
+            source_file_hash=None,
+            source_row_position=None,
+        )
+        BankStatementRow.objects.filter(pk=first_row.pk).update(
+            source_fingerprint='',
+            source_fingerprint_key_version='',
+            source_fingerprint_format_version=0,
+            source_format_version=0,
+        )
+
+        BankStatementUpload.objects.filter(pk=first.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        movement.refresh_from_db()
+        first_row.refresh_from_db()
+        self.assertIsNone(movement.source_ref)
+        self.assertEqual(movement.source_fingerprint, '')
+        self.assertIsNone(movement.source_file_hash)
+        self.assertIsNone(movement.source_row_position)
+        self.assertIsNone(first_row.source_ref)
+        self.assertEqual(first_row.source_fingerprint, '')
+
+        second = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-LEGACY',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='legacy-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+
+        second.refresh_from_db()
+        row = BankStatementRow.objects.get(
+            upload=second,
+            source_ref='R-LEGACY',
+        )
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(first_row.transaction, movement)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('986.80'))
 
 
 class TestStatementBankVerification(TestCase):
