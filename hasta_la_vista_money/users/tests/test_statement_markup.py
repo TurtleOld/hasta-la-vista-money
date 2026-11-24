@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 from django.urls import reverse
@@ -99,7 +100,92 @@ class StatementMarkupTest(StatementMarkupFixture):
             local.date(),
             datetime(2026, 3, 1, tzinfo=timezone.get_current_timezone()).date(),
         )
-        self.assertNotEqual((local.hour, local.minute), (0, 0))
+        # A date-only statement is normalized to midnight by the parser.
+        self.assertEqual((local.hour, local.minute), (0, 0))
+
+    def test_post_keeps_known_bank_time_for_same_date(self) -> None:
+        first = self._row(1)
+        second = self._row(2)
+        for row, hour, minute in ((first, 9, 10), (second, 18, 45)):
+            row.transaction_date = datetime(
+                2026,
+                3,
+                1,
+                hour,
+                minute,
+                tzinfo=timezone.get_current_timezone(),
+            )
+            row.save(update_fields=['transaction_date'])
+        category = self._category('Продукты')
+
+        self.service.post(first.pk, self.user.pk, category.pk)
+        self.service.post(second.pk, self.user.pk, category.pk)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        first_movement = first.transaction
+        second_movement = second.transaction
+        if first_movement is None or second_movement is None:
+            self.fail('row is not linked to a movement')
+        local = [
+            timezone.localtime(first_movement.date),
+            timezone.localtime(second_movement.date),
+        ]
+        self.assertEqual(local[0].date(), local[1].date())
+        self.assertEqual((local[0].hour, local[0].minute), (9, 10))
+        self.assertEqual((local[1].hour, local[1].minute), (18, 45))
+        self.assertEqual(local[0].date(), date(2026, 3, 1))
+
+    def test_date_only_movement_does_not_depend_on_markup_time(self) -> None:
+        first = self._row(1)
+        second = self._row(2)
+        category = self._category('Продукты')
+        expected = datetime(
+            2026,
+            3,
+            1,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        moments = []
+        for row, hour in ((first, 9), (second, 20)):
+            markup_time = timezone.now().replace(
+                hour=hour,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            with mock.patch(
+                'django.utils.timezone.now',
+                return_value=markup_time,
+            ):
+                self.service.post(row.pk, self.user.pk, category.pk)
+            row.refresh_from_db()
+            movement = row.transaction
+            if movement is None:
+                self.fail('row is not linked to a movement')
+            moments.append(timezone.localtime(movement.date))
+
+        self.assertEqual(moments[0], expected)
+        self.assertEqual(moments[1], expected)
+
+    def test_decision_for_row_without_date_keeps_it_empty(self) -> None:
+        row = self._row(1)
+        BankStatementRow.objects.filter(pk=row.pk).update(
+            transaction_date=None,
+        )
+        before = timezone.now()
+
+        self.service.exclude(row.pk, self.user.pk, EXCLUSION_CODE)
+
+        row.refresh_from_db()
+        self.assertIsNone(row.transaction_date)
+        self.assertIsNotNone(row.decided_at)
+        if row.decided_at is None:
+            self.fail('decision did not record the user action time')
+        self.assertGreaterEqual(row.decided_at, before)
+        audit = BankStatementDecisionAudit.objects.get(row=row)
+        self.assertIsNotNone(audit.created_at)
+        self.assertGreaterEqual(audit.created_at, before)
 
     def test_post_income_adds_to_balance(self) -> None:
         row = self._row(1, transaction_type='income')
@@ -377,8 +463,9 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         transaction_type: str = 'expense',
         counterparty: str = OWN_NUMBER,
         kind: str = 'own_c2c',
+        position: int = 1,
     ) -> BankStatementRow:
-        row = self._row(1, transaction_type, kind)
+        row = self._row(position, transaction_type, kind)
         row.counterparty_account = counterparty
         row.save(update_fields=['counterparty_account'])
         return row
@@ -400,6 +487,60 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         self.assertEqual(transfer.from_account, self.account)
         self.assertEqual(transfer.to_account, self.other)
         self.assertIsNone(row.transaction)
+
+    def test_transfer_keeps_known_bank_time(self) -> None:
+        row = self._own_row()
+        moment = datetime(
+            2026,
+            3,
+            1,
+            16,
+            25,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        row.transaction_date = moment
+        row.save(update_fields=['transaction_date'])
+
+        self.service.post_transfer(row.pk, self.user.pk, None)
+
+        row.refresh_from_db()
+        transfer = row.transfer
+        if transfer is None:
+            self.fail('row is not linked to a transfer')
+        local = timezone.localtime(transfer.exchange_date)
+        self.assertEqual(local.date(), date(2026, 3, 1))
+        self.assertEqual((local.hour, local.minute), (16, 25))
+
+    def test_date_only_transfer_does_not_depend_on_markup_time(self) -> None:
+        first = self._own_row(position=1)
+        second = self._own_row(position=2)
+        expected = datetime(
+            2026,
+            3,
+            1,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        moments = []
+        for row, hour in ((first, 9), (second, 20)):
+            markup_time = timezone.now().replace(
+                hour=hour,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            with mock.patch(
+                'django.utils.timezone.now',
+                return_value=markup_time,
+            ):
+                self.service.post_transfer(row.pk, self.user.pk, None)
+            row.refresh_from_db()
+            transfer = row.transfer
+            if transfer is None:
+                self.fail('row is not linked to a transfer')
+            moments.append(timezone.localtime(transfer.exchange_date))
+
+        self.assertEqual(moments[0], expected)
+        self.assertEqual(moments[1], expected)
 
     def test_income_row_transfers_from_chosen_account(self) -> None:
         row = self._own_row('income')
