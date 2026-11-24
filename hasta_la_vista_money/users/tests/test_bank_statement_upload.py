@@ -10357,7 +10357,9 @@ class TestBankStatementImportReliability(TestCase):
             'BankStatementParser',
         ) as parser:
             parser.return_value.parse.return_value = parse_result
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
 
         upload.refresh_from_db()
         row.refresh_from_db()
@@ -10451,6 +10453,93 @@ class TestBankStatementImportReliability(TestCase):
             BankStatementRow.Decision.AWAITING_MARKUP,
         )
         self.assertEqual(Transaction.objects.count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('986.80'))
+
+    def test_legacy_retained_overlap_without_fingerprint_stays_manual(
+        self,
+    ) -> None:
+        """A legacy movement without technical proof stays for manual review."""
+        moment = datetime(2026, 1, 10, 10, tzinfo=UTC)
+        first = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-LEGACY',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='legacy-first',
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        first_row = BankStatementRow.objects.get(upload=first)
+        movement = cast('Transaction', first_row.transaction)
+        Transaction.objects.filter(pk=movement.pk).update(
+            source_fingerprint='',
+            source_fingerprint_key_version='',
+            source_fingerprint_format_version=0,
+            source_format_version=0,
+            source_file_hash=None,
+            source_row_position=None,
+        )
+        BankStatementRow.objects.filter(pk=first_row.pk).update(
+            source_fingerprint='',
+            source_fingerprint_key_version='',
+            source_fingerprint_format_version=0,
+            source_format_version=0,
+        )
+
+        BankStatementUpload.objects.filter(pk=first.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        movement.refresh_from_db()
+        first_row.refresh_from_db()
+        self.assertIsNone(movement.source_ref)
+        self.assertEqual(movement.source_fingerprint, '')
+        self.assertIsNone(movement.source_file_hash)
+        self.assertIsNone(movement.source_row_position)
+        self.assertIsNone(first_row.source_ref)
+        self.assertEqual(first_row.source_fingerprint, '')
+
+        second = self._raiffeisen_upload(
+            [
+                {
+                    'date': moment,
+                    'amount': Decimal('-13.20'),
+                    'description': 'Комиссия за обслуживание',
+                    'source_ref': 'R-LEGACY',
+                    'source_ref_strength': 'strong',
+                    'category_name': 'Комиссия банка',
+                    'row_position': 0,
+                },
+            ],
+            file_hash='legacy-second',
+            period_start=date(2026, 1, 15),
+            period_end=date(2026, 2, 15),
+        )
+
+        second.refresh_from_db()
+        row = BankStatementRow.objects.get(
+            upload=second,
+            source_ref='R-LEGACY',
+        )
+        self.assertEqual(
+            second.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertIsNone(row.transaction)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(first_row.transaction, movement)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('986.80'))
 
