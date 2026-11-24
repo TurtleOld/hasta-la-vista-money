@@ -1783,6 +1783,26 @@ class BankStatementImportService:
                     if exact is not None and not exact.conflict:
                         duplicates.append((trans, position, exact))
                         continue
+                    # A bank-owned weak reference keeps the old suppression
+                    # for its unresolved repeats. An explicitly strong ref
+                    # keeps its own row instead, and weak banks already keep
+                    # every cross-file observation.
+                    if (
+                        bank not in WEAK_REFERENCE_BANKS
+                        and source_ref_strength != 'strong'
+                    ) and self._has_unresolved_observation(
+                        upload=upload,
+                        bank=bank,
+                        source_ref=trans.get('source_ref'),
+                        type_value=(
+                            TransactionType.INCOME
+                            if trans['amount'] > 0
+                            else TransactionType.EXPENSE
+                        ),
+                        amount=abs(trans['amount']),
+                        trans_date=trans['date'],
+                    ):
+                        continue
                 new_rows[position] = trans
             # A cancel of a debit from an earlier upload is an income to
             # mark up.
