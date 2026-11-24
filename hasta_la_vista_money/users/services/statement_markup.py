@@ -57,6 +57,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
+from hasta_la_vista_money.users.services.statement_completion import (
+    is_statement_complete,
+)
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
@@ -555,7 +558,7 @@ class StatementMarkupService:
 
     def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if self.pending_rows(upload).exists():
+        if not is_statement_complete(upload):
             return
         upload.status = BankStatementUpload.Status.COMPLETED
         upload.save(update_fields=['status'])

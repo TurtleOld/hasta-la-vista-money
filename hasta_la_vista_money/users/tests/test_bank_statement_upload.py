@@ -836,6 +836,72 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.upload.linked_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
 
+    def test_last_pending_decision_keeps_unresolved_upload_open(
+        self,
+    ) -> None:
+        url = reverse(
+            'finance_account:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+        candidate = BankStatementCandidate.objects.get(row=self.row)
+        for unresolved in (
+            BankStatementRow.Decision.AWAITING_MARKUP,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        ):
+            with self.subTest(unresolved=unresolved):
+                self.upload.statement_rows.exclude(pk=self.row.pk).delete()
+                BankStatementRow.objects.filter(pk=self.row.pk).update(
+                    decision=BankStatementRow.Decision.PENDING,
+                    transaction=None,
+                    transfer=None,
+                    decided_at=None,
+                )
+                BankStatementRow.objects.create(
+                    upload=self.upload,
+                    transaction_type=TransactionType.EXPENSE,
+                    transaction_date=timezone.now(),
+                    amount=Decimal('25.00'),
+                    description='Нерешённая строка',
+                    source_row_position=10,
+                    decision=unresolved,
+                )
+                BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+                    status=(BankStatementUpload.Status.AWAITING_CONFIRMATION),
+                )
+
+                response = self.client.post(
+                    url,
+                    {'decision': 'linked', 'candidate': candidate.pk},
+                )
+
+                self.assertEqual(response.status_code, 302)
+                self.upload.refresh_from_db()
+                self.assertEqual(
+                    self.upload.status,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                )
+
+    def test_retention_keeps_empty_parse_unconfirmed(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/empty-retention.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            total_transactions=0,
+            expires_at=timezone.now(),
+        )
+
+        BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        ).cleanup_expired(timezone.now() + timedelta(seconds=1))
+
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
     def test_multiple_candidates_are_not_preselected(self) -> None:
         second = Transaction.objects.create(
             user=self.user,
@@ -9621,6 +9687,84 @@ class TestBankStatementImportReliability(TestCase):
 
         self.assertEqual(decided.decision, BankStatementRow.Decision.NEW)
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_partial_replay_keeps_expired_rows_open(self) -> None:
+        """A replay that restores fewer rows keeps the expired one open."""
+        moment = timezone.now()
+        known = {
+            'date': moment,
+            'amount': Decimal('-13.20'),
+            'description': 'Комиссия за обслуживание',
+            'source_ref': None,
+            'category_name': 'Комиссия банка',
+            'row_position': 0,
+        }
+        unknown = {
+            'date': moment,
+            'amount': Decimal('-25.00'),
+            'description': 'Оплата в MAGNIT',
+            'source_ref': None,
+            'category_name': None,
+            'row_position': 1,
+        }
+        upload = self._generic_upload(
+            [known, unknown],
+            file_hash='partial-replay',
+        )
+        upload.refresh_from_db()
+        expired = upload.statement_rows.get(source_row_position=1)
+        self.assertEqual(
+            expired.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            expires_at=timezone.now(),
+        )
+        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        upload.refresh_from_db()
+        expired.refresh_from_db()
+        self.assertEqual(expired.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'partial-replay.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[known],
+                bank='generic',
+                format_version=2,
+            )
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
+
+        upload.refresh_from_db()
+        expired.refresh_from_db()
+        self.assertEqual(expired.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
 
     def _replay_parse_result(
         self,

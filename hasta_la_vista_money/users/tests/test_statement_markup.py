@@ -340,6 +340,43 @@ class StatementMarkupTest(StatementMarkupFixture):
             BankStatementUpload.Status.COMPLETED,
         )
 
+    def test_last_markup_row_keeps_upload_unconfirmed_while_rows_unresolved(
+        self,
+    ) -> None:
+        for unresolved in (
+            BankStatementRow.Decision.PENDING,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        ):
+            with self.subTest(unresolved=unresolved):
+                self.upload.statement_rows.all().delete()
+                row = self._row(1)
+                BankStatementRow.objects.create(
+                    upload=self.upload,
+                    transaction_type='expense',
+                    transaction_date=datetime(
+                        2026,
+                        3,
+                        2,
+                        tzinfo=timezone.get_current_timezone(),
+                    ),
+                    amount=Decimal('25.00'),
+                    description='Нерешённая строка',
+                    source_row_position=2,
+                    decision=unresolved,
+                )
+                self.upload.status = (
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION
+                )
+                self.upload.save(update_fields=['status'])
+
+                self.service.exclude(row.pk, self.user.pk, EXCLUSION_CODE)
+
+                self.upload.refresh_from_db()
+                self.assertEqual(
+                    self.upload.status,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                )
+
     def test_categories_are_sorted_by_name(self) -> None:
         self._category('Аптека')
         recent = self._category('Яблоки')

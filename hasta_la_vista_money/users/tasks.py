@@ -10,10 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.users.models import (
-    BankStatementRow,
-    BankStatementUpload,
-)
+from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
 )
@@ -22,6 +19,10 @@ from hasta_la_vista_money.users.services.bank_statement_import import (
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
+)
+from hasta_la_vista_money.users.services.statement_completion import (
+    has_open_rows,
+    is_statement_complete,
 )
 
 logger = structlog.get_logger(__name__)
@@ -118,17 +119,8 @@ def _finalize_upload(
             return None
         upload.account.refresh_from_db(fields=['balance'])
         empty_parse = upload.total_transactions == 0
-        awaiting_markup = BankStatementRow.objects.filter(
-            upload=upload,
-            decision=BankStatementRow.Decision.AWAITING_MARKUP,
-        ).exists()
-        pending = BankStatementRow.objects.filter(
-            upload=upload,
-            decision=BankStatementRow.Decision.PENDING,
-        ).exists()
-        unresolved = (
-            awaiting_markup or pending or result.needs_transfer_count > 0
-        )
+        complete = is_statement_complete(upload)
+        unresolved = has_open_rows(upload)
         _store_statement_balance(upload, result)
 
         if empty_parse:
@@ -138,7 +130,7 @@ def _finalize_upload(
                     'полнота не подтверждена.',
                 ),
             )
-        if empty_parse or unresolved:
+        if empty_parse or not complete:
             upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         else:
             upload.status = BankStatementUpload.Status.COMPLETED
