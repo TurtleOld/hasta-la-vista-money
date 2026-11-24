@@ -318,10 +318,8 @@ def _mark_upload_failed(
     """Перевести загрузку в FAILED, пока этот запуск ею владеет."""
     try:
         with transaction.atomic():
-            upload = BankStatementUpload.objects.select_for_update().get(
-                id=upload_id,
-            )
-            if upload.celery_task_id != run_id:
+            upload = _lock_active_run(upload_id, run_id)
+            if upload is None:
                 return
             upload.status = BankStatementUpload.Status.FAILED
             upload.failed_count = 1

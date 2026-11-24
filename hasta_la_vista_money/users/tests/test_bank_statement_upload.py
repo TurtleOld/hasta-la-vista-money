@@ -7302,6 +7302,37 @@ class TestBankStatementImportReliability(TestCase):
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
 
+    def test_parse_failure_after_deadline_does_not_mark_failed(self) -> None:
+        """An expired run must not write FAILED before cleanup clears it."""
+        upload = self._create_upload()
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            celery_task_id='run-active',
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        def expire_then_fail() -> None:
+            BankStatementUpload.objects.filter(pk=upload.pk).update(
+                expires_at=timezone.now() - timedelta(seconds=1),
+            )
+            raise BankStatementParseError('expired during parse')
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.side_effect = expire_then_fail
+            with self.assertRaises(BankStatementParseError):
+                process_bank_statement_task.apply(
+                    args=[upload.pk, 'run-active'],
+                ).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+        self.assertEqual(upload.celery_task_id, 'run-active')
+        self.assertEqual(upload.failed_count, 0)
+        self.assertEqual(upload.error_message, '')
+        self.assertIsNone(upload.retention_cleaned_at)
+
     def _raiffeisen_upload(
         self,
         transactions: list[dict[str, Any]],
