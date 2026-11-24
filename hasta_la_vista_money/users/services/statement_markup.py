@@ -576,6 +576,7 @@ class StatementMarkupService:
         ):
             raise StatementMarkupConflictError('row')
         transaction_date = row.transaction_date
+        amount = row.amount
         account = upload.account
         if account.is_archived or account.is_deposit:
             raise StatementMarkupConflictError('account')
@@ -588,30 +589,67 @@ class StatementMarkupService:
             )
         category = self._category(row, upload.user, category_id)
         moment = self._moment(transaction_date)
+        locked_account = Account.objects.select_for_update().get(
+            pk=upload.account_id,
+        )
+        self._reject_repeated_strong_movement(row, locked_account)
         created = Transaction.objects.create(
             user=upload.user,
-            account=account,
+            account=locked_account,
             category=category,
             type=transaction_type,
-            amount=row.amount,
+            amount=amount,
             date=moment,
             description=row.description,
             source_ref=row.source_ref,
-            source_file_hash=(upload.file_hash if not row.source_ref else None),
-            source_row_position=(
-                row.source_row_position if not row.source_ref else None
+            source_file_hash=upload.file_hash or None,
+            source_row_position=row.source_row_position,
+            source_format_version=row.source_format_version,
+            source_fingerprint=row.source_fingerprint,
+            source_fingerprint_key_version=(row.source_fingerprint_key_version),
+            source_fingerprint_format_version=(
+                row.source_fingerprint_format_version
             ),
         )
-        delta = row.amount
+        delta = amount
         if transaction_type == TransactionType.EXPENSE:
             delta = -delta
         # The bank is the source of truth: no funds check.
         self._balance_service.apply_balance_delta(
-            account,
+            locked_account,
             delta,
             check_funds=False,
         )
         return created
+
+    @staticmethod
+    def _reject_repeated_strong_movement(
+        row: BankStatementRow,
+        account: Account,
+    ) -> None:
+        """Refuse a second movement for one proven statement observation.
+
+        A strong bank reference plus the same fingerprint, direction,
+        amount and bank date is one operation, even when two overlapping
+        uploads kept separate unresolved rows for it. A weak or reused
+        reference stays a hint: those rows are still posted independently.
+        """
+        if (
+            row.source_ref_strength != 'strong'
+            or not row.source_fingerprint
+            or row.transaction_date is None
+            or row.amount is None
+        ):
+            return
+        existing = Transaction.objects.filter(
+            account=account,
+            source_fingerprint=row.source_fingerprint,
+            type=row.transaction_type,
+            amount=row.amount,
+            date__date=timezone.localtime(row.transaction_date).date(),
+        )
+        if existing.exists():
+            raise StatementMarkupConflictError('duplicate')
 
     @staticmethod
     def _remember(
