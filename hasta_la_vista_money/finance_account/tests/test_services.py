@@ -1286,6 +1286,34 @@ class TestAccountServices(TestCase):
         self.assertIsNone(upload.account_balance_after)
         self.assertIsNone(upload.balance_discrepancy)
 
+    def test_expired_rows_block_balance_check_until_replayed(self) -> None:
+        moment = timezone.now() - timedelta(days=2)
+        upload = self._balance_upload(
+            closing=Decimal('900.00'),
+            moment=moment,
+        )
+        self._row(
+            upload,
+            1,
+            decision=BankStatementRow.Decision.EXPIRED,
+            transaction_date=moment,
+        )
+        service = self.container.users.statement_balance_verification_service()
+
+        service.verify(upload)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.NOT_CHECKED,
+        )
+        self.assertEqual(
+            upload.balance_reason,
+            BankStatementUpload.BalanceReason.UNRESOLVED_ROWS,
+        )
+        self.assertIsNone(upload.account_balance_after)
+        self.assertIsNone(upload.balance_discrepancy)
+
     def test_amount_or_date_change_invalidates_and_category_does_not(
         self,
     ) -> None:

@@ -20,6 +20,7 @@ from hasta_la_vista_money.system.audit_registry import (
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementDecisionAudit,
@@ -29,16 +30,13 @@ from hasta_la_vista_money.users.models import (
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
+from hasta_la_vista_money.users.services.statement_completion import (
+    OPEN_DECISIONS,
+    UNRESOLVED_DECISIONS,
+    is_statement_complete,
+)
 
 logger = structlog.get_logger(__name__)
-
-_UNRESOLVED_DECISIONS: Final = frozenset(
-    {
-        BankStatementRow.Decision.PENDING,
-        BankStatementRow.Decision.NEEDS_TRANSFER,
-        BankStatementRow.Decision.AWAITING_MARKUP,
-    },
-)
 
 _CREATED_DECISIONS: Final = frozenset(
     {
@@ -141,8 +139,12 @@ class BankStatementRetentionService:
                 ),
             )
             unresolved_ids = [
-                row.pk for row in rows if row.decision in _UNRESOLVED_DECISIONS
+                row.pk for row in rows if row.decision in UNRESOLVED_DECISIONS
             ]
+            open_ids = [
+                row.pk for row in rows if row.decision in OPEN_DECISIONS
+            ]
+            complete = is_statement_complete(upload)
             row_ids = [row.pk for row in rows]
             provenance = self._statement_audit_provenance(upload, rows)
 
@@ -184,6 +186,7 @@ class BankStatementRetentionService:
                 match_calendar_date=False,
             )
             self._anonymize_audit_copies(upload, provenance)
+            self._clear_created_movement_references(provenance)
             upload.pdf_file = ''
             upload.retention_cleaned_at = now
             upload.statement_closing_balance = None
@@ -197,11 +200,15 @@ class BankStatementRetentionService:
             upload.celery_task_id = ''
             upload.status = (
                 BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED
-                if unresolved_ids
+                if open_ids
                 else (
                     BankStatementUpload.Status.FAILED
                     if upload.status == BankStatementUpload.Status.FAILED
-                    else BankStatementUpload.Status.COMPLETED
+                    else (
+                        BankStatementUpload.Status.COMPLETED
+                        if complete
+                        else BankStatementUpload.Status.AWAITING_CONFIRMATION
+                    )
                 )
             )
             upload.save(
@@ -324,6 +331,24 @@ class BankStatementRetentionService:
             scrubbed = _scrub_diff(entry.diff)
             if scrubbed != entry.diff:
                 AuditLog.objects.filter(pk=entry.pk).update(diff=scrubbed)
+
+    @staticmethod
+    def _clear_created_movement_references(
+        provenance: _AuditProvenance,
+    ) -> None:
+        """Drop the raw bank reference from movements this upload created.
+
+        The provenance set only contains decisions that created money, so
+        a linked pre-existing movement keeps its own reference. A queryset
+        update bypasses the audit signal: the technical fingerprint, file
+        position and the financial record stay, only the bank identifier
+        is removed.
+        """
+        if not provenance.transaction_ids:
+            return
+        Transaction.objects.filter(
+            pk__in=provenance.transaction_ids,
+        ).update(source_ref=None)
 
     @staticmethod
     def _record_anonymization(
