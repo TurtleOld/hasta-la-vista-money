@@ -5,6 +5,8 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from hasta_la_vista_money.finance_account.models import (
@@ -72,6 +74,8 @@ class StatementCoverageService:
         upload: BankStatementUpload,
         period_start: date | None,
         period_end: date | None,
+        *,
+        run_id: str | None = None,
     ) -> StatementPeriodCoverage | None:
         """Record the explicit period of a parsed statement.
 
@@ -81,32 +85,50 @@ class StatementCoverageService:
         every operation was read; its bounds stay on the upload for
         traceability.
 
+        Publication and retirement take the upload lock and check the run
+        owner in the same transaction. A worker paused before this point
+        therefore cannot replace or revoke the coverage of a newer run.
+
         Args:
             upload: Parsed statement upload.
             period_start: Explicit statement start, if the parser found one.
             period_end: Explicit statement end, if the parser found one.
+            run_id: Identifier of the run publishing coverage; when set, it
+                must still match the upload's current run.
 
         Returns:
-            The recorded coverage, or ``None`` when the period is unusable or
-            the parse extracted no operations.
+            The recorded coverage, or ``None`` when the period is unusable,
+            the parse extracted no operations, or another run owns the
+            upload.
         """
-        if (
-            period_start is None
-            or period_end is None
-            or period_end < period_start
-        ):
-            self._coverage_repository.retire_without_bounds(upload)
-            return None
-        if upload.total_transactions == 0:
-            return None
-        return self._coverage_repository.record(
-            account_id=upload.account_id,
-            period_start=period_start,
-            period_end=period_end,
-            source=StatementPeriodCoverage.Source.BANK_STATEMENT,
-            author=upload.user,
-            upload=upload,
-        )
+        with transaction.atomic():
+            locked = BankStatementUpload.objects.select_for_update().get(
+                pk=upload.pk,
+            )
+            if run_id is not None and locked.celery_task_id != run_id:
+                return None
+            if (
+                locked.retention_cleaned_at is not None
+                or locked.expires_at <= timezone.now()
+            ):
+                return None
+            if (
+                period_start is None
+                or period_end is None
+                or period_end < period_start
+            ):
+                self._coverage_repository.retire_without_bounds(locked)
+                return None
+            if locked.total_transactions == 0:
+                return None
+            return self._coverage_repository.record(
+                account_id=locked.account_id,
+                period_start=period_start,
+                period_end=period_end,
+                source=StatementPeriodCoverage.Source.BANK_STATEMENT,
+                author=locked.user,
+                upload=locked,
+            )
 
     def confirm_manual(
         self,

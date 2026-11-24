@@ -70,6 +70,17 @@ def _statement_result_counts(
     }
 
 
+def _empty_result_counts() -> dict[str, int]:
+    """Return counters without exposing bank data of a stopped run."""
+    return {
+        'income_count': 0,
+        'expense_count': 0,
+        'skipped_count': 0,
+        'needs_transfer_count': 0,
+        'total_count': 0,
+    }
+
+
 def _lock_active_run(
     upload_id: int,
     run_id: str | None,
@@ -168,6 +179,7 @@ cleanup_expired_bank_statements = shared_task(
 def process_bank_statement_task(
     self: Any,
     upload_id: int,
+    run_id: str | None = None,
 ) -> dict[str, int]:
     """Обработать PDF-выписку в фоне: импортировать транзакции и сверить баланс.
 
@@ -177,9 +189,15 @@ def process_bank_statement_task(
     PDF, дедупликации, категоризации и проводки движения инкапсулирована
     в сервисе; здесь остаётся только жизненный цикл записи загрузки.
 
+    The run identifier is assigned before the task is published. A stale
+    delivery with another identifier cannot claim the upload, so it never
+    writes PROCESSING or FAILED and never returns bank data.
+
     Args:
         self: Экземпляр Celery-задачи (bind=True).
         upload_id: Первичный ключ ``BankStatementUpload`` для обработки.
+        run_id: Идентификатор запуска, назначенный до публикации задачи.
+            Без него используется идентификатор текущей доставки Celery.
 
     Returns:
         Словарь с ключами ``income_count``, ``expense_count``,
@@ -188,21 +206,26 @@ def process_bank_statement_task(
     Raises:
         BankStatementParseError: Если PDF не удалось разобрать.
     """
+    run_id = run_id or self.request.id
     logger.info(
         'bank_statement_task_started',
         upload_id=upload_id,
+        run_id=run_id,
     )
 
     try:
-        upload = BankStatementUpload.objects.select_related(
-            'user',
-            'account',
-        ).get(id=upload_id)
+        upload = _claim_run(upload_id, run_id)
+        if upload is None:
+            logger.info(
+                'bank_statement_run_not_owned',
+                upload_id=upload_id,
+                run_id=run_id,
+            )
+            return _empty_result_counts()
         if upload.account.is_archived or upload.account.is_deposit:
             raise BankStatementParseError(
                 _('Архивный счёт или счёт вклада недоступен для импорта.'),
             )
-        _initialize_upload(upload, self)
 
         container = ApplicationContainer()
         service = container.users.bank_statement_import_service()
@@ -216,7 +239,7 @@ def process_bank_statement_task(
 
         finalized = _finalize_upload(
             upload_id,
-            self.request.id,
+            run_id,
             result,
             container,
         )
@@ -251,7 +274,11 @@ def process_bank_statement_task(
             'bank_statement_parse_failed',
             upload_id=upload_id,
         )
-        _mark_upload_failed(upload_id, f'{_("Ошибка парсинга")}: {e!s}')
+        _mark_upload_failed(
+            upload_id,
+            run_id,
+            f'{_("Ошибка парсинга")}: {e!s}',
+        )
         raise
 
     except RETRYABLE_ERRORS as e:
@@ -262,6 +289,7 @@ def process_bank_statement_task(
         if self.request.retries >= self.max_retries:
             _mark_upload_failed(
                 upload_id,
+                run_id,
                 f'{_("Непредвиденная ошибка")}: {e!s}',
             )
         raise self.retry(
@@ -274,49 +302,74 @@ def process_bank_statement_task(
             'bank_statement_task_unexpected_error',
             upload_id=upload_id,
         )
-        _mark_upload_failed(upload_id, f'{_("Непредвиденная ошибка")}: {e!s}')
+        _mark_upload_failed(
+            upload_id,
+            run_id,
+            f'{_("Непредвиденная ошибка")}: {e!s}',
+        )
         raise
 
 
-def _mark_upload_failed(upload_id: int, message: str) -> None:
-    """Перевести загрузку в FAILED с текстом ошибки."""
+def _mark_upload_failed(
+    upload_id: int,
+    run_id: str,
+    message: str,
+) -> None:
+    """Перевести загрузку в FAILED, пока этот запуск ею владеет."""
     try:
-        upload = BankStatementUpload.objects.get(id=upload_id)
+        with transaction.atomic():
+            upload = _lock_active_run(upload_id, run_id)
+            if upload is None:
+                return
+            upload.status = BankStatementUpload.Status.FAILED
+            upload.failed_count = 1
+            upload.error_message = message
+            upload.save(
+                update_fields=[
+                    'status',
+                    'failed_count',
+                    'error_message',
+                    'updated_at',
+                ],
+            )
     except BankStatementUpload.DoesNotExist:
         return
-    upload.status = BankStatementUpload.Status.FAILED
-    upload.failed_count = 1
-    upload.error_message = message
-    upload.save(
-        update_fields=[
-            'status',
-            'failed_count',
-            'error_message',
-            'updated_at',
-        ],
-    )
 
 
-def _initialize_upload(
-    upload: BankStatementUpload,
-    task: shared_task,
-) -> None:
-    """Перевести запись загрузки в статус «обрабатывается».
+def _claim_run(
+    upload_id: int,
+    run_id: str,
+) -> BankStatementUpload | None:
+    """Lock the upload and start it only for the current run owner.
 
-    Args:
-        upload: Экземпляр ``BankStatementUpload`` для инициализации.
-        task: Экземпляр Celery-задачи для получения ``request.id``.
+    The identifier is assigned before publication. A delivery with an older
+    identifier, or one that arrives after cleanup or the retention deadline,
+    gets ``None`` and must not write any run state.
     """
-    upload.status = BankStatementUpload.Status.PROCESSING
-    upload.celery_task_id = task.request.id
-    upload.failed_count = 0
-    upload.error_message = ''
-    upload.save(
-        update_fields=[
-            'status',
-            'celery_task_id',
-            'failed_count',
-            'error_message',
-            'updated_at',
-        ],
-    )
+    with transaction.atomic():
+        upload = (
+            BankStatementUpload.objects.select_for_update()
+            .select_related('account', 'user')
+            .get(pk=upload_id)
+        )
+        if (
+            upload.retention_cleaned_at is not None
+            or upload.expires_at <= timezone.now()
+        ):
+            return None
+        if upload.celery_task_id and upload.celery_task_id != run_id:
+            return None
+        upload.celery_task_id = run_id
+        upload.status = BankStatementUpload.Status.PROCESSING
+        upload.failed_count = 0
+        upload.error_message = ''
+        upload.save(
+            update_fields=[
+                'status',
+                'celery_task_id',
+                'failed_count',
+                'error_message',
+                'updated_at',
+            ],
+        )
+        return upload

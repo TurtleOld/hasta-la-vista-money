@@ -50,6 +50,9 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     StaleStatementCandidateError,
 )
+from hasta_la_vista_money.users.services.statement_coverage import (
+    StatementCoverageService,
+)
 from hasta_la_vista_money.users.services.statement_identity import (
     StatementFingerprintUnavailableError,
     StatementIdentityService,
@@ -2808,6 +2811,311 @@ class CoverageRevisionTest(TestCase):
         )
         self.assertEqual(summary.state, 'unknown')
         self.assertFalse(summary.intervals)
+
+
+@override_settings(
+    STATEMENT_FINGERPRINT_KEYS=KEYS,
+    STATEMENT_FINGERPRINT_ACTIVE_KEY='k2',
+)
+class RunOwnershipTest(TransactionTestCase):
+    """Only the run that owns the upload may start, finish or fail it."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+    def _upload(
+        self,
+        run_id: str,
+        *,
+        status: str = BankStatementUpload.Status.PENDING,
+    ) -> BankStatementUpload:
+        return BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash=f'hash-{run_id}',
+            pdf_file=SimpleUploadedFile(
+                f'{run_id}.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            status=status,
+            celery_task_id=run_id,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+    def _parse_result(self) -> StatementParseResult:
+        return StatementParseResult(
+            transactions=[
+                {
+                    'date': WHEN,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Продукты',
+                    'source_ref': 'row-1',
+                    'row_position': 0,
+                },
+            ],
+            bank=SYNTHETIC_BANK,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+
+    def test_waiting_old_delivery_does_not_start_the_new_run(self) -> None:
+        upload = self._upload('run-b')
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            result = process_bank_statement_task.apply(
+                args=[upload.pk, 'run-a'],
+            ).get()
+
+        parser.return_value.parse.assert_not_called()
+        self.assertEqual(result['total_count'], 0)
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
+        self.assertEqual(upload.celery_task_id, 'run-b')
+        self.assertEqual(upload.error_message, '')
+
+    def test_old_delivery_cannot_fail_the_new_run(self) -> None:
+        upload = self._upload(
+            'run-a',
+            status=BankStatementUpload.Status.PROCESSING,
+        )
+
+        def fail_with_new_owner(*_args: object, **_kwargs: object) -> None:
+            BankStatementUpload.objects.filter(pk=upload.pk).update(
+                celery_task_id='run-b',
+                status=BankStatementUpload.Status.PENDING,
+            )
+            raise ValueError('bad row')
+
+        with patch.object(
+            BankStatementImportService,
+            'import_statement',
+            side_effect=fail_with_new_owner,
+        ):
+            process_bank_statement_task.apply(args=[upload.pk, 'run-a'])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.celery_task_id, 'run-b')
+        self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
+        self.assertEqual(upload.failed_count, 0)
+        self.assertEqual(upload.error_message, '')
+
+    def test_repeated_delivery_of_the_current_run_is_idempotent(
+        self,
+    ) -> None:
+        upload = self._upload('run-a')
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = self._parse_result()
+            first = process_bank_statement_task.apply(
+                args=[upload.pk, 'run-a'],
+            ).get()
+            process_bank_statement_task.apply(
+                args=[upload.pk, 'run-a'],
+            ).get()
+
+        self.assertEqual(first['expense_count'], 1)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            1,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+
+class CoverageRunOwnershipTest(TestCase):
+    """Coverage publication and retirement belong to the current run."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+            total_transactions=1,
+            status=BankStatementUpload.Status.PROCESSING,
+            celery_task_id='run-b',
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+        self.service = ApplicationContainer().users.statement_coverage_service()
+
+    def test_old_run_cannot_replace_or_retire_new_coverage(self) -> None:
+        current = self.service.record_statement_period(
+            self.upload,
+            date(2026, 2, 1),
+            date(2026, 2, 28),
+            run_id='run-b',
+        )
+        if current is None:
+            self.fail('the current run must publish its coverage')
+
+        replaced = self.service.record_statement_period(
+            self.upload,
+            date(2026, 1, 1),
+            date(2026, 1, 31),
+            run_id='run-a',
+        )
+        retired = self.service.record_statement_period(
+            self.upload,
+            None,
+            None,
+            run_id='run-a',
+        )
+
+        self.assertIsNone(replaced)
+        self.assertIsNone(retired)
+        current.refresh_from_db()
+        self.assertTrue(current.is_actual)
+        self.assertEqual(current.revision_reason, '')
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(
+                upload=self.upload,
+                period_start=date(2026, 1, 1),
+            ).exists(),
+        )
+
+
+@override_settings(
+    STATEMENT_FINGERPRINT_KEYS=KEYS,
+    STATEMENT_FINGERPRINT_ACTIVE_KEY='k2',
+)
+class CoveragePublicationRaceTest(TransactionTestCase):
+    """A run paused before publishing cannot revoke the next run's coverage."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            file_hash='paused-coverage-file',
+            pdf_file=SimpleUploadedFile(
+                'paused-coverage.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            status=BankStatementUpload.Status.PROCESSING,
+            celery_task_id='run-a',
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+    def test_paused_old_run_keeps_new_coverage_actual(self) -> None:
+        reached = Barrier(2, timeout=5)
+        release = Barrier(2, timeout=5)
+        real_record = StatementCoverageService.record_statement_period
+        errors: list[Exception | None] = [None]
+
+        def paused_record(
+            service: StatementCoverageService,
+            upload: BankStatementUpload,
+            period_start: date | None,
+            period_end: date | None,
+            *,
+            run_id: str | None = None,
+        ) -> StatementPeriodCoverage | None:
+            if run_id == 'run-a':
+                reached.wait(timeout=5)
+                release.wait(timeout=5)
+            return real_record(
+                service,
+                upload,
+                period_start,
+                period_end,
+                run_id=run_id,
+            )
+
+        def run_old() -> None:
+            try:
+                with patch(
+                    'hasta_la_vista_money.users.services.'
+                    'bank_statement_import.BankStatementParser',
+                ) as parser:
+                    parser.return_value.parse.return_value = (
+                        StatementParseResult(
+                            transactions=[
+                                {
+                                    'date': WHEN,
+                                    'amount': Decimal('-100.00'),
+                                    'description': 'Продукты',
+                                    'source_ref': 'row-1',
+                                    'row_position': 0,
+                                },
+                            ],
+                            bank=SYNTHETIC_BANK,
+                            period_start=date(2026, 1, 1),
+                            period_end=date(2026, 1, 31),
+                        )
+                    )
+                    process_bank_statement_task.apply(
+                        args=[self.upload.pk, 'run-a'],
+                    ).get()
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        with patch.object(
+            StatementCoverageService,
+            'record_statement_period',
+            new=paused_record,
+        ):
+            thread = Thread(target=run_old)
+            thread.start()
+            reached.wait(timeout=5)
+
+            BankStatementUpload.objects.filter(pk=self.upload.pk).update(
+                celery_task_id='run-b',
+            )
+            current = (
+                ApplicationContainer()
+                .users.statement_coverage_service()
+                .record_statement_period(
+                    self.upload,
+                    date(2026, 2, 1),
+                    date(2026, 2, 28),
+                    run_id='run-b',
+                )
+            )
+            if current is None:
+                self.fail('the new run must publish its coverage')
+            release.wait(timeout=5)
+            thread.join(timeout=10)
+
+        if errors[0] is not None:
+            self.fail(f'old delivery failed unexpectedly: {errors[0]}')
+        current.refresh_from_db()
+        self.assertTrue(current.is_actual)
+        self.assertFalse(
+            StatementPeriodCoverage.objects.filter(
+                upload=self.upload,
+                period_start=date(2026, 1, 1),
+            ).exists(),
+        )
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.celery_task_id, 'run-b')
 
 
 class LegacyCompatibilityMigrationTest(TransactionTestCase):

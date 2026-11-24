@@ -178,6 +178,10 @@ class TestBankStatementUploadView(TestCase):
         self.assertEqual(upload.user, self.user)
         self.assertEqual(upload.account, self.account)
         self.assertEqual(upload.status, 'pending')
+        self.assertEqual(
+            mock_task.delay.call_args[0][1],
+            upload.celery_task_id,
+        )
 
         # Check redirect and message
         self.assertRedirects(response, self.upload_url)
@@ -7303,6 +7307,37 @@ class TestBankStatementImportReliability(TestCase):
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
 
+    def test_parse_failure_after_deadline_does_not_mark_failed(self) -> None:
+        """An expired run must not write FAILED before cleanup clears it."""
+        upload = self._create_upload()
+        BankStatementUpload.objects.filter(pk=upload.pk).update(
+            celery_task_id='run-active',
+            expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        def expire_then_fail() -> None:
+            BankStatementUpload.objects.filter(pk=upload.pk).update(
+                expires_at=timezone.now() - timedelta(seconds=1),
+            )
+            raise BankStatementParseError('expired during parse')
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.side_effect = expire_then_fail
+            with self.assertRaises(BankStatementParseError):
+                process_bank_statement_task.apply(
+                    args=[upload.pk, 'run-active'],
+                ).get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.PROCESSING)
+        self.assertEqual(upload.celery_task_id, 'run-active')
+        self.assertEqual(upload.failed_count, 0)
+        self.assertEqual(upload.error_message, '')
+        self.assertIsNone(upload.retention_cleaned_at)
+
     def _raiffeisen_upload(
         self,
         transactions: list[dict[str, Any]],
@@ -8458,9 +8493,14 @@ class TestBankStatementImportReliability(TestCase):
             },
         )
 
-        mock_task.delay.assert_called_once_with(upload.pk)
+        mock_task.delay.assert_called_once()
+        self.assertEqual(mock_task.delay.call_args[0][0], upload.pk)
         upload.refresh_from_db()
         self.assertEqual(upload.status, BankStatementUpload.Status.PENDING)
+        self.assertEqual(
+            mock_task.delay.call_args[0][1],
+            upload.celery_task_id,
+        )
 
     @patch(
         'hasta_la_vista_money.finance_account.bank_statement_views.process_bank_statement_task',
@@ -8501,7 +8541,13 @@ class TestBankStatementImportReliability(TestCase):
             - timedelta(minutes=constants.STATEMENT_UPLOAD_STALE_MINUTES + 1),
         )
         post()
-        mock_task.delay.assert_called_once_with(upload.pk)
+        mock_task.delay.assert_called_once()
+        self.assertEqual(mock_task.delay.call_args[0][0], upload.pk)
+        upload.refresh_from_db()
+        self.assertEqual(
+            mock_task.delay.call_args[0][1],
+            upload.celery_task_id,
+        )
 
     def test_ozon_known_category_posts_row_and_movement_once(self) -> None:
         """A known local Ozon purpose posts one linked movement, once."""
@@ -9173,7 +9219,9 @@ class TestBankStatementImportReliability(TestCase):
                     ),
                 ),
             )
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
             upload.refresh_from_db()
             after = {
                 row.source_row_position: (
@@ -9277,7 +9325,9 @@ class TestBankStatementImportReliability(TestCase):
             'BankStatementParser',
         ) as parser:
             parser.return_value.parse.return_value = parse_result
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
 
         rows = BankStatementRow.objects.filter(upload=upload)
         self.assertEqual(rows.count(), 1)
@@ -9379,12 +9429,15 @@ class TestBankStatementImportReliability(TestCase):
                     ),
                 ),
             )
+            run_id = service.start_run(upload)
             with patch(
                 'hasta_la_vista_money.users.services.bank_statement_import.'
                 'BankStatementParser',
             ) as parser:
                 parser.return_value.parse.return_value = parse_result
-                process_bank_statement_task.apply(args=[upload.pk])
+                process_bank_statement_task.apply(
+                    args=[upload.pk, run_id],
+                )
             upload.refresh_from_db()
             row.refresh_from_db()
             self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
@@ -9492,7 +9545,9 @@ class TestBankStatementImportReliability(TestCase):
             'BankStatementParser',
         ) as parser:
             parser.return_value.parse.return_value = parse_result
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
 
         upload.refresh_from_db()
         row.refresh_from_db()
@@ -9730,7 +9785,9 @@ class TestBankStatementImportReliability(TestCase):
             'BankStatementParser',
         ) as parser:
             parser.return_value.parse.return_value = parse_result
-            process_bank_statement_task.apply(args=[upload.pk])
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
 
         upload.refresh_from_db()
         row.refresh_from_db()
@@ -10042,7 +10099,9 @@ class TestBankStatementImportReliability(TestCase):
                         ),
                     ),
                 )
-                process_bank_statement_task.apply(args=[upload.pk])
+                process_bank_statement_task.apply(
+                    args=[upload.pk, upload.celery_task_id],
+                )
                 upload.refresh_from_db()
                 account.refresh_from_db()
                 after_positions = {

@@ -313,6 +313,8 @@ class BankStatementImportServiceProtocol(Protocol):
 
     def restart_if_stale(self, upload: BankStatementUpload) -> bool: ...
 
+    def start_run(self, upload: BankStatementUpload) -> str: ...
+
     def prepare_known_replay(
         self,
         upload: BankStatementUpload,
@@ -336,6 +338,8 @@ class StatementCoverageServiceProtocol(Protocol):
         upload: BankStatementUpload,
         period_start: date | None,
         period_end: date | None,
+        *,
+        run_id: str | None = None,
     ) -> StatementPeriodCoverage | None: ...
 
     def confirm_manual(
