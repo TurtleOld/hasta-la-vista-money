@@ -112,7 +112,10 @@ class StatementRowLinkedMovementTest(TestCase):
         self.assertIsNone(row.decided_at)
 
     def test_delete_transaction_returns_row_to_pending(self) -> None:
+        self.upload.status = BankStatementUpload.Status.COMPLETED
+        self.upload.save(update_fields=['status'])
         row = self._row(transaction=self.expense)
+        movement_id = self.expense.pk
 
         self.transaction_service.delete_transaction(
             user=self.user,
@@ -125,6 +128,18 @@ class StatementRowLinkedMovementTest(TestCase):
         self.upload.refresh_from_db()
         self.assertEqual(self.upload.awaiting_decision_count, 1)
         self.assertEqual(self.upload.linked_count, 0)
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        audit = row.decision_audits.get()
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
+        self.assertEqual(audit.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(audit.previous_transaction_pk, movement_id)
+        self.assertEqual(audit.actor, self.user)
 
     def test_delete_transfer_returns_row_to_pending(self) -> None:
         transfer = self.transfer_service.transfer_money(

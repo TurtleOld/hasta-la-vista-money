@@ -375,6 +375,8 @@ class StatementBalanceVerificationServiceProtocol(Protocol):
         upload: BankStatementUpload,
     ) -> BankStatementUpload: ...
 
+    def verify_completed(self, upload: BankStatementUpload) -> None: ...
+
     def refresh_actuality(
         self,
         upload: BankStatementUpload,

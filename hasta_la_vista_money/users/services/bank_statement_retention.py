@@ -171,6 +171,17 @@ class BankStatementRetentionService:
             pending_paths.append(file_name)
 
         if unresolved_ids:
+            BankStatementDecisionAudit.objects.bulk_create(
+                [
+                    BankStatementDecisionAudit(
+                        row=row,
+                        previous_decision=row.decision,
+                        decision=BankStatementRow.Decision.EXPIRED,
+                    )
+                    for row in rows
+                    if row.decision in UNRESOLVED_DECISIONS
+                ],
+            )
             BankStatementRow.objects.filter(
                 pk__in=unresolved_ids,
             ).update(

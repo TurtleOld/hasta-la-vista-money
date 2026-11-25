@@ -126,13 +126,6 @@ class UsersContainer(containers.DeclarativeContainer):
 
     statement_identity_service = providers.Factory(StatementIdentityService)
 
-    bank_statement_reconciliation_service: providers.Factory[
-        BankStatementReconciliationServiceProtocol
-    ] = providers.Factory(
-        BankStatementReconciliationService,
-        balance_service=providers.Factory(BalanceService),
-    )
-
     statement_row_repository = providers.Singleton(StatementRowRepository)
     statement_coverage_repository = providers.Singleton(
         StatementCoverageRepository,
@@ -150,6 +143,14 @@ class UsersContainer(containers.DeclarativeContainer):
     ] = providers.Factory(
         StatementBalanceVerificationService,
         balance_history_service=balance_history_service,
+    )
+
+    bank_statement_reconciliation_service: providers.Factory[
+        BankStatementReconciliationServiceProtocol
+    ] = providers.Factory(
+        BankStatementReconciliationService,
+        balance_service=providers.Factory(BalanceService),
+        balance_verification_service=statement_balance_verification_service,
     )
 
     accounting_control_service: providers.Factory[

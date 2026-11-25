@@ -1719,7 +1719,7 @@ class BankStatementImportService:
             and row.decision == BankStatementRow.Decision.NEW
         ):
             return row
-        BankStatementRow.objects.filter(
+        updated = BankStatementRow.objects.filter(
             pk=row.pk,
             transaction__isnull=True,
         ).update(
@@ -1745,6 +1745,13 @@ class BankStatementImportService:
                 : constants.TWO_HUNDRED_FIFTY
             ],
         )
+        if updated:
+            BankStatementDecisionAudit.objects.create(
+                row=row,
+                previous_decision=row.decision,
+                decision=BankStatementRow.Decision.NEW,
+                transaction=transaction,
+            )
         row.refresh_from_db()
         return row
 

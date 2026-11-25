@@ -242,8 +242,13 @@ class StatementRowLinkService:
         transfer: TransferMoneyLog,
     ) -> None:
         """Close a locked repayment row by the transfer that paid it."""
+        previous_decision = row.decision
         self.statement_row_repository.close_row(row, transfer)
-        self.statement_row_repository.record_decision(row, transfer.user_id)
+        self.statement_row_repository.record_decision(
+            row,
+            transfer.user_id,
+            previous_decision=previous_decision,
+        )
         self.reconciliation_service.refresh_outcome_counts(row.upload)
 
     def repayment_candidates(

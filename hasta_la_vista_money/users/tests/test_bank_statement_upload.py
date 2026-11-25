@@ -1037,6 +1037,51 @@ class TestBankStatementReconciliationView(TestCase):
             2,
         )
 
+    def test_last_reconciliation_decision_verifies_statement_balance(
+        self,
+    ) -> None:
+        self.upload.statement_closing_balance = Decimal('830.00')
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        self.upload.balance_moment = self.row.transaction_date
+        self.upload.save()
+        last_row = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=self.row.transaction_date,
+            amount=Decimal('50.00'),
+            suggested_category='Поездки',
+            source_ref='another-source',
+            source_row_position=1,
+        )
+        url = reverse(
+            'finance_account:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.client.post(url, {'decision': 'new'})
+        self.upload.refresh_from_db()
+        self.assertIsNone(self.upload.balance_checked_at)
+        self.client.post(
+            reverse(
+                'finance_account:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, last_row.pk],
+            ),
+            {'decision': 'new'},
+        )
+
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertEqual(self.upload.account_balance_after, Decimal('830.00'))
+        self.assertTrue(self.upload.balance_is_actual)
+
     def test_decision_is_its_own_resolution_operation(self) -> None:
         """Resolving a row tags its audit entries as their own operation."""
         url = reverse(
@@ -9927,7 +9972,9 @@ class TestBankStatementImportReliability(TestCase):
             upload.status,
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
-        audit = row.decision_audits.get()
+        audit = row.decision_audits.get(
+            previous_decision=BankStatementRow.Decision.EXPIRED,
+        )
         self.assertEqual(
             audit.decision,
             BankStatementRow.Decision.AWAITING_MARKUP,
@@ -10030,8 +10077,18 @@ class TestBankStatementImportReliability(TestCase):
             self.assertEqual(Transaction.objects.count(), 0)
 
         self.assertEqual(row.pk, row_pk)
-        self.assertEqual(row.decision_audits.count(), 1)
-        audit = row.decision_audits.get()
+        self.assertEqual(row.decision_audits.count(), 2)
+        expired = row.decision_audits.get(
+            decision=BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertEqual(
+            expired.previous_decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertIsNone(expired.actor)
+        audit = row.decision_audits.get(
+            previous_decision=BankStatementRow.Decision.EXPIRED,
+        )
         self.assertEqual(audit.decision, BankStatementRow.Decision.PENDING)
         self.assertEqual(
             audit.previous_decision,

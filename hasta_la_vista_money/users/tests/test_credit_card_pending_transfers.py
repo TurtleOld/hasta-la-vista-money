@@ -170,6 +170,8 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
 
     def test_mark_not_payment_closes_row_without_movement(self) -> None:
         upload = self._create_upload()
+        upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        upload.save(update_fields=['status'])
         row = self._create_pending_row(
             upload=upload,
             amount=Decimal('199.00'),
@@ -187,6 +189,9 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
         )
         self.card.refresh_from_db()
         self.assertEqual(self.card.balance, Decimal('1000.00'))
+        upload.refresh_from_db()
+        self.assertEqual(upload.needs_transfer_count, 0)
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
 
 
 class ReconciliationCreditIncomeGuardTest(CreditCardStatementBaseTest):

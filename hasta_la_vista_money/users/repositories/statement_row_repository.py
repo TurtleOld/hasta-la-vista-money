@@ -92,9 +92,23 @@ class StatementRowRepository:
         closed row never outlives its movement.
         """
         rows = self._linked_rows(movement)
-        reopened_ids = list(rows.values_list('pk', flat=True))
+        linked_rows = list(
+            rows.select_for_update()
+            .order_by('pk')
+            .values_list('pk', 'decision'),
+        )
+        if not linked_rows:
+            return []
         repeats = BankStatementRow.objects.filter(
-            canonical_row_id__in=reopened_ids,
+            canonical_row_id__in=[pk for pk, _ in linked_rows],
+        )
+        repeat_rows = list(
+            repeats.select_for_update()
+            .order_by('pk')
+            .values_list('pk', 'decision'),
+        )
+        repayment_ids = set(
+            rows.filter(_REPAYMENT_ROW).values_list('pk', flat=True),
         )
         uploads = list(
             BankStatementUpload.objects.filter(
@@ -106,11 +120,11 @@ class StatementRowRepository:
             ),
         )
         reopened = {'transaction': None, 'transfer': None, 'decided_at': None}
-        rows.filter(_REPAYMENT_ROW).update(
+        rows.filter(pk__in=repayment_ids).update(
             decision=BankStatementRow.Decision.NEEDS_TRANSFER,
             **reopened,
         )
-        rows.exclude(_REPAYMENT_ROW).update(
+        rows.exclude(pk__in=repayment_ids).update(
             decision=BankStatementRow.Decision.PENDING,
             **reopened,
         )
@@ -118,6 +132,26 @@ class StatementRowRepository:
             decision=BankStatementRow.Decision.PENDING,
             canonical_row=None,
             decided_at=None,
+        )
+        is_transfer = isinstance(movement, TransferMoneyLog)
+        BankStatementDecisionAudit.objects.bulk_create(
+            [
+                BankStatementDecisionAudit(
+                    row_id=pk,
+                    actor_id=movement.user_id,
+                    previous_decision=previous_decision,
+                    decision=(
+                        BankStatementRow.Decision.NEEDS_TRANSFER
+                        if pk in repayment_ids
+                        else BankStatementRow.Decision.PENDING
+                    ),
+                    previous_transaction_pk=None
+                    if is_transfer
+                    else movement.pk,
+                    previous_transfer_pk=movement.pk if is_transfer else None,
+                )
+                for pk, previous_decision in (*linked_rows, *repeat_rows)
+            ],
         )
         return uploads
 
@@ -282,9 +316,18 @@ class StatementRowRepository:
         row.decided_at = timezone.now()
         row.save(update_fields=['transfer', 'decision', 'decided_at'])
 
-    def record_decision(self, row: BankStatementRow, actor_id: int) -> None:
+    def record_decision(
+        self,
+        row: BankStatementRow,
+        actor_id: int,
+        *,
+        previous_decision: str,
+    ) -> None:
         BankStatementDecisionAudit.objects.create(
             row=row,
             actor_id=actor_id,
             decision=row.decision,
+            previous_decision=previous_decision,
+            transaction_id=row.transaction_id,
+            transfer_id=row.transfer_id,
         )

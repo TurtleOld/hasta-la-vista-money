@@ -36,6 +36,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.protocols.services import (
+    StatementBalanceVerificationServiceProtocol,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
@@ -95,8 +98,16 @@ class BulkDecisionResult:
 class BankStatementReconciliationService:
     """Apply an owner decision to a probable statement duplicate."""
 
-    def __init__(self, balance_service: BalanceService | None = None) -> None:
+    def __init__(
+        self,
+        balance_service: BalanceService | None = None,
+        *,
+        balance_verification_service: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
+    ) -> None:
         self._balance_service = balance_service or BalanceService()
+        self._balance_verification_service = balance_verification_service
 
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
@@ -232,13 +243,13 @@ class BankStatementReconciliationService:
             row=row,
             actor_id=user_id,
             decision=decision,
+            previous_decision=BankStatementRow.Decision.PENDING,
             transaction=row.transaction,
             transfer=row.transfer,
         )
         self.refresh_outcome_counts(upload)
-        if is_statement_complete(upload):
-            upload.status = BankStatementUpload.Status.COMPLETED
-            upload.save(update_fields=['status'])
+        if self._balance_verification_service is not None:
+            self._balance_verification_service.verify_completed(upload)
         return row
 
     @transaction.atomic
@@ -405,7 +416,13 @@ class BankStatementReconciliationService:
         return uploads.get()
 
     @staticmethod
+    @transaction.atomic
     def refresh_outcome_counts(upload: BankStatementUpload) -> None:
+        """Synchronize persisted row outcomes with the upload under its lock."""
+        upload.refresh_from_db(
+            from_queryset=BankStatementUpload.objects.select_for_update(),
+            fields=['status', 'retention_cleaned_at', 'total_transactions'],
+        )
         decisions = (
             BankStatementRow.objects.filter(upload=upload)
             .values(
@@ -437,15 +454,24 @@ class BankStatementReconciliationService:
             upload.income_count + upload.expense_count,
             counts.get(BankStatementRow.Decision.NEW, 0),
         )
-        upload.save(
-            update_fields=[
-                'linked_count',
-                'awaiting_decision_count',
-                'needs_transfer_count',
-                'expired_count',
-                'imported_count',
-            ],
-        )
+        update_fields = [
+            'linked_count',
+            'awaiting_decision_count',
+            'needs_transfer_count',
+            'expired_count',
+            'imported_count',
+        ]
+        if upload.retention_cleaned_at is None and upload.status in {
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            BankStatementUpload.Status.COMPLETED,
+        }:
+            upload.status = (
+                BankStatementUpload.Status.COMPLETED
+                if is_statement_complete(upload)
+                else BankStatementUpload.Status.AWAITING_CONFIRMATION
+            )
+            update_fields.append('status')
+        upload.save(update_fields=update_fields)
 
     def _validated_candidate(
         self,
@@ -753,6 +779,7 @@ class BankStatementReconciliationService:
             row=row,
             actor_id=user_id,
             decision=row.decision,
+            previous_decision=BankStatementRow.Decision.NEEDS_TRANSFER,
         )
         self.refresh_outcome_counts(row.upload)
         return row
