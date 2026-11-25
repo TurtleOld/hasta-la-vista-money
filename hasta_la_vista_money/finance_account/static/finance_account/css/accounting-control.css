@@ -22,13 +22,13 @@
 }
 
 .statement-control .control-measurements {
-  align-items: start;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-count: 2;
+  column-gap: 1rem;
 }
 
 .statement-control .control-card {
+  break-inside: avoid;
+  margin-bottom: 1rem;
   min-width: 0;
   padding: 1rem 1.25rem 1.25rem;
 }
@@ -54,7 +54,7 @@
 
 @media (max-width: 54rem) {
   .statement-control .control-measurements {
-    grid-template-columns: minmax(0, 1fr);
+    column-count: 1;
   }
 }
 
