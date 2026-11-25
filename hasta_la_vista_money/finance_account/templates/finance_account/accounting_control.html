@@ -44,11 +44,11 @@
                 </div>
                 <div class="statement-field">
                     <label for="control-period-start">{% translate 'Начало периода' %}</label>
-                    <input id="control-period-start" type="date" name="period_start" value="{{ period_start|date:'Y-m-d' }}" class="statement-select">
+                    <input id="control-period-start" type="date" data-flatpickr data-flatpickr-disable-mobile name="period_start" value="{{ period_start|date:'Y-m-d' }}" class="statement-select">
                 </div>
                 <div class="statement-field">
                     <label for="control-period-end">{% translate 'Конец периода' %}</label>
-                    <input id="control-period-end" type="date" name="period_end" value="{{ period_end|date:'Y-m-d' }}" class="statement-select">
+                    <input id="control-period-end" type="date" data-flatpickr data-flatpickr-disable-mobile name="period_end" value="{{ period_end|date:'Y-m-d' }}" class="statement-select">
                 </div>
                 <button type="submit" class="finances-button finances-button-primary">{% translate 'Показать' %}</button>
             </form>

@@ -62,6 +62,7 @@ function buildFlatpickrOptions(element) {
     dateFormat: 'Y-m-d',
     altInput: true,
     altFormat: 'd.m.Y',
+    disableMobile: element.hasAttribute('data-flatpickr-disable-mobile'),
   };
 }
 
@@ -100,7 +101,16 @@ export function initializeFlatpickr(rootElement = document) {
     }
 
     try {
+      const label = element.labels?.[0];
       const instance = flatpickr(element, buildFlatpickrOptions(element));
+      if (
+        label &&
+        instance.altInput &&
+        element.hasAttribute('data-flatpickr-disable-mobile')
+      ) {
+        instance.altInput.id = `${element.id}-display`;
+        label.htmlFor = instance.altInput.id;
+      }
       enableHourAutoAdvance(instance);
     } catch (error) {
       console.error('flatpickr-init: failed to initialize', element, error);
