@@ -137,6 +137,19 @@ class RepaymentRowTransferServiceTest(RepaymentRowTransferBase):
         self.upload.refresh_from_db()
         self.assertEqual(self.upload.needs_transfer_count, 1)
 
+    def test_transfer_closes_upload_after_last_repayment(self) -> None:
+        self.upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        self.upload.save(update_fields=['status'])
+
+        self._transfer(self.row.pk)
+
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.needs_transfer_count, 0)
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+
     def test_transfer_without_row_keeps_matching_row_open(self) -> None:
         self._transfer(None)
 
