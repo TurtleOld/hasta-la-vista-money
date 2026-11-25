@@ -1140,6 +1140,119 @@ class TestFinancesView(TestCase):
             ).exists(),
         )
 
+    def test_owner_revokes_and_reconfirms_manual_coverage(self) -> None:
+        self.client.force_login(self.user)
+        url = self._control_url(self.account)
+        bounds = {
+            'account': self.account.pk,
+            'period_start': '2026-03-01',
+            'period_end': '2026-03-31',
+        }
+        self.client.post(url, bounds)
+        original = StatementPeriodCoverage.objects.get(account=self.account)
+        self.assertContains(self.client.get(url), 'Отозвать подтверждение')
+        self.client.post(
+            url,
+            {
+                **bounds,
+                'action': 'revoke_coverage',
+                'coverage_id': original.pk,
+                'reason': 'Обнаружены пропущенные дни.',
+            },
+        )
+
+        original.refresh_from_db()
+        self.assertFalse(original.is_actual)
+        self.assertEqual(original.author, self.user)
+        self.assertEqual(original.revoked_by, self.user)
+        self.assertIsNotNone(original.revoked_at)
+        self.assertEqual(
+            original.revocation_note,
+            'Обнаружены пропущенные дни.',
+        )
+        self.assertEqual(
+            self.client.get(url).context['control'].coverage.state,
+            'unknown',
+        )
+
+        self.client.post(url, bounds)
+        response = self.client.post(
+            url,
+            {
+                **bounds,
+                'action': 'revoke_coverage',
+                'coverage_id': original.pk,
+                'reason': 'Повторный запрос.',
+            },
+            follow=True,
+        )
+        original.refresh_from_db()
+        self.assertContains(response, 'Отозванные подтверждения')
+        self.assertContains(response, 'Обнаружены пропущенные дни.')
+        self.assertEqual(
+            original.revocation_note,
+            'Обнаружены пропущенные дни.',
+        )
+        self.assertFalse(original.is_actual)
+        self.assertEqual(
+            StatementPeriodCoverage.objects.filter(
+                account=self.account,
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            self.client.get(url).context['control'].coverage.state,
+            'covered',
+        )
+
+    def test_revoke_coverage_requires_reason_and_own_manual_record(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+        url = self._control_url(self.account)
+        start, end = date(2026, 3, 1), date(2026, 3, 31)
+        own = StatementPeriodCoverage.objects.create(
+            account=self.account,
+            period_start=start,
+            period_end=end,
+            source=StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+        )
+        bank = StatementPeriodCoverage.objects.create(
+            account=self.account,
+            period_start=start,
+            period_end=end,
+            source=StatementPeriodCoverage.Source.BANK_STATEMENT,
+        )
+        foreign_user = User.objects.create_user(username='coverage-foreign')
+        foreign_account = Account.objects.create(
+            user=foreign_user,
+            name_account='Другой счёт',
+        )
+        foreign = StatementPeriodCoverage.objects.create(
+            account=foreign_account,
+            period_start=start,
+            period_end=end,
+            source=StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+        )
+        for record, reason in (
+            (own, '  '),
+            (bank, 'Ошибка'),
+            (foreign, 'Ошибка'),
+        ):
+            with self.subTest(record=record.pk):
+                self.client.post(
+                    url,
+                    {
+                        'action': 'revoke_coverage',
+                        'account': self.account.pk,
+                        'coverage_id': record.pk,
+                        'reason': reason,
+                    },
+                )
+                record.refresh_from_db()
+                self.assertTrue(record.is_actual)
+                self.assertIsNone(record.revoked_at)
+
     def test_accounting_control_does_not_block_statistics(self) -> None:
         self.client.force_login(self.user)
 

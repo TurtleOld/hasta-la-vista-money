@@ -142,6 +142,26 @@
                             <span>{{ interval.period_start|date:'d.m.Y' }} — {{ interval.period_end|date:'d.m.Y' }}</span>
                             <span class="finances-row-sub">{{ interval.source_label }}{% if interval.author %} · {{ interval.author.username }}{% endif %}</span>
                         </div>
+                        {% if can_write and interval.source == 'manual_confirmation' %}
+                            <details class="control-coverage-form">
+                                <summary>{% translate 'Отозвать подтверждение' %}</summary>
+                                <form method="post" class="statement-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="{{ revoke_coverage_action }}">
+                                    <input type="hidden" name="coverage_id" value="{{ interval.coverage.pk }}">
+                                    <input type="hidden" name="account" value="{{ selected_account.pk }}">
+                                    <input type="hidden" name="period_start" value="{{ period_start|date:'Y-m-d' }}">
+                                    <input type="hidden" name="period_end" value="{{ period_end|date:'Y-m-d' }}">
+                                    {% if request.GET.group_id %}<input type="hidden" name="group_id" value="{{ request.GET.group_id }}">{% endif %}
+                                    <p class="statement-help">{% blocktranslate with start=interval.coverage.period_start|date:'d.m.Y' end=interval.coverage.period_end|date:'d.m.Y' %}Будет отозвано подтверждение за весь период {{ start }} — {{ end }}.{% endblocktranslate %}</p>
+                                    <label class="statement-field">
+                                        <span>{% translate 'Причина отзыва' %}</span>
+                                        <input type="text" name="reason" required maxlength="{{ revocation_form.reason.field.max_length }}" class="statement-select">
+                                    </label>
+                                    <button type="submit" class="finances-button finances-button-secondary">{% translate 'Подтвердить отзыв' %}</button>
+                                </form>
+                            </details>
+                        {% endif %}
                     {% endfor %}
                     {% for gap in control.coverage.gaps %}
                         <div class="control-row control-gap">
@@ -149,6 +169,20 @@
                             <span class="finances-row-sub">{% translate 'Разрыв покрытия' %}</span>
                         </div>
                     {% endfor %}
+                    {% if can_write and control.coverage.manual_revocations %}
+                        <details class="control-coverage-form">
+                            <summary>{% translate 'Отозванные подтверждения' %}</summary>
+                            {% for revision in control.coverage.manual_revocations %}
+                                <div class="control-row">
+                                    <div>
+                                        <p>{{ revision.period_start|date:'d.m.Y' }} — {{ revision.period_end|date:'d.m.Y' }}</p>
+                                        <p class="statement-help">{{ revision.revocation_note }}</p>
+                                    </div>
+                                    <span class="finances-row-sub">{{ revision.revoked_at|date:'d.m.Y H:i' }}{% if revision.revoked_by %} · {{ revision.revoked_by.username }}{% endif %}</span>
+                                </div>
+                            {% endfor %}
+                        </details>
+                    {% endif %}
                     {% if can_write %}
                         <form method="post" class="statement-form control-coverage-form">
                             {% csrf_token %}

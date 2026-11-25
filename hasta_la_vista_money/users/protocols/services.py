@@ -350,6 +350,14 @@ class StatementCoverageServiceProtocol(Protocol):
         period_end: date,
     ) -> StatementPeriodCoverage: ...
 
+    def revoke_manual(
+        self,
+        user: User,
+        account: Account,
+        coverage_id: int,
+        reason: str,
+    ) -> None: ...
+
     def summary(
         self,
         account: Account,

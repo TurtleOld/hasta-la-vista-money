@@ -556,6 +556,13 @@ class BankStatementUploadForm(Form):
         return pdf_file
 
 
+class ManualCoverageRevocationForm(Form):
+    """Require a reason for withdrawing a manual coverage confirmation."""
+
+    coverage_id = IntegerField(min_value=1)
+    reason = CharField(max_length=constants.TWO_HUNDRED_FIFTY)
+
+
 class ManualCoverageForm(Form):
     """Owner confirmation of an accounting period without a bank statement."""
 

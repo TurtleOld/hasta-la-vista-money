@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
     StatementPeriodCoverage,
 )
@@ -35,6 +36,7 @@ class CoverageInterval:
     source_label: str
     upload: BankStatementUpload | None
     author: User | None
+    coverage: StatementPeriodCoverage
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,7 @@ class CoverageSummary:
     state_label: str
     intervals: tuple[CoverageInterval, ...]
     gaps: tuple[CoverageGap, ...]
+    manual_revocations: tuple[StatementPeriodCoverage, ...]
 
 
 class StatementCoverageService:
@@ -167,6 +170,29 @@ class StatementCoverageService:
             author=user,
         )
 
+    def revoke_manual(
+        self,
+        user: User,
+        account: 'Account',
+        coverage_id: int,
+        reason: str,
+    ) -> None:
+        """Withdraw an active manual confirmation as the account owner."""
+        if account.user_id != user.pk:
+            raise PermissionDenied(_('Покрытие отзывает только владелец.'))
+        reason = reason.strip()
+        if not reason or len(reason) > constants.TWO_HUNDRED_FIFTY:
+            raise ValidationError(_('Укажите причину отзыва.'))
+        if not self._coverage_repository.revoke_manual(
+            account_id=account.pk,
+            coverage_id=coverage_id,
+            author=user,
+            reason=reason,
+        ):
+            raise ValidationError(
+                _('Активное ручное подтверждение не найдено.'),
+            )
+
     def summary(
         self,
         account: 'Account',
@@ -212,6 +238,13 @@ class StatementCoverageService:
             state_label=str(label),
             intervals=intervals,
             gaps=gaps,
+            manual_revocations=tuple(
+                self._coverage_repository.manual_revocations(
+                    account.pk,
+                    period_start,
+                    period_end,
+                ),
+            ),
         )
 
     @staticmethod
@@ -230,6 +263,7 @@ class StatementCoverageService:
             source_label=str(coverage.get_source_display()),
             upload=coverage.upload,
             author=coverage.author,
+            coverage=coverage,
         )
 
     @staticmethod
