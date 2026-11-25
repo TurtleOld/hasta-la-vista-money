@@ -553,11 +553,7 @@ class StatementMarkupService:
 
     def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if (
-            upload.status == BankStatementUpload.Status.COMPLETED
-            and upload.statement_closing_balance is not None
-        ):
-            self._balance_verification_service.verify(upload)
+        self._balance_verification_service.verify_completed(upload)
 
     def _create_movement(
         self,

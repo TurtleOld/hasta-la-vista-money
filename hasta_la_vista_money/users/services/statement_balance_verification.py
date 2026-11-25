@@ -115,6 +115,14 @@ class StatementBalanceVerificationService:
             )
         return None
 
+    def verify_completed(self, upload: BankStatementUpload) -> None:
+        """Check a completed upload with a reported closing balance."""
+        if (
+            upload.status == BankStatementUpload.Status.COMPLETED
+            and upload.statement_closing_balance is not None
+        ):
+            self.verify(upload)
+
     def verify(self, upload: BankStatementUpload) -> BankStatementUpload:
         """Recompute and store the balance result for one upload.
 

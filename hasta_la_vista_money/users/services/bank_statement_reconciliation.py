@@ -36,6 +36,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.protocols.services import (
+    StatementBalanceVerificationServiceProtocol,
+)
 from hasta_la_vista_money.users.repositories.transfer_matching import (
     find_mirroring_transfers,
     local_row_date,
@@ -95,8 +98,16 @@ class BulkDecisionResult:
 class BankStatementReconciliationService:
     """Apply an owner decision to a probable statement duplicate."""
 
-    def __init__(self, balance_service: BalanceService | None = None) -> None:
+    def __init__(
+        self,
+        balance_service: BalanceService | None = None,
+        *,
+        balance_verification_service: (
+            StatementBalanceVerificationServiceProtocol | None
+        ) = None,
+    ) -> None:
         self._balance_service = balance_service or BalanceService()
+        self._balance_verification_service = balance_verification_service
 
     @staticmethod
     def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
@@ -236,6 +247,8 @@ class BankStatementReconciliationService:
             transfer=row.transfer,
         )
         self.refresh_outcome_counts(upload)
+        if self._balance_verification_service is not None:
+            self._balance_verification_service.verify_completed(upload)
         return row
 
     @transaction.atomic
