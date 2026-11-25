@@ -246,30 +246,20 @@ class BankStatementUploadView(
             _reconciliation_service(self.request).upload_history(user.pk),
             PAGINATE_BY_DEFAULT,
         ).get_page(self.request.GET.get('page'))
-        # Check if there's an ongoing upload
-        last_upload_id = self.request.session.get('last_upload_id')
+        # Open progress only for the upload just submitted.
+        last_upload_id = self.request.session.pop('last_upload_id', None)
         if last_upload_id:
-            try:
-                upload = BankStatementUpload.objects.get(
-                    id=last_upload_id,
-                    user=user,
-                )
-                # Show progress if not completed
-                if upload.status in [
-                    BankStatementUpload.Status.PENDING,
-                    BankStatementUpload.Status.PROCESSING,
-                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
-                ]:
-                    context['show_progress'] = True
-                    context['upload_id'] = upload.pk
-                if upload.status not in {
-                    BankStatementUpload.Status.PENDING,
-                    BankStatementUpload.Status.PROCESSING,
-                }:
-                    self.request.session.pop('last_upload_id', None)
-            except BankStatementUpload.DoesNotExist:
-                # Clear invalid session data
-                self.request.session.pop('last_upload_id', None)
+            upload = BankStatementUpload.objects.filter(
+                pk=last_upload_id,
+                user=user,
+            ).first()
+            if upload and upload.status in {
+                BankStatementUpload.Status.PENDING,
+                BankStatementUpload.Status.PROCESSING,
+                BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            }:
+                context['show_progress'] = True
+                context['upload_id'] = upload.pk
         return context
 
     def get_success_url(self) -> str:

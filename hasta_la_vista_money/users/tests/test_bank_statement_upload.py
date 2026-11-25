@@ -414,6 +414,9 @@ class TestBankStatementUploadView(TestCase):
         self.assertTrue(response.context.get('show_progress'))
         self.assertEqual(response.context.get('upload_id'), upload.id)
 
+        returned = self.client.get(self.upload_url)
+        self.assertFalse(returned.context.get('show_progress', False))
+
     def test_return_to_upload_history_after_pending_review(self) -> None:
         upload = BankStatementUpload.objects.create(
             user=self.user,
