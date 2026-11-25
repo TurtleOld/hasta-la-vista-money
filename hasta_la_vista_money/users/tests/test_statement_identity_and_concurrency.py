@@ -3125,7 +3125,7 @@ class LegacyCompatibilityMigrationTest(TransactionTestCase):
     migrate_to = [
         (
             'users',
-            '0030_bankstatementupload_legacy_review_reason_and_more',
+            '0033_bankstatementupload_retention_pending_pdf_paths',
         ),
     ]
 
