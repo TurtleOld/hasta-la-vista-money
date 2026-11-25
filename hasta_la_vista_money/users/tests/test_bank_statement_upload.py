@@ -1014,6 +1014,29 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.upload.imported_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
 
+    def test_new_expense_can_exceed_current_account_balance(self) -> None:
+        self.account.balance = Decimal('100.00')
+        self.account.save(update_fields=['balance'])
+        self.row.amount = Decimal('200.00')
+        self.row.save(update_fields=['amount'])
+        url = reverse(
+            'finance_account:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.client.post(url, {'decision': 'new'})
+        self.client.post(url, {'decision': 'new'})
+
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(self.row.transaction_id)
+        self.assertEqual(self.account.balance, Decimal('-100.00'))
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+
     def test_decision_is_its_own_resolution_operation(self) -> None:
         """Resolving a row tags its audit entries as their own operation."""
         url = reverse(
