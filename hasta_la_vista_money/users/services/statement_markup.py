@@ -57,9 +57,6 @@ from hasta_la_vista_money.users.services.bank_statement import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
 )
-from hasta_la_vista_money.users.services.statement_completion import (
-    is_statement_complete,
-)
 
 REFUND_CATEGORY_NAME: Final = 'Возвраты'
 _NO_MERCHANT_KINDS: Final = frozenset(
@@ -467,7 +464,6 @@ class StatementMarkupService:
             previous_decision=BankStatementRow.Decision.SKIPPED,
             exclusion_code=previous_code,
         )
-        upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
         upload.account_balance_after = None
         upload.balance_discrepancy = None
         upload.balance_is_actual = False
@@ -476,7 +472,6 @@ class StatementMarkupService:
         )
         upload.save(
             update_fields=[
-                'status',
                 'account_balance_after',
                 'balance_discrepancy',
                 'balance_is_actual',
@@ -558,10 +553,6 @@ class StatementMarkupService:
 
     def _finalize(self, upload: BankStatementUpload) -> None:
         BankStatementReconciliationService.refresh_outcome_counts(upload)
-        if not is_statement_complete(upload):
-            return
-        upload.status = BankStatementUpload.Status.COMPLETED
-        upload.save(update_fields=['status'])
         self._balance_verification_service.verify_completed(upload)
 
     def _create_movement(

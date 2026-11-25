@@ -118,6 +118,7 @@ def _finalize_upload(
         if upload is None:
             return None
         upload.account.refresh_from_db(fields=['balance'])
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
         empty_parse = upload.total_transactions == 0
         complete = is_statement_complete(upload)
         unresolved = has_open_rows(upload)
@@ -153,7 +154,6 @@ def _finalize_upload(
                 container.users.statement_balance_verification_service()
             )
             upload = balance_service.verify(upload)
-        BankStatementReconciliationService.refresh_outcome_counts(upload)
     return upload
 
 
