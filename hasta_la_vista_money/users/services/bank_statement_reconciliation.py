@@ -670,8 +670,11 @@ class BankStatementReconciliationService:
         delta = amount
         if transaction_type == 'expense':
             delta = -delta
-        # ADR-0014: every balance change goes through the shared service.
-        self._balance_service.apply_account_deltas({account.pk: delta})
+        # The bank has already posted the transaction.
+        self._balance_service.apply_account_deltas(
+            {account.pk: delta},
+            check_funds=False,
+        )
         return created
 
     @staticmethod
