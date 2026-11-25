@@ -149,20 +149,14 @@
   white-space: nowrap;
 }
 
-/* One line per row on wide screens: actions fill the gap before the amount. */
 .statement-markup .markup-row {
   align-items: center;
   border-bottom: 1px solid var(--finances-border);
   display: grid;
   gap: 0.6rem 0.8rem;
-  grid-template-columns: 1rem 2.6rem minmax(10rem, 1fr) auto 7.5rem;
+  grid-template-columns: 1rem 2.6rem minmax(0, 1fr) auto;
   margin: 0;
   padding: 0.95rem 24px;
-}
-
-.statement-markup .markup-row .finances-row-amount {
-  grid-column: 5;
-  grid-row: 1;
 }
 
 .statement-markup .markup-row:last-child {
@@ -171,43 +165,33 @@
 
 .statement-markup .markup-row .finances-row-amount {
   font-size: 1rem;
+  grid-column: 4;
 }
 
 .statement-markup .markup-row .markup-actions {
-  grid-column: 4;
-  grid-row: 1;
-  justify-content: flex-end;
-}
-
-/* Transfer rows carry too many controls for one line. */
-.statement-markup .markup-row-stacked {
-  grid-template-columns: 1rem 2.6rem minmax(0, 1fr) auto;
-}
-
-.statement-markup .markup-row-stacked .finances-row-amount {
-  grid-column: 4;
-}
-
-.statement-markup .markup-row-stacked .markup-actions {
   grid-column: 3 / -1;
-  grid-row: 2;
   justify-content: flex-start;
 }
 
-@media (max-width: 1100px) {
-  .statement-markup .markup-row {
-    grid-template-columns: 1rem 2.6rem minmax(0, 1fr) auto;
-  }
+.statement-markup input[type='checkbox'] {
+  accent-color: var(--finances-accent);
+}
 
-  .statement-markup .markup-row .finances-row-amount {
-    grid-column: 4;
-  }
+.statement-markup .markup-exclusions {
+  margin-top: 1rem;
+}
 
-  .statement-markup .markup-row .markup-actions {
-    grid-column: 3 / -1;
-    grid-row: 2;
-    justify-content: flex-start;
-  }
+.statement-markup .markup-exclusions h2 {
+  font-size: 1.125rem;
+  line-height: 1.35;
+}
+
+.statement-markup .markup-exclusion-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.statement-markup .markup-exclusion-row .finances-row-amount {
+  grid-column: 2;
 }
 
 .statement-markup .markup-duplicate {
@@ -225,6 +209,14 @@
   }
 
   .statement-markup .markup-row .markup-actions {
+    grid-column: 1 / -1;
+  }
+
+  .statement-markup .markup-exclusion-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .statement-markup .markup-exclusion-row form {
     grid-column: 1 / -1;
   }
 
@@ -420,6 +412,27 @@
 
 .statement-upload [data-state='failed'] {
   --statement-progress-c: var(--finances-negative);
+}
+
+.statement-upload #progressReviewLink[hidden],
+.statement-upload [data-state='failed'] .statement-progress-track,
+.statement-upload [data-state='failed'] #progressPercent {
+  display: none;
+}
+
+.statement-upload .statement-progress[data-state='failed'] {
+  background: color-mix(in oklab, var(--finances-negative) 8%, var(--app-surface));
+  border-color: var(--finances-negative);
+}
+
+.statement-upload [data-state='failed'] .statement-progress-hd h2,
+.statement-upload .statement-history-error {
+  color: var(--finances-negative);
+}
+
+.statement-upload [data-state='failed'] #progressStatus {
+  color: var(--finances-text);
+  font-size: 0.95rem;
 }
 
 .statement-upload #progressPercent {

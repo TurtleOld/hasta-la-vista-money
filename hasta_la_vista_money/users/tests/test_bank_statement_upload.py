@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 from celery.exceptions import Retry
 from django.contrib.auth.models import Group
-from django.contrib.messages import get_messages
+from django.contrib.messages import SUCCESS, get_messages
 from django.core.files import File
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, OperationalError
@@ -184,11 +184,13 @@ class TestBankStatementUploadView(TestCase):
             upload.celery_task_id,
         )
 
-        # Check redirect and message
         self.assertRedirects(response, self.upload_url)
-        messages = list(get_messages(response.wsgi_request))
-        # Check that there's a success message
-        self.assertTrue(len(messages) > 0)
+        self.assertFalse(
+            any(
+                message.level == SUCCESS
+                for message in get_messages(response.wsgi_request)
+            ),
+        )
 
     def test_profile_form_stores_statement_retention_days(self) -> None:
         """The user chooses the term; the model rejects impossible terms."""
@@ -414,6 +416,44 @@ class TestBankStatementUploadView(TestCase):
         self.assertTrue(response.context.get('show_progress'))
         self.assertEqual(response.context.get('upload_id'), upload.id)
 
+        returned = self.client.get(self.upload_url)
+        self.assertFalse(returned.context.get('show_progress', False))
+
+    def test_return_to_upload_history_after_pending_review(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        session = self.client.session
+        session['last_upload_id'] = upload.pk
+        session.save()
+
+        first = self.client.get(self.upload_url)
+        self.assertTrue(first.context['show_progress'])
+        self.assertContains(first, 'id="progressReviewLink"')
+
+        returned = self.client.get(self.upload_url)
+        self.assertFalse(returned.context.get('show_progress', False))
+        self.assertEqual(list(returned.context['upload_history']), [upload])
+
+    def test_failed_upload_shows_error_even_if_processing_already_ended(
+        self,
+    ) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.FAILED,
+            error_message='Банк выписки не совпадает с банком счёта.',
+        )
+        session = self.client.session
+        session['last_upload_id'] = upload.pk
+        session.save()
+
+        response = self.client.get(self.upload_url)
+        self.assertTrue(response.context['show_progress'])
+        self.assertContains(response, upload.error_message)
+
     def test_no_progress_for_completed_upload(self) -> None:
         """Test that progress bar doesn't show for completed upload."""
         # Create a completed upload
@@ -606,6 +646,7 @@ class TestBankStatementUploadStatusView(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['status'], 'failed')
+        self.assertEqual(data['status_label'], str(upload.get_status_display()))
         self.assertEqual(data['error_message'], 'Тестовая ошибка')
         self.assertEqual(data['outcomes']['failed'], 1)
 

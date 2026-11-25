@@ -1,19 +1,77 @@
+.statement-control .control-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 1rem 0 1.5rem;
+}
+
 .statement-control .control-selector {
   align-items: end;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.75rem;
-  padding: 1rem 1.5rem 1.5rem;
+  grid-template-columns: minmax(13rem, 20rem) repeat(2, minmax(9rem, 11rem)) auto;
+  max-width: 100%;
+}
+
+.statement-control .statement-field .statement-select {
+  min-width: 0;
+}
+
+.statement-control input.statement-select[type='date'] {
+  background-image: none;
+  padding-inline-end: 0.875rem;
 }
 
 .statement-control .control-measurements {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  column-count: 2;
+  column-gap: 1rem;
 }
 
 .statement-control .control-card {
-  height: 100%;
+  break-inside: avoid;
+  margin-bottom: 1rem;
+  min-width: 0;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.statement-control .control-card > .composer-hd {
+  border-bottom: 1px solid var(--finances-border);
+  margin-bottom: 0.75rem;
+  padding: 0 0 0.75rem;
+}
+
+.statement-control .control-card h2 {
+  font-size: 1.125rem;
+  line-height: 1.35;
+}
+
+.statement-control .control-card .statement-history-row {
+  padding-inline: 0;
+}
+
+.statement-control .control-card .statement-form {
+  padding-inline: 0;
+}
+
+@media (max-width: 54rem) {
+  .statement-control .control-measurements {
+    column-count: 1;
+  }
+}
+
+@media (max-width: 46rem) {
+  .statement-control .control-selector {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .statement-control .control-selector .statement-field:first-of-type,
+  .statement-control .control-selector button {
+    grid-column: 1 / -1;
+  }
+
+  .statement-control .control-selector button {
+    justify-self: end;
+  }
 }
 
 .statement-control .control-adapter-note {

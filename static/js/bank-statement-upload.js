@@ -142,10 +142,6 @@ import { icon } from './icons.js';
             return false;
         }
 
-        if (url.startsWith('/')) {
-            return true;
-        }
-
         try {
             const urlObj = new URL(url, window.location.origin);
             return urlObj.origin === window.location.origin;
@@ -164,6 +160,7 @@ import { icon } from './icons.js';
         const progressPercent = document.getElementById('progressPercent');
         const progressTitle = document.getElementById('progressTitle');
         const progressStatus = document.getElementById('progressStatus');
+        const progressReviewLink = document.getElementById('progressReviewLink');
         const progressTransactions = document.getElementById('progressTransactions');
         const processedCount = document.getElementById('processedCount');
         const totalCount = document.getElementById('totalCount');
@@ -176,6 +173,14 @@ import { icon } from './icons.js';
         let uploadId = null;
 
         function updateProgress(data) {
+            const row = document.getElementById(`statement-upload-${uploadId}`);
+            if (row && data.status_label) {
+                row.querySelector('[data-upload-status]').textContent = data.status_label;
+                const historyError = row.querySelector('[data-upload-error]');
+                historyError.textContent = data.error_message || '';
+                historyError.hidden = !data.error_message;
+            }
+
             const progress = data.progress || 0;
             progressBar.style.width = progress + '%';
             progressPercent.textContent = progress + '%';
@@ -196,8 +201,12 @@ import { icon } from './icons.js';
                 if (pollInterval) {
                     clearInterval(pollInterval);
                 }
+                progressTitle.textContent = window.bankStatementTranslations.awaitingReview;
+                progressStatus.textContent = '';
+                progressTransactions.classList.add('hidden');
                 if (isValidRedirectUrl(data.reconciliation_url)) {
-                    window.location.assign(data.reconciliation_url);
+                    progressReviewLink.href = data.reconciliation_url;
+                    progressReviewLink.hidden = false;
                 }
             } else if (data.status === 'completed' || data.status === 'completed_with_unresolved') {
                 progressIndicator.dataset.state = 'done';
@@ -233,17 +242,11 @@ import { icon } from './icons.js';
                     clearInterval(pollInterval);
                 }
 
-                setTimeout(function() {
-                    const redirectUrl = window.bankStatementUrls.accountList;
-                    if (redirectUrl) {
-                        if (isValidRedirectUrl(redirectUrl)) {
-                            window.location.assign(redirectUrl);
-                        }
-                    }
-                }, 5000);
             } else if (data.status === 'failed') {
                 progressIndicator.dataset.state = 'failed';
-                progressStatus.textContent = `${window.bankStatementTranslations.error} ${data.error_message || window.bankStatementTranslations.unknownError}`;
+                progressTransactions.classList.add('hidden');
+                progressReviewLink.hidden = true;
+                progressStatus.textContent = data.error_message || window.bankStatementTranslations.unknownError;
 
                 progressTitle.textContent = window.bankStatementTranslations.processingError;
 
@@ -272,14 +275,10 @@ import { icon } from './icons.js';
                 });
         }
 
-        const contextUploadId = window.bankStatementData?.uploadId || '';
-        const showProgress = window.bankStatementData?.showProgress || false;
-        const lastUploadId = contextUploadId || window.bankStatementData?.sessionUploadId || '';
-
-        if (showProgress && lastUploadId) {
-            uploadId = lastUploadId;
+        const contextUploadId = window.bankStatementData?.uploadId;
+        if (window.bankStatementData?.showProgress && contextUploadId) {
+            uploadId = contextUploadId;
             progressIndicator.classList.remove('hidden');
-            progressIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
             pollInterval = setInterval(pollUploadStatus, 2000);
             pollUploadStatus();
         }

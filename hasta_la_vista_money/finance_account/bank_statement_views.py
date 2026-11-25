@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -124,17 +123,12 @@ def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
 
 class BankStatementUploadView(
     LoginRequiredMixin,
-    SuccessMessageMixin[BankStatementUploadForm],
     FormView[BankStatementUploadForm],
 ):
     """View for uploading bank statements in PDF format."""
 
     template_name = 'finance_account/bank_statement_upload.html'
     form_class = BankStatementUploadForm
-    success_message = _(
-        'Банковская выписка загружена и будет обработана в фоновом режиме. '
-        'Данные появятся в расходах и доходах в течение нескольких минут.',
-    )
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Add user to form kwargs."""
@@ -222,9 +216,6 @@ class BankStatementUploadView(
             # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
 
-            if created:
-                messages.success(self.request, str(self.success_message))
-
         except Exception as e:
             logger.exception(
                 'bank_statement_upload_failed',
@@ -246,31 +237,21 @@ class BankStatementUploadView(
             _reconciliation_service(self.request).upload_history(user.pk),
             PAGINATE_BY_DEFAULT,
         ).get_page(self.request.GET.get('page'))
-        # Check if there's an ongoing upload
-        last_upload_id = self.request.session.get('last_upload_id')
+        # Open progress only for the upload just submitted.
+        last_upload_id = self.request.session.pop('last_upload_id', None)
         if last_upload_id:
-            try:
-                upload = BankStatementUpload.objects.get(
-                    id=last_upload_id,
-                    user=user,
-                )
-                # Show progress if not completed
-                if upload.status in [
-                    BankStatementUpload.Status.PENDING,
-                    BankStatementUpload.Status.PROCESSING,
-                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
-                ]:
-                    context['show_progress'] = True
-                    context['upload_id'] = upload.pk
-                elif upload.status in {
-                    BankStatementUpload.Status.COMPLETED,
-                    BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
-                }:
-                    # Clear session if completed
-                    self.request.session.pop('last_upload_id', None)
-            except BankStatementUpload.DoesNotExist:
-                # Clear invalid session data
-                self.request.session.pop('last_upload_id', None)
+            upload = BankStatementUpload.objects.filter(
+                pk=last_upload_id,
+                user=user,
+            ).first()
+            if upload and upload.status in {
+                BankStatementUpload.Status.PENDING,
+                BankStatementUpload.Status.PROCESSING,
+                BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                BankStatementUpload.Status.FAILED,
+            }:
+                context['show_progress'] = True
+                context['upload_id'] = upload.pk
         return context
 
     def get_success_url(self) -> str:
@@ -309,6 +290,7 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
             return JsonResponse(
                 {
                     'status': upload.status,
+                    'status_label': str(upload.get_status_display()),
                     'progress': upload.progress,
                     'total_transactions': upload.total_transactions,
                     'processed_transactions': upload.processed_transactions,

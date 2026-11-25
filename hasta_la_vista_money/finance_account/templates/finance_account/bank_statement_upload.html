@@ -113,6 +113,9 @@
             <p id="progressTransactions" class="statement-help hidden">
                 {% translate 'Обработано транзакций:' %} <span id="processedCount">0</span> / <span id="totalCount">0</span>
             </p>
+            <a id="progressReviewLink" class="finances-button finances-button-secondary mt-3" hidden>
+                {% translate 'Открыть выписку' %}
+            </a>
         </section>
 
         <section id="reconciliationBlock" class="composer-card statement-recon hidden">
@@ -136,10 +139,11 @@
         <section class="composer-card statement-history">
             <div class="composer-hd"><h1>{% translate 'История загрузок' %}</h1></div>
             {% for history_upload in upload_history %}
-                <div class="statement-history-row">
+                <div id="statement-upload-{{ history_upload.pk }}" class="statement-history-row">
                     <div>
                         <p class="statement-history-account">{{ history_upload.account.name_account }}</p>
-                        <p class="statement-help">{{ history_upload.created_at|date:'d.m.Y H:i' }} · {{ history_upload.get_status_display }}</p>
+                        <p class="statement-help">{{ history_upload.created_at|date:'d.m.Y H:i' }} · <span data-upload-status>{{ history_upload.get_status_display }}</span></p>
+                        <p class="statement-help statement-history-error" data-upload-error {% if not history_upload.error_message %}hidden{% endif %}>{{ history_upload.error_message }}</p>
                         {% if history_upload.needs_transfer_count %}
                             <p class="statement-warning">
                                 {% blocktranslate with count=history_upload.needs_transfer_count %}Пропущено {{ count }} погашений — проведите их переводами{% endblocktranslate %}
@@ -176,13 +180,11 @@
 <script nonce="{{ request.csp_nonce }}">
     window.bankStatementData = {
         uploadId: '{{ upload_id|default:"" }}',
-        showProgress: {% if show_progress %}true{% else %}false{% endif %},
-        sessionUploadId: '{{ request.session.last_upload_id|default:"" }}'
+        showProgress: {% if show_progress %}true{% else %}false{% endif %}
     };
 
     window.bankStatementUrls = {
-        statusUrl: '{% url "finance_account:bank_statement_upload_status" 0 %}',
-        accountList: '{% url "finance_account:list" %}'
+        statusUrl: '{% url "finance_account:bank_statement_upload_status" 0 %}'
     };
 
     window.bankStatementTranslations = {
@@ -190,6 +192,7 @@
         fileUploaded: '{% translate "Файл загружен" %}',
         processing: '{% translate "Обрабатывается..." %}',
         processingStatement: '{% translate "Обработка выписки" %}',
+        awaitingReview: '{% translate "Выписка ожидает проверки" %}',
         completed: '{% translate "Завершено! Создано:" %}',
         incomes: '{% translate "доходов" %}',
         expenses: '{% translate "расходов" %}',
@@ -197,9 +200,8 @@
         pendingTransfersPrefix: '{% translate "Пропущено" %}',
         pendingTransfersSuffix: '{% translate "погашений — проведите их переводами" %}',
         done: '{% translate "Готово!" %}',
-        error: '{% translate "Ошибка:" %}',
         unknownError: '{% translate "Неизвестная ошибка" %}',
-        processingError: '{% translate "Ошибка обработки" %}',
+        processingError: '{% translate "Не удалось обработать выписку" %}',
         uploading: '{% translate "Загрузка..." %}',
         balanceMatch: '{% translate "Совпадает" %}',
         balanceMismatch: '{% translate "Расхождение" %}'

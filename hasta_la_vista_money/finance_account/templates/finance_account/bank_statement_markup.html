@@ -64,7 +64,7 @@
             <form id="markup-form" method="post" action="{% url 'finance_account:bank_statement_markup_decide' upload.pk %}">
                 {% csrf_token %}
                 {% for item in rows %}{% with row=item.row %}
-                    <div class="markup-row{% if item.can_transfer %} markup-row-stacked{% endif %}">
+                    <div class="markup-row">
                         <input type="hidden" name="row" value="{{ row.pk }}">
                         <span class="markup-row-check">
                             {% if row.kind != 'own_c2c' %}<input type="checkbox" name="rows" value="{{ row.pk }}" class="bulk-row" aria-label="{% translate 'Выбрать строку' %}">{% endif %}
@@ -135,8 +135,6 @@
                 {% endif %}
             </form>
 
-            {% include 'finance_account/partials/_statement_exclusions.html' %}
-
             {% if page_obj.has_other_pages %}
                 <nav class="finances-pagination" aria-label="{% translate 'Пагинация' %}">
                     {% if page_obj.has_previous %}<a class="finances-page-link" href="?page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
@@ -145,6 +143,7 @@
                 </nav>
             {% endif %}
         </section>
+        {% include 'finance_account/partials/_statement_exclusions.html' %}
     </div>
     <div id="category-modal"></div>
     <script nonce="{{ request.csp_nonce }}">

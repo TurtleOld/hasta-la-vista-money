@@ -564,7 +564,12 @@ class ManualCoverageForm(Form):
         input_formats=['%Y-%m-%d'],
         widget=DateInput(
             format='%Y-%m-%d',
-            attrs={'type': 'date'},
+            attrs={
+                'type': 'date',
+                'class': 'statement-select',
+                'data-flatpickr': 'true',
+                'data-flatpickr-disable-mobile': 'true',
+            },
         ),
     )
     period_end = DateField(
@@ -572,7 +577,12 @@ class ManualCoverageForm(Form):
         input_formats=['%Y-%m-%d'],
         widget=DateInput(
             format='%Y-%m-%d',
-            attrs={'type': 'date'},
+            attrs={
+                'type': 'date',
+                'class': 'statement-select',
+                'data-flatpickr': 'true',
+                'data-flatpickr-disable-mobile': 'true',
+            },
         ),
     )
 
