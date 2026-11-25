@@ -422,6 +422,27 @@
   --statement-progress-c: var(--finances-negative);
 }
 
+.statement-upload #progressReviewLink[hidden],
+.statement-upload [data-state='failed'] .statement-progress-track,
+.statement-upload [data-state='failed'] #progressPercent {
+  display: none;
+}
+
+.statement-upload .statement-progress[data-state='failed'] {
+  background: color-mix(in oklab, var(--finances-negative) 8%, var(--app-surface));
+  border-color: var(--finances-negative);
+}
+
+.statement-upload [data-state='failed'] .statement-progress-hd h2,
+.statement-upload .statement-history-error {
+  color: var(--finances-negative);
+}
+
+.statement-upload [data-state='failed'] #progressStatus {
+  color: var(--finances-text);
+  font-size: 0.95rem;
+}
+
 .statement-upload #progressPercent {
   color: var(--statement-progress-c);
   font-family: var(--font-mono);

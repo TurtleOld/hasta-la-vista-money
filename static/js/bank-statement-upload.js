@@ -173,6 +173,14 @@ import { icon } from './icons.js';
         let uploadId = null;
 
         function updateProgress(data) {
+            const row = document.getElementById(`statement-upload-${uploadId}`);
+            if (row && data.status_label) {
+                row.querySelector('[data-upload-status]').textContent = data.status_label;
+                const historyError = row.querySelector('[data-upload-error]');
+                historyError.textContent = data.error_message || '';
+                historyError.hidden = !data.error_message;
+            }
+
             const progress = data.progress || 0;
             progressBar.style.width = progress + '%';
             progressPercent.textContent = progress + '%';
@@ -198,7 +206,7 @@ import { icon } from './icons.js';
                 progressTransactions.classList.add('hidden');
                 if (isValidRedirectUrl(data.reconciliation_url)) {
                     progressReviewLink.href = data.reconciliation_url;
-                    progressReviewLink.classList.remove('hidden');
+                    progressReviewLink.hidden = false;
                 }
             } else if (data.status === 'completed' || data.status === 'completed_with_unresolved') {
                 progressIndicator.dataset.state = 'done';
@@ -236,7 +244,9 @@ import { icon } from './icons.js';
 
             } else if (data.status === 'failed') {
                 progressIndicator.dataset.state = 'failed';
-                progressStatus.textContent = `${window.bankStatementTranslations.error} ${data.error_message || window.bankStatementTranslations.unknownError}`;
+                progressTransactions.classList.add('hidden');
+                progressReviewLink.hidden = true;
+                progressStatus.textContent = data.error_message || window.bankStatementTranslations.unknownError;
 
                 progressTitle.textContent = window.bankStatementTranslations.processingError;
 

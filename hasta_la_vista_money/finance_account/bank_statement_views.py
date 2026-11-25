@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -124,17 +123,12 @@ def _link_service(request: HttpRequest) -> StatementRowLinkServiceProtocol:
 
 class BankStatementUploadView(
     LoginRequiredMixin,
-    SuccessMessageMixin[BankStatementUploadForm],
     FormView[BankStatementUploadForm],
 ):
     """View for uploading bank statements in PDF format."""
 
     template_name = 'finance_account/bank_statement_upload.html'
     form_class = BankStatementUploadForm
-    success_message = _(
-        'Банковская выписка загружена и будет обработана в фоновом режиме. '
-        'Данные появятся в расходах и доходах в течение нескольких минут.',
-    )
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Add user to form kwargs."""
@@ -222,9 +216,6 @@ class BankStatementUploadView(
             # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
 
-            if created:
-                messages.success(self.request, str(self.success_message))
-
         except Exception as e:
             logger.exception(
                 'bank_statement_upload_failed',
@@ -257,6 +248,7 @@ class BankStatementUploadView(
                 BankStatementUpload.Status.PENDING,
                 BankStatementUpload.Status.PROCESSING,
                 BankStatementUpload.Status.AWAITING_CONFIRMATION,
+                BankStatementUpload.Status.FAILED,
             }:
                 context['show_progress'] = True
                 context['upload_id'] = upload.pk
@@ -298,6 +290,7 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
             return JsonResponse(
                 {
                     'status': upload.status,
+                    'status_label': str(upload.get_status_display()),
                     'progress': upload.progress,
                     'total_transactions': upload.total_transactions,
                     'processed_transactions': upload.processed_transactions,
