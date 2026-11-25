@@ -113,6 +113,9 @@
             <p id="progressTransactions" class="statement-help hidden">
                 {% translate 'Обработано транзакций:' %} <span id="processedCount">0</span> / <span id="totalCount">0</span>
             </p>
+            <a id="progressReviewLink" class="finances-button finances-button-secondary mt-3 hidden">
+                {% translate 'Открыть выписку' %}
+            </a>
         </section>
 
         <section id="reconciliationBlock" class="composer-card statement-recon hidden">
@@ -176,13 +179,11 @@
 <script nonce="{{ request.csp_nonce }}">
     window.bankStatementData = {
         uploadId: '{{ upload_id|default:"" }}',
-        showProgress: {% if show_progress %}true{% else %}false{% endif %},
-        sessionUploadId: '{{ request.session.last_upload_id|default:"" }}'
+        showProgress: {% if show_progress %}true{% else %}false{% endif %}
     };
 
     window.bankStatementUrls = {
-        statusUrl: '{% url "finance_account:bank_statement_upload_status" 0 %}',
-        accountList: '{% url "finance_account:list" %}'
+        statusUrl: '{% url "finance_account:bank_statement_upload_status" 0 %}'
     };
 
     window.bankStatementTranslations = {
@@ -190,6 +191,7 @@
         fileUploaded: '{% translate "Файл загружен" %}',
         processing: '{% translate "Обрабатывается..." %}',
         processingStatement: '{% translate "Обработка выписки" %}',
+        awaitingReview: '{% translate "Выписка ожидает проверки" %}',
         completed: '{% translate "Завершено! Создано:" %}',
         incomes: '{% translate "доходов" %}',
         expenses: '{% translate "расходов" %}',

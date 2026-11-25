@@ -414,6 +414,24 @@ class TestBankStatementUploadView(TestCase):
         self.assertTrue(response.context.get('show_progress'))
         self.assertEqual(response.context.get('upload_id'), upload.id)
 
+    def test_return_to_upload_history_after_pending_review(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        session = self.client.session
+        session['last_upload_id'] = upload.pk
+        session.save()
+
+        first = self.client.get(self.upload_url)
+        self.assertTrue(first.context['show_progress'])
+        self.assertContains(first, 'id="progressReviewLink"')
+
+        returned = self.client.get(self.upload_url)
+        self.assertFalse(returned.context.get('show_progress', False))
+        self.assertEqual(list(returned.context['upload_history']), [upload])
+
     def test_no_progress_for_completed_upload(self) -> None:
         """Test that progress bar doesn't show for completed upload."""
         # Create a completed upload

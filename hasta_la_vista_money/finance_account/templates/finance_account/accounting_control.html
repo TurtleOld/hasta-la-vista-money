@@ -16,9 +16,7 @@
     <div class="finances-wrap">
         <header class="finances-header">
             <div>
-                <div class="finances-kicker">{% translate 'Финансы' %}</div>
                 <h1 class="finances-title">{% translate 'Контроль учёта' %}</h1>
-                <p class="finances-muted mt-3">{% translate 'Техническая обработка, разрешение строк, доступность банковских данных, покрытие и проверка остатка показываются раздельно.' %}</p>
             </div>
             <div class="finances-actions">
                 <a href="{% url 'finances' %}" class="finances-button finances-button-secondary">
@@ -30,11 +28,8 @@
             </div>
         </header>
 
-        <section class="composer-card">
-            <div class="composer-hd">
-                <h2>{% translate 'Счёт и период' %}</h2>
-            </div>
-            <form method="get" class="statement-form control-selector">
+        <section class="control-toolbar" aria-label="{% translate 'Счёт и период' %}">
+            <form method="get" class="control-selector">
                 {% if request.GET.group_id %}
                     <input type="hidden" name="group_id" value="{{ request.GET.group_id }}">
                 {% endif %}
@@ -64,8 +59,6 @@
                 <p class="statement-help">{% translate 'Выберите счёт и период, чтобы увидеть контроль учёта.' %}</p>
             </section>
         {% else %}
-            <p class="control-adapter-note">{{ control.adapter_note }}</p>
-
             <div class="control-measurements">
                 <section class="composer-card control-card">
                     <div class="composer-hd">
@@ -266,6 +259,7 @@
                     {% endfor %}
                 </section>
             </div>
+            <p class="control-adapter-note">{{ control.adapter_note }}</p>
         {% endif %}
     </div>
 </main>

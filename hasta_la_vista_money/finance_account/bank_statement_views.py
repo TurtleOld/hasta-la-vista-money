@@ -262,11 +262,10 @@ class BankStatementUploadView(
                 ]:
                     context['show_progress'] = True
                     context['upload_id'] = upload.pk
-                elif upload.status in {
-                    BankStatementUpload.Status.COMPLETED,
-                    BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+                if upload.status not in {
+                    BankStatementUpload.Status.PENDING,
+                    BankStatementUpload.Status.PROCESSING,
                 }:
-                    # Clear session if completed
                     self.request.session.pop('last_upload_id', None)
             except BankStatementUpload.DoesNotExist:
                 # Clear invalid session data
