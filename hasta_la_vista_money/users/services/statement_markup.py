@@ -549,8 +549,10 @@ class StatementMarkupService:
             row=row,
             actor_id=user_id,
             decision=row.decision,
+            previous_decision=BankStatementRow.Decision.AWAITING_MARKUP,
             exclusion_code=row.exclusion_code,
             transaction=row.transaction,
+            transfer=row.transfer,
         )
         if finalize:
             self._finalize(upload)

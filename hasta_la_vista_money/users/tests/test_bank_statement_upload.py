@@ -9927,7 +9927,9 @@ class TestBankStatementImportReliability(TestCase):
             upload.status,
             BankStatementUpload.Status.AWAITING_CONFIRMATION,
         )
-        audit = row.decision_audits.get()
+        audit = row.decision_audits.get(
+            previous_decision=BankStatementRow.Decision.EXPIRED,
+        )
         self.assertEqual(
             audit.decision,
             BankStatementRow.Decision.AWAITING_MARKUP,
@@ -10030,8 +10032,18 @@ class TestBankStatementImportReliability(TestCase):
             self.assertEqual(Transaction.objects.count(), 0)
 
         self.assertEqual(row.pk, row_pk)
-        self.assertEqual(row.decision_audits.count(), 1)
-        audit = row.decision_audits.get()
+        self.assertEqual(row.decision_audits.count(), 2)
+        expired = row.decision_audits.get(
+            decision=BankStatementRow.Decision.EXPIRED,
+        )
+        self.assertEqual(
+            expired.previous_decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertIsNone(expired.actor)
+        audit = row.decision_audits.get(
+            previous_decision=BankStatementRow.Decision.EXPIRED,
+        )
         self.assertEqual(audit.decision, BankStatementRow.Decision.PENDING)
         self.assertEqual(
             audit.previous_decision,
