@@ -77,6 +77,10 @@
                             <div>
                                 <p class="finances-row-title">{{ item.upload.get_status_display }}</p>
                                 <p class="statement-help">{{ item.upload.created_at|date:'d.m.Y H:i' }} · {{ item.markup_label }}</p>
+                                {% if item.upload.statement_period_from and item.upload.statement_period_to %}
+                                    <p class="statement-help">{% translate 'Период выписки' %}: {{ item.upload.statement_period_from|date:'d.m.Y' }} — {{ item.upload.statement_period_to|date:'d.m.Y' }}</p>
+                                {% endif %}
+                                {% if item.empty_parse %}<p class="statement-help">{{ item.empty_parse_label }}</p>{% endif %}
                                 {% if item.requires_legacy_review %}<p class="statement-help">{{ item.legacy_review_label }}</p>{% endif %}
                             </div>
                             <div class="finances-row-sub">{{ item.upload.progress }}%</div>

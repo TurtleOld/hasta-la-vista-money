@@ -959,6 +959,28 @@ class TestFinancesView(TestCase):
                 self.assertContains(response, heading)
         self.assertContains(response, 'Не проверено')
 
+    def test_accounting_control_shows_empty_statement_period_and_diagnostic(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+        BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/control-empty.pdf',
+            total_transactions=0,
+            statement_period_from=date(2026, 3, 1),
+            statement_period_to=date(2026, 3, 31),
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+        response = self.client.get(self._control_url(self.account))
+
+        self.assertContains(response, 'Период выписки')
+        self.assertContains(response, '01.03.2026')
+        self.assertContains(response, '31.03.2026')
+        self.assertContains(response, 'Пустой разбор')
+        self.assertEqual(response.context['control'].coverage.state, 'unknown')
+
     def test_accounting_control_rejects_malformed_account_id(self) -> None:
         self.client.force_login(self.user)
         malformed = '9' * 5000
