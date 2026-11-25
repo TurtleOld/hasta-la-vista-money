@@ -345,6 +345,7 @@ class StatementPeriodCoverage(models.Model):
             'period_revised',
             _('Период пересмотрен повторным разбором'),
         )
+        MANUAL_REVOKED = ('manual_revoked', _('Ручное подтверждение отозвано'))
 
     class Source(models.TextChoices):
         BANK_STATEMENT = 'bank_statement', _('Период банковской выписки')
@@ -382,6 +383,19 @@ class StatementPeriodCoverage(models.Model):
         blank=True,
         null=True,
     )
+    revoked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='revoked_statement_period_coverages',
+        blank=True,
+        null=True,
+    )
+    revoked_at = models.DateTimeField(blank=True, null=True)
+    revocation_note = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -395,7 +409,10 @@ class StatementPeriodCoverage(models.Model):
             ),
             models.UniqueConstraint(
                 fields=['account', 'period_start', 'period_end'],
-                condition=models.Q(source='manual_confirmation'),
+                condition=models.Q(
+                    source='manual_confirmation',
+                    is_actual=True,
+                ),
                 name='uniq_manual_stmt_coverage',
             ),
             models.UniqueConstraint(

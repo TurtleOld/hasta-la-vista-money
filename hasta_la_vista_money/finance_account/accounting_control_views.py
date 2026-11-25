@@ -17,6 +17,7 @@ from django.views.generic import TemplateView
 from hasta_la_vista_money.finance_account.forms import (
     BalanceExplanationForm,
     ManualCoverageForm,
+    ManualCoverageRevocationForm,
 )
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import Account
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 ACTION_COVERAGE: Final = 'coverage'
+ACTION_REVOKE_COVERAGE: Final = 'revoke_coverage'
 ACTION_EXPLAIN_BALANCE: Final = 'explain_balance'
 ACTION_RECHECK_BALANCE: Final = 'recheck_balance'
 
@@ -154,6 +156,8 @@ class AccountingControlView(
                 'explanation_form': (
                     BalanceExplanationForm() if writable else None
                 ),
+                'revoke_coverage_action': ACTION_REVOKE_COVERAGE,
+                'revocation_form': ManualCoverageRevocationForm(),
                 'explain_action': ACTION_EXPLAIN_BALANCE,
                 'recheck_action': ACTION_RECHECK_BALANCE,
             },
@@ -221,22 +225,14 @@ class AccountingControlView(
                     str(error) or _('Не удалось изменить проверку остатка.'),
                 )
         else:
-            coverage_form = ManualCoverageForm(request.POST)
-            if coverage_form.is_valid():
-                start = coverage_form.cleaned_data['period_start']
-                end = coverage_form.cleaned_data['period_end']
-                _coverage_service(request).confirm_manual(
-                    user,
-                    account,
-                    start,
-                    end,
-                )
-                messages.success(request, _('Период покрытия подтверждён.'))
-            else:
-                messages.error(
-                    request,
-                    _('Не удалось подтвердить период: проверьте даты.'),
-                )
+            confirmed = self._update_manual_coverage(
+                request,
+                user,
+                account,
+                action,
+            )
+            if confirmed is not None:
+                start, end = confirmed
         params = {
             'account': account.pk,
             'period_start': start.isoformat(),
@@ -249,3 +245,42 @@ class AccountingControlView(
         return redirect(
             f'{reverse("finance_account:accounting_control")}?{query}',
         )
+
+    @staticmethod
+    def _update_manual_coverage(
+        request: HttpRequest,
+        user: 'User',
+        account: Account,
+        action: str,
+    ) -> tuple[date, date] | None:
+        service = _coverage_service(request)
+        if action == ACTION_REVOKE_COVERAGE:
+            revocation = ManualCoverageRevocationForm(request.POST)
+            if not revocation.is_valid():
+                messages.error(request, _('Укажите причину отзыва.'))
+                return None
+            try:
+                service.revoke_manual(
+                    user,
+                    account,
+                    revocation.cleaned_data['coverage_id'],
+                    revocation.cleaned_data['reason'],
+                )
+            except ValidationError as error:
+                messages.error(request, error.messages[0])
+            else:
+                messages.success(request, _('Ручное подтверждение отозвано.'))
+            return None
+
+        coverage_form = ManualCoverageForm(request.POST)
+        if not coverage_form.is_valid():
+            messages.error(
+                request,
+                _('Не удалось подтвердить период: проверьте даты.'),
+            )
+            return None
+        start = coverage_form.cleaned_data['period_start']
+        end = coverage_form.cleaned_data['period_end']
+        service.confirm_manual(user, account, start, end)
+        messages.success(request, _('Период покрытия подтверждён.'))
+        return start, end

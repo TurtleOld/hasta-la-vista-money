@@ -3,6 +3,7 @@
 from datetime import date
 
 from django.db.models import QuerySet
+from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import (
     StatementPeriodCoverage,
@@ -68,7 +69,10 @@ class StatementCoverageRepository:
                     StatementPeriodCoverage.RevisionReason.PERIOD_REVISED
                 ),
             )
-        coverage, created = StatementPeriodCoverage.objects.get_or_create(
+        coverages = StatementPeriodCoverage.objects.all()
+        if source == StatementPeriodCoverage.Source.MANUAL_CONFIRMATION:
+            coverages = coverages.filter(is_actual=True)
+        coverage, created = coverages.get_or_create(
             account_id=account_id,
             upload=upload,
             source=source,
@@ -84,6 +88,50 @@ class StatementCoverageRepository:
             coverage.is_actual = True
             coverage.revision_reason = ''
         return coverage
+
+    @staticmethod
+    def manual_revocations(
+        account_id: int,
+        period_start: date,
+        period_end: date,
+    ) -> QuerySet[StatementPeriodCoverage]:
+        """Return revoked manual confirmations overlapping the period."""
+        return (
+            StatementPeriodCoverage.objects.filter(
+                account_id=account_id,
+                source=StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+                is_actual=False,
+                revoked_at__isnull=False,
+                period_start__lte=period_end,
+                period_end__gte=period_start,
+            )
+            .select_related('revoked_by')
+            .order_by('-revoked_at', '-pk')
+        )
+
+    def revoke_manual(
+        self,
+        *,
+        account_id: int,
+        coverage_id: int,
+        author: User,
+        reason: str,
+    ) -> bool:
+        """Revoke an active manual record once, keeping its original data."""
+        return bool(
+            StatementPeriodCoverage.objects.filter(
+                pk=coverage_id,
+                account_id=account_id,
+                source=StatementPeriodCoverage.Source.MANUAL_CONFIRMATION,
+                is_actual=True,
+            ).update(
+                is_actual=False,
+                revision_reason=StatementPeriodCoverage.RevisionReason.MANUAL_REVOKED,
+                revoked_by=author,
+                revoked_at=timezone.now(),
+                revocation_note=reason,
+            ),
+        )
 
     def retire_without_bounds(
         self,
