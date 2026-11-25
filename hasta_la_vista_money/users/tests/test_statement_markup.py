@@ -524,6 +524,13 @@ class StatementOwnTransferTest(StatementMarkupFixture):
         self.assertEqual(transfer.from_account, self.account)
         self.assertEqual(transfer.to_account, self.other)
         self.assertIsNone(row.transaction)
+        audit = row.decision_audits.get()
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertEqual(audit.decision, BankStatementRow.Decision.TRANSFERRED)
+        self.assertEqual(audit.transfer, transfer)
 
     def test_transfer_keeps_known_bank_time(self) -> None:
         row = self._own_row()

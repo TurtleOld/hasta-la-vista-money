@@ -243,6 +243,7 @@ class BankStatementReconciliationService:
             row=row,
             actor_id=user_id,
             decision=decision,
+            previous_decision=BankStatementRow.Decision.PENDING,
             transaction=row.transaction,
             transfer=row.transfer,
         )
@@ -778,6 +779,7 @@ class BankStatementReconciliationService:
             row=row,
             actor_id=user_id,
             decision=row.decision,
+            previous_decision=BankStatementRow.Decision.NEEDS_TRANSFER,
         )
         self.refresh_outcome_counts(row.upload)
         return row

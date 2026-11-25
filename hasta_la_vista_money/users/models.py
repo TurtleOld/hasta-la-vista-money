@@ -24,6 +24,7 @@ from django.db.models import (
     IntegerField,
     JSONField,
     Model,
+    PositiveBigIntegerField,
     PositiveIntegerField,
     PositiveSmallIntegerField,
     Q,
@@ -648,6 +649,9 @@ class BankStatementDecisionAudit(Model):
         blank=True,
         null=True,
     )
+    # Keep the internal movement identifier when deletion clears its FK.
+    previous_transaction_pk = PositiveBigIntegerField(blank=True, null=True)
+    previous_transfer_pk = PositiveBigIntegerField(blank=True, null=True)
     created_at = DateTimeField(auto_now_add=True)
 
     class Meta:

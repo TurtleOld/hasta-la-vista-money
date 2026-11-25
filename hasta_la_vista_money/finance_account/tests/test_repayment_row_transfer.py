@@ -126,6 +126,8 @@ class RepaymentRowTransferServiceTest(RepaymentRowTransferBase):
             BankStatementDecisionAudit.objects.filter(
                 row=self.row,
                 actor=self.user,
+                previous_decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+                transfer=transfer,
                 decision=BankStatementRow.Decision.TRANSFERRED,
             ).exists(),
         )
@@ -209,6 +211,14 @@ class RepaymentRowTransferServiceTest(RepaymentRowTransferBase):
         self.assertIsNone(self.row.decided_at)
         self.upload.refresh_from_db()
         self.assertEqual(self.upload.needs_transfer_count, 1)
+        audit = self.row.decision_audits.get(
+            previous_decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        self.assertEqual(
+            audit.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertEqual(audit.previous_transfer_pk, transfer.pk)
 
 
 class RepaymentRowTransferViewTest(RepaymentRowTransferBase):
