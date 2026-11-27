@@ -1,5 +1,6 @@
 """Tests for bank statement upload functionality."""
 
+import signal
 import tempfile
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -55,6 +56,7 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
+    RAIFFEISEN_FALLBACK_POSITION_BASE,
     BankStatementParseError,
     BankStatementParser,
     StatementParseResult,
@@ -5621,6 +5623,193 @@ class TestRaiffeisenBankParser(TestCase):
         self.assertIsNone(transactions[0]['amount'])
         self.assertEqual(transactions[0]['row_position'], 1)
 
+    def test_compact_unreadable_amount_keeps_date_and_purpose_fragment(
+        self,
+    ) -> None:
+        """A dated purpose without amount or document stays visible."""
+        parser = self._make_parser()
+        layouts = [
+            [['01.09.2026 10:00:00', '', 'Комиссия банка', '']],
+            [['01.09.2026', '', 'Комиссия банка', '']],
+            [
+                ['01.09.2026 10:00:00', '', '', ''],
+                ['', '', 'Комиссия банка', ''],
+            ],
+            [
+                ['01.09.2026', '', '', ''],
+                ['', '', 'Комиссия банка', ''],
+            ],
+        ]
+
+        for rows in layouts:
+            with self.subTest(rows=rows):
+                transactions = parser._parse_table(pd.DataFrame(rows))
+
+                self.assertEqual(len(transactions), 1)
+                self.assertEqual(
+                    transactions[0]['parse_issue'],
+                    'unsupported',
+                )
+                self.assertIsNone(transactions[0]['amount'])
+                self.assertEqual(
+                    transactions[0]['description'],
+                    'Комиссия банка',
+                )
+                self.assertIsNotNone(transactions[0]['date'])
+
+    def test_compact_unreadable_amount_survives_neighbour_operation(
+        self,
+    ) -> None:
+        """A broken operation after a parsed one is not treated as its tail."""
+        parser = self._make_parser()
+        layouts = [
+            [
+                ['01.02.2026 18:14', '', '', ''],
+                ['', '+ 1 000,00 ₽', 'Перевод средств', ''],
+                ['02.02.2026', '', 'Комиссия банка', ''],
+            ],
+            [
+                ['01.02.2026 18:14', '', '', ''],
+                ['', '+ 1 000,00 ₽', 'Перевод средств', ''],
+                ['01.02.2026', '', 'Комиссия банка', ''],
+            ],
+            [
+                ['01.02.2026 18:14', '', '', ''],
+                ['', '+ 1 000,00 ₽', 'Перевод средств', ''],
+                ['02.02.2026', '', '', ''],
+                ['', '', 'Комиссия банка', ''],
+            ],
+        ]
+
+        for rows in layouts:
+            with self.subTest(rows=rows):
+                transactions = parser._parse_table(pd.DataFrame(rows))
+
+                self.assertEqual(len(transactions), 2)
+                self.assertEqual(
+                    transactions[0]['amount'],
+                    Decimal('1000.00'),
+                )
+                fragment = transactions[1]
+                self.assertEqual(fragment['parse_issue'], 'unsupported')
+                self.assertIsNone(fragment['amount'])
+                self.assertEqual(fragment['description'], 'Комиссия банка')
+                self.assertIsNotNone(fragment['date'])
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    def test_compact_zero_amount_row_stays_visible_as_problem_fragment(
+        self,
+        mock_extract_text: MagicMock,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A compact zero-amount row is kept as a problem fragment."""
+        table = MagicMock()
+        table.df = pd.DataFrame(
+            [
+                ['01.02.2026 18:14', '', '', ''],
+                ['', '0,00 ₽', 'Комиссия', ''],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [table]
+
+        result = self._make_parser().parse()
+
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]['amount'], Decimal('0.00'))
+        self.assertEqual(
+            result.transactions[0]['parse_issue'],
+            'zero_amount',
+        )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_compact_rows_without_document_get_unique_positions_across_pages(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """Rows without a printed number never share one statement position."""
+        first_page = MagicMock()
+        first_page.df = pd.DataFrame(
+            [
+                ['', '', '', ''],
+                ['01.02.2026 18:14', '', '', ''],
+                ['', '+ 1 000,00 ₽', 'Перевод средств', ''],
+            ],
+        )
+        second_page = MagicMock()
+        second_page.df = pd.DataFrame(
+            [
+                ['', '', '', ''],
+                ['02.02.2026 09:10', '', '', ''],
+                ['', '- 500,00 ₽', 'Оплата покупки', ''],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [first_page, second_page]
+
+        result = self._make_parser().parse()
+
+        positions = [item['row_position'] for item in result.transactions]
+        self.assertEqual(len(positions), 2)
+        self.assertEqual(len(set(positions)), 2)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.extract_text',
+        return_value='',
+    )
+    def test_zero_amount_row_stays_visible_as_problem_fragment(
+        self,
+        mock_extract_text: MagicMock,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A zero-amount row is kept as a fragment instead of being dropped."""
+        table = MagicMock()
+        table.df = pd.DataFrame(
+            [
+                [
+                    '1',
+                    '01.02.2026 18:14',
+                    'DOC-1',
+                    '',
+                    '0,00 ₽',
+                    'Комиссия',
+                    '',
+                ],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [table]
+
+        result = self._make_parser().parse()
+
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]['amount'], Decimal('0.00'))
+        self.assertEqual(
+            result.transactions[0]['parse_issue'],
+            'zero_amount',
+        )
+
+    def test_clean_description_with_long_digit_run_is_fast(self) -> None:
+        """A long digit run without a currency marker cannot stall cleaning."""
+
+        def _raise_timeout(_signum: int, _frame: Any) -> None:
+            raise TimeoutError('description cleaning exceeded its budget')
+
+        parser = self._make_parser()
+        description = 'Покупка ' + '1' * 40
+        previous_handler = signal.signal(signal.SIGALRM, _raise_timeout)
+        signal.setitimer(signal.ITIMER_REAL, 2.0)
+        try:
+            result = parser._clean_description(description)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+
+        self.assertIn('Покупка', result)
+        self.assertIn('1' * 40, result)
+
     def test_real_statement_matches_bank_summary(self) -> None:
         """Real anonymized statement parses all rows and printed totals."""
         result = _RaiffeisenBankParser(
@@ -5638,6 +5827,7 @@ class TestRaiffeisenBankParser(TestCase):
             if transaction['amount'] < 0
         )
         self.assertEqual(len(result.transactions), 138)
+        self.assertEqual(result.format_version, 3)
         self.assertEqual(income, Decimal('613390.25'))
         self.assertEqual(expense, Decimal('619845.17'))
         self.assertEqual(
@@ -5832,6 +6022,25 @@ class TestSberbankParser(TestCase):
         self.assertEqual(transactions[0]['amount'], Decimal('50546.00'))
         self.assertGreater(transactions[0]['amount'], 0)
 
+    def test_merged_cell_topup_with_text_prefix_is_income(self) -> None:
+        """A merged amount cell keeps a '+' sign after a category prefix."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '01.04.2026\n16:51\nПополнение',
+                    'Курс 90,00 / Пополнение\n+ 50 546,00',
+                    '113 051,18',
+                ],
+            ],
+        )
+
+        transactions = parser._parse_table(df)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['amount'], Decimal('50546.00'))
+        self.assertGreater(transactions[0]['amount'], 0)
+
     def test_parse_table_keeps_unparsed_amount_as_error_fragment(self) -> None:
         """A dated row without a readable amount stays visible, not dropped."""
         parser = self._make_parser()
@@ -5879,6 +6088,20 @@ class TestSberbankParser(TestCase):
         """Amount with '+' prefix is treated as income (positive)."""
         parser = self._make_parser()
         result = parser._extract_sberbank_amount('+50 546,00 ₽')
+        self.assertEqual(result, Decimal('50546.00'))
+
+    def test_extract_sberbank_amount_with_multiple_spaces(self) -> None:
+        """Multiple spaces and a currency sign keep the '+' and the sum."""
+        parser = self._make_parser()
+        result = parser._extract_sberbank_amount('+  50  546,00 ₽')
+        self.assertEqual(result, Decimal('50546.00'))
+
+    def test_extract_sberbank_amount_ignores_prefix_decimal(self) -> None:
+        """An unsigned prefix number never wins over the currency amount."""
+        parser = self._make_parser()
+        result = parser._extract_sberbank_amount(
+            'Курс 90,00 / Пополнение + 50 546,00 ₽',
+        )
         self.assertEqual(result, Decimal('50546.00'))
 
     def test_extract_sberbank_amount_returns_none_for_empty(self) -> None:
@@ -7293,7 +7516,7 @@ class TestOzonBankStatement(TestCase):
         self.assertIsNone(result.closing_balance_date)
         self.assertIsNone(result.period_start)
         self.assertEqual(result.bank, 'ozon')
-        self.assertEqual(result.format_version, 2)
+        self.assertEqual(result.format_version, 3)
         self.assertEqual(
             [item['category_name'] for item in result.transactions],
             ['Возвраты Ozon', 'Покупки Ozon', None, 'Чаевые Ozon'],
@@ -7581,6 +7804,38 @@ class TestOzonBankStatement(TestCase):
             [item['row_position'] for item in result.transactions],
             [0, 1, 2],
         )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_repeated_header_and_broken_row_stay_out_of_previous_operation(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        """A repeated header never extends a row; a broken row is its own."""
+        mock_table = MagicMock()
+        mock_table.page = '2'
+        mock_table.df = pd.DataFrame(
+            [
+                ['01.09.2026 10:00:00', 'DOC-A', 'Ozon', '- 100.00 ₽'],
+                ['Дата операции', 'Документ', 'Назначение платежа', ''],
+                ['02.09.2026 11:00:00', '', 'Комиссия банка', ''],
+                ['03.09.2026 12:00:00', 'DOC-C', 'Ozon', '- 200.00 ₽'],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        first, broken, last = result.transactions
+        self.assertEqual(first['source_ref'], 'DOC-A')
+        self.assertEqual(first['description'], 'Покупки Ozon')
+        self.assertEqual(first['amount'], Decimal('-100.00'))
+        self.assertEqual(broken['parse_issue'], 'unparsed')
+        self.assertIsNone(broken['source_ref'])
+        self.assertEqual(broken['description'], 'Комиссия банка')
+        self.assertIsNone(broken['amount'])
+        self.assertEqual(last['source_ref'], 'DOC-C')
+        self.assertEqual(last['amount'], Decimal('-200.00'))
 
     @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
     def test_repeated_document_number_keeps_both_rows(
@@ -8026,7 +8281,7 @@ class TestBankStatementImportReliability(TestCase):
         transactions: list[dict[str, Any]],
         *,
         file_hash: str = '',
-        format_version: int = 2,
+        format_version: int = 3,
     ) -> BankStatementUpload:
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -9218,7 +9473,7 @@ class TestBankStatementImportReliability(TestCase):
             parser.return_value.parse.return_value = StatementParseResult(
                 transactions=[row_data],
                 bank='ozon',
-                format_version=2,
+                format_version=3,
             )
             process_bank_statement_task.apply(args=[upload.pk])
 
@@ -9397,7 +9652,7 @@ class TestBankStatementImportReliability(TestCase):
             source_ref='OZ-EXACT',
             source_file_hash='same-file',
             source_row_position=0,
-            source_format_version=2,
+            source_format_version=3,
         )
         canonical_row = BankStatementRow.objects.create(
             upload=canonical_upload,
@@ -9431,6 +9686,184 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(Transaction.objects.count(), 1)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_ozon_reparse_keeps_new_fragment_after_old_position_mapping(
+        self,
+    ) -> None:
+        """An old row at the fragment position is not mistaken for it."""
+        moment = datetime(2026, 9, 1, 10, tzinfo=UTC)
+        fragment_moment = datetime(2026, 9, 2, 11, tzinfo=UTC)
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/ozon-reparse.pdf',
+            file_hash='ozon-reparse-file',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('200.00'),
+            description='Ozon',
+            source_ref='DOC-C',
+            source_ref_strength='weak',
+            source_row_position=1,
+            source_format_version=2,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'ozon-reparse.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        parse_result = StatementParseResult(
+            transactions=[
+                {
+                    'date': moment,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупки Ozon',
+                    'source_ref': 'DOC-A',
+                    'source_ref_strength': 'weak',
+                    'source': 'ozon',
+                    'row_position': 0,
+                },
+                {
+                    'date': fragment_moment,
+                    'amount': None,
+                    'description': 'Комиссия банка',
+                    'source_ref': None,
+                    'source_ref_strength': 'weak',
+                    'source': 'ozon',
+                    'row_position': 1,
+                    'parse_issue': 'unparsed',
+                },
+                {
+                    'date': moment,
+                    'amount': Decimal('-200.00'),
+                    'description': 'Ozon',
+                    'source_ref': 'DOC-C',
+                    'source_ref_strength': 'weak',
+                    'source': 'ozon',
+                    'row_position': 2,
+                },
+            ],
+            bank='ozon',
+            format_version=3,
+        )
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
+
+        fragment = BankStatementRow.objects.get(
+            upload=upload,
+            source_row_position=1,
+        )
+        self.assertEqual(fragment.description, 'Комиссия банка')
+        self.assertIsNone(fragment.amount)
+        self.assertIsNone(fragment.source_ref)
+        self.assertEqual(
+            fragment.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertTrue(
+            BankStatementRow.objects.filter(
+                upload=upload,
+                source_row_position=2,
+                source_ref='DOC-C',
+            ).exists(),
+        )
+
+    def test_raiffeisen_reparse_detaches_old_collided_position(self) -> None:
+        """A stale row from another page is not restored as the first row."""
+        moment = datetime(2026, 2, 1, 10, tzinfo=UTC)
+        first_position = RAIFFEISEN_FALLBACK_POSITION_BASE + 1
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/raiffeisen-reparse.pdf',
+            file_hash='raiffeisen-reparse-file',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=moment,
+            amount=Decimal('500.00'),
+            description='Оплата покупки',
+            source_row_position=first_position,
+            source_format_version=2,
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        service = ApplicationContainer().users.bank_statement_import_service()
+        self.assertTrue(
+            service.prepare_known_replay(
+                upload,
+                SimpleUploadedFile(
+                    'raiffeisen-reparse.pdf',
+                    b'%PDF-1.4 replay',
+                    content_type='application/pdf',
+                ),
+            ),
+        )
+        parse_result = StatementParseResult(
+            transactions=[
+                {
+                    'date': moment,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Перевод средств',
+                    'source_ref': None,
+                    'source_ref_strength': 'weak',
+                    'date_only': True,
+                    'row_position': first_position,
+                },
+                {
+                    'date': moment,
+                    'amount': Decimal('-500.00'),
+                    'description': 'Оплата покупки',
+                    'source_ref': None,
+                    'source_ref_strength': 'weak',
+                    'date_only': True,
+                    'row_position': first_position + 1,
+                },
+            ],
+            bank='raiffeisen',
+            format_version=3,
+        )
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            process_bank_statement_task.apply(
+                args=[upload.pk, upload.celery_task_id],
+            )
+
+        first = BankStatementRow.objects.get(
+            upload=upload,
+            source_row_position=first_position,
+        )
+        self.assertEqual(first.description, 'Перевод средств')
+        self.assertEqual(first.amount, Decimal('100.00'))
+        second = BankStatementRow.objects.get(
+            upload=upload,
+            source_row_position=first_position + 1,
+        )
+        self.assertEqual(second.description, 'Оплата покупки')
+        self.assertEqual(second.amount, Decimal('500.00'))
 
     def test_ozon_without_balance_does_not_claim_zero_or_coverage(self) -> None:
         """A missing balance and period are not filled with zero."""
