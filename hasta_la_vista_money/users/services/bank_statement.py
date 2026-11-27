@@ -105,6 +105,16 @@ RAIFFEISEN_COMPACT_REF_PATTERN = re.compile(
     r'^\s*(\d+)[\s/]+(\d+)\s*$',
 )
 RAIFFEISEN_TIME_PATTERN = re.compile(r'\d{1,2}:\d{2}')
+RAIFFEISEN_COMPACT_DATE_ROW = re.compile(
+    r'\d{2}\.\d{2}\.\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?',
+)
+# Date-only lines that continue the bank's processing note of the
+# operation above rather than starting a new operation.
+RAIFFEISEN_CONTINUATION_PATTERN = re.compile(
+    r'^(?:сбп|rub\b|\d[\d\s\xa0]*[.,]\d{2}\b|x\d+'
+    r'|трансп\. карту|номер перевода|перевод (?:с|на) номер)',
+    re.IGNORECASE,
+)
 RAIFFEISEN_ACCOUNT_PATTERN = re.compile(
     r'Номер счета[\s\S]{0,300}?([\d\xa0 ]{15,})',
 )
@@ -465,11 +475,12 @@ class BaseBankStatementParser(ABC):
             return 'Выдача наличных'
 
         cleaned = re.sub(r'\s+\d{2}\.\d{2}\.\d{2,4}', '', description)
-        cleaned = re.sub(
-            r'\s*\d+(?:\s?\d+)*(?:[.,]\d{2})?\s*(?:руб\.?|₽)',
-            '',
-            cleaned,
-        )
+        if '₽' in cleaned or 'руб' in cleaned.casefold():
+            cleaned = re.sub(
+                r'\s*\d(?:[\d\s\xa0]*\d)?(?:[.,]\d{2})?\s*(?:руб\.?|₽)',
+                '',
+                cleaned,
+            )
         cleaned = re.sub(
             r'\s*(?:ATM|терминал)\s*\d+',
             '',
@@ -626,11 +637,19 @@ class _GenericBankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
+            if self.bank_code == 'raiffeisen':
+                for trans in transactions:
+                    if trans.get('amount') == Decimal(0):
+                        trans.setdefault('parse_issue', 'zero_amount')
+
             transactions = [
                 trans
                 for trans in transactions
                 if trans['amount'] != Decimal(0)
-                or (self.bank_code == 'generic' and trans.get('parse_issue'))
+                or (
+                    self.bank_code in {'generic', 'raiffeisen'}
+                    and trans.get('parse_issue')
+                )
             ]
             transactions = _dedup_transactions(
                 transactions,
@@ -701,7 +720,7 @@ class _GenericBankParser(BaseBankStatementParser):
                     row=row_idx,
                     error=str(e),
                 )
-                if self.bank_code != 'generic':
+                if self.bank_code not in {'generic', 'raiffeisen'}:
                     if isinstance(e, ValueError):
                         continue
                     raise
@@ -890,9 +909,10 @@ class _RaiffeisenBankParser(_GenericBankParser):
     """
 
     bank_code = 'raiffeisen'
-    # Version 2 keeps unsupported rows visible and adds local categories;
-    # a row imported by the previous mapping must be reassigned manually.
-    format_version = 2
+    # Version 3 keeps compact fragments with unreadable amounts and gives
+    # every row a unique position across pages, so rows imported by the
+    # previous mapping must be reassigned manually.
+    format_version = 3
     min_table_columns = RAIFFEISEN_COMPACT_COLUMNS
 
     def parse(self) -> StatementParseResult:
@@ -903,6 +923,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
         """
         logger.info('bank_statement_parse_started', parser='raiffeisen')
         result = super().parse()
+        self._uniquify_row_positions(result.transactions)
         full_text = self.full_text
         result.account_number = self._extract_account_number(full_text)
         result.period_start = self._extract_period_start(full_text)
@@ -911,6 +932,39 @@ class _RaiffeisenBankParser(_GenericBankParser):
         result.closing_balance_date = closing_date
         result.closing_balance = closing_balance
         return result
+
+    @staticmethod
+    def _uniquify_row_positions(
+        transactions: list[dict[str, Any]],
+    ) -> None:
+        """Give every row its own statement position, including fallbacks.
+
+        A compact multi-page statement numbers rows per page, so rows
+        without a printed document number can receive the same fallback
+        position from two pages. The import stores positions under a
+        unique constraint, therefore a collision must be resolved here
+        instead of silently overwriting a row.
+        """
+        reserved = {
+            position
+            for transaction in transactions
+            if isinstance(
+                position := transaction.get('row_position'),
+                int,
+            )
+        }
+        seen: set[int] = set()
+        next_position = RAIFFEISEN_FALLBACK_POSITION_BASE + 1
+        for transaction in transactions:
+            position = transaction.get('row_position')
+            if isinstance(position, int) and position not in seen:
+                seen.add(position)
+                continue
+            while next_position in reserved or next_position in seen:
+                next_position += 1
+            transaction['row_position'] = next_position
+            seen.add(next_position)
+            next_position += 1
 
     @staticmethod
     def _extract_account_number(full_text: str) -> str | None:
@@ -1084,6 +1138,7 @@ class _RaiffeisenBankParser(_GenericBankParser):
 
         transactions: list[dict[str, Any]] = []
         handled_rows = {index for index, _amount in amount_rows}
+        covered_date_rows: set[int] = set()
         for position, (index, signed_amount) in enumerate(amount_rows):
             previous_amount = amount_rows[position - 1][0] if position else -1
             next_amount = (
@@ -1092,6 +1147,9 @@ class _RaiffeisenBankParser(_GenericBankParser):
                 else len(df)
             )
             date, has_time = self._date_with_precision(df, index)
+            date_index = self._date_row_index(df, index)
+            if date_index is not None:
+                covered_date_rows.add(date_index)
             source_ref, row_number = self._compact_reference(df, index)
             start, end = self._compact_bounds(
                 df,
@@ -1139,43 +1197,168 @@ class _RaiffeisenBankParser(_GenericBankParser):
                 },
             )
 
+        self._append_compact_unparsed_rows(
+            df,
+            handled_rows,
+            covered_date_rows,
+            transactions,
+        )
+        return transactions
+
+    def _append_compact_unparsed_rows(
+        self,
+        df: pd.DataFrame,
+        handled_rows: set[int],
+        covered_date_rows: set[int],
+        transactions: list[dict[str, Any]],
+    ) -> None:
+        """Keep every compact row the amount branch could not complete."""
         for index in range(len(df)):
             if index in handled_rows:
                 continue
             row = df.iloc[index]
             if len(row) <= RAIFFEISEN_COMPACT_AMOUNT_COL:
                 continue
-            if self._compact_reference(df, index) == (None, None):
+            source_ref, row_number = self._compact_reference(df, index)
+            if source_ref is not None or row_number is not None:
+                self._append_compact_reference_fragment(
+                    df,
+                    index,
+                    source_ref,
+                    row_number,
+                    transactions,
+                )
                 continue
-            date, has_time = self._date_with_precision(df, index)
-            description, _category = self._compact_description(
+            own_date = self._extract_date(str(row.iloc[0]))
+            if own_date is None or index in covered_date_rows:
+                continue
+            if (
+                RAIFFEISEN_COMPACT_DATE_ROW.fullmatch(
+                    str(row.iloc[0]).strip(),
+                )
+                is None
+            ):
+                continue
+            fragment = self._compact_unparsed_fragment(
                 df,
                 index,
+                handled_rows,
+            )
+            if fragment is None:
+                continue
+            if self._compact_date_continues_amount(
+                df,
+                index,
+                str(fragment['description']),
+            ):
+                continue
+            fragment['row_position'] = (
+                RAIFFEISEN_FALLBACK_POSITION_BASE + len(transactions) + 1
+            )
+            transactions.append(fragment)
+
+    def _append_compact_reference_fragment(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        source_ref: str | None,
+        row_number: int | None,
+        transactions: list[dict[str, Any]],
+    ) -> None:
+        """Append a document-only compact row as a visible fragment."""
+        date, has_time = self._date_with_precision(df, index)
+        description, _category = self._compact_description(
+            df,
+            index,
+            RAIFFEISEN_COMPACT_DESCRIPTION_COL,
+            index - 1,
+            index + 1,
+        )
+        transactions.append(
+            {
+                'date': date,
+                'amount': None,
+                'description': description,
+                'source_ref': source_ref,
+                'source_ref_strength': 'weak',
+                'date_only': not has_time,
+                'row_position': (
+                    row_number
+                    if row_number is not None
+                    else RAIFFEISEN_FALLBACK_POSITION_BASE
+                    + len(transactions)
+                    + 1
+                ),
+                'category_name': None,
+                'parse_issue': 'unsupported',
+            },
+        )
+
+    def _compact_date_continues_amount(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        description: str,
+    ) -> bool:
+        """Return whether a date-only row continues the previous operation.
+
+        A time in the date starts a new operation. A date-only row is a
+        continuation only when its purpose is a known bank processing note;
+        any other dated purpose is a separate operation even when its
+        amount is unreadable.
+        """
+        row_text = str(df.iloc[index].iloc[0])
+        if RAIFFEISEN_TIME_PATTERN.search(row_text):
+            return False
+        return bool(
+            'осуществлен через сбп' in description.casefold()
+            or RAIFFEISEN_CONTINUATION_PATTERN.match(description),
+        )
+
+    def _compact_unparsed_fragment(
+        self,
+        df: pd.DataFrame,
+        index: int,
+        handled_rows: set[int],
+    ) -> dict[str, Any] | None:
+        """Read a dated operation band whose amount and document are absent."""
+        end = len(df) - 1
+        for next_index in range(index + 1, len(df)):
+            next_row = df.iloc[next_index]
+            if (
+                next_index in handled_rows
+                or self._extract_date(str(next_row.iloc[0])) is not None
+            ):
+                end = next_index - 1
+                break
+        if any(
+            self._compact_reference(df, row_index) != (None, None)
+            for row_index in range(index, end + 1)
+        ):
+            return None
+        parts = [
+            self._description_cell(
+                df,
+                row_index,
                 RAIFFEISEN_COMPACT_DESCRIPTION_COL,
-                index - 1,
-                index + 1,
             )
-            source_ref, row_number = self._compact_reference(df, index)
-            transactions.append(
-                {
-                    'date': date,
-                    'amount': None,
-                    'description': description,
-                    'source_ref': source_ref,
-                    'source_ref_strength': 'weak',
-                    'date_only': not has_time,
-                    'row_position': (
-                        row_number
-                        if row_number is not None
-                        else RAIFFEISEN_FALLBACK_POSITION_BASE
-                        + len(transactions)
-                        + 1
-                    ),
-                    'category_name': None,
-                    'parse_issue': 'unsupported',
-                },
-            )
-        return transactions
+            for row_index in range(index, end + 1)
+        ]
+        texts = [part for part in parts if part]
+        if not texts:
+            return None
+        description = self._clean_description(' '.join(texts))
+        date, has_time = self._date_with_precision(df, index)
+        return {
+            'date': date,
+            'amount': None,
+            'description': description[:250] if description else 'Операция',
+            'source_ref': None,
+            'source_ref_strength': 'weak',
+            'date_only': not has_time,
+            'category_name': None,
+            'parse_issue': 'unsupported',
+        }
 
     def _compact_reference(
         self,
@@ -1866,42 +2049,36 @@ class _SberbankParser(BaseBankStatementParser):
         """Extract signed amount: '+' → positive, else negative.
 
         Sberbank statements use format like '500,00' or '+50 546,00'
-        (no ₽ symbol).
+        (no ₽ symbol). A merged cell may put the category label before
+        the amount, e.g. 'Пополнение\\n+ 50 546,00'. Prefer the signed
+        amount when the prefix also contains a decimal number.
         """
         if not text or text == 'nan':
             return None
 
-        stripped = text.strip()
-
-        # First try the general extractor (handles amounts with ₽)
-        base = self._extract_amount_from_column(stripped)
-
-        # Fallback: Sberbank format — digits with non-breaking spaces
-        # (\xa0) or regular spaces as thousands separators,
-        # comma as decimal separator, e.g. '1\xa0000,00'
-        if base is None:
-            # Pattern: optional sign, digits (with optional whitespace
-            # thousands separator), comma, 2 digits
-            amount_pattern = r'[+-]?\s*(\d+(?:[\s\xa0]\d+)*,\d{2})'
-            match = re.search(amount_pattern, stripped)
-            if match:
-                # Remove both regular spaces and non-breaking spaces
-                # before converting
-                amount_str = (
-                    match.group(1)
-                    .replace('\xa0', '')
-                    .replace(' ', '')
-                    .replace(',', '.')
-                )
-                try:
-                    base = Decimal(amount_str)
-                except InvalidOperation:
-                    return None
-
-        if base is None:
+        sign_pattern = r'(?P<sign>[+-])'
+        amount_pattern = r'\s*(?P<amount>\d+(?:[\s\xa0]+\d+)*,\d{2})'
+        fallback_pattern = sign_pattern + '?' + amount_pattern
+        match = re.search(sign_pattern + amount_pattern, text)
+        if match is None:
+            match = re.search(fallback_pattern + r'\s*₽', text)
+        if match is None:
+            match = re.search(fallback_pattern, text)
+        if match is None:
             return None
 
-        if stripped.startswith('+'):
+        amount_str = (
+            match.group('amount')
+            .replace('\xa0', '')
+            .replace(' ', '')
+            .replace(',', '.')
+        )
+        try:
+            base = Decimal(amount_str)
+        except InvalidOperation:
+            return None
+
+        if match.group('sign') == '+':
             return base  # income
         return -base  # expense
 
@@ -1924,9 +2101,10 @@ class _OzonBankParser(BaseBankStatementParser):
     """
 
     bank_code = 'ozon'
-    # Version 2 keeps unknown purposes, transfers and row fragments
-    # visible and treats the document number as a weak hint.
-    format_version = 2
+    # Version 3 skips repeated table headers and starts a dated purpose
+    # without a document as its own fragment, so positions of rows already
+    # stored by version 2 must be reassigned manually.
+    format_version = 3
 
     def parse(self) -> StatementParseResult:
         """Parse every potential Ozon operation into a traceable row."""
@@ -1998,6 +2176,9 @@ class _OzonBankParser(BaseBankStatementParser):
                 next_row = df.iloc[next_index]
                 if self._is_operation_start(next_row):
                     break
+                if self._is_table_header(next_row):
+                    next_index += 1
+                    continue
                 parts.append(next_row)
                 next_index += 1
 
@@ -2006,14 +2187,21 @@ class _OzonBankParser(BaseBankStatementParser):
 
         return transactions, operation_rows
 
+    def _is_table_header(self, row: pd.Series) -> bool:
+        """Return whether the row repeats one of the table headers."""
+        return any(
+            self._cell(row, column) in OZON_TABLE_HEADERS
+            for column in range(len(row))
+        )
+
     def _is_operation_start(self, row: pd.Series) -> bool:
         """Return whether the row begins a new potential operation.
 
         A readable amount begins a row even when its date cannot be read:
         gluing it to the previous operation would mix two financial
-        observations. A row with its own document and purpose is an
-        ambiguous fragment even when its date cannot be read, so it starts
-        its own row instead of silently extending a neighbour. Table
+        observations. A row with its own purpose and a document or date is
+        an ambiguous fragment even when its date cannot be read, so it
+        starts its own row instead of silently extending a neighbour. Table
         headers are not operations. A continuation has no purpose, only a
         document fragment ending in ``-``, or a short numeric document
         tail under a row without its own date.
@@ -2038,7 +2226,9 @@ class _OzonBankParser(BaseBankStatementParser):
             or purpose in OZON_TABLE_HEADERS
         ):
             return False
-        if not (document and purpose and not document.endswith('-')):
+        if not purpose or document.endswith('-'):
+            return False
+        if not document and not date:
             return False
         is_document_tail = (
             not date
