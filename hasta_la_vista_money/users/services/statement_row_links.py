@@ -26,6 +26,7 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
+    StatementBalanceVerificationServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     LockedStatementRow,
@@ -61,9 +62,13 @@ class StatementRowLinkService:
         self,
         statement_row_repository: StatementRowRepository,
         reconciliation_service: BankStatementReconciliationServiceProtocol,
+        balance_verification_service: (
+            StatementBalanceVerificationServiceProtocol
+        ),
     ) -> None:
         self.statement_row_repository = statement_row_repository
         self.reconciliation_service = reconciliation_service
+        self._balance_verification_service = balance_verification_service
 
     def has_linked_row(self, movement: Transaction | TransferMoneyLog) -> bool:
         """Return whether a statement row is closed by this movement."""
@@ -90,6 +95,10 @@ class StatementRowLinkService:
         locked = self.statement_row_repository.lock_released_rows(movement)
         if not locked.linked:
             return False
+        self.statement_row_repository.invalidate_upload_checks(
+            [upload.pk for upload in locked.uploads],
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
         scrub_audit = any(
             row.retention_cleaned_at is not None
             and row.decision in CREATED_DECISIONS
@@ -370,6 +379,7 @@ class StatementRowLinkService:
             previous_decision=previous_decision,
         )
         self.reconciliation_service.refresh_outcome_counts(row.upload)
+        self._balance_verification_service.verify_completed(row.upload)
 
     def repayment_candidates(
         self,

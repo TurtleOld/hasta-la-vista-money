@@ -219,6 +219,26 @@ class TransactionService:
                     ),
                 )
 
+            date_value = command.transaction_date
+            if not isinstance(date_value, datetime):
+                date_value = timezone.make_aware(
+                    datetime.combine(date_value, time.min),
+                )
+            elif timezone.is_naive(date_value):
+                date_value = timezone.make_aware(date_value)
+            if (
+                date_value != old_date
+                and self.statement_row_links.has_linked_row(
+                    transaction_obj,
+                )
+            ):
+                # A date change invalidates affected statement checks;
+                # a category-only change leaves them untouched. Uploads are
+                # locked before accounts to keep one lock order everywhere.
+                self.statement_row_links.invalidate_linked_checks(
+                    transaction_obj,
+                )
+
             deltas = {
                 old_account.pk: -self._balance_delta(old_amount, old_type),
             }
@@ -232,27 +252,8 @@ class TransactionService:
             transaction_obj.category = command.category
             transaction_obj.amount = command.amount
             transaction_obj.type = command.type_value
-
-            date_value = command.transaction_date
-            if not isinstance(date_value, datetime):
-                date_value = timezone.make_aware(
-                    datetime.combine(date_value, time.min),
-                )
-            elif timezone.is_naive(date_value):
-                date_value = timezone.make_aware(date_value)
             transaction_obj.date = date_value
             transaction_obj.save()
-            if (
-                transaction_obj.date != old_date
-                and self.statement_row_links.has_linked_row(
-                    transaction_obj,
-                )
-            ):
-                # A date change invalidates affected statement checks;
-                # a category-only change leaves them untouched.
-                self.statement_row_links.invalidate_linked_checks(
-                    transaction_obj,
-                )
         return transaction_obj
 
     def delete_transaction(
@@ -271,14 +272,16 @@ class TransactionService:
                 transaction_obj.pk,
             )
             self._validate_transaction_owner(user, transaction_obj)
+            transaction_pk = transaction_obj.pk
+            # Statement uploads and rows are locked before the account, the
+            # single order every statement path takes.
+            was_cleaned = self.statement_row_links.release_linked_rows(
+                transaction_obj,
+            )
             self._apply_balance_for_delete(
                 transaction_obj.account,
                 transaction_obj.amount,
                 transaction_obj.type,
-            )
-            transaction_pk = transaction_obj.pk
-            was_cleaned = self.statement_row_links.release_linked_rows(
-                transaction_obj,
             )
             transaction_obj.delete()
             if was_cleaned:

@@ -115,6 +115,44 @@ class StatementBalanceVerificationService:
             )
         return None
 
+    @classmethod
+    def _comparison_reason(
+        cls,
+        upload: BankStatementUpload,
+        account: Account,
+    ) -> str:
+        """Return why the closing balance cannot be compared now."""
+        checks = (
+            (
+                has_open_rows(upload),
+                BankStatementUpload.BalanceReason.UNRESOLVED_ROWS,
+            ),
+            (
+                upload.statement_closing_balance is None,
+                BankStatementUpload.BalanceReason.MISSING_BALANCE,
+            ),
+            (
+                not upload.balance_currency,
+                BankStatementUpload.BalanceReason.MISSING_CURRENCY,
+            ),
+            (
+                upload.balance_currency != account.currency,
+                BankStatementUpload.BalanceReason.CURRENCY_MISMATCH,
+            ),
+            (
+                upload.balance_type not in _CONFIRMED_SEMANTICS,
+                BankStatementUpload.BalanceReason.MISSING_SEMANTICS,
+            ),
+            (
+                cls._comparison_moment(upload) is None,
+                BankStatementUpload.BalanceReason.MISSING_MOMENT,
+            ),
+        )
+        for failed, reason in checks:
+            if failed:
+                return reason
+        return ''
+
     def verify_completed(self, upload: BankStatementUpload) -> None:
         """Check a completed upload with a reported closing balance."""
         if (
@@ -138,15 +176,10 @@ class StatementBalanceVerificationService:
         Returns:
             The refreshed upload with its stored verification.
         """
-        upload = BankStatementUpload.objects.select_related('account').get(
-            pk=upload.pk,
-        )
-        if upload.retention_cleaned_at is not None:
-            return upload
         with transaction.atomic():
             upload = (
-                BankStatementUpload.objects.select_for_update()
-                .select_related('account')
+                BankStatementUpload.objects.select_for_update(of=('self',))
+                .select_related('account', 'balance_explained_by')
                 .get(pk=upload.pk)
             )
             if upload.retention_cleaned_at is not None:
@@ -163,27 +196,11 @@ class StatementBalanceVerificationService:
         account: Account,
     ) -> BankStatementUpload:
         """Compute and store a result while upload and account are locked."""
-        account.refresh_from_db(fields=['balance', 'currency'])
         now = timezone.now()
         closing = upload.statement_closing_balance
         currency = upload.balance_currency
-        kind = upload.balance_type
         moment = self._comparison_moment(upload)
-        unresolved = has_open_rows(upload)
-        reason = ''
-        if unresolved:
-            reason = BankStatementUpload.BalanceReason.UNRESOLVED_ROWS
-        elif closing is None:
-            reason = BankStatementUpload.BalanceReason.MISSING_BALANCE
-        elif not currency:
-            reason = BankStatementUpload.BalanceReason.MISSING_CURRENCY
-        elif currency != account.currency:
-            reason = BankStatementUpload.BalanceReason.CURRENCY_MISMATCH
-        elif kind not in _CONFIRMED_SEMANTICS:
-            reason = BankStatementUpload.BalanceReason.MISSING_SEMANTICS
-        elif moment is None:
-            reason = BankStatementUpload.BalanceReason.MISSING_MOMENT
-
+        reason = self._comparison_reason(upload, account)
         explanation_code = upload.balance_explanation_code
         explained_at = upload.balance_explained_at
         explained_by = upload.balance_explained_by
@@ -223,21 +240,23 @@ class StatementBalanceVerificationService:
             explained_at = None
             explained_by = None
 
+        checked_at = (
+            upload.balance_checked_at
+            if reason
+            and upload.balance_result
+            != BankStatementUpload.BalanceResult.NOT_CHECKED
+            else now
+        )
+        actual = (
+            not reason
+            and result != BankStatementUpload.BalanceResult.NOT_CHECKED
+        )
         BankStatementUpload.objects.filter(pk=upload.pk).update(
             balance_result=result,
             # A failed recheck keeps the date of the last confirmed
             # comparison instead of the time of the failed attempt.
-            balance_checked_at=(
-                upload.balance_checked_at
-                if reason
-                and upload.balance_result
-                != BankStatementUpload.BalanceResult.NOT_CHECKED
-                else now
-            ),
-            balance_is_actual=(
-                not reason
-                and result != BankStatementUpload.BalanceResult.NOT_CHECKED
-            ),
+            balance_checked_at=checked_at,
+            balance_is_actual=actual,
             balance_reason=reason,
             account_balance_after=ledger,
             balance_discrepancy=discrepancy,
@@ -245,10 +264,16 @@ class StatementBalanceVerificationService:
             balance_explained_at=explained_at,
             balance_explained_by=explained_by,
         )
-        return BankStatementUpload.objects.select_related(
-            'account',
-            'balance_explained_by',
-        ).get(pk=upload.pk)
+        upload.balance_result = result
+        upload.balance_checked_at = checked_at
+        upload.balance_is_actual = actual
+        upload.balance_reason = reason
+        upload.account_balance_after = ledger
+        upload.balance_discrepancy = discrepancy
+        upload.balance_explanation_code = explanation_code
+        upload.balance_explained_at = explained_at
+        upload.balance_explained_by = explained_by
+        return upload
 
     def refresh_actuality(
         self,
@@ -265,15 +290,21 @@ class StatementBalanceVerificationService:
         Returns:
             The upload, refreshed after any staleness update.
         """
-        upload = BankStatementUpload.objects.select_related('account').get(
-            pk=upload.pk,
-        )
+        upload = BankStatementUpload.objects.select_related(
+            'account',
+            'balance_explained_by',
+        ).get(pk=upload.pk)
         if not upload.balance_is_actual:
+            return upload
+        # A read never locks the account or the upload: the write
+        # transaction starts only when the stored result is really stale.
+        reason = self._stale_reason(upload, upload.account)
+        if not reason:
             return upload
         with transaction.atomic():
             upload = (
-                BankStatementUpload.objects.select_for_update()
-                .select_related('account')
+                BankStatementUpload.objects.select_for_update(of=('self',))
+                .select_related('account', 'balance_explained_by')
                 .get(pk=upload.pk)
             )
             if not upload.balance_is_actual:

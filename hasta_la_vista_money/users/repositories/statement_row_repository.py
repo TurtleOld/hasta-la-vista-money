@@ -120,30 +120,34 @@ class StatementRowRepository:
         self,
         movement: Transaction | TransferMoneyLog,
     ) -> LockedRelease:
-        """Lock rows closed by the movement and their repeat observations."""
+        """Lock uploads first, then the rows closed by the movement.
+
+        The shared order is movement, statement upload, statement row and
+        account. Uploads are locked before rows so cleanup, markup and
+        deletion cannot wait on each other in opposite directions.
+        """
         rows = self._linked_rows(movement)
-        linked = _locked_rows(
-            rows.select_for_update().order_by('pk'),
-        )
-        if not linked:
+        linked_ids = list(rows.values_list('pk', flat=True))
+        if not linked_ids:
             return LockedRelease([], [], set(), [])
         repeats = BankStatementRow.objects.filter(
-            canonical_row_id__in=[row.pk for row in linked],
+            canonical_row_id__in=linked_ids,
+        )
+        upload_ids = set(rows.values_list('upload_id', flat=True))
+        upload_ids.update(repeats.values_list('upload_id', flat=True))
+        uploads = list(
+            BankStatementUpload.objects.select_for_update()
+            .filter(pk__in=upload_ids)
+            .order_by('pk'),
+        )
+        linked = _locked_rows(
+            rows.select_for_update().order_by('pk'),
         )
         repeat_rows = _locked_rows(
             repeats.select_for_update().order_by('pk'),
         )
         repayment_ids = set(
             rows.filter(_REPAYMENT_ROW).values_list('pk', flat=True),
-        )
-        uploads = list(
-            BankStatementUpload.objects.filter(
-                pk__in=rows.values('upload_id'),
-            ).union(
-                BankStatementUpload.objects.filter(
-                    pk__in=repeats.values('upload_id'),
-                ),
-            ),
         )
         return LockedRelease(linked, repeat_rows, repayment_ids, uploads)
 
@@ -211,23 +215,37 @@ class StatementRowRepository:
             ],
         )
 
-    def invalidate_linked_checks(
-        self,
-        movement: Transaction | TransferMoneyLog,
+    @staticmethod
+    def invalidate_upload_checks(
+        upload_ids: Sequence[int],
+        reason: str,
     ) -> None:
-        """Reset affected statement checks and mark them for rechecking."""
-        affected = BankStatementUpload.objects.filter(
-            pk__in=self._linked_rows(movement).values('upload_id'),
-        )
+        """Reset stored checks of these uploads and mark them stale."""
+        affected = BankStatementUpload.objects.filter(pk__in=upload_ids)
         affected.update(
             account_balance_after=None,
             balance_discrepancy=None,
         )
         affected.filter(balance_is_actual=True).update(
             balance_is_actual=False,
-            balance_reason=(
-                BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED
+            balance_reason=reason,
+        )
+
+    def invalidate_linked_checks(
+        self,
+        movement: Transaction | TransferMoneyLog,
+        *,
+        reason: str = BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+    ) -> None:
+        """Reset affected statement checks and mark them for rechecking."""
+        self.invalidate_upload_checks(
+            list(
+                self._linked_rows(movement).values_list(
+                    'upload_id',
+                    flat=True,
+                ),
             ),
+            reason,
         )
 
     @staticmethod

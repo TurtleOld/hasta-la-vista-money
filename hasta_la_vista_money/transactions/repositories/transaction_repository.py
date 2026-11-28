@@ -27,7 +27,7 @@ class TransactionRepository:
     def get_by_id_for_update(self, transaction_id: int) -> Transaction:
         """Return and lock a transaction for mutation."""
         return (
-            Transaction.objects.select_for_update()
+            Transaction.objects.select_for_update(of=('self',))
             .select_related('account', 'category', 'user')
             .get(pk=transaction_id)
         )

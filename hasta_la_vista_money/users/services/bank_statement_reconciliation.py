@@ -371,6 +371,8 @@ class BankStatementReconciliationService:
             transaction=row.transaction,
         )
         self.refresh_outcome_counts(upload)
+        if self._balance_verification_service is not None:
+            self._balance_verification_service.verify_completed(upload)
         return row
 
     def bulk_decide(

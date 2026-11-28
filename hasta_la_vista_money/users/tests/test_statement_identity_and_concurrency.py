@@ -8,7 +8,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connections, transaction
+from django.db import connection, connections, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Model
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -1862,6 +1862,47 @@ class ReconciliationUsesBalanceServiceTest(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('900.00'))
 
+    def test_revising_a_linked_row_rechecks_the_balance(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+        )
+        self.row.transaction = movement
+        self.row.decision = BankStatementRow.Decision.LINKED
+        self.row.save(update_fields=['transaction', 'decision'])
+        self.upload.total_transactions = 1
+        self.upload.status = BankStatementUpload.Status.COMPLETED
+        self.upload.statement_closing_balance = Decimal('900.00')
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        self.upload.balance_moment = WHEN
+        self.upload.save()
+
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        service.revise_linked_to_new(
+            self.row.pk,
+            self.user.pk,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.balance_checked_at)
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(self.upload.balance_is_actual)
+
 
 class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
     """Posting NEW twice for one proven operation must not double money."""
@@ -2168,6 +2209,96 @@ class LinkedDateInvalidationTest(TestCase):
             self.upload.balance_discrepancy,
             Decimal('-100.00'),
         )
+
+    def test_delete_reopening_statement_marks_the_check_reopened(self) -> None:
+        self._verify_matched()
+
+        self.transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=self.movement,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertFalse(self.upload.balance_is_actual)
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
+        self.assertIsNone(self.upload.account_balance_after)
+        self.assertIsNone(self.upload.balance_discrepancy)
+
+
+class StatementLockOrderTest(TestCase):
+    """Every path takes movement, upload, row and account in that order."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        self.movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+        )
+        BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction=self.movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+
+    def test_delete_takes_the_account_last(self) -> None:
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        tables = {
+            Transaction._meta.db_table: 'movement',
+            BankStatementUpload._meta.db_table: 'upload',
+            BankStatementRow._meta.db_table: 'row',
+            Account._meta.db_table: 'account',
+        }
+        order: list[str] = []
+
+        def record(
+            execute: Callable[..., Any],
+            sql: str,
+            params: Any,
+            many: bool,
+            context: dict[str, Any],
+        ) -> Any:
+            if 'FOR UPDATE' in sql:
+                scope = (
+                    sql.split('FOR UPDATE', 1)[1]
+                    if 'FOR UPDATE OF' in sql
+                    else sql
+                )
+                for table, name in tables.items():
+                    if f'"{table}"' in scope and name not in order:
+                        order.append(name)
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record):
+            transaction_service.delete_transaction(
+                user=self.user,
+                transaction_obj=self.movement,
+            )
+
+        self.assertEqual(order, ['movement', 'upload', 'row', 'account'])
 
 
 class SharedMovementMigrationTest(TransactionTestCase):
