@@ -26,6 +26,7 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
+    StatementBalanceVerificationServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
     LockedStatementRow,
@@ -54,6 +55,10 @@ def _released_decision(
     return BankStatementRow.Decision.PENDING
 
 
+class _LinkRetryError(Exception):
+    """Signal that the canonical movement changed while locks were taken."""
+
+
 class StatementRowLinkService:
     """Keep statement rows consistent with the movements that close them."""
 
@@ -61,9 +66,13 @@ class StatementRowLinkService:
         self,
         statement_row_repository: StatementRowRepository,
         reconciliation_service: BankStatementReconciliationServiceProtocol,
+        balance_verification_service: (
+            StatementBalanceVerificationServiceProtocol
+        ),
     ) -> None:
         self.statement_row_repository = statement_row_repository
         self.reconciliation_service = reconciliation_service
+        self._balance_verification_service = balance_verification_service
 
     def has_linked_row(self, movement: Transaction | TransferMoneyLog) -> bool:
         """Return whether a statement row is closed by this movement."""
@@ -90,6 +99,10 @@ class StatementRowLinkService:
         locked = self.statement_row_repository.lock_released_rows(movement)
         if not locked.linked:
             return False
+        self.statement_row_repository.invalidate_upload_checks(
+            [upload.pk for upload in locked.uploads],
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
         scrub_audit = any(
             row.retention_cleaned_at is not None
             and row.decision in CREATED_DECISIONS
@@ -196,39 +209,94 @@ class StatementRowLinkService:
                 row is already resolved, or the canonical row is itself a
                 duplicate — a chain or cycle is never closed automatically.
         """
-        with (
-            audit_operation(
-                kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
-            ),
-            transaction.atomic(),
+        with audit_operation(
+            kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
         ):
-            row = self.statement_row_repository.lock_owned_row(
-                row_id,
-                user_id,
-            )
-            canonical = self.statement_row_repository.lock_owned_row(
+            for _attempt in range(3):
+                try:
+                    with transaction.atomic():
+                        return self._link_duplicate_locked(
+                            row_id,
+                            canonical_row_id,
+                            user_id,
+                        )
+                except _LinkRetryError:
+                    continue
+            raise ReconciliationDecisionConflictError('movement')
+
+    def _link_duplicate_locked(
+        self,
+        row_id: int,
+        canonical_row_id: int,
+        user_id: int,
+    ) -> BankStatementRow:
+        """Link a repeat after the canonical movement was locked first."""
+        transaction_id, transfer_id = (
+            self.statement_row_repository.row_movement_ids(
                 canonical_row_id,
                 user_id,
             )
-            if row.pk == canonical.pk:
-                raise ReconciliationDecisionConflictError('self')
-            if row.decision != BankStatementRow.Decision.PENDING:
-                raise ReconciliationDecisionConflictError(row.decision)
-            self._validate_canonical_duplicate(row, canonical)
-            row.decision = BankStatementRow.Decision.DUPLICATE
-            row.canonical_row = canonical
-            row.decided_at = timezone.now()
-            row.save(
-                update_fields=['decision', 'canonical_row', 'decided_at'],
+        )
+        self._lock_canonical_movement(
+            transaction_id,
+            transfer_id,
+            user_id,
+        )
+        locked = self.statement_row_repository.lock_owned_rows(
+            (row_id, canonical_row_id),
+            user_id,
+        )
+        locked_by_id = {locked_row.pk: locked_row for locked_row in locked}
+        row = locked_by_id[row_id]
+        canonical = locked_by_id[canonical_row_id]
+        if (canonical.transaction_id, canonical.transfer_id) != (
+            transaction_id,
+            transfer_id,
+        ):
+            raise _LinkRetryError(canonical_row_id)
+        if row.pk == canonical.pk:
+            raise ReconciliationDecisionConflictError('self')
+        if row.decision != BankStatementRow.Decision.PENDING:
+            raise ReconciliationDecisionConflictError(row.decision)
+        self._validate_canonical_duplicate(row, canonical)
+        row.decision = BankStatementRow.Decision.DUPLICATE
+        row.canonical_row = canonical
+        row.decided_at = timezone.now()
+        row.save(
+            update_fields=['decision', 'canonical_row', 'decided_at'],
+        )
+        BankStatementDecisionAudit.objects.create(
+            row=row,
+            actor_id=user_id,
+            decision=row.decision,
+            previous_decision=BankStatementRow.Decision.PENDING,
+        )
+        self.reconciliation_service.refresh_outcome_counts(row.upload)
+        return row
+
+    def _lock_canonical_movement(
+        self,
+        transaction_id: int | None,
+        transfer_id: int | None,
+        user_id: int,
+    ) -> Transaction | TransferMoneyLog | None:
+        """Lock the movement a repeat's canonical row proves, if any."""
+        movement: Transaction | TransferMoneyLog | None
+        if transaction_id is not None:
+            movement = self.statement_row_repository.lock_owned_transaction(
+                transaction_id,
+                user_id,
             )
-            BankStatementDecisionAudit.objects.create(
-                row=row,
-                actor_id=user_id,
-                decision=row.decision,
-                previous_decision=BankStatementRow.Decision.PENDING,
+        elif transfer_id is not None:
+            movement = self.statement_row_repository.lock_owned_transfer(
+                transfer_id,
+                user_id,
             )
-            self.reconciliation_service.refresh_outcome_counts(row.upload)
-            return row
+        else:
+            return None
+        if movement is None:
+            raise _LinkRetryError(transaction_id or transfer_id)
+        return movement
 
     @classmethod
     def _validate_canonical_duplicate(
@@ -370,6 +438,7 @@ class StatementRowLinkService:
             previous_decision=previous_decision,
         )
         self.reconciliation_service.refresh_outcome_counts(row.upload)
+        self._balance_verification_service.verify_completed(row.upload)
 
     def repayment_candidates(
         self,

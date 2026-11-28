@@ -981,6 +981,71 @@ class TestFinancesView(TestCase):
         self.assertContains(response, 'Пустой разбор')
         self.assertEqual(response.context['control'].coverage.state, 'unknown')
 
+    def test_accounting_control_reads_actual_balance_without_locks(
+        self,
+    ) -> None:
+        """An actual balance check is read, never locked or rewritten."""
+        self.client.force_login(self.user)
+
+        def actual_upload(position: int) -> BankStatementUpload:
+            explanation_code = (
+                BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE
+            )
+            return BankStatementUpload.objects.create(
+                user=self.user,
+                account=self.account,
+                pdf_file=f'bank_statements/control-read-{position}.pdf',
+                total_transactions=1,
+                statement_period_from=date(2026, 3, 1),
+                statement_period_to=date(2026, 3, 31),
+                status=BankStatementUpload.Status.COMPLETED,
+                statement_closing_balance=Decimal('1000.00'),
+                balance_currency='RUB',
+                balance_type=(BankStatementUpload.BalanceType.EXACT_MOMENT),
+                balance_moment=timezone.now(),
+                balance_bank_date=timezone.localdate(),
+                balance_result=(BankStatementUpload.BalanceResult.DISCREPANCY),
+                balance_is_actual=True,
+                account_balance_after=Decimal('1000.00'),
+                balance_discrepancy=Decimal('0.00'),
+                balance_checked_at=timezone.now(),
+                balance_explanation_code=explanation_code,
+                balance_explained_at=timezone.now(),
+                balance_explained_by=self.user,
+            )
+
+        actual_upload(1)
+        with CaptureQueriesContext(connection) as single:
+            response = self.client.get(self._control_url(self.account))
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+
+        actual_upload(2)
+        with CaptureQueriesContext(connection) as double:
+            response = self.client.get(self._control_url(self.account))
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+
+        for query in double.captured_queries:
+            sql = query['sql'].upper()
+            self.assertNotIn('FOR UPDATE', sql)
+            self.assertFalse(sql.lstrip().startswith('UPDATE'))
+        authors = 'FROM "USERS_USER"'
+        self.assertEqual(
+            len(
+                [
+                    query
+                    for query in double.captured_queries
+                    if authors in query['sql'].upper()
+                ],
+            ),
+            len(
+                [
+                    query
+                    for query in single.captured_queries
+                    if authors in query['sql'].upper()
+                ],
+            ),
+        )
+
     def test_accounting_control_rejects_malformed_account_id(self) -> None:
         self.client.force_login(self.user)
         malformed = '9' * 5000

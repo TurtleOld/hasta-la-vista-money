@@ -88,6 +88,16 @@ _STATEMENT_AUDIT_MODELS: Final = frozenset({TRANSACTION_LABEL, TRANSFER_LABEL})
 # a snapshot created within this small allowance.
 _LEGACY_DELETE_SNAPSHOT_TOLERANCE: Final = timedelta(seconds=5)
 
+# Only a movement that still carries a bank reference needs the cleanup
+# lock and update; an already cleared one is left alone.
+_HAS_BANK_REFERENCE: Final = Q(source_ref__isnull=False) & ~Q(
+    source_ref='',
+)
+
+
+class _StatementCompositionChangedError(Exception):
+    """Signal that statement rows changed while their locks were taken."""
+
 
 class _AuditProvenance(NamedTuple):
     """Typed identities and safe technical keys of created movements.
@@ -157,30 +167,81 @@ class BankStatementRetentionService:
         rollback keeps both the file and the database consistent. A failed
         storage delete leaves the path queued for a later run without
         touching the cleaned bank data or writing another audit entry.
+
+        Movements are locked before the upload. Deleting a movement takes
+        it first and then waits for the upload, so holding the upload and
+        waiting for the movement in the ``source_ref`` update would
+        deadlock. A row linked between the pre-read and the upload lock
+        restarts the attempt inside a savepoint, so every movement is
+        always taken before the upload it belongs to.
         """
-        with transaction.atomic():
-            upload = (
-                BankStatementUpload.objects.select_for_update()
-                .select_related('account', 'user')
-                .get(pk=upload_id)
+        for _attempt in range(3):
+            try:
+                with transaction.atomic():
+                    return self._cleanup_upload_locked(upload_id, now)
+            except _StatementCompositionChangedError:
+                continue
+        raise _StatementCompositionChangedError(upload_id)
+
+    def _cleanup_upload_locked(self, upload_id: int, now: datetime) -> bool:
+        """Run one cleanup attempt with the movement lock taken first."""
+        locked_transaction_ids = self._lock_created_movements(upload_id)
+        upload = (
+            BankStatementUpload.objects.select_for_update(of=('self',))
+            .select_related('account', 'user')
+            .get(pk=upload_id)
+        )
+        cleaned = False
+        if upload.retention_cleaned_at is None and upload.expires_at <= now:
+            cleaned = self._clean_bank_data(
+                upload,
+                now,
+                locked_transaction_ids,
             )
-            cleaned = False
-            if upload.retention_cleaned_at is None and upload.expires_at <= now:
-                cleaned = self._clean_bank_data(upload, now)
-            if upload.retention_pending_pdf_paths:
-                transaction.on_commit(
-                    partial(self._delete_pending_pdfs, upload.pk),
-                )
-            return cleaned
+        if upload.retention_pending_pdf_paths:
+            transaction.on_commit(
+                partial(self._delete_pending_pdfs, upload.pk),
+            )
+        return cleaned
+
+    @staticmethod
+    def _lock_created_movements(upload_id: int) -> set[int]:
+        """Lock only live movements a ``NEW``/``TRANSFERRED`` row created.
+
+        The shared order is movement, upload, row. Cleanup rewrites
+        ``source_ref`` only on movements the statement created and that
+        still carry that reference, so an already cleared movement and a
+        ``LINKED`` row's independent movement are never locked: a revision
+        holds the upload and waits for such a movement's ``KEY SHARE`` on
+        commit, so cleanup taking it would close a new deadlock cycle.
+        The row composition is rechecked under the upload and row locks.
+        """
+        movement_ids = set(
+            BankStatementRow.objects.filter(
+                upload_id=upload_id,
+                transaction_id__isnull=False,
+                decision__in=CREATED_DECISIONS,
+            ).values_list('transaction_id', flat=True),
+        )
+        if not movement_ids:
+            return movement_ids
+        return set(
+            Transaction.objects.select_for_update(of=('self',))
+            .filter(pk__in=movement_ids)
+            .filter(_HAS_BANK_REFERENCE)
+            .order_by('pk')
+            .values_list('pk', flat=True),
+        )
 
     def _clean_bank_data(
         self,
         upload: BankStatementUpload,
         now: datetime,
+        locked_transaction_ids: set[int],
     ) -> bool:
         """Remove one upload's bank payload inside its transaction."""
         rows = list(
-            BankStatementRow.objects.select_for_update().filter(
+            BankStatementRow.objects.select_for_update(of=('self',)).filter(
                 upload=upload,
             ),
         )
@@ -191,6 +252,15 @@ class BankStatementRetentionService:
         complete = is_statement_complete(upload)
         row_ids = [row.pk for row in rows]
         provenance = self._statement_audit_provenance(upload, rows)
+        clearable_ids = set(
+            Transaction.objects.filter(
+                pk__in=provenance.transaction_ids,
+            )
+            .filter(_HAS_BANK_REFERENCE)
+            .values_list('pk', flat=True),
+        )
+        if not clearable_ids <= locked_transaction_ids:
+            raise _StatementCompositionChangedError(upload.pk)
 
         file_name = upload.pdf_file.name
         pending_paths = list(upload.retention_pending_pdf_paths or [])
@@ -233,7 +303,7 @@ class BankStatementRetentionService:
             match_calendar_date=False,
         )
         self._anonymize_audit_copies(upload, provenance)
-        self._clear_created_movement_references(provenance)
+        self._clear_created_movement_references(clearable_ids)
         upload.pdf_file = ''
         upload.retention_pending_pdf_paths = pending_paths
         upload.retention_cleaned_at = now
@@ -488,22 +558,23 @@ class BankStatementRetentionService:
 
     @staticmethod
     def _clear_created_movement_references(
-        provenance: _AuditProvenance,
+        transaction_ids: set[int],
     ) -> None:
         """Drop the raw bank reference from movements this upload created.
 
-        The provenance set only contains live rows whose decision created
-        money, so a linked pre-existing movement keeps its own reference
-        and a reused primary key of a deleted movement is never touched. A
-        queryset update bypasses the audit signal: the technical
-        fingerprint, file position and the financial record stay, only the
-        bank identifier is removed.
+        The ids are the locked live movements whose decision created money
+        and that still carry a reference, so a linked pre-existing
+        movement keeps its own reference, a reused primary key of a deleted
+        movement is never touched, and an already cleared movement gets no
+        statement at all. A queryset update bypasses the audit signal: the
+        technical fingerprint, file position and the financial record stay,
+        only the bank identifier is removed.
         """
-        if not provenance.transaction_ids:
+        if not transaction_ids:
             return
-        Transaction.objects.filter(
-            pk__in=provenance.transaction_ids,
-        ).update(source_ref=None)
+        Transaction.objects.filter(pk__in=transaction_ids).update(
+            source_ref=None,
+        )
 
     @staticmethod
     def _record_anonymization(

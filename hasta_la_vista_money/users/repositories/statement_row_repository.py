@@ -7,6 +7,7 @@ from operator import or_
 from typing import NamedTuple
 from uuid import UUID
 
+from django.db import transaction
 from django.db.models import (
     BooleanField,
     Exists,
@@ -55,6 +56,10 @@ class LockedRelease(NamedTuple):
     repeats: list[LockedStatementRow]
     repayment_ids: set[int]
     uploads: list[BankStatementUpload]
+
+
+class _StatementLockRetryError(Exception):
+    """Signal that the affected uploads changed while locks were taken."""
 
 
 def _locked_rows(
@@ -120,32 +125,68 @@ class StatementRowRepository:
         self,
         movement: Transaction | TransferMoneyLog,
     ) -> LockedRelease:
-        """Lock rows closed by the movement and their repeat observations."""
+        """Lock every affected upload, then every row, in primary-key order.
+
+        The caller already holds the movement. Cleanup and deletion share
+        the order movement, upload, row; a repeat row can appear between
+        reading the affected uploads and locking them, so an unstable
+        attempt is retried inside a savepoint. That releases the locks of
+        the attempt instead of taking an upload out of primary-key order.
+        """
+        for _attempt in range(3):
+            try:
+                with transaction.atomic():
+                    return self._lock_released_rows(movement)
+            except _StatementLockRetryError:
+                continue
+        raise _StatementLockRetryError(movement.pk)
+
+    def _lock_released_rows(
+        self,
+        movement: Transaction | TransferMoneyLog,
+    ) -> LockedRelease:
+        """Take the locks of one attempt or ask for a fresh snapshot."""
         rows = self._linked_rows(movement)
-        linked = _locked_rows(
-            rows.select_for_update().order_by('pk'),
-        )
-        if not linked:
+        linked_ids = list(rows.values_list('pk', flat=True))
+        if not linked_ids:
             return LockedRelease([], [], set(), [])
+        upload_ids = set(rows.values_list('upload_id', flat=True))
+        upload_ids.update(
+            BankStatementRow.objects.filter(
+                canonical_row_id__in=linked_ids,
+            ).values_list('upload_id', flat=True),
+        )
+        uploads = self._lock_uploads(upload_ids)
+        linked = _locked_rows(
+            rows.select_for_update(of=('self',)).order_by('pk'),
+        )
         repeats = BankStatementRow.objects.filter(
-            canonical_row_id__in=[row.pk for row in linked],
+            canonical_row_id__in=linked_ids,
         )
         repeat_rows = _locked_rows(
-            repeats.select_for_update().order_by('pk'),
+            repeats.select_for_update(of=('self',)).order_by('pk'),
         )
+        locked_upload_ids = {upload.pk for upload in uploads}
+        if any(
+            row.upload_id not in locked_upload_ids
+            for row in (*linked, *repeat_rows)
+        ):
+            raise _StatementLockRetryError(movement.pk)
         repayment_ids = set(
             rows.filter(_REPAYMENT_ROW).values_list('pk', flat=True),
         )
-        uploads = list(
-            BankStatementUpload.objects.filter(
-                pk__in=rows.values('upload_id'),
-            ).union(
-                BankStatementUpload.objects.filter(
-                    pk__in=repeats.values('upload_id'),
-                ),
-            ),
-        )
         return LockedRelease(linked, repeat_rows, repayment_ids, uploads)
+
+    @staticmethod
+    def _lock_uploads(upload_ids: set[int]) -> list[BankStatementUpload]:
+        """Lock these uploads in primary-key order."""
+        if not upload_ids:
+            return []
+        return list(
+            BankStatementUpload.objects.select_for_update(of=('self',))
+            .filter(pk__in=upload_ids)
+            .order_by('pk'),
+        )
 
     @staticmethod
     def expire_rows(row_ids: Sequence[int], decided_at: datetime) -> None:
@@ -211,23 +252,43 @@ class StatementRowRepository:
             ],
         )
 
-    def invalidate_linked_checks(
-        self,
-        movement: Transaction | TransferMoneyLog,
+    @staticmethod
+    def invalidate_upload_checks(
+        upload_ids: Sequence[int],
+        reason: str,
     ) -> None:
-        """Reset affected statement checks and mark them for rechecking."""
-        affected = BankStatementUpload.objects.filter(
-            pk__in=self._linked_rows(movement).values('upload_id'),
-        )
+        """Reset stored checks of these uploads and mark them stale.
+
+        A cleaned upload keeps its bank-data-cleaned reason: it has no
+        payload left to recheck. A live upload always takes the new
+        reason, even when an earlier change already made it stale, so a
+        reopened accounting never keeps an old cause.
+        """
+        affected = BankStatementUpload.objects.filter(pk__in=upload_ids)
         affected.update(
             account_balance_after=None,
             balance_discrepancy=None,
         )
-        affected.filter(balance_is_actual=True).update(
+        affected.filter(retention_cleaned_at__isnull=True).update(
             balance_is_actual=False,
-            balance_reason=(
-                BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED
+            balance_reason=reason,
+        )
+
+    def invalidate_linked_checks(
+        self,
+        movement: Transaction | TransferMoneyLog,
+        *,
+        reason: str = BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+    ) -> None:
+        """Reset affected statement checks and mark them for rechecking."""
+        self.invalidate_upload_checks(
+            list(
+                self._linked_rows(movement).values_list(
+                    'upload_id',
+                    flat=True,
+                ),
             ),
+            reason,
         )
 
     @staticmethod
@@ -319,6 +380,45 @@ class StatementRowRepository:
             row.upload = uploads[0]
         return row
 
+    def lock_owned_rows(
+        self,
+        row_ids: Sequence[int],
+        user_id: int,
+    ) -> list[BankStatementRow]:
+        """Lock the uploads of these rows, then the rows by primary key.
+
+        Deleting a movement takes every affected upload in primary-key
+        order before any row. A repeat link that locked its own upload
+        before the canonical row's upload would deadlock with it, so both
+        uploads are always taken together in one ordered query.
+
+        Raises:
+            BankStatementRow.DoesNotExist: A row is missing or foreign.
+        """
+        ordered_ids = sorted(set(row_ids))
+        upload_ids = set(
+            BankStatementRow.objects.filter(
+                pk__in=ordered_ids,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            ).values_list('upload_id', flat=True),
+        )
+        uploads = self._lock_uploads(upload_ids)
+        if len(uploads) != len(upload_ids):
+            raise BankStatementRow.DoesNotExist
+        rows = list(
+            BankStatementRow.objects.select_for_update(of=('self',))
+            .select_related('upload__account', 'upload__user')
+            .filter(pk__in=ordered_ids, upload_id__in=upload_ids)
+            .order_by('pk'),
+        )
+        if len(rows) != len(ordered_ids):
+            raise BankStatementRow.DoesNotExist
+        uploads_by_id = {upload.pk: upload for upload in uploads}
+        for row in rows:
+            row.upload = uploads_by_id[row.upload_id]
+        return rows
+
     def lock_owned_row(self, row_id: int, user_id: int) -> BankStatementRow:
         """Raises ``BankStatementRow.DoesNotExist`` for a foreign row."""
         uploads = self._lock_row_uploads(row_id, user_id)
@@ -340,9 +440,54 @@ class StatementRowRepository:
         transfer_id: int,
         user_id: int,
     ) -> TransferMoneyLog | None:
+        """Lock a transfer weakly: a revision's KEY SHARE still fits.
+
+        ``FOR NO KEY UPDATE`` serializes with another such lock and with
+        ``DELETE``, but not with the ``FOR KEY SHARE`` a revision needs for
+        its ``previous_transfer`` reference, so the two cannot deadlock.
+        """
         return (
-            TransferMoneyLog.objects.select_for_update(of=('self',))
+            TransferMoneyLog.objects.select_for_update(
+                no_key=True,
+                of=('self',),
+            )
             .filter(pk=transfer_id, user_id=user_id)
+            .first()
+        )
+
+    @staticmethod
+    def row_movement_ids(
+        row_id: int,
+        user_id: int,
+    ) -> tuple[int | None, int | None]:
+        """Read a row's movement ids before locking that movement."""
+        return (
+            BankStatementRow.objects.filter(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+            .values_list('transaction_id', 'transfer_id')
+            .get()
+        )
+
+    def lock_owned_transaction(
+        self,
+        transaction_id: int,
+        user_id: int,
+    ) -> Transaction | None:
+        """Lock a transaction weakly: a revision's KEY SHARE still fits.
+
+        ``FOR NO KEY UPDATE`` serializes with another such lock and with
+        ``DELETE``, but not with the ``FOR KEY SHARE`` a revision needs for
+        its ``previous_transaction`` reference, so the two cannot deadlock.
+        """
+        return (
+            Transaction.objects.select_for_update(
+                no_key=True,
+                of=('self',),
+            )
+            .filter(pk=transaction_id, user_id=user_id)
             .first()
         )
 

@@ -382,6 +382,50 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
         self.assertEqual(upload.needs_transfer_count, 0)
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
 
+    def test_mark_not_payment_checks_the_completed_statement_balance(
+        self,
+    ) -> None:
+        """Closing the last open row still verifies the statement balance."""
+        upload = self._create_upload()
+        moment = timezone.now()
+        upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        upload.statement_closing_balance = Decimal('1000.00')
+        upload.balance_currency = 'RUB'
+        upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        upload.balance_moment = moment
+        upload.balance_bank_date = timezone.localdate()
+        upload.save(
+            update_fields=[
+                'status',
+                'statement_closing_balance',
+                'balance_currency',
+                'balance_type',
+                'balance_moment',
+                'balance_bank_date',
+            ],
+        )
+        row = self._create_pending_row(
+            upload=upload,
+            amount=Decimal('199.00'),
+            when=datetime(2026, 2, 9, 12, 0, tzinfo=UTC),
+        )
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+
+        service.mark_not_payment(row.pk, self.user.pk)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(upload.balance_is_actual)
+        self.assertEqual(
+            upload.account_balance_after,
+            Decimal('1000.00'),
+        )
+
 
 class ExpiredRepaymentRowRejectionTest(CreditCardStatementBaseTest):
     """Retention is enforced before the background cleanup runs."""
@@ -667,6 +711,61 @@ class RepaymentLinkTest(CreditCardStatementBaseTest):
         candidates = self.link_service.repayment_candidates([self.row])
 
         self.assertEqual(candidates, {self.row.pk: [match]})
+
+    def _prepare_balance_check(self, closing: Decimal) -> None:
+        """Give the upload a confirmed closing balance and open closure."""
+        self.upload.total_transactions = 1
+        self.upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        self.upload.statement_closing_balance = closing
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        self.upload.balance_moment = self.ROW_DATE
+        self.upload.balance_bank_date = self.ROW_DATE.date()
+        self.upload.save()
+
+    def test_link_closes_last_row_and_rechecks_the_balance(self) -> None:
+        self._prepare_balance_check(Decimal('1000.00'))
+        transfer = self._transfer()
+
+        self.link_service.link_repayment(self.row.pk, transfer.pk, self.user.pk)
+
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+        self.assertIsNotNone(self.upload.balance_checked_at)
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(self.upload.balance_is_actual)
+
+    def test_created_repayment_transfer_rechecks_the_balance(self) -> None:
+        self._prepare_balance_check(Decimal('1199.00'))
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+
+        transfer_service.transfer_money(
+            self.debit,
+            self.card,
+            Decimal('199.00'),
+            self.user,
+            exchange_date=self.ROW_DATE,
+            statement_row_id=self.row.pk,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(self.upload.balance_is_actual)
 
     def test_link_closes_row_and_keeps_balances(self) -> None:
         transfer = self._transfer()

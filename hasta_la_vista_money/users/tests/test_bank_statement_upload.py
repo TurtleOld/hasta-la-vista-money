@@ -2,6 +2,7 @@
 
 import signal
 import tempfile
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
@@ -16,7 +17,7 @@ from django.contrib.auth.models import Group
 from django.contrib.messages import SUCCESS, get_messages
 from django.core.files import File
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import DatabaseError, OperationalError
+from django.db import DatabaseError, OperationalError, connection
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -2017,6 +2018,62 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(created.source_row_position, 0)
         self.assertEqual(linked.source_ref, 'linked-bank-ref')
         self.assertEqual(foreign.source_ref, 'manual-bank-ref')
+
+    def test_cleanup_skips_a_cleared_created_movement(self) -> None:
+        """A created movement without a bank reference is not rewritten."""
+        self.upload.file_hash = 'retention-cleared-file'
+        self.upload.save(update_fields=['file_hash'])
+        cleared = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('120.00'),
+            date=self.candidate.date,
+            description='Банковская покупка',
+            source_ref=None,
+            source_fingerprint='cleared-fingerprint',
+            source_fingerprint_key_version='k2',
+            source_file_hash=self.upload.file_hash,
+            source_row_position=0,
+        )
+        self.row.transaction = cleared
+        self.row.decision = BankStatementRow.Decision.NEW
+        self.row.save(update_fields=['transaction', 'decision'])
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+        movement_table = f'"{Transaction._meta.db_table}"'
+        locks: list[str] = []
+        updates: list[str] = []
+
+        def record(
+            execute: Callable[..., Any],
+            sql: str,
+            params: Any,
+            many: bool,
+            context: dict[str, Any],
+        ) -> Any:
+            if movement_table in sql:
+                if 'FOR UPDATE' in sql:
+                    locks.append(sql)
+                elif sql.lstrip().upper().startswith('UPDATE'):
+                    updates.append(sql)
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record):
+            BankStatementRetentionService(
+                BankStatementReconciliationService(),
+            ).cleanup_expired(deadline)
+
+        if len(locks) != 1:
+            self.fail('cleanup must lock the created movement once')
+        self.assertIn('"source_ref" IS NOT NULL', locks[0])
+        self.assertEqual(updates, [])
+        cleared.refresh_from_db()
+        self.assertIsNone(cleared.source_ref)
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
 
     def test_cleanup_keeps_legacy_decision_and_independent_audit(
         self,

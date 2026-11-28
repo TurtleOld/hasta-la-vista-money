@@ -304,7 +304,7 @@ class AccountingControlService:
         """Return uploads whose explicit period or run date intersects."""
         queryset = (
             BankStatementUpload.objects.filter(account_id=account_id)
-            .select_related('account')
+            .select_related('account', 'balance_explained_by')
             .annotate(
                 has_markup_rows=Exists(
                     BankStatementRow.objects.filter(

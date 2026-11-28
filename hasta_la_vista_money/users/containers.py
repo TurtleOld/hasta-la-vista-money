@@ -167,6 +167,7 @@ class UsersContainer(containers.DeclarativeContainer):
         StatementRowLinkService,
         statement_row_repository=statement_row_repository,
         reconciliation_service=bank_statement_reconciliation_service,
+        balance_verification_service=statement_balance_verification_service,
     )
 
     bank_statement_retention_service: providers.Factory[

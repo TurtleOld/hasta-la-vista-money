@@ -8,7 +8,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connections, transaction
+from django.db import connection, connections, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Model
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -95,13 +95,168 @@ def _signal_before_movement_lock(
         many: bool,
         context: dict[str, Any],
     ) -> Any:
-        if 'FOR UPDATE' in sql and any(
+        if ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and any(
             table in sql for table in movement_tables
         ):
             decision_started.set()
         return execute(sql, params, many, context)
 
     return wrapper
+
+
+def _signal_after_movement_lock(
+    movement_locked: Event,
+    release: Event,
+) -> Callable[..., Any]:
+    """Announce the movement lock only after its own SQL returned.
+
+    The holder thus provably owns the row before it releases the other
+    thread, and keeps that lock while the other path reaches the same
+    statement, so the two paths always overlap on the real lock.
+    """
+    movement_tables = (
+        Transaction._meta.db_table,
+        TransferMoneyLog._meta.db_table,
+    )
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        result = execute(sql, params, many, context)
+        if ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and any(
+            table in sql for table in movement_tables
+        ):
+            movement_locked.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError('partner did not reach the movement lock')
+        return result
+
+    return wrapper
+
+
+def _signal_after_upload_lock(
+    upload_locked: Event,
+    release: Event,
+) -> Callable[..., Any]:
+    """Hold a revision after its upload lock until the other path runs."""
+    upload_table = BankStatementUpload._meta.db_table
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        result = execute(sql, params, many, context)
+        if 'FOR UPDATE' in sql and upload_table in sql:
+            upload_locked.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError('race partner did not run in time')
+        return result
+
+    return wrapper
+
+
+def _run_cleanup_thread(
+    retention: Any,
+    errors: list[Exception | None],
+    index: int,
+    *,
+    delete_locked: Event,
+    cleanup_attempted: Event,
+) -> None:
+    """Lock the movement after deletion did, while it still holds it."""
+    try:
+        if not delete_locked.wait(timeout=5):
+            raise TimeoutError('delete did not lock the movement in time')
+        with connections['default'].execute_wrapper(
+            _signal_before_movement_lock(cleanup_attempted),
+        ):
+            retention.cleanup_expired()
+    except Exception as exc:
+        errors[index] = exc
+    finally:
+        connections.close_all()
+
+
+def _run_delete_thread(
+    delete_service: Any,
+    movement: Transaction,
+    user: User,
+    *,
+    errors: list[Exception | None],
+    delete_locked: Event,
+    cleanup_attempted: Event,
+) -> None:
+    """Delete the movement and hold its lock until cleanup tries it too."""
+    try:
+        with connections['default'].execute_wrapper(
+            _signal_after_movement_lock(
+                delete_locked,
+                cleanup_attempted,
+            ),
+        ):
+            delete_service.delete_transaction(
+                user=user,
+                transaction_obj=movement,
+            )
+    except Exception as exc:
+        errors[1] = exc
+    finally:
+        connections.close_all()
+
+
+def _run_cleanup_delete_race(
+    retention: Any,
+    delete_service: Any,
+    movement: Transaction,
+    user: User,
+) -> list[Exception | None]:
+    """Race cleanup against deletion of the movement it cleans.
+
+    Deletion takes the movement lock, then cleanup is released and blocks
+    on the same row before it may take the upload. If cleanup took the
+    upload first, deletion would hold the movement and wait for that
+    upload, so the two paths would deadlock; the shared order movement,
+    upload, row is therefore proven by a real lock overlap.
+    """
+    delete_locked = Event()
+    cleanup_attempted = Event()
+    errors: list[Exception | None] = [None, None]
+    threads = [
+        Thread(
+            target=_run_cleanup_thread,
+            args=(retention, errors, 0),
+            kwargs={
+                'delete_locked': delete_locked,
+                'cleanup_attempted': cleanup_attempted,
+            },
+        ),
+        Thread(
+            target=_run_delete_thread,
+            args=(delete_service, movement, user),
+            kwargs={
+                'errors': errors,
+                'delete_locked': delete_locked,
+                'cleanup_attempted': cleanup_attempted,
+            },
+        ),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    errors.extend(
+        AssertionError('race thread did not finish')
+        for thread in threads
+        if thread.is_alive()
+    )
+    return errors
 
 
 class StatementFingerprintTest(TestCase):
@@ -1862,6 +2017,47 @@ class ReconciliationUsesBalanceServiceTest(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('900.00'))
 
+    def test_revising_a_linked_row_rechecks_the_balance(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+        )
+        self.row.transaction = movement
+        self.row.decision = BankStatementRow.Decision.LINKED
+        self.row.save(update_fields=['transaction', 'decision'])
+        self.upload.total_transactions = 1
+        self.upload.status = BankStatementUpload.Status.COMPLETED
+        self.upload.statement_closing_balance = Decimal('900.00')
+        self.upload.balance_currency = 'RUB'
+        self.upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        self.upload.balance_moment = WHEN
+        self.upload.save()
+
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        service.revise_linked_to_new(
+            self.row.pk,
+            self.user.pk,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertIsNotNone(self.upload.balance_checked_at)
+        self.assertEqual(
+            self.upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(self.upload.balance_is_actual)
+
 
 class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
     """Posting NEW twice for one proven operation must not double money."""
@@ -2168,6 +2364,185 @@ class LinkedDateInvalidationTest(TestCase):
             self.upload.balance_discrepancy,
             Decimal('-100.00'),
         )
+
+    def test_delete_reopening_statement_marks_the_check_reopened(self) -> None:
+        self._verify_matched()
+
+        self.transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=self.movement,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertFalse(self.upload.balance_is_actual)
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
+        self.assertIsNone(self.upload.account_balance_after)
+        self.assertIsNone(self.upload.balance_discrepancy)
+
+    def test_delete_after_stale_check_marks_the_check_reopened(self) -> None:
+        """A stale cause is replaced when the accounting is reopened."""
+        self._verify_matched()
+        self._update(
+            category=self.category,
+            when=WHEN + timedelta(days=2),
+        )
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+        )
+
+        self.transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=self.movement,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertFalse(self.upload.balance_is_actual)
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
+
+
+class StatementLockOrderTest(TestCase):
+    """Every path takes movement, upload, row and account in that order."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        self.movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+        )
+        BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction=self.movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+
+    def test_delete_takes_the_account_last(self) -> None:
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        tables = {
+            Transaction._meta.db_table: 'movement',
+            BankStatementUpload._meta.db_table: 'upload',
+            BankStatementRow._meta.db_table: 'row',
+            Account._meta.db_table: 'account',
+        }
+        order: list[str] = []
+
+        def record(
+            execute: Callable[..., Any],
+            sql: str,
+            params: Any,
+            many: bool,
+            context: dict[str, Any],
+        ) -> Any:
+            if 'FOR UPDATE' in sql:
+                scope = (
+                    sql.split('FOR UPDATE', 1)[1]
+                    if 'FOR UPDATE OF' in sql
+                    else sql
+                )
+                for table, name in tables.items():
+                    if f'"{table}"' in scope and name not in order:
+                        order.append(name)
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record):
+            transaction_service.delete_transaction(
+                user=self.user,
+                transaction_obj=self.movement,
+            )
+
+        self.assertEqual(order, ['movement', 'upload', 'row', 'account'])
+
+    def test_delete_locks_and_invalidates_every_repeat_upload(self) -> None:
+        """A repeat in another upload is locked in order and invalidated."""
+        canonical = BankStatementRow.objects.get(upload=self.upload)
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='repeat.pdf',
+            account_balance_after=Decimal('900.00'),
+            balance_discrepancy=Decimal('-100.00'),
+            balance_is_actual=True,
+        )
+        repeat = BankStatementRow.objects.create(
+            upload=other_upload,
+            canonical_row=canonical,
+            decision=BankStatementRow.Decision.DUPLICATE,
+        )
+        self.upload.account_balance_after = Decimal('900.00')
+        self.upload.balance_discrepancy = Decimal('-100.00')
+        self.upload.balance_is_actual = True
+        self.upload.save(
+            update_fields=[
+                'account_balance_after',
+                'balance_discrepancy',
+                'balance_is_actual',
+            ],
+        )
+        batches: list[list[int]] = []
+
+        def record(
+            execute: Callable[..., Any],
+            sql: str,
+            params: Any,
+            many: bool,
+            context: dict[str, Any],
+        ) -> Any:
+            upload_table = f'"{BankStatementUpload._meta.db_table}"'
+            if 'FOR UPDATE' in sql and '"id" IN' in sql and upload_table in sql:
+                batches.append(list(params))
+            return execute(sql, params, many, context)
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        with connection.execute_wrapper(record):
+            transaction_service.delete_transaction(
+                user=self.user,
+                transaction_obj=self.movement,
+            )
+
+        expected = sorted([self.upload.pk, other_upload.pk])
+        self.assertEqual(batches[0], expected)
+        for upload in (self.upload, other_upload):
+            upload.refresh_from_db()
+            self.assertFalse(upload.balance_is_actual)
+            self.assertEqual(
+                upload.balance_reason,
+                BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+            )
+            self.assertIsNone(upload.account_balance_after)
+            self.assertIsNone(upload.balance_discrepancy)
+        repeat.refresh_from_db()
+        self.assertEqual(repeat.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(repeat.canonical_row_id)
 
 
 class SharedMovementMigrationTest(TransactionTestCase):
@@ -2629,6 +3004,67 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         self.assertGreater(upload.expires_at, timezone.now())
         self.assertTrue(bool(upload.pdf_file))
 
+    def _cleanup_delete_fixture(
+        self,
+    ) -> tuple[Transaction, BankStatementRow, BankStatementUpload]:
+        """Create a due statement whose row created its own movement."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            source_ref='race-bank-reference',
+        )
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'race-delete.pdf',
+                b'%PDF-1.4 race statement',
+                content_type='application/pdf',
+            ),
+            file_hash='race-delete-file',
+            status=BankStatementUpload.Status.COMPLETED,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        return movement, row, upload
+
+    def test_cleanup_and_delete_take_the_movement_first(self) -> None:
+        """Cleanup waits for a movement lock before it takes the upload."""
+        movement, row, upload = self._cleanup_delete_fixture()
+        errors = _run_cleanup_delete_race(
+            ApplicationContainer().users.bank_statement_retention_service(),
+            ApplicationContainer().transactions.transaction_service(),
+            movement,
+            self.user,
+        )
+
+        self.assertEqual(errors, [None, None])
+        self.assertFalse(Transaction.objects.filter(pk=movement.pk).exists())
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertIsNone(row.transaction_id)
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+
     def test_concurrent_decisions_create_one_movement(self) -> None:
         upload = BankStatementUpload.objects.create(
             user=self.user,
@@ -2967,6 +3403,52 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         return transfer, row
 
+    def _duplicate_revision_fixture(
+        self,
+    ) -> tuple[
+        Transaction,
+        BankStatementRow,
+        BankStatementRow,
+    ]:
+        """One linked canonical row and one pending repeat of it."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='duplicate-revision-race.pdf',
+        )
+        canonical = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        pending = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=1,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        return movement, canonical, pending
+
     def _run_service_race(
         self,
         hold: Callable[[Event, Event], None],
@@ -3245,6 +3727,144 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             BankStatementRow.Decision.NEEDS_TRANSFER,
         )
         self.assertIsNone(row.transfer_id)
+
+    def test_duplicate_link_does_not_deadlock_a_revision(self) -> None:
+        """A link and a revision take the same movement in the same order.
+
+        The revision locks the movement that its audit will reference
+        before it touches the upload, so a link that already holds that
+        movement only makes the revision wait for it. The link then takes
+        the upload and the row it needs instead of waiting for an upload
+        the revision already holds.
+        """
+        movement, canonical, pending = self._duplicate_revision_fixture()
+        movement_locked = Event()
+        revision_started = Event()
+        errors: list[Exception | None] = [None, None]
+        revise_service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        link_service = ApplicationContainer().users.statement_row_link_service()
+
+        def revise_thread() -> None:
+            try:
+                if not movement_locked.wait(timeout=5):
+                    self.fail('link did not lock the movement in time')
+                revision_started.set()
+                revise_service.revise_linked_to_new(
+                    canonical.pk,
+                    self.user.pk,
+                )
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def link_thread() -> None:
+            try:
+                with connections['default'].execute_wrapper(
+                    _signal_after_movement_lock(
+                        movement_locked,
+                        revision_started,
+                    ),
+                ):
+                    link_service.link_duplicate(
+                        pending.pk,
+                        canonical.pk,
+                        self.user.pk,
+                    )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=revise_thread), Thread(target=link_thread)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
+        self.assertEqual(errors, [None, None])
+
+        pending.refresh_from_db()
+        self.assertEqual(
+            pending.decision,
+            BankStatementRow.Decision.DUPLICATE,
+        )
+        self.assertEqual(pending.canonical_row_id, canonical.pk)
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.decision, BankStatementRow.Decision.NEW)
+        self.assertNotEqual(canonical.transaction_id, movement.pk)
+
+    def test_revision_does_not_deadlock_a_movement_delete(self) -> None:
+        """A revision takes the movement before the upload it replaces.
+
+        Deleting the movement takes it first and only then the upload; a
+        revision that held the upload while its audit needed a ``KEY
+        SHARE`` of the movement would deadlock with that delete. The
+        delete is signalled only when its own movement SQL is about to
+        run, so the revision cannot finish before the delete has really
+        attempted that lock.
+        """
+        movement, canonical, _pending = self._duplicate_revision_fixture()
+        upload_locked = Event()
+        delete_attempted = Event()
+        errors: list[Exception | None] = [None, None]
+        revise_service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+
+        def revise_thread() -> None:
+            try:
+                with connections['default'].execute_wrapper(
+                    _signal_after_upload_lock(
+                        upload_locked,
+                        delete_attempted,
+                    ),
+                ):
+                    revise_service.revise_linked_to_new(
+                        canonical.pk,
+                        self.user.pk,
+                    )
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def delete_thread() -> None:
+            try:
+                if not upload_locked.wait(timeout=5):
+                    self.fail('revision did not lock the upload in time')
+                with connections['default'].execute_wrapper(
+                    _signal_before_movement_lock(delete_attempted),
+                ):
+                    transaction_service.delete_transaction(
+                        user=self.user,
+                        transaction_obj=movement,
+                    )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=revise_thread), Thread(target=delete_thread)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
+        self.assertEqual(errors, [None, None])
+        self.assertFalse(
+            Transaction.objects.filter(pk=movement.pk).exists(),
+        )
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.decision, BankStatementRow.Decision.NEW)
+        self.assertNotEqual(canonical.transaction_id, movement.pk)
 
 
 class CoverageRevisionTest(TestCase):

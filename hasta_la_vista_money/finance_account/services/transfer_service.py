@@ -62,9 +62,9 @@ class TransferService:
         to_account: Account,
         amount: Decimal,
         user: User,
+        *,
         exchange_date: datetime | None = None,
         notes: str | None = None,
-        *,
         statement_row_id: int | None = None,
     ) -> TransferMoneyLog:
         """Transfer money between accounts with validation and logging.
@@ -211,15 +211,16 @@ class TransferService:
             )
 
         with audit_operation(kind=AuditOperationKind.TRANSFER):
+            transfer_pk = transfer_log.pk
+            # Uploads and rows are locked before both accounts.
+            was_cleaned = self.statement_row_links.release_linked_rows(
+                transfer_log,
+            )
             self._balance_service.apply_account_deltas(
                 {
                     from_account.pk: transfer_log.amount,
                     to_account.pk: -transfer_log.amount,
                 },
-            )
-            transfer_pk = transfer_log.pk
-            was_cleaned = self.statement_row_links.release_linked_rows(
-                transfer_log,
             )
             self.transfer_money_log_repository.delete_log(transfer_log)
             if was_cleaned:
