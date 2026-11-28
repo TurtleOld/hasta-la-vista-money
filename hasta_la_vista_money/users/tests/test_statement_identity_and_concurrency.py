@@ -104,6 +104,118 @@ def _signal_before_movement_lock(
     return wrapper
 
 
+def _hold_cleanup_until_delete(
+    retention: Any,
+    cleanup_holds: Event,
+    delete_started: Event,
+) -> Callable[[Any], None]:
+    """Return a hook that makes cleanup wait for the deletion attempt."""
+    original_clear = retention._clear_created_movement_references
+
+    def hold(provenance: Any) -> None:
+        cleanup_holds.set()
+        if not delete_started.wait(timeout=5):
+            raise TimeoutError('delete did not start in time')
+        original_clear(provenance)
+
+    return hold
+
+
+def _run_cleanup_thread(
+    retention: Any,
+    hold: Callable[[Any], None],
+    errors: list[Exception | None],
+    index: int,
+) -> None:
+    """Run cleanup with the hook that synchronizes it with the deletion."""
+    try:
+        with patch.object(
+            retention,
+            '_clear_created_movement_references',
+            side_effect=hold,
+        ):
+            retention.cleanup_expired()
+    except Exception as exc:
+        errors[index] = exc
+    finally:
+        connections.close_all()
+
+
+def _run_delete_thread(
+    delete_service: Any,
+    movement: Transaction,
+    user: User,
+    cleanup_holds: Event,
+    delete_started: Event,
+    errors: list[Exception | None],
+) -> None:
+    """Delete the movement once cleanup announces that it holds its locks."""
+    try:
+        if not cleanup_holds.wait(timeout=5):
+            raise TimeoutError('cleanup did not lock in time')
+        with connections['default'].execute_wrapper(
+            _signal_before_movement_lock(delete_started),
+        ):
+            delete_service.delete_transaction(
+                user=user,
+                transaction_obj=movement,
+            )
+    except Exception as exc:
+        errors[1] = exc
+    finally:
+        connections.close_all()
+
+
+def _run_cleanup_delete_race(
+    retention: Any,
+    delete_service: Any,
+    movement: Transaction,
+    user: User,
+) -> list[Exception | None]:
+    """Race cleanup against deletion of the movement it cleans.
+
+    Cleanup announces that it holds its locks; deletion starts only after
+    that and announces its own movement lock attempt. A cleanup that held
+    the upload before the movement would wait there while the deletion
+    waits for the upload.
+    """
+    cleanup_holds = Event()
+    delete_started = Event()
+    errors: list[Exception | None] = [None, None]
+    hold = _hold_cleanup_until_delete(
+        retention,
+        cleanup_holds,
+        delete_started,
+    )
+    threads = [
+        Thread(
+            target=_run_cleanup_thread,
+            args=(retention, hold, errors, 0),
+        ),
+        Thread(
+            target=_run_delete_thread,
+            args=(
+                delete_service,
+                movement,
+                user,
+                cleanup_holds,
+                delete_started,
+                errors,
+            ),
+        ),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    errors.extend(
+        AssertionError('race thread did not finish')
+        for thread in threads
+        if thread.is_alive()
+    )
+    return errors
+
+
 class StatementFingerprintTest(TestCase):
     """HMAC fingerprints carry bank/account and key/format versions."""
 
@@ -2227,6 +2339,31 @@ class LinkedDateInvalidationTest(TestCase):
         self.assertIsNone(self.upload.account_balance_after)
         self.assertIsNone(self.upload.balance_discrepancy)
 
+    def test_delete_after_stale_check_marks_the_check_reopened(self) -> None:
+        """A stale cause is replaced when the accounting is reopened."""
+        self._verify_matched()
+        self._update(
+            category=self.category,
+            when=WHEN + timedelta(days=2),
+        )
+        self.upload.refresh_from_db()
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.MONEY_OR_DATE_CHANGED,
+        )
+
+        self.transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=self.movement,
+        )
+
+        self.upload.refresh_from_db()
+        self.assertFalse(self.upload.balance_is_actual)
+        self.assertEqual(
+            self.upload.balance_reason,
+            BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+        )
+
 
 class StatementLockOrderTest(TestCase):
     """Every path takes movement, upload, row and account in that order."""
@@ -2299,6 +2436,70 @@ class StatementLockOrderTest(TestCase):
             )
 
         self.assertEqual(order, ['movement', 'upload', 'row', 'account'])
+
+    def test_delete_locks_and_invalidates_every_repeat_upload(self) -> None:
+        """A repeat in another upload is locked in order and invalidated."""
+        canonical = BankStatementRow.objects.get(upload=self.upload)
+        other_upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='repeat.pdf',
+            account_balance_after=Decimal('900.00'),
+            balance_discrepancy=Decimal('-100.00'),
+            balance_is_actual=True,
+        )
+        repeat = BankStatementRow.objects.create(
+            upload=other_upload,
+            canonical_row=canonical,
+            decision=BankStatementRow.Decision.DUPLICATE,
+        )
+        self.upload.account_balance_after = Decimal('900.00')
+        self.upload.balance_discrepancy = Decimal('-100.00')
+        self.upload.balance_is_actual = True
+        self.upload.save(
+            update_fields=[
+                'account_balance_after',
+                'balance_discrepancy',
+                'balance_is_actual',
+            ],
+        )
+        batches: list[list[int]] = []
+
+        def record(
+            execute: Callable[..., Any],
+            sql: str,
+            params: Any,
+            many: bool,
+            context: dict[str, Any],
+        ) -> Any:
+            upload_table = f'"{BankStatementUpload._meta.db_table}"'
+            if 'FOR UPDATE' in sql and '"id" IN' in sql and upload_table in sql:
+                batches.append(list(params))
+            return execute(sql, params, many, context)
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        with connection.execute_wrapper(record):
+            transaction_service.delete_transaction(
+                user=self.user,
+                transaction_obj=self.movement,
+            )
+
+        expected = sorted([self.upload.pk, other_upload.pk])
+        self.assertEqual(batches[0], expected)
+        for upload in (self.upload, other_upload):
+            upload.refresh_from_db()
+            self.assertFalse(upload.balance_is_actual)
+            self.assertEqual(
+                upload.balance_reason,
+                BankStatementUpload.BalanceReason.ACCOUNTING_REOPENED,
+            )
+            self.assertIsNone(upload.account_balance_after)
+            self.assertIsNone(upload.balance_discrepancy)
+        repeat.refresh_from_db()
+        self.assertEqual(repeat.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(repeat.canonical_row_id)
 
 
 class SharedMovementMigrationTest(TransactionTestCase):
@@ -2759,6 +2960,67 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         self.assertIsNone(upload.retention_cleaned_at)
         self.assertGreater(upload.expires_at, timezone.now())
         self.assertTrue(bool(upload.pdf_file))
+
+    def _cleanup_delete_fixture(
+        self,
+    ) -> tuple[Transaction, BankStatementRow, BankStatementUpload]:
+        """Create a due statement whose row created its own movement."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            source_ref='race-bank-reference',
+        )
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file=SimpleUploadedFile(
+                'race-delete.pdf',
+                b'%PDF-1.4 race statement',
+                content_type='application/pdf',
+            ),
+            file_hash='race-delete-file',
+            status=BankStatementUpload.Status.COMPLETED,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.NEW,
+        )
+        return movement, row, upload
+
+    def test_cleanup_and_delete_take_the_movement_first(self) -> None:
+        """Cleanup waits for a movement lock before it takes the upload."""
+        movement, row, upload = self._cleanup_delete_fixture()
+        errors = _run_cleanup_delete_race(
+            ApplicationContainer().users.bank_statement_retention_service(),
+            ApplicationContainer().transactions.transaction_service(),
+            movement,
+            self.user,
+        )
+
+        self.assertEqual(errors, [None, None])
+        self.assertFalse(Transaction.objects.filter(pk=movement.pk).exists())
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertIsNone(row.transaction_id)
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
 
     def test_concurrent_decisions_create_one_movement(self) -> None:
         upload = BankStatementUpload.objects.create(

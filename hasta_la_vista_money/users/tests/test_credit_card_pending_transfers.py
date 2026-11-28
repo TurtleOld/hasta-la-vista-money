@@ -382,6 +382,50 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
         self.assertEqual(upload.needs_transfer_count, 0)
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
 
+    def test_mark_not_payment_checks_the_completed_statement_balance(
+        self,
+    ) -> None:
+        """Closing the last open row still verifies the statement balance."""
+        upload = self._create_upload()
+        moment = timezone.now()
+        upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        upload.statement_closing_balance = Decimal('1000.00')
+        upload.balance_currency = 'RUB'
+        upload.balance_type = BankStatementUpload.BalanceType.EXACT_MOMENT
+        upload.balance_moment = moment
+        upload.balance_bank_date = timezone.localdate()
+        upload.save(
+            update_fields=[
+                'status',
+                'statement_closing_balance',
+                'balance_currency',
+                'balance_type',
+                'balance_moment',
+                'balance_bank_date',
+            ],
+        )
+        row = self._create_pending_row(
+            upload=upload,
+            amount=Decimal('199.00'),
+            when=datetime(2026, 2, 9, 12, 0, tzinfo=UTC),
+        )
+        service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+
+        service.mark_not_payment(row.pk, self.user.pk)
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.balance_result,
+            BankStatementUpload.BalanceResult.MATCHED,
+        )
+        self.assertTrue(upload.balance_is_actual)
+        self.assertEqual(
+            upload.account_balance_after,
+            Decimal('1000.00'),
+        )
+
 
 class ExpiredRepaymentRowRejectionTest(CreditCardStatementBaseTest):
     """Retention is enforced before the background cleanup runs."""

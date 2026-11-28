@@ -211,14 +211,13 @@ class StatementRowLinkService:
             ),
             transaction.atomic(),
         ):
-            row = self.statement_row_repository.lock_owned_row(
-                row_id,
+            locked = self.statement_row_repository.lock_owned_rows(
+                (row_id, canonical_row_id),
                 user_id,
             )
-            canonical = self.statement_row_repository.lock_owned_row(
-                canonical_row_id,
-                user_id,
-            )
+            locked_by_id = {locked_row.pk: locked_row for locked_row in locked}
+            row = locked_by_id[row_id]
+            canonical = locked_by_id[canonical_row_id]
             if row.pk == canonical.pk:
                 raise ReconciliationDecisionConflictError('self')
             if row.decision != BankStatementRow.Decision.PENDING:

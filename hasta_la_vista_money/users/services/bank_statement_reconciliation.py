@@ -932,4 +932,6 @@ class BankStatementReconciliationService:
             previous_decision=BankStatementRow.Decision.NEEDS_TRANSFER,
         )
         self.refresh_outcome_counts(row.upload)
+        if self._balance_verification_service is not None:
+            self._balance_verification_service.verify_completed(row.upload)
         return row

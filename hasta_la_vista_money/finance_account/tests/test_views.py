@@ -988,6 +988,9 @@ class TestFinancesView(TestCase):
         self.client.force_login(self.user)
 
         def actual_upload(position: int) -> BankStatementUpload:
+            explanation_code = (
+                BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE
+            )
             return BankStatementUpload.objects.create(
                 user=self.user,
                 account=self.account,
@@ -1006,9 +1009,7 @@ class TestFinancesView(TestCase):
                 account_balance_after=Decimal('1000.00'),
                 balance_discrepancy=Decimal('0.00'),
                 balance_checked_at=timezone.now(),
-                balance_explanation_code=(
-                    BankStatementUpload.ExplanationCode.BANK_POSTING_DATE_DIFFERENCE
-                ),
+                balance_explanation_code=explanation_code,
                 balance_explained_at=timezone.now(),
                 balance_explained_by=self.user,
             )
