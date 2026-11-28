@@ -3,7 +3,8 @@
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from threading import Barrier, Thread
+from threading import Barrier, Event, Thread
+from time import sleep
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -1832,6 +1833,7 @@ class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
             amount=Decimal('100.00'),
             suggested_category='Продукты',
             source_ref='doc-1',
+            source_ref_strength='strong',
             source_fingerprint=self.fingerprint.digest,
             decision=BankStatementRow.Decision.PENDING,
         )
@@ -1855,6 +1857,102 @@ class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
             self.row.decision,
             BankStatementRow.Decision.PENDING,
         )
+
+
+class ReconciliationAllowsWeakReferenceTest(TestCase):
+    """A weak or reused reference never proves a repeat by itself."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        self.fingerprint = StatementIdentityService(
+            keys=KEYS,
+            active_key_version='k2',
+            format_version=1,
+        ).fingerprint(
+            bank=SYNTHETIC_BANK,
+            account_id=self.account.pk,
+            source_ref='doc-1',
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            source_ref='doc-1',
+            source_fingerprint=self.fingerprint.digest,
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+        )
+
+    def _row(
+        self,
+        *,
+        amount: Decimal = Decimal('100.00'),
+        strength: str = 'weak',
+    ) -> BankStatementRow:
+        return BankStatementRow.objects.create(
+            upload=self.upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=amount,
+            suggested_category='Продукты',
+            source_ref='doc-1',
+            source_ref_strength=strength,
+            source_fingerprint=self.fingerprint.digest,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+
+    def test_weak_reference_posts_a_second_legitimate_operation(self) -> None:
+        row = self._row()
+
+        BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_strong_reference_with_other_amount_still_posts(self) -> None:
+        row = self._row(amount=Decimal('150.00'), strength='strong')
+
+        BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('850.00'))
 
 
 class LinkedDateInvalidationTest(TestCase):
@@ -2536,6 +2634,7 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                     amount=Decimal('100.00'),
                     suggested_category='Продукты',
                     source_ref='shared-resolution-ref',
+                    source_ref_strength='strong',
                     source_fingerprint=fingerprint.digest,
                     source_fingerprint_key_version=fingerprint.key_version,
                     source_fingerprint_format_version=(
@@ -2668,6 +2767,131 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                 BankStatementRow.Decision.NEW,
             ],
         )
+
+    def _candidate_fixture(
+        self,
+    ) -> tuple[Transaction, BankStatementRow, BankStatementCandidate]:
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='candidate-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            suggested_category='Продукты',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        candidate = BankStatementCandidate.objects.create(
+            row=row,
+            transaction=movement,
+            description='Продукты',
+        )
+        return movement, row, candidate
+
+    def _race_candidate_change(
+        self,
+        action: Callable[[Transaction], None],
+    ) -> tuple[list[Exception | None], BankStatementRow]:
+        """Lock the candidate, change it, then let a decision race in."""
+        movement, row, candidate = self._candidate_fixture()
+        locked = Event()
+        errors: list[Exception | None] = [None, None]
+
+        def change() -> None:
+            try:
+                with transaction.atomic():
+                    locked_movement = (
+                        Transaction.objects.select_for_update().get(
+                            pk=movement.pk,
+                        )
+                    )
+                    action(locked_movement)
+                    locked.set()
+                    # Hold the lock until the other thread blocks on it.
+                    sleep(0.5)
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def decide() -> None:
+            try:
+                locked.wait(timeout=5)
+                BankStatementReconciliationService().decide(
+                    row.pk,
+                    BankStatementRow.Decision.LINKED,
+                    self.user.pk,
+                    candidate.pk,
+                )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=change), Thread(target=decide)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        return errors, row
+
+    def test_concurrent_candidate_edit_is_stale_not_an_error(self) -> None:
+        def change_amount(movement: Transaction) -> None:
+            movement.amount = Decimal('999.00')
+            movement.save(update_fields=['amount'])
+
+        errors, row = self._race_candidate_change(change_amount)
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+
+    def test_concurrent_candidate_delete_is_stale_not_an_error(self) -> None:
+        def delete_movement(movement: Transaction) -> None:
+            movement.delete()
+
+        errors, row = self._race_candidate_change(delete_movement)
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+
+    def test_deleted_candidate_movement_is_stale_not_an_error(self) -> None:
+        movement, row, candidate = self._candidate_fixture()
+        movement.delete()
+
+        with self.assertRaises(StaleStatementCandidateError):
+            BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
 
 
 class CoverageRevisionTest(TestCase):

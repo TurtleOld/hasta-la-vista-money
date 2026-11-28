@@ -70,6 +70,20 @@ class AmbiguousStatementCandidateError(ValueError):
 
 # Statement data is kept only until the ADR-0003 retention deadline.
 _AVAILABLE_UPLOAD = Q(expires_at__gt=Now(), retention_cleaned_at__isnull=True)
+
+
+def ensure_upload_available(
+    row_id: int,
+    upload: BankStatementUpload,
+) -> None:
+    """Reject a row whose statement data is expired or already cleaned."""
+    if (
+        upload.retention_cleaned_at is not None
+        or timezone.now() >= upload.expires_at
+    ):
+        raise ReconciliationExpiredError(row_id)
+
+
 _OUTCOMES = frozenset(
     {
         constants.STATEMENT_OUTCOME_ALL,
@@ -213,15 +227,23 @@ class BankStatementReconciliationService:
             if row.decision != decision:
                 raise ReconciliationDecisionConflictError(decision)
             if decision == BankStatementRow.Decision.LINKED:
-                movement = self._validated_candidate(row, candidate_id)
-                if not self._row_links_movement(row, movement):
+                candidate = self._validated_candidate(row, candidate_id)
+                movement = candidate.transaction or candidate.transfer
+                if movement is None or not self._row_links_movement(
+                    row,
+                    movement,
+                ):
                     raise ReconciliationDecisionConflictError(candidate_id)
             return row
-        if timezone.now() >= row.upload.expires_at:
-            raise ReconciliationExpiredError(row_id)
+        ensure_upload_available(row_id, row.upload)
 
         if decision == BankStatementRow.Decision.LINKED:
-            movement = self._validated_candidate(row, candidate_id)
+            candidate = self._validated_candidate(row, candidate_id)
+            movement = self._locked_candidate_movement(
+                row,
+                candidate,
+                candidate.pk,
+            )
             self._link_movement(row, movement)
         elif decision == BankStatementRow.Decision.NEW:
             row.transaction = self._create_transaction(row)
@@ -283,8 +305,7 @@ class BankStatementReconciliationService:
             return row
         if row.decision != BankStatementRow.Decision.LINKED:
             raise ReconciliationDecisionConflictError(row.decision)
-        if timezone.now() >= row.upload.expires_at:
-            raise ReconciliationExpiredError(row_id)
+        ensure_upload_available(row_id, row.upload)
 
         previous_transaction = row.transaction
         previous_transfer = row.transfer
@@ -304,6 +325,7 @@ class BankStatementReconciliationService:
             row=row,
             actor_id=user_id,
             decision=row.decision,
+            previous_decision=BankStatementRow.Decision.LINKED,
             previous_transaction=previous_transaction,
             previous_transfer=previous_transfer,
             transaction=row.transaction,
@@ -477,7 +499,7 @@ class BankStatementReconciliationService:
         self,
         row: BankStatementRow,
         candidate_id: int | None,
-    ) -> Transaction | TransferMoneyLog:
+    ) -> BankStatementCandidate:
         if candidate_id is None:
             raise InvalidReconciliationDecisionError('candidate')
         candidate = (
@@ -490,10 +512,42 @@ class BankStatementReconciliationService:
         )
         if candidate is None or not self._candidate_is_current(row, candidate):
             raise StaleStatementCandidateError(candidate_id)
-        movement = candidate.transaction or candidate.transfer
-        if movement is None:
+        if candidate.transaction is None and candidate.transfer is None:
             raise StaleStatementCandidateError(candidate_id)
-        return movement
+        return candidate
+
+    def _locked_candidate_movement(
+        self,
+        row: BankStatementRow,
+        candidate: BankStatementCandidate,
+        candidate_id: int,
+    ) -> Transaction | TransferMoneyLog:
+        """Lock the candidate movement, then re-check it is still current.
+
+        The candidate was read before the lock, so another owner may have
+        edited or deleted the movement in between. A missing movement is a
+        stale candidate, never an unhandled crash.
+        """
+        if candidate.transaction_id is not None:
+            try:
+                transaction = Transaction.objects.select_for_update().get(
+                    pk=candidate.transaction_id,
+                )
+            except Transaction.DoesNotExist:
+                raise StaleStatementCandidateError(candidate_id) from None
+            if not self._transaction_is_current(row, transaction):
+                raise StaleStatementCandidateError(candidate_id)
+            return transaction
+        if candidate.transfer_id is not None:
+            transfer = (
+                TransferMoneyLog.objects.select_for_update()
+                .filter(pk=candidate.transfer_id)
+                .first()
+            )
+            if transfer is None or not self._transfer_is_current(row, transfer):
+                raise StaleStatementCandidateError(candidate_id)
+            return transfer
+        raise StaleStatementCandidateError(candidate_id)
 
     @staticmethod
     def _row_links_movement(
@@ -509,30 +563,24 @@ class BankStatementReconciliationService:
         row: BankStatementRow,
         movement: Transaction | TransferMoneyLog,
     ) -> None:
-        """Link the movement after locking it against another row."""
+        """Link the already locked movement against another row."""
         if isinstance(movement, TransferMoneyLog):
-            locked = TransferMoneyLog.objects.select_for_update().get(
-                pk=movement.pk,
-            )
             sharing = BankStatementRow.objects.filter(
-                transfer=locked,
+                transfer=movement,
                 transaction_type=row.transaction_type,
             ).exclude(pk=row.pk)
             if sharing.exists():
                 raise ReconciliationDecisionConflictError('transfer')
-            row.transfer = locked
+            row.transfer = movement
             row.transaction = None
             return
-        locked_transaction = Transaction.objects.select_for_update().get(
-            pk=movement.pk,
-        )
         if (
-            BankStatementRow.objects.filter(transaction=locked_transaction)
+            BankStatementRow.objects.filter(transaction=movement)
             .exclude(pk=row.pk)
             .exists()
         ):
             raise ReconciliationDecisionConflictError('transaction')
-        row.transaction = locked_transaction
+        row.transaction = movement
         row.transfer = None
 
     def _candidate_is_current(
@@ -696,12 +744,24 @@ class BankStatementReconciliationService:
         row: BankStatementRow,
         account: Account,
     ) -> None:
-        """Refuse a new movement for an already proven operation."""
-        if not row.source_fingerprint or row.transaction_date is None:
+        """Refuse a new movement for the same proven bank operation.
+
+        Only a strong bank reference with the same direction, amount and
+        bank date proves a repeat. A weak or reused reference stays a hint,
+        so a second legitimate operation on the same day still posts.
+        """
+        if (
+            row.source_ref_strength != 'strong'
+            or not row.source_fingerprint
+            or row.transaction_date is None
+            or row.amount is None
+        ):
             return
         existing = Transaction.objects.filter(
             account=account,
             source_fingerprint=row.source_fingerprint,
+            type=row.transaction_type,
+            amount=row.amount,
         )
         if row.transaction_id is not None:
             existing = existing.exclude(pk=row.transaction_id)
@@ -770,6 +830,7 @@ class BankStatementReconciliationService:
         )
         if row.decision == BankStatementRow.Decision.NOT_A_PAYMENT:
             return row
+        ensure_upload_available(row_id, row.upload)
         if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
             raise ReconciliationDecisionConflictError(row.decision)
         row.decision = BankStatementRow.Decision.NOT_A_PAYMENT

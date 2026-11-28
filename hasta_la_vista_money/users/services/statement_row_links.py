@@ -29,6 +29,7 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     StaleStatementCandidateError,
+    ensure_upload_available,
 )
 
 
@@ -228,6 +229,7 @@ class StatementRowLinkService:
             raise ValidationError(
                 _('Строка выписки не относится к счёту получателя.'),
             )
+        ensure_upload_available(row_id, row.upload)
         if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
             raise ValidationError(_('Строка выписки уже закрыта.'))
         if row.amount != amount:
@@ -278,6 +280,7 @@ class StatementRowLinkService:
                 row_id,
                 user_id,
             )
+            ensure_upload_available(row_id, row.upload)
             if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
                 raise ReconciliationDecisionConflictError(row.decision)
             # The lock keeps two rows of one account from taking one transfer.

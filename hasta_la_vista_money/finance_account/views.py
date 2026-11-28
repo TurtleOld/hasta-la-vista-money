@@ -86,6 +86,9 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    ReconciliationExpiredError,
+)
 from hasta_la_vista_money.users.services.groups import readable_users
 
 if TYPE_CHECKING:
@@ -2276,6 +2279,12 @@ class TransferMoneyAccountView(
             )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
+        except ReconciliationExpiredError:
+            messages.error(
+                request,
+                _('Срок хранения выписки истёк.'),
+            )
+            return self.form_invalid(form)  # type: ignore[return-value]
         except ValidationError as e:
             form.add_error(None, e)
             return self.form_invalid(form)  # type: ignore[return-value]
