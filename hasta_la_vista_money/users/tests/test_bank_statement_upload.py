@@ -11631,6 +11631,99 @@ class TestBankStatementImportReliability(TestCase):
         later_delete.refresh_from_db()
         self.assertEqual(later_delete.diff, later_diff)
 
+    def test_cleanup_keeps_delete_of_manual_movement_before_statement_row(
+        self,
+    ) -> None:
+        """A manual movement deleted before the statement row stays intact.
+
+        The statement movement reuses the released primary key, so the
+        legacy decision must scrub its own deletion copy, not the earlier
+        foreign one, and must not touch the earlier creation copy.
+        """
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/legacy-earlier-delete.pdf',
+            file_hash='legacy-earlier-delete-file',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        manual = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('50.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+        transfer_pk = manual.pk
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        manual_audits = AuditLog.objects.filter(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+        )
+        manual_create = manual_audits.get(action=AuditLog.Action.CREATE)
+        manual_delete = manual_audits.get(action=AuditLog.Action.DELETE)
+        manual_create_diff = manual_create.diff
+        manual_delete_diff = manual_delete.diff
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            statement_transfer = TransferMoneyLog.objects.create(
+                pk=transfer_pk,
+                user=self.user,
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('75.00'),
+                exchange_date=timezone.now(),
+                notes='Ручной перевод',
+            )
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('75.00'),
+            transfer=statement_transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        statement_delete = AuditLog.objects.exclude(pk=manual_delete.pk).get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        BankStatementDecisionAudit.objects.filter(
+            row__upload=upload,
+        ).update(release_operation_id=None)
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        manual_create.refresh_from_db()
+        self.assertEqual(manual_create.diff, manual_create_diff)
+        manual_delete.refresh_from_db()
+        self.assertEqual(manual_delete.diff, manual_delete_diff)
+        statement_delete.refresh_from_db()
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, statement_delete.diff['deleted'])
+
     def test_cleanup_scans_audit_entries_in_bounded_chunks(self) -> None:
         """Cleanup must not load a user's whole audit history at once."""
         upload = BankStatementUpload.objects.create(
@@ -11643,6 +11736,7 @@ class TestBankStatementImportReliability(TestCase):
             transfer_ids=set(),
             deleted_transaction_ids={},
             deleted_transfer_ids={},
+            deleted_movement_starts={},
             delete_snapshots=set(),
             legacy_delete_snapshot_ids=set(),
             fingerprints=set(),

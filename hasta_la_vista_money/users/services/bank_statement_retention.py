@@ -96,12 +96,15 @@ class _AuditProvenance(NamedTuple):
     ids are saved by a release decision and carry the release time. They
     are kept apart so a reused primary key never clears a live reference,
     an unrelated snapshot, or an audit copy written after the release.
+    Each deleted id also carries the time its own movement started, so an
+    earlier holder of the same primary key keeps its audit copy.
     """
 
     transaction_ids: set[int]
     transfer_ids: set[int]
     deleted_transaction_ids: dict[int, datetime]
     deleted_transfer_ids: dict[int, datetime]
+    deleted_movement_starts: dict[tuple[str, int], datetime]
     delete_snapshots: set[tuple[UUID, str, str]]
     legacy_delete_snapshot_ids: set[int]
     fingerprints: set[str]
@@ -423,11 +426,17 @@ class BankStatementRetentionService:
                 upload=upload,
                 deleted_at=audit.created_at,
             )
+        deleted_movement_starts = _deleted_movement_starts(
+            upload,
+            deleted_transaction_ids,
+            deleted_transfer_ids,
+        )
         return _AuditProvenance(
             transaction_ids=transaction_ids,
             transfer_ids=transfer_ids,
             deleted_transaction_ids=deleted_transaction_ids,
             deleted_transfer_ids=deleted_transfer_ids,
+            deleted_movement_starts=deleted_movement_starts,
             delete_snapshots=delete_snapshots,
             legacy_delete_snapshot_ids=legacy_delete_snapshot_ids,
             fingerprints=fingerprints,
@@ -611,9 +620,9 @@ def _collect_delete_snapshot(
     """Save the exact deletion audit copy a release decision confirmed.
 
     A decision saved before the release operation id existed has no exact
-    operation, so its earliest deletion copy for the same safety window is
-    resolved instead. A later deletion of a reused primary key is never
-    selected.
+    operation, so the deletion copy nearest the same safety window is
+    resolved instead. A deletion of a primary key taken again after the
+    decision is never selected.
     """
     if decision not in CREATED_DECISIONS:
         return
@@ -643,8 +652,15 @@ def _collect_legacy_delete_snapshot(
     object_pk: int,
     released_at: datetime,
 ) -> None:
-    """Resolve the deletion copy of a decision without an operation id."""
-    snapshot = (
+    """Resolve the deletion copy of a decision without an operation id.
+
+    The release decision is written right before the movement is deleted,
+    so the copy nearest the release deadline belongs to it: a manual
+    movement deleted before the statement one was created stays earlier
+    and keeps its own copy. A primary key taken again after the release
+    is skipped, because that deletion released a different movement.
+    """
+    snapshots = (
         AuditLog.objects.filter(
             user_id=upload.user_id,
             model_name=model_name,
@@ -654,12 +670,93 @@ def _collect_legacy_delete_snapshot(
             created_at__gte=upload.created_at,
             created_at__lte=(released_at + _LEGACY_DELETE_SNAPSHOT_TOLERANCE),
         )
-        .order_by('created_at', 'pk')
-        .only('pk')
+        .order_by('-created_at', '-pk')
+        .values_list('pk', 'created_at')
+    )
+    for snapshot_pk, deleted_at in snapshots:
+        if _movement_created_since(
+            upload,
+            model_name,
+            object_pk,
+            released_at,
+            deleted_at,
+        ):
+            continue
+        keys.add(snapshot_pk)
+        return
+
+
+def _movement_created_since(
+    upload: BankStatementUpload,
+    model_name: str,
+    object_pk: int,
+    released_at: datetime,
+    deleted_at: datetime,
+) -> bool:
+    """Return whether the released id was created again before deleting."""
+    return (
+        AuditLog.objects.filter(
+            user_id=upload.user_id,
+            model_name=model_name,
+            object_pk=str(object_pk),
+            kind__in=_STATEMENT_AUDIT_KINDS,
+            created_at__gte=released_at,
+            created_at__lt=deleted_at,
+        )
+        .exclude(action=AuditLog.Action.DELETE)
+        .exists()
+    )
+
+
+def _deleted_movement_starts(
+    upload: BankStatementUpload,
+    transaction_ids: dict[int, datetime],
+    transfer_ids: dict[int, datetime],
+) -> dict[tuple[str, int], datetime]:
+    """Return when each released id started living its current life."""
+    return {
+        (model_name, movement_id): _movement_lifetime_start(
+            upload,
+            model_name,
+            movement_id,
+            released_at,
+        )
+        for model_name, ids in (
+            (TRANSACTION_LABEL, transaction_ids),
+            (TRANSFER_LABEL, transfer_ids),
+        )
+        for movement_id, released_at in ids.items()
+    }
+
+
+def _movement_lifetime_start(
+    upload: BankStatementUpload,
+    model_name: str,
+    object_pk: int,
+    released_at: datetime,
+) -> datetime:
+    """Return the creation bound of the movement that the release deleted.
+
+    An earlier holder of the same primary key was deleted before this
+    movement existed, so copies written before that deletion belong to it
+    and keep their values.
+    """
+    previous = (
+        AuditLog.objects.filter(
+            user_id=upload.user_id,
+            model_name=model_name,
+            object_pk=str(object_pk),
+            action=AuditLog.Action.DELETE,
+            kind__in=_STATEMENT_AUDIT_KINDS,
+            created_at__lt=released_at,
+        )
+        .order_by('-created_at', '-pk')
+        .values_list('created_at', flat=True)
         .first()
     )
-    if snapshot is not None:
-        keys.add(snapshot.pk)
+    if previous is None or previous < upload.created_at:
+        return upload.created_at
+    return previous
 
 
 def _is_statement_audit_copy(
@@ -687,8 +784,14 @@ def _is_statement_audit_copy(
         released_at = deleted_ids.get(movement_id)
         if released_at is not None:
             # A movement created after the release reused the primary key;
-            # its own audit copy is not a statement copy.
-            return entry.created_at <= released_at
+            # its own audit copy is not a statement copy. A copy older
+            # than the latest deletion of the same id belongs to an
+            # earlier, unrelated movement.
+            started_at = provenance.deleted_movement_starts.get(
+                (entry.model_name, movement_id),
+                entry.created_at,
+            )
+            return started_at <= entry.created_at <= released_at
     return _has_technical_match(entry, provenance)
 
 
