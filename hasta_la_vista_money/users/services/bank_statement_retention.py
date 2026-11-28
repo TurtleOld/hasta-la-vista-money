@@ -699,9 +699,12 @@ def _movement_created_since(
             user_id=upload.user_id,
             model_name=model_name,
             object_pk=str(object_pk),
-            kind__in=_STATEMENT_AUDIT_KINDS,
             created_at__gte=released_at,
             created_at__lt=deleted_at,
+        )
+        .filter(
+            Q(action=AuditLog.Action.CREATE)
+            | Q(kind__in=_STATEMENT_AUDIT_KINDS),
         )
         .exclude(action=AuditLog.Action.DELETE)
         .exists()

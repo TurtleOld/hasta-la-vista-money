@@ -11631,6 +11631,107 @@ class TestBankStatementImportReliability(TestCase):
         later_delete.refresh_from_db()
         self.assertEqual(later_delete.diff, later_diff)
 
+    def test_cleanup_keeps_manual_delete_of_reused_transaction_id(
+        self,
+    ) -> None:
+        """A manual transaction deleting a reused id keeps its own copy.
+
+        The manual movement is created and deleted inside the legacy
+        tolerance, so only its own creation copy proves the deletion
+        belongs to another movement.
+        """
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reused-delete-pk.pdf',
+            file_hash='reused-delete-pk-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=4,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            statement = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+                source_ref='R-STALE',
+            )
+        released_pk = statement.pk
+        row.transaction = statement
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=statement,
+        )
+        statement_delete = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(released_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        BankStatementDecisionAudit.objects.filter(
+            row__upload=upload,
+        ).update(release_operation_id=None)
+        with audit_operation(kind=AuditOperationKind.EXPENSE):
+            manual = Transaction.objects.create(
+                pk=released_pk,
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('70.00'),
+                date=timezone.now(),
+                description='Ручная операция',
+            )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=manual,
+        )
+        manual_delete = AuditLog.objects.exclude(
+            pk=statement_delete.pk,
+        ).get(
+            model_name='transactions.Transaction',
+            object_pk=str(released_pk),
+            action=AuditLog.Action.DELETE,
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        manual_diff = manual_delete.diff
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        manual_delete.refresh_from_db()
+        self.assertEqual(manual_delete.diff, manual_diff)
+        statement_delete.refresh_from_db()
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, statement_delete.diff['deleted'])
+
     def test_cleanup_keeps_delete_of_manual_movement_before_statement_row(
         self,
     ) -> None:
