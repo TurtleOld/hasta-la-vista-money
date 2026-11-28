@@ -276,6 +276,15 @@ class StatementRowLinkService:
             ),
             transaction.atomic(),
         ):
+            # The transfer is locked before the statement: deleting a
+            # transfer takes it first and only then the statement rows and
+            # uploads, so the opposite order would deadlock with it.
+            transfer = self.statement_row_repository.lock_owned_transfer(
+                transfer_id,
+                user_id,
+            )
+            if transfer is None:
+                raise StaleStatementCandidateError(transfer_id)
             row = self.statement_row_repository.lock_owned_row(
                 row_id,
                 user_id,
@@ -284,14 +293,7 @@ class StatementRowLinkService:
             if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
                 raise ReconciliationDecisionConflictError(row.decision)
             # The lock keeps two rows of one account from taking one transfer.
-            transfer = self.statement_row_repository.lock_owned_transfer(
-                transfer_id,
-                user_id,
-            )
-            if (
-                transfer is None
-                or transfer not in (self.repayment_candidates([row])[row.pk])
-            ):
+            if transfer not in self.repayment_candidates([row])[row.pk]:
                 raise StaleStatementCandidateError(transfer_id)
             self.close_repayment_row(row, transfer)
             return row

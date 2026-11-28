@@ -15,6 +15,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT_CARD
 from hasta_la_vista_money.finance_account.models import (
     Account,
     StatementPeriodCoverage,
@@ -36,6 +37,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementRow,
     BankStatementUpload,
     User,
+)
+from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    StatementRowRepository,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
@@ -2844,22 +2848,77 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         return transfer, row, candidate
 
+    def _repayment_link_fixture(
+        self,
+    ) -> tuple[TransferMoneyLog, BankStatementRow]:
+        card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=card,
+                amount=Decimal('100.00'),
+                user=self.user,
+                exchange_date=WHEN,
+            )
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=card,
+            pdf_file='repayment-link-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=1,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        return transfer, row
+
     def _run_service_race(
         self,
         hold: Callable[[Event, Event], None],
         decide: Callable[[], object],
+        lock_target: tuple[type[Any], str] = (
+            BankStatementReconciliationService,
+            '_lock_candidate_movement',
+        ),
     ) -> list[Exception | None]:
         """Run a holder and a decision through their services in order.
 
-        The holder announces that it locked the movement, then waits for
-        the decision thread to start before it commits its change. The
-        decision blocks on the movement lock, so it always re-reads the
-        committed movement. No timing is guessed: the two service paths
-        meet on events.
+        The holder announces that it locked the movement, then waits until
+        the decision is about to take the movement lock before it commits
+        its change. The decision then blocks on that lock, so it always
+        re-reads the committed movement. No timing is guessed: the two
+        service paths meet on events.
         """
         holder_locked = Event()
         decision_started = Event()
         errors: list[Exception | None] = [None, None]
+        lock_owner, lock_name = lock_target
+        original_lock = getattr(lock_owner, lock_name)
+
+        def lock_after_signal(*args: Any, **kwargs: Any) -> Any:
+            decision_started.set()
+            return original_lock(*args, **kwargs)
 
         def hold_thread() -> None:
             try:
@@ -2873,8 +2932,13 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             try:
                 if not holder_locked.wait(timeout=5):
                     self.fail('holder did not lock in time')
-                decision_started.set()
-                decide()
+                with patch.object(
+                    lock_owner,
+                    lock_name,
+                    autospec=True,
+                    side_effect=lock_after_signal,
+                ):
+                    decide()
             except Exception as exc:
                 errors[1] = exc
             finally:
@@ -3064,6 +3128,61 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
 
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+
+    def test_concurrent_repayment_delete_does_not_deadlock_a_link(
+        self,
+    ) -> None:
+        """The link waits for the transfer before it touches the upload.
+
+        Deleting the transfer takes it first and only then the rows and
+        uploads; a link that held the upload while waiting for the transfer
+        would deadlock with it.
+        """
+        transfer, row = self._repayment_link_fixture()
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        original_apply = transfer_service._balance_service.apply_account_deltas
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transfer_service._balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transfer_service.delete_transfer(
+                    transfer_id=transfer.pk,
+                    user=self.user,
+                )
+
+        link_service = ApplicationContainer().users.statement_row_link_service()
+        errors = self._run_service_race(
+            hold,
+            lambda: link_service.link_repayment(
+                row.pk,
+                transfer.pk,
+                self.user.pk,
+            ),
+            lock_target=(StatementRowRepository, 'lock_owned_transfer'),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(row.transfer_id)
 
 
 class CoverageRevisionTest(TestCase):
