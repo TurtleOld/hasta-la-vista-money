@@ -14,7 +14,10 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
-from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+    current_operation_id,
+)
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementDecisionAudit,
@@ -152,6 +155,7 @@ class StatementRowLinkService:
         self.statement_row_repository.record_release_decisions(
             movement,
             released,
+            release_operation_id=current_operation_id(),
         )
         for upload in locked.uploads:
             self.reconciliation_service.refresh_outcome_counts(upload)

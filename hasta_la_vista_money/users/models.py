@@ -31,6 +31,7 @@ from django.db.models import (
     TextChoices,
     TextField,
     UniqueConstraint,
+    UUIDField,
 )
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -652,6 +653,10 @@ class BankStatementDecisionAudit(Model):
     # Keep the internal movement identifier when deletion clears its FK.
     previous_transaction_pk = PositiveBigIntegerField(blank=True, null=True)
     previous_transfer_pk = PositiveBigIntegerField(blank=True, null=True)
+    # The delete operation that released this row: it proves which audit
+    # deletion snapshot holds this row's bank copy, so a reused primary
+    # key never reaches an unrelated snapshot.
+    release_operation_id = UUIDField(blank=True, null=True)
     created_at = DateTimeField(auto_now_add=True)
 
     class Meta:

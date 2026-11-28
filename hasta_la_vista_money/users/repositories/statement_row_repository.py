@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import reduce
 from operator import or_
 from typing import NamedTuple
+from uuid import UUID
 
 from django.db.models import (
     BooleanField,
@@ -188,6 +189,8 @@ class StatementRowRepository:
     def record_release_decisions(
         movement: Transaction | TransferMoneyLog,
         released: Sequence[tuple[int, str, str]],
+        *,
+        release_operation_id: UUID | None,
     ) -> None:
         """Store the decision history of one release in one insert."""
         is_transfer = isinstance(movement, TransferMoneyLog)
@@ -202,6 +205,7 @@ class StatementRowRepository:
                         None if is_transfer else movement.pk
                     ),
                     previous_transfer_pk=(movement.pk if is_transfer else None),
+                    release_operation_id=release_operation_id,
                 )
                 for pk, previous_decision, decision in released
             ],

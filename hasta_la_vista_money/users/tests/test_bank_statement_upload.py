@@ -11365,6 +11365,109 @@ class TestBankStatementImportReliability(TestCase):
             'overlap-fingerprint',
         )
 
+    def test_cleanup_keeps_reused_primary_key_of_deleted_movement(
+        self,
+    ) -> None:
+        """A reused primary key keeps its reference and a foreign copy."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reused-pk.pdf',
+            file_hash='reused-pk-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=3,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+                source_ref='R-STALE',
+            )
+        deleted_pk = transaction.pk
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        foreign_diff = {
+            'v': 2,
+            'deleted': {
+                'amount': '50.00',
+                'description': 'Чужое описание',
+            },
+        }
+        foreign = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk=str(deleted_pk),
+            action=AuditLog.Action.DELETE,
+            diff=foreign_diff,
+            operation_id=uuid4(),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        with audit_operation(kind=AuditOperationKind.EXPENSE):
+            reused = Transaction.objects.create(
+                pk=deleted_pk,
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('70.00'),
+                date=timezone.now(),
+                description='Ручная операция',
+                source_ref='R-NEW',
+            )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        reused.refresh_from_db()
+        self.assertEqual(reused.source_ref, 'R-NEW')
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.diff, foreign_diff)
+        own_deleted = (
+            AuditLog.objects.filter(
+                model_name='transactions.Transaction',
+                object_pk=str(deleted_pk),
+                kind=AuditOperationKind.TRANSACTION_DELETE,
+            )
+            .exclude(pk=foreign.pk)
+            .get()
+        )
+        for field in ('amount', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, own_deleted.diff['deleted'])
+
     def test_cleanup_scans_audit_entries_in_bounded_chunks(self) -> None:
         """Cleanup must not load a user's whole audit history at once."""
         upload = BankStatementUpload.objects.create(
@@ -11375,6 +11478,9 @@ class TestBankStatementImportReliability(TestCase):
         provenance = _AuditProvenance(
             transaction_ids={1},
             transfer_ids=set(),
+            deleted_transaction_ids=set(),
+            deleted_transfer_ids=set(),
+            delete_snapshots=set(),
             fingerprints=set(),
             row_positions=set(),
             file_hash='bounded-audit-file',

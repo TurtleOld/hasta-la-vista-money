@@ -10,6 +10,7 @@ fingerprints and the independent financial audit stay untouched.
 from datetime import datetime
 from functools import partial
 from typing import Any, Final, NamedTuple
+from uuid import UUID
 
 import structlog
 from django.db import transaction
@@ -84,10 +85,18 @@ _STATEMENT_AUDIT_MODELS: Final = frozenset({TRANSACTION_LABEL, TRANSFER_LABEL})
 
 
 class _AuditProvenance(NamedTuple):
-    """Typed identities and safe technical keys of created movements."""
+    """Typed identities and safe technical keys of created movements.
+
+    Live ids come from a row that still points at its movement; deleted
+    ids are saved by a release decision. They are kept apart so a reused
+    primary key never clears a live reference or an unrelated snapshot.
+    """
 
     transaction_ids: set[int]
     transfer_ids: set[int]
+    deleted_transaction_ids: set[int]
+    deleted_transfer_ids: set[int]
+    delete_snapshots: set[tuple[UUID, str, str]]
     fingerprints: set[str]
     row_positions: set[int]
     file_hash: str
@@ -337,9 +346,16 @@ class BankStatementRetentionService:
         account composite still reaches the copy proved to belong to this
         upload, so sharing never blocks cleanup forever and never scrubs
         another upload's records.
+
+        Saved movement ids and the delete operation that released them are
+        kept apart from live references: a primary key reused by a later
+        movement never inherits the deleted movement's provenance.
         """
         transaction_ids: set[int] = set()
         transfer_ids: set[int] = set()
+        deleted_transaction_ids: set[int] = set()
+        deleted_transfer_ids: set[int] = set()
+        delete_snapshots: set[tuple[UUID, str, str]] = set()
         fingerprints: set[str] = set()
         row_positions: set[int] = set()
         for row in rows:
@@ -367,29 +383,40 @@ class BankStatementRetentionService:
         for audit in BankStatementDecisionAudit.objects.filter(
             row__in=rows,
         ):
-            for decision, transaction_id, transfer_id in (
-                (audit.decision, audit.transaction_id, audit.transfer_id),
-                (
-                    audit.previous_decision,
-                    audit.previous_transaction_id,
-                    audit.previous_transfer_id,
-                ),
-                (
-                    audit.previous_decision,
-                    audit.previous_transaction_pk,
-                    audit.previous_transfer_pk,
-                ),
-            ):
-                _collect_created_movement(
-                    transaction_ids,
-                    transfer_ids,
-                    decision,
-                    transaction_id,
-                    transfer_id,
-                )
+            _collect_created_movement(
+                transaction_ids,
+                transfer_ids,
+                audit.decision,
+                audit.transaction_id,
+                audit.transfer_id,
+            )
+            _collect_created_movement(
+                transaction_ids,
+                transfer_ids,
+                audit.previous_decision,
+                audit.previous_transaction_id,
+                audit.previous_transfer_id,
+            )
+            _collect_created_movement(
+                deleted_transaction_ids,
+                deleted_transfer_ids,
+                audit.previous_decision,
+                audit.previous_transaction_pk,
+                audit.previous_transfer_pk,
+            )
+            _collect_delete_snapshot(
+                delete_snapshots,
+                audit.release_operation_id,
+                audit.previous_decision,
+                audit.previous_transaction_pk,
+                audit.previous_transfer_pk,
+            )
         return _AuditProvenance(
             transaction_ids=transaction_ids,
             transfer_ids=transfer_ids,
+            deleted_transaction_ids=deleted_transaction_ids,
+            deleted_transfer_ids=deleted_transfer_ids,
+            delete_snapshots=delete_snapshots,
             fingerprints=fingerprints,
             row_positions=row_positions,
             file_hash=upload.file_hash,
@@ -412,7 +439,12 @@ class BankStatementRetentionService:
         """
         movement_ids = sorted(
             str(pk)
-            for pk in provenance.transaction_ids | provenance.transfer_ids
+            for pk in (
+                provenance.transaction_ids
+                | provenance.transfer_ids
+                | provenance.deleted_transaction_ids
+                | provenance.deleted_transfer_ids
+            )
         )
         entries = AuditLog.objects.filter(
             Q(created_at__gte=upload.created_at)
@@ -436,11 +468,12 @@ class BankStatementRetentionService:
     ) -> None:
         """Drop the raw bank reference from movements this upload created.
 
-        The provenance set only contains decisions that created money, so
-        a linked pre-existing movement keeps its own reference. A queryset
-        update bypasses the audit signal: the technical fingerprint, file
-        position and the financial record stay, only the bank identifier
-        is removed.
+        The provenance set only contains live rows whose decision created
+        money, so a linked pre-existing movement keeps its own reference
+        and a reused primary key of a deleted movement is never touched. A
+        queryset update bypasses the audit signal: the technical
+        fingerprint, file position and the financial record stay, only the
+        bank identifier is removed.
         """
         if not provenance.transaction_ids:
             return
@@ -524,26 +557,47 @@ def _collect_created_movement(
         transfer_ids.add(transfer_id)
 
 
+def _collect_delete_snapshot(
+    keys: set[tuple[UUID, str, str]],
+    operation_id: UUID | None,
+    decision: str,
+    transaction_pk: int | None,
+    transfer_pk: int | None,
+) -> None:
+    """Save the exact deletion audit copy a release decision confirmed."""
+    if operation_id is None or decision not in CREATED_DECISIONS:
+        return
+    if transaction_pk is not None:
+        keys.add((operation_id, TRANSACTION_LABEL, str(transaction_pk)))
+    if transfer_pk is not None:
+        keys.add((operation_id, TRANSFER_LABEL, str(transfer_pk)))
+
+
 def _is_statement_audit_copy(
     entry: AuditLog,
     provenance: _AuditProvenance,
 ) -> bool:
     """Return whether one audit entry belongs to this upload's movement."""
-    movement_id = _int_or_none(entry.object_pk)
-    if (
-        entry.model_name == TRANSACTION_LABEL
-        and movement_id in provenance.transaction_ids
-    ):
-        return True
-    if (
-        entry.model_name == TRANSFER_LABEL
-        and movement_id in provenance.transfer_ids
-    ):
-        return True
-    # A deletion snapshot is bank payload only when the exact movement is
-    # proved to belong to this upload; a shared fingerprint is not enough.
-    if entry.kind == AuditOperationKind.TRANSACTION_DELETE:
+    if entry.model_name == TRANSACTION_LABEL:
+        created_ids = provenance.transaction_ids
+        deleted_ids = provenance.deleted_transaction_ids
+    elif entry.model_name == TRANSFER_LABEL:
+        created_ids = provenance.transfer_ids
+        deleted_ids = provenance.deleted_transfer_ids
+    else:
         return False
+    # A deletion snapshot is bank payload only when it belongs to the
+    # delete operation a release decision confirmed. A reused primary key
+    # never reaches an unrelated snapshot.
+    if entry.action == AuditLog.Action.DELETE:
+        return (
+            entry.operation_id is not None
+            and (entry.operation_id, entry.model_name, entry.object_pk)
+            in provenance.delete_snapshots
+        )
+    movement_id = _int_or_none(entry.object_pk)
+    if movement_id in created_ids or movement_id in deleted_ids:
+        return True
     diff = entry.diff if isinstance(entry.diff, dict) else {}
     if provenance.fingerprints & _audit_values(diff, 'source_fingerprint'):
         return True
