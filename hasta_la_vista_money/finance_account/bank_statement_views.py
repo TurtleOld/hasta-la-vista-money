@@ -984,6 +984,8 @@ class BankStatementPendingTransferLinkView(LoginRequiredMixin, View):
             )
         except BankStatementRow.DoesNotExist as error:
             raise Http404 from error
+        except ReconciliationExpiredError:
+            return HttpResponse(status=410)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except StaleStatementCandidateError:

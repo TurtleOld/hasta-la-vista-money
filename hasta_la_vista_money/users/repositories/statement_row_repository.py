@@ -220,33 +220,64 @@ class StatementRowRepository:
             if version
         }
 
+    @staticmethod
+    def _lock_row_uploads(
+        row_id: int,
+        user_id: int,
+        account: Account | None = None,
+    ) -> list[BankStatementUpload]:
+        """Lock only a row's upload, never the row itself.
+
+        Cleanup takes the upload first and the rows second, so a row lock
+        taken before its upload could deadlock with it.
+        """
+        uploads = BankStatementUpload.objects.select_for_update(
+            of=('self',),
+        ).filter(
+            statement_rows__pk=row_id,
+            user_id=user_id,
+            account__user_id=user_id,
+        )
+        if account is not None:
+            uploads = uploads.filter(account=account)
+        return list(uploads.order_by('pk'))
+
     def lock_account_row(
         self,
         row_id: int,
         account: Account,
     ) -> BankStatementRow | None:
-        return (
-            BankStatementRow.objects.select_for_update()
-            .select_related('upload')
-            .filter(
-                pk=row_id,
-                upload__user_id=account.user_id,
-                upload__account=account,
-            )
+        uploads = self._lock_row_uploads(
+            row_id,
+            account.user_id,
+            account,
+        )
+        if not uploads:
+            return None
+        row = (
+            BankStatementRow.objects.select_for_update(of=('self',))
+            .filter(pk=row_id, upload=uploads[0])
             .first()
         )
+        if row is not None:
+            row.upload = uploads[0]
+        return row
 
     def lock_owned_row(self, row_id: int, user_id: int) -> BankStatementRow:
         """Raises ``BankStatementRow.DoesNotExist`` for a foreign row."""
-        return (
-            BankStatementRow.objects.select_for_update()
+        uploads = self._lock_row_uploads(row_id, user_id)
+        if not uploads:
+            raise BankStatementRow.DoesNotExist
+        row = (
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload__account', 'upload__user')
             .get(
                 pk=row_id,
-                upload__user_id=user_id,
-                upload__account__user_id=user_id,
+                upload=uploads[0],
             )
         )
+        row.upload = uploads[0]
+        return row
 
     def lock_owned_transfer(
         self,
@@ -254,7 +285,7 @@ class StatementRowRepository:
         user_id: int,
     ) -> TransferMoneyLog | None:
         return (
-            TransferMoneyLog.objects.select_for_update()
+            TransferMoneyLog.objects.select_for_update(of=('self',))
             .filter(pk=transfer_id, user_id=user_id)
             .first()
         )

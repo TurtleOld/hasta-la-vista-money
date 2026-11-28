@@ -42,6 +42,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
     ReconciliationDecisionConflictError,
+    ReconciliationExpiredError,
     StaleStatementCandidateError,
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
@@ -382,6 +383,134 @@ class PendingTransferDismissTest(CreditCardStatementBaseTest):
         self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
 
 
+class ExpiredRepaymentRowRejectionTest(CreditCardStatementBaseTest):
+    """Retention is enforced before the background cleanup runs."""
+
+    ROW_DATE = datetime(2026, 2, 9, 12, 0, tzinfo=UTC)
+
+    def _row_on_expired_upload(
+        self,
+        *,
+        cleaned: bool = False,
+    ) -> tuple[
+        BankStatementUpload,
+        BankStatementRow,
+    ]:
+        upload = self._create_upload()
+        if cleaned:
+            upload.expires_at = timezone.now() + timedelta(days=1)
+        else:
+            upload.expires_at = timezone.now() - timedelta(seconds=1)
+        update_fields = ['expires_at']
+        if cleaned:
+            upload.retention_cleaned_at = timezone.now()
+            update_fields.append('retention_cleaned_at')
+        upload.save(update_fields=update_fields)
+        row = self._create_pending_row(
+            upload=upload,
+            amount=Decimal('199.00'),
+            when=self.ROW_DATE,
+        )
+        return upload, row
+
+    def _transfer(self) -> TransferMoneyLog:
+        return TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            exchange_date=self.ROW_DATE,
+        )
+
+    def _assert_untouched(self, row: BankStatementRow) -> None:
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(row.transfer_id)
+        self.assertFalse(
+            BankStatementDecisionAudit.objects.filter(row=row).exists(),
+        )
+
+    def test_mark_not_payment_rejects_expired_row(self) -> None:
+        _, row = self._row_on_expired_upload()
+
+        with self.assertRaises(ReconciliationExpiredError):
+            self.service.mark_not_payment(row.pk, self.user.pk)
+
+        self._assert_untouched(row)
+
+    def test_mark_not_payment_rejects_cleaned_row(self) -> None:
+        _, row = self._row_on_expired_upload(cleaned=True)
+
+        with self.assertRaises(ReconciliationExpiredError):
+            self.service.mark_not_payment(row.pk, self.user.pk)
+
+        self._assert_untouched(row)
+
+    def test_link_repayment_rejects_expired_row(self) -> None:
+        _, row = self._row_on_expired_upload()
+        transfer = self._transfer()
+
+        with self.assertRaises(ReconciliationExpiredError):
+            self.link_service.link_repayment(
+                row.pk,
+                transfer.pk,
+                self.user.pk,
+            )
+
+        self._assert_untouched(row)
+
+    def test_link_repayment_rejects_cleaned_row(self) -> None:
+        _, row = self._row_on_expired_upload(cleaned=True)
+        transfer = self._transfer()
+
+        with self.assertRaises(ReconciliationExpiredError):
+            self.link_service.link_repayment(
+                row.pk,
+                transfer.pk,
+                self.user.pk,
+            )
+
+        self._assert_untouched(row)
+
+    def test_lock_repayment_row_rejects_expired_row(self) -> None:
+        _, row = self._row_on_expired_upload()
+
+        with self.assertRaises(ReconciliationExpiredError):
+            self.link_service.lock_repayment_row(
+                row.pk,
+                to_account=self.card,
+                amount=Decimal('199.00'),
+            )
+
+        self._assert_untouched(row)
+
+    def test_transfer_from_expired_row_is_rejected(self) -> None:
+        _, row = self._row_on_expired_upload()
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+
+        with self.assertRaises(ReconciliationExpiredError):
+            transfer_service.transfer_money(
+                from_account=self.debit,
+                to_account=self.card,
+                amount=Decimal('199.00'),
+                user=self.user,
+                exchange_date=self.ROW_DATE,
+                statement_row_id=row.pk,
+            )
+
+        self.assertFalse(TransferMoneyLog.objects.exists())
+        self.card.refresh_from_db()
+        self.debit.refresh_from_db()
+        self.assertEqual(self.card.balance, Decimal('1000.00'))
+        self.assertEqual(self.debit.balance, Decimal('1000.00'))
+        self._assert_untouched(row)
+
+
 class ReconciliationCreditIncomeGuardTest(CreditCardStatementBaseTest):
     """Reconciliation cannot create an income on a credit account."""
 
@@ -668,6 +797,21 @@ class RepaymentLinkViewTest(CreditCardStatementBaseTest):
         response = self.client.post(self.url, {'transfer': transfer.pk})
 
         self.assertEqual(response.status_code, 409)
+
+    def test_expired_row_returns_gone(self) -> None:
+        self.upload.expires_at = timezone.now() - timedelta(seconds=1)
+        self.upload.save(update_fields=['expires_at'])
+        transfer = self._transfer()
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {'transfer': transfer.pk})
+
+        self.assertEqual(response.status_code, 410)
+        self.row.refresh_from_db()
+        self.assertEqual(
+            self.row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
 
     def test_foreign_row_is_not_found(self) -> None:
         transfer = self._transfer()

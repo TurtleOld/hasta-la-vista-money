@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from threading import Barrier, Thread
+from threading import Barrier, Event, Thread
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -15,6 +15,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT_CARD
 from hasta_la_vista_money.finance_account.models import (
     Account,
     StatementPeriodCoverage,
@@ -70,6 +71,37 @@ SYNTHETIC_BANK = 'synthetic-test'
 # The import classifies a row before its write transaction, so acting on
 # the second call pauses the run with the first row already posted.
 PAUSE_BEFORE_SECOND_ROW = 2
+
+
+def _signal_before_movement_lock(
+    decision_started: Event,
+) -> Callable[..., Any]:
+    """Announce the movement lock only when its own SQL is about to run.
+
+    The candidate is read by a plain ``SELECT`` before the movement is
+    re-read with ``SELECT ... FOR UPDATE``; signalling at method entry
+    would let the holder commit first and the movement read would then
+    fail without ever waiting on the lock.
+    """
+    movement_tables = (
+        Transaction._meta.db_table,
+        TransferMoneyLog._meta.db_table,
+    )
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        if 'FOR UPDATE' in sql and any(
+            table in sql for table in movement_tables
+        ):
+            decision_started.set()
+        return execute(sql, params, many, context)
+
+    return wrapper
 
 
 class StatementFingerprintTest(TestCase):
@@ -1878,6 +1910,7 @@ class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
             amount=Decimal('100.00'),
             suggested_category='Продукты',
             source_ref='doc-1',
+            source_ref_strength='strong',
             source_fingerprint=self.fingerprint.digest,
             decision=BankStatementRow.Decision.PENDING,
         )
@@ -1901,6 +1934,102 @@ class ReconciliationRejectsRepeatedFingerprintTest(TestCase):
             self.row.decision,
             BankStatementRow.Decision.PENDING,
         )
+
+
+class ReconciliationAllowsWeakReferenceTest(TestCase):
+    """A weak or reused reference never proves a repeat by itself."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        self.fingerprint = StatementIdentityService(
+            keys=KEYS,
+            active_key_version='k2',
+            format_version=1,
+        ).fingerprint(
+            bank=SYNTHETIC_BANK,
+            account_id=self.account.pk,
+            source_ref='doc-1',
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            source_ref='doc-1',
+            source_fingerprint=self.fingerprint.digest,
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='statement.pdf',
+        )
+
+    def _row(
+        self,
+        *,
+        amount: Decimal = Decimal('100.00'),
+        strength: str = 'weak',
+    ) -> BankStatementRow:
+        return BankStatementRow.objects.create(
+            upload=self.upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=amount,
+            suggested_category='Продукты',
+            source_ref='doc-1',
+            source_ref_strength=strength,
+            source_fingerprint=self.fingerprint.digest,
+            decision=BankStatementRow.Decision.PENDING,
+        )
+
+    def test_weak_reference_posts_a_second_legitimate_operation(self) -> None:
+        row = self._row()
+
+        BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('900.00'))
+
+    def test_strong_reference_with_other_amount_still_posts(self) -> None:
+        row = self._row(amount=Decimal('150.00'), strength='strong')
+
+        BankStatementReconciliationService().decide(
+            row.pk,
+            BankStatementRow.Decision.NEW,
+            self.user.pk,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('850.00'))
 
 
 class LinkedDateInvalidationTest(TestCase):
@@ -2582,6 +2711,7 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                     amount=Decimal('100.00'),
                     suggested_category='Продукты',
                     source_ref='shared-resolution-ref',
+                    source_ref_strength='strong',
                     source_fingerprint=fingerprint.digest,
                     source_fingerprint_key_version=fingerprint.key_version,
                     source_fingerprint_format_version=(
@@ -2714,6 +2844,407 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                 BankStatementRow.Decision.NEW,
             ],
         )
+
+    def _candidate_fixture(
+        self,
+    ) -> tuple[Transaction, BankStatementRow, BankStatementCandidate]:
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='candidate-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            suggested_category='Продукты',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        candidate = BankStatementCandidate.objects.create(
+            row=row,
+            transaction=movement,
+            description='Продукты',
+        )
+        return movement, row, candidate
+
+    def _candidate_transfer_fixture(
+        self,
+    ) -> tuple[TransferMoneyLog, BankStatementRow, BankStatementCandidate]:
+        target = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=target,
+            amount=Decimal('100.00'),
+            user=self.user,
+            exchange_date=WHEN,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='candidate-transfer-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        candidate = BankStatementCandidate.objects.create(
+            row=row,
+            transfer=transfer,
+            description='Перевод',
+        )
+        return transfer, row, candidate
+
+    def _repayment_link_fixture(
+        self,
+    ) -> tuple[TransferMoneyLog, BankStatementRow]:
+        card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитная карта',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=card,
+                amount=Decimal('100.00'),
+                user=self.user,
+                exchange_date=WHEN,
+            )
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=card,
+            pdf_file='repayment-link-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=1,
+            transaction_type=BankStatementRow.TransactionType.INCOME,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        return transfer, row
+
+    def _run_service_race(
+        self,
+        hold: Callable[[Event, Event], None],
+        decide: Callable[[], object],
+    ) -> list[Exception | None]:
+        """Run a holder and a decision through their services in order.
+
+        The holder announces that it locked the movement, then waits until
+        the decision is about to take the movement lock before it commits
+        its change. The decision then blocks on that lock, so it always
+        re-reads the committed movement. The signal comes from the SQL that
+        takes the lock itself, not from a service method, so it cannot fire
+        before the candidate is read. No timing is guessed: the two service
+        paths meet on events.
+        """
+        holder_locked = Event()
+        decision_started = Event()
+        errors: list[Exception | None] = [None, None]
+
+        def hold_thread() -> None:
+            try:
+                hold(holder_locked, decision_started)
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def decide_thread() -> None:
+            try:
+                if not holder_locked.wait(timeout=5):
+                    self.fail('holder did not lock in time')
+                with connections['default'].execute_wrapper(
+                    _signal_before_movement_lock(decision_started),
+                ):
+                    decide()
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=hold_thread), Thread(target=decide_thread)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
+        return errors
+
+    def test_concurrent_candidate_edit_is_stale_not_an_error(self) -> None:
+        movement, row, candidate = self._candidate_fixture()
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        original_apply = (
+            transaction_service.account_service.apply_account_deltas
+        )
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transaction_service.account_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transaction_service.update_transaction(
+                    UpdateTransactionCommand(
+                        user=self.user,
+                        transaction_obj=movement,
+                        account=self.account,
+                        category=movement.category,
+                        amount=Decimal('999.00'),
+                        transaction_date=WHEN.date(),
+                        type_value=TransactionType.EXPENSE,
+                    ),
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+        movement.refresh_from_db()
+        self.assertEqual(movement.amount, Decimal('999.00'))
+
+    def test_concurrent_candidate_delete_is_stale_not_an_error(self) -> None:
+        transfer, row, candidate = self._candidate_transfer_fixture()
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        original_apply = transfer_service._balance_service.apply_account_deltas
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transfer_service._balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transfer_service.delete_transfer(
+                    transfer_id=transfer.pk,
+                    user=self.user,
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transfer_id)
+
+    def test_linked_row_of_the_same_upload_does_not_deadlock_a_delete(
+        self,
+    ) -> None:
+        """A movement already closing another row of the upload stays safe.
+
+        The decision must take the movement before the upload and the row;
+        otherwise deleting the movement (which takes it first) would wait
+        for the upload while the decision waits for the movement.
+        """
+        movement, row, candidate = self._candidate_fixture()
+        linked_row = BankStatementRow.objects.create(
+            upload=row.upload,
+            source_row_position=1,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        balance_service = transaction_service.account_service.balance_service
+        original_apply = balance_service.apply_account_deltas
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transaction_service.delete_transaction(
+                    user=self.user,
+                    transaction_obj=movement,
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            Transaction.objects.filter(pk=movement.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+        linked_row.refresh_from_db()
+        self.assertEqual(
+            linked_row.decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertIsNone(linked_row.transaction_id)
+
+    def test_deleted_candidate_movement_is_stale_not_an_error(self) -> None:
+        movement, row, candidate = self._candidate_fixture()
+        movement.delete()
+
+        with self.assertRaises(StaleStatementCandidateError):
+            BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+
+    def test_concurrent_repayment_delete_does_not_deadlock_a_link(
+        self,
+    ) -> None:
+        """The link waits for the transfer before it touches the upload.
+
+        Deleting the transfer takes it first and only then the rows and
+        uploads; a link that held the upload while waiting for the transfer
+        would deadlock with it.
+        """
+        transfer, row = self._repayment_link_fixture()
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        original_apply = transfer_service._balance_service.apply_account_deltas
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transfer_service._balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transfer_service.delete_transfer(
+                    transfer_id=transfer.pk,
+                    user=self.user,
+                )
+
+        link_service = ApplicationContainer().users.statement_row_link_service()
+        errors = self._run_service_race(
+            hold,
+            lambda: link_service.link_repayment(
+                row.pk,
+                transfer.pk,
+                self.user.pk,
+            ),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertIsNone(row.transfer_id)
 
 
 class CoverageRevisionTest(TestCase):
