@@ -22,7 +22,10 @@ from hasta_la_vista_money.system.audit_registry import (
     TRANSFER_LABEL,
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
-from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+    current_operation_id,
+)
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
@@ -482,9 +485,10 @@ def scrub_movement_audit_copy(
     """Scrub bank payload from the fresh deletion copy of one movement.
 
     A movement deleted after its statement was cleaned writes a deletion
-    snapshot outside the retention run, so the DELETE action, exact model
-    label and primary key select only that copy. The movement's original
-    creation audit is left as the retention cleanup stored it.
+    snapshot outside the retention run. The DELETE action, exact model
+    label and primary key select that copy, and the current operation id
+    keeps out an older snapshot of a reused primary key. The movement's
+    original creation audit is left as the retention cleanup stored it.
     """
     entries = AuditLog.objects.filter(
         user_id=user_id,
@@ -493,6 +497,9 @@ def scrub_movement_audit_copy(
         action=AuditLog.Action.DELETE,
         kind__in=_STATEMENT_AUDIT_KINDS,
     )
+    operation_id = current_operation_id()
+    if operation_id is not None:
+        entries = entries.filter(operation_id=operation_id)
     for entry in entries.iterator(
         chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
     ):

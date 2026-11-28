@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pandas as pd
 from celery.exceptions import Retry
@@ -76,6 +77,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 from hasta_la_vista_money.users.services.bank_statement_retention import (
     BankStatementRetentionService,
     _AuditProvenance,
+    scrub_movement_audit_copy,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
@@ -10831,6 +10833,49 @@ class TestBankStatementImportReliability(TestCase):
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_scrub_keeps_delete_snapshot_of_another_operation(
+        self,
+    ) -> None:
+        """A reused primary key must not scrub an older deletion copy."""
+        diff = {
+            'v': 2,
+            'deleted': {
+                'amount': '100.00',
+                'description': 'Старое секретное описание',
+            },
+        }
+        historical = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk='501',
+            action=AuditLog.Action.DELETE,
+            diff=diff,
+            operation_id=uuid4(),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        with audit_operation(
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        ) as operation_id:
+            current = AuditLog.objects.create(
+                user=self.user,
+                model_name='transactions.Transaction',
+                object_pk='501',
+                action=AuditLog.Action.DELETE,
+                diff=diff,
+                operation_id=operation_id,
+                kind=AuditOperationKind.TRANSACTION_DELETE,
+            )
+            scrub_movement_audit_copy(
+                user_id=self.user.pk,
+                model_name='transactions.Transaction',
+                object_id=501,
+            )
+
+        historical.refresh_from_db()
+        current.refresh_from_db()
+        self.assertEqual(historical.diff, diff)
+        self.assertNotIn('description', current.diff['deleted'])
 
     def test_cleanup_uses_file_hash_and_position_after_safe_delete(
         self,
