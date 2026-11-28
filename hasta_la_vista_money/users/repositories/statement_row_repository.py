@@ -446,6 +446,33 @@ class StatementRowRepository:
             .first()
         )
 
+    @staticmethod
+    def row_movement_ids(
+        row_id: int,
+        user_id: int,
+    ) -> tuple[int | None, int | None]:
+        """Read a row's movement ids before locking that movement."""
+        return (
+            BankStatementRow.objects.filter(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+            .values_list('transaction_id', 'transfer_id')
+            .get()
+        )
+
+    def lock_owned_transaction(
+        self,
+        transaction_id: int,
+        user_id: int,
+    ) -> Transaction | None:
+        return (
+            Transaction.objects.select_for_update(of=('self',))
+            .filter(pk=transaction_id, user_id=user_id)
+            .first()
+        )
+
     def repayment_candidates(
         self,
         rows: Sequence[BankStatementRow],

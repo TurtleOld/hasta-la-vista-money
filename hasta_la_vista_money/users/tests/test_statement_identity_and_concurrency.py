@@ -104,35 +104,54 @@ def _signal_before_movement_lock(
     return wrapper
 
 
-def _hold_cleanup_until_delete(
-    retention: Any,
-    cleanup_holds: Event,
-    delete_started: Event,
-) -> Callable[[Any], None]:
-    """Return a hook that makes cleanup wait for the deletion attempt."""
-    original_clear = retention._clear_created_movement_references
+def _signal_after_movement_lock(
+    movement_locked: Event,
+    release: Event,
+) -> Callable[..., Any]:
+    """Announce the movement lock only after its own SQL returned.
 
-    def hold(provenance: Any) -> None:
-        cleanup_holds.set()
-        if not delete_started.wait(timeout=5):
-            raise TimeoutError('delete did not start in time')
-        original_clear(provenance)
+    The holder thus provably owns the row before it releases the other
+    thread, and keeps that lock while the other path reaches the same
+    statement, so the two paths always overlap on the real lock.
+    """
+    movement_tables = (
+        Transaction._meta.db_table,
+        TransferMoneyLog._meta.db_table,
+    )
 
-    return hold
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        result = execute(sql, params, many, context)
+        if 'FOR UPDATE' in sql and any(
+            table in sql for table in movement_tables
+        ):
+            movement_locked.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError('cleanup did not reach the movement lock')
+        return result
+
+    return wrapper
 
 
 def _run_cleanup_thread(
     retention: Any,
-    hold: Callable[[Any], None],
     errors: list[Exception | None],
     index: int,
+    *,
+    delete_locked: Event,
+    cleanup_attempted: Event,
 ) -> None:
-    """Run cleanup with the hook that synchronizes it with the deletion."""
+    """Lock the movement after deletion did, while it still holds it."""
     try:
-        with patch.object(
-            retention,
-            '_clear_created_movement_references',
-            side_effect=hold,
+        if not delete_locked.wait(timeout=5):
+            raise TimeoutError('delete did not lock the movement in time')
+        with connections['default'].execute_wrapper(
+            _signal_before_movement_lock(cleanup_attempted),
         ):
             retention.cleanup_expired()
     except Exception as exc:
@@ -145,16 +164,18 @@ def _run_delete_thread(
     delete_service: Any,
     movement: Transaction,
     user: User,
-    cleanup_holds: Event,
-    delete_started: Event,
+    *,
     errors: list[Exception | None],
+    delete_locked: Event,
+    cleanup_attempted: Event,
 ) -> None:
-    """Delete the movement once cleanup announces that it holds its locks."""
+    """Delete the movement and hold its lock until cleanup tries it too."""
     try:
-        if not cleanup_holds.wait(timeout=5):
-            raise TimeoutError('cleanup did not lock in time')
         with connections['default'].execute_wrapper(
-            _signal_before_movement_lock(delete_started),
+            _signal_after_movement_lock(
+                delete_locked,
+                cleanup_attempted,
+            ),
         ):
             delete_service.delete_transaction(
                 user=user,
@@ -174,34 +195,32 @@ def _run_cleanup_delete_race(
 ) -> list[Exception | None]:
     """Race cleanup against deletion of the movement it cleans.
 
-    Cleanup announces that it holds its locks; deletion starts only after
-    that and announces its own movement lock attempt. A cleanup that held
-    the upload before the movement would wait there while the deletion
-    waits for the upload.
+    Deletion takes the movement lock, then cleanup is released and blocks
+    on the same row before it may take the upload. If cleanup took the
+    upload first, deletion would hold the movement and wait for that
+    upload, so the two paths would deadlock; the shared order movement,
+    upload, row is therefore proven by a real lock overlap.
     """
-    cleanup_holds = Event()
-    delete_started = Event()
+    delete_locked = Event()
+    cleanup_attempted = Event()
     errors: list[Exception | None] = [None, None]
-    hold = _hold_cleanup_until_delete(
-        retention,
-        cleanup_holds,
-        delete_started,
-    )
     threads = [
         Thread(
             target=_run_cleanup_thread,
-            args=(retention, hold, errors, 0),
+            args=(retention, errors, 0),
+            kwargs={
+                'delete_locked': delete_locked,
+                'cleanup_attempted': cleanup_attempted,
+            },
         ),
         Thread(
             target=_run_delete_thread,
-            args=(
-                delete_service,
-                movement,
-                user,
-                cleanup_holds,
-                delete_started,
-                errors,
-            ),
+            args=(delete_service, movement, user),
+            kwargs={
+                'errors': errors,
+                'delete_locked': delete_locked,
+                'cleanup_attempted': cleanup_attempted,
+            },
         ),
     ]
     for thread in threads:

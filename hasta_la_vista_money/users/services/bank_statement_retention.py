@@ -200,30 +200,22 @@ class BankStatementRetentionService:
 
     @staticmethod
     def _lock_created_movements(upload_id: int) -> set[int]:
-        """Lock live movements referenced by the upload, by primary key.
+        """Lock only live movements a ``NEW``/``TRANSFERRED`` row created.
 
-        The shared order is movement, upload, row. Cleanup only updates
-        ``source_ref`` on movements a statement created, but every
-        referenced movement is locked so a deletion that already holds one
-        blocks before the upload lock instead of after it.
+        The shared order is movement, upload, row. Cleanup rewrites
+        ``source_ref`` only on movements the statement created, so a
+        ``LINKED`` row's independent movement is never locked: a revision
+        holds the upload and waits for that movement's ``KEY SHARE`` on
+        commit, so cleanup taking it would close a new deadlock cycle.
+        The row composition is rechecked under the upload and row locks.
         """
-        audits = BankStatementDecisionAudit.objects.filter(
-            row__upload_id=upload_id,
-        )
-        movement_ids: set[int] = set(
+        movement_ids = set(
             BankStatementRow.objects.filter(
                 upload_id=upload_id,
                 transaction_id__isnull=False,
+                decision__in=CREATED_DECISIONS,
             ).values_list('transaction_id', flat=True),
         )
-        for transaction_id, previous_id in audits.values_list(
-            'transaction_id',
-            'previous_transaction_pk',
-        ):
-            if transaction_id is not None:
-                movement_ids.add(transaction_id)
-            if previous_id is not None:
-                movement_ids.add(previous_id)
         if not movement_ids:
             return movement_ids
         return set(
