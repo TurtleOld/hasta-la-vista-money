@@ -1226,7 +1226,7 @@ class StaleRunAfterRetentionTest(TestCase):
         self,
         upload: BankStatementUpload,
         pause: Callable[[], None],
-    ) -> object:
+    ) -> StatementImportResult:
         """Import two rows and act once the first row is already posted."""
         calls = 0
 
@@ -1257,7 +1257,10 @@ class StaleRunAfterRetentionTest(TestCase):
                 transactions=self._transactions(),
                 bank=SYNTHETIC_BANK,
             )
-            return self.service.import_statement(upload)
+            return cast(
+                'StatementImportResult',
+                self.service.import_statement(upload),
+            )
 
     def _assert_only_first_row_posted(self) -> None:
         self.assertEqual(
@@ -1276,12 +1279,55 @@ class StaleRunAfterRetentionTest(TestCase):
                 now=upload.expires_at + timedelta(minutes=1),
             )
 
-        self._import_with_pause(upload, cleanup)
+        result = self._import_with_pause(upload, cleanup)
 
         self._assert_only_first_row_posted()
+        self.assertTrue(result.stopped)
+        self.assertEqual(result.income_count, 0)
+        self.assertEqual(result.expense_count, 0)
+        self.assertEqual(result.skipped_count, 0)
+        self.assertEqual(result.needs_transfer_count, 0)
+        self.assertIsNone(result.closing_balance)
         upload.refresh_from_db()
         self.assertIsNotNone(upload.retention_cleaned_at)
         self.assertIsNone(upload.statement_closing_balance)
+
+    def test_lost_ownership_returns_zero_task_counters(self) -> None:
+        """A worker that lost the upload leaks no counters or bank data."""
+        upload = self._upload()
+        with (
+            patch(
+                'hasta_la_vista_money.users.services.bank_statement_import.'
+                'BankStatementParser',
+            ) as parser,
+            patch(
+                'hasta_la_vista_money.users.tasks._finalize_upload',
+                return_value=None,
+            ),
+        ):
+            parser.return_value.parse.return_value = StatementParseResult(
+                transactions=[
+                    {
+                        **self._transactions()[0],
+                        'category_name': FALLBACK_CATEGORY,
+                    },
+                ],
+                bank=SYNTHETIC_BANK,
+            )
+            result = process_bank_statement_task.apply(
+                args=[upload.pk, 'run-a'],
+            ).get()
+
+        self.assertEqual(
+            result,
+            {
+                'income_count': 0,
+                'expense_count': 0,
+                'skipped_count': 0,
+                'needs_transfer_count': 0,
+                'total_count': 0,
+            },
+        )
 
     def test_new_active_run_stops_the_previous_run(self) -> None:
         upload = self._upload()
