@@ -36,6 +36,18 @@ _REPAYMENT_ROW = Q(
 )
 
 
+def _decision_ids(
+    released: Sequence[tuple[int, str, str]],
+    decision: str,
+) -> list[int]:
+    """Return the rows released into one decision."""
+    return [
+        pk
+        for pk, _, released_decision in released
+        if released_decision == decision
+    ]
+
+
 class StatementRowRepository:
     """Statement rows linked to movements and repayment rows."""
 
@@ -86,7 +98,10 @@ class StatementRowRepository:
     ) -> list[BankStatementUpload]:
         """Reopen the movement's rows and return their uploads.
 
-        A credit-account repayment goes back to waiting for a transfer,
+        A cleaned upload kept no bank payload, so its rows become
+        ``EXPIRED`` instead of an unresolvable pending decision and keep
+        the upload marked as completed with unresolved rows. A
+        credit-account repayment goes back to waiting for a transfer,
         every other row goes back to the pending decision. Rows that are
         exact repeat observations of a reopened row are reopened too, so a
         closed row never outlives its movement.
@@ -95,17 +110,27 @@ class StatementRowRepository:
         linked_rows = list(
             rows.select_for_update()
             .order_by('pk')
-            .values_list('pk', 'decision'),
+            .values_list(
+                'pk',
+                'decision',
+                'upload_id',
+                'upload__retention_cleaned_at',
+            ),
         )
         if not linked_rows:
             return []
         repeats = BankStatementRow.objects.filter(
-            canonical_row_id__in=[pk for pk, _ in linked_rows],
+            canonical_row_id__in=[pk for pk, *_ in linked_rows],
         )
         repeat_rows = list(
             repeats.select_for_update()
             .order_by('pk')
-            .values_list('pk', 'decision'),
+            .values_list(
+                'pk',
+                'decision',
+                'upload_id',
+                'upload__retention_cleaned_at',
+            ),
         )
         repayment_ids = set(
             rows.filter(_REPAYMENT_ROW).values_list('pk', flat=True),
@@ -119,19 +144,68 @@ class StatementRowRepository:
                 ),
             ),
         )
+        released: list[tuple[int, str, str]] = []
+        for pk, previous_decision, _, cleaned_at in linked_rows:
+            if cleaned_at is not None:
+                decision = BankStatementRow.Decision.EXPIRED
+            elif pk in repayment_ids:
+                decision = BankStatementRow.Decision.NEEDS_TRANSFER
+            else:
+                decision = BankStatementRow.Decision.PENDING
+            released.append((pk, previous_decision, decision))
+        for pk, previous_decision, _, cleaned_at in repeat_rows:
+            released.append(
+                (
+                    pk,
+                    previous_decision,
+                    (
+                        BankStatementRow.Decision.EXPIRED
+                        if cleaned_at is not None
+                        else BankStatementRow.Decision.PENDING
+                    ),
+                ),
+            )
+        expired_ids = _decision_ids(released, BankStatementRow.Decision.EXPIRED)
+        if expired_ids:
+            BankStatementRow.objects.filter(pk__in=expired_ids).update(
+                decision=BankStatementRow.Decision.EXPIRED,
+                transaction=None,
+                transfer=None,
+                canonical_row=None,
+                decided_at=timezone.now(),
+            )
+            cleaned_upload_ids = {
+                upload_id
+                for _, _, upload_id, cleaned_at in (
+                    *linked_rows,
+                    *repeat_rows,
+                )
+                if cleaned_at is not None
+            }
+            BankStatementUpload.objects.filter(
+                pk__in=cleaned_upload_ids,
+            ).update(
+                status=BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+            )
         reopened = {'transaction': None, 'transfer': None, 'decided_at': None}
-        rows.filter(pk__in=repayment_ids).update(
+        BankStatementRow.objects.filter(
+            pk__in=_decision_ids(
+                released,
+                BankStatementRow.Decision.NEEDS_TRANSFER,
+            ),
+        ).update(
             decision=BankStatementRow.Decision.NEEDS_TRANSFER,
             **reopened,
         )
-        rows.exclude(pk__in=repayment_ids).update(
-            decision=BankStatementRow.Decision.PENDING,
-            **reopened,
-        )
-        repeats.update(
+        BankStatementRow.objects.filter(
+            pk__in=_decision_ids(
+                released,
+                BankStatementRow.Decision.PENDING,
+            ),
+        ).update(
             decision=BankStatementRow.Decision.PENDING,
             canonical_row=None,
-            decided_at=None,
+            **reopened,
         )
         is_transfer = isinstance(movement, TransferMoneyLog)
         BankStatementDecisionAudit.objects.bulk_create(
@@ -140,17 +214,13 @@ class StatementRowRepository:
                     row_id=pk,
                     actor_id=movement.user_id,
                     previous_decision=previous_decision,
-                    decision=(
-                        BankStatementRow.Decision.NEEDS_TRANSFER
-                        if pk in repayment_ids
-                        else BankStatementRow.Decision.PENDING
+                    decision=decision,
+                    previous_transaction_pk=(
+                        None if is_transfer else movement.pk
                     ),
-                    previous_transaction_pk=None
-                    if is_transfer
-                    else movement.pk,
-                    previous_transfer_pk=movement.pk if is_transfer else None,
+                    previous_transfer_pk=(movement.pk if is_transfer else None),
                 )
-                for pk, previous_decision in (*linked_rows, *repeat_rows)
+                for pk, previous_decision, decision in released
             ],
         )
         return uploads

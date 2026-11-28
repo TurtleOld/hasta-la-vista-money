@@ -51,7 +51,7 @@ class StatementRowLinkService:
         self,
         movement: Transaction | TransferMoneyLog,
     ) -> None:
-        """Reopen rows closed by the movement and recount their uploads."""
+        """Release rows closed by the movement and recount their uploads."""
         for upload in self.statement_row_repository.release_linked_rows(
             movement,
         ):

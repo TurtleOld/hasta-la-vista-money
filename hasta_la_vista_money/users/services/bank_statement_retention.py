@@ -16,6 +16,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.audit_registry import (
     TRANSACTION_LABEL,
     TRANSFER_LABEL,
@@ -321,9 +322,10 @@ class BankStatementRetentionService:
 
         Deleting a movement sets the row and decision-audit foreign keys to
         NULL. Its statement audit copy still carries the same HMAC
-        fingerprint, or the same (upload file hash, row position) pair, so
-        those safe technical keys recover the link without guessing from a
-        weak reference or an amount. A fingerprint shared with another
+        fingerprint, or the same (upload file hash, row position) pair, or
+        the movement id saved by the release decision, so those safe
+        technical keys recover the link without guessing from a weak
+        reference or an amount. A fingerprint shared with another
         upload is not trusted on its own; the exact file-hash/position and
         account composite still reaches the copy proved to belong to this
         upload, so sharing never blocks cleanup forever and never scrubs
@@ -358,20 +360,26 @@ class BankStatementRetentionService:
         for audit in BankStatementDecisionAudit.objects.filter(
             row__in=rows,
         ):
-            _collect_created_movement(
-                transaction_ids,
-                transfer_ids,
-                audit.decision,
-                audit.transaction_id,
-                audit.transfer_id,
-            )
-            _collect_created_movement(
-                transaction_ids,
-                transfer_ids,
-                audit.previous_decision,
-                audit.previous_transaction_id,
-                audit.previous_transfer_id,
-            )
+            for decision, transaction_id, transfer_id in (
+                (audit.decision, audit.transaction_id, audit.transfer_id),
+                (
+                    audit.previous_decision,
+                    audit.previous_transaction_id,
+                    audit.previous_transfer_id,
+                ),
+                (
+                    audit.previous_decision,
+                    audit.previous_transaction_pk,
+                    audit.previous_transfer_pk,
+                ),
+            ):
+                _collect_created_movement(
+                    transaction_ids,
+                    transfer_ids,
+                    decision,
+                    transaction_id,
+                    transfer_id,
+                )
         return _AuditProvenance(
             transaction_ids=transaction_ids,
             transfer_ids=transfer_ids,
@@ -391,14 +399,24 @@ class BankStatementRetentionService:
         Only entries written by an import, resolution or markup operation
         are touched. A match needs the exact model label plus primary key,
         or an exact safe technical key from a statement row; independent
-        financial audit entries keep their values.
+        financial audit entries keep their values. The search starts at
+        the upload and includes known movement ids, and it streams the
+        result in chunks so a years-long history is never loaded at once.
         """
+        movement_ids = sorted(
+            str(pk)
+            for pk in provenance.transaction_ids | provenance.transfer_ids
+        )
         entries = AuditLog.objects.filter(
+            Q(created_at__gte=upload.created_at)
+            | Q(object_pk__in=movement_ids),
             user_id=upload.user_id,
             model_name__in=_STATEMENT_AUDIT_MODELS,
             kind__in=_STATEMENT_AUDIT_KINDS,
         )
-        for entry in entries:
+        for entry in entries.iterator(
+            chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
+        ):
             if not _is_statement_audit_copy(entry, provenance):
                 continue
             scrubbed = _scrub_diff(entry.diff)
