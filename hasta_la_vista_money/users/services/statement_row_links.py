@@ -34,6 +34,7 @@ from hasta_la_vista_money.users.repositories.statement_row_repository import (
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     ReconciliationDecisionConflictError,
     StaleStatementCandidateError,
+    ensure_upload_available,
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
     CREATED_DECISIONS,
@@ -346,6 +347,7 @@ class StatementRowLinkService:
             raise ValidationError(
                 _('Строка выписки не относится к счёту получателя.'),
             )
+        ensure_upload_available(row_id, row.upload)
         if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
             raise ValidationError(_('Строка выписки уже закрыта.'))
         if row.amount != amount:
@@ -392,21 +394,24 @@ class StatementRowLinkService:
             ),
             transaction.atomic(),
         ):
-            row = self.statement_row_repository.lock_owned_row(
-                row_id,
-                user_id,
-            )
-            if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
-                raise ReconciliationDecisionConflictError(row.decision)
-            # The lock keeps two rows of one account from taking one transfer.
+            # The transfer is locked before the statement: deleting a
+            # transfer takes it first and only then the statement rows and
+            # uploads, so the opposite order would deadlock with it.
             transfer = self.statement_row_repository.lock_owned_transfer(
                 transfer_id,
                 user_id,
             )
-            if (
-                transfer is None
-                or transfer not in (self.repayment_candidates([row])[row.pk])
-            ):
+            if transfer is None:
+                raise StaleStatementCandidateError(transfer_id)
+            row = self.statement_row_repository.lock_owned_row(
+                row_id,
+                user_id,
+            )
+            ensure_upload_available(row_id, row.upload)
+            if row.decision != BankStatementRow.Decision.NEEDS_TRANSFER:
+                raise ReconciliationDecisionConflictError(row.decision)
+            # The lock keeps two rows of one account from taking one transfer.
+            if transfer not in self.repayment_candidates([row])[row.pk]:
                 raise StaleStatementCandidateError(transfer_id)
             self.close_repayment_row(row, transfer)
             return row

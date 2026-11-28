@@ -647,6 +647,10 @@ class TransferCandidateDecisionTest(TransferDedupeBaseTest):
         audit = row.decision_audits.order_by('created_at').last()
         if audit is None:
             self.fail('Expected a revision audit entry')
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
         self.assertEqual(audit.previous_transfer, transfer)
         self.assertIsNone(audit.previous_transaction)
 
