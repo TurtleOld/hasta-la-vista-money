@@ -179,7 +179,7 @@ class StatementBalanceVerificationService:
         with transaction.atomic():
             upload = (
                 BankStatementUpload.objects.select_for_update(of=('self',))
-                .select_related('account', 'balance_explained_by')
+                .select_related('balance_explained_by')
                 .get(pk=upload.pk)
             )
             if upload.retention_cleaned_at is not None:
