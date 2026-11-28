@@ -33,6 +33,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     StaleStatementCandidateError,
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
+    CREATED_DECISIONS,
     scrub_movement_audit_copy,
 )
 
@@ -78,12 +79,18 @@ class StatementRowLinkService:
         observations of a released row are released too, so a closed row
         never outlives its movement.
 
-        Returns whether rows of an already cleaned upload were released;
-        the deletion audit copy of such a movement still needs scrubbing.
+        Returns whether the movement was created from a cleaned upload;
+        only such a movement proves its deletion audit copy is a bank copy.
+        A movement merely linked as ``LINKED`` keeps its own audit.
         """
         locked = self.statement_row_repository.lock_released_rows(movement)
         if not locked.linked:
             return False
+        scrub_audit = any(
+            row.retention_cleaned_at is not None
+            and row.decision in CREATED_DECISIONS
+            for row in locked.linked
+        )
         rows = (*locked.linked, *locked.repeats)
         released = [
             (
@@ -148,7 +155,7 @@ class StatementRowLinkService:
         )
         for upload in locked.uploads:
             self.reconciliation_service.refresh_outcome_counts(upload)
-        return bool(expired_ids)
+        return scrub_audit
 
     def scrub_deleted_movement_audit(
         self,

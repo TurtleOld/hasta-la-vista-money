@@ -11067,6 +11067,157 @@ class TestBankStatementImportReliability(TestCase):
             with self.subTest(field=field):
                 self.assertNotIn(field, deleted)
 
+    def test_deleting_linked_manual_transaction_keeps_its_audit(
+        self,
+    ) -> None:
+        """A manual movement linked to a cleaned row keeps its own audit."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        manual = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=timezone.now(),
+            description='Ручная операция',
+        )
+        manual_pk = manual.pk
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/linked-manual-delete.pdf',
+            total_transactions=1,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            transaction=manual,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        create_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(manual_pk),
+            action=AuditLog.Action.CREATE,
+        )
+        created_diff = create_audit.diff
+
+        (
+            ApplicationContainer()
+            .transactions.transaction_service()
+            .delete_transaction(user=self.user, transaction_obj=manual)
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
+        create_audit.refresh_from_db()
+        self.assertEqual(create_audit.diff, created_diff)
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(manual_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertIn(field, deleted)
+
+    def test_deleting_linked_manual_transfer_keeps_its_audit(
+        self,
+    ) -> None:
+        """A manual linked transfer keeps its creation and deletion audit."""
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('50.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+        transfer_pk = transfer.pk
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/linked-manual-transfer.pdf',
+            total_transactions=1,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        create_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.CREATE,
+        )
+        created_diff = create_audit.diff
+
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
+        create_audit.refresh_from_db()
+        self.assertEqual(create_audit.diff, created_diff)
+        delete_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertIn(field, deleted)
+
     def test_cleanup_scrubs_deleted_movement_by_saved_id_across_statements(
         self,
     ) -> None:

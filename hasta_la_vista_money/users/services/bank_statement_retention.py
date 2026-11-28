@@ -41,7 +41,7 @@ from hasta_la_vista_money.users.services.statement_completion import (
 
 logger = structlog.get_logger(__name__)
 
-_CREATED_DECISIONS: Final = frozenset(
+CREATED_DECISIONS: Final = frozenset(
     {
         BankStatementRow.Decision.NEW,
         BankStatementRow.Decision.TRANSFERRED,
@@ -479,16 +479,18 @@ def scrub_movement_audit_copy(
     model_name: str,
     object_id: int,
 ) -> None:
-    """Scrub bank payload from statement copies of one exact movement.
+    """Scrub bank payload from the fresh deletion copy of one movement.
 
-    A movement deleted after its statement was cleaned writes a fresh
-    deletion snapshot outside the retention run, so the exact model label
-    and primary key select the copies to scrub.
+    A movement deleted after its statement was cleaned writes a deletion
+    snapshot outside the retention run, so the DELETE action, exact model
+    label and primary key select only that copy. The movement's original
+    creation audit is left as the retention cleanup stored it.
     """
     entries = AuditLog.objects.filter(
         user_id=user_id,
         model_name=model_name,
         object_pk=str(object_id),
+        action=AuditLog.Action.DELETE,
         kind__in=_STATEMENT_AUDIT_KINDS,
     )
     for entry in entries.iterator(
@@ -507,7 +509,7 @@ def _collect_created_movement(
     transfer_id: int | None,
 ) -> None:
     """Add the typed movement id a NEW or TRANSFERRED decision created."""
-    if decision not in _CREATED_DECISIONS:
+    if decision not in CREATED_DECISIONS:
         return
     if transaction_id is not None:
         transaction_ids.add(transaction_id)
