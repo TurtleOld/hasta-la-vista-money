@@ -212,7 +212,22 @@ class BankStatementReconciliationService:
         decision: str,
         user_id: int,
         candidate_id: int | None = None,
+        *,
+        require_unique: bool = False,
     ) -> BankStatementRow:
+        # A movement is locked before the statement: deleting a movement
+        # takes it first and only then the statement rows and uploads, so
+        # the opposite order would deadlock with the deletion.
+        movement = None
+        if (
+            decision == BankStatementRow.Decision.LINKED
+            and candidate_id is not None
+        ):
+            movement = self._lock_candidate_movement(
+                row_id,
+                user_id,
+                candidate_id,
+            )
         upload = self._lock_upload(row_id, user_id)
         row = (
             BankStatementRow.objects.select_for_update(of=('self',))
@@ -228,23 +243,23 @@ class BankStatementReconciliationService:
                 raise ReconciliationDecisionConflictError(decision)
             if decision == BankStatementRow.Decision.LINKED:
                 candidate = self._validated_candidate(row, candidate_id)
-                movement = candidate.transaction or candidate.transfer
-                if movement is None or not self._row_links_movement(
+                linked = candidate.transaction or candidate.transfer
+                if linked is None or not self._row_links_movement(
                     row,
-                    movement,
+                    linked,
                 ):
                     raise ReconciliationDecisionConflictError(candidate_id)
             return row
         ensure_upload_available(row_id, row.upload)
 
         if decision == BankStatementRow.Decision.LINKED:
-            candidate = self._validated_candidate(row, candidate_id)
-            movement = self._locked_candidate_movement(
+            self._apply_linked_decision(
                 row,
-                candidate,
-                candidate.pk,
+                user_id,
+                candidate_id,
+                movement,
+                require_unique=require_unique,
             )
-            self._link_movement(row, movement)
         elif decision == BankStatementRow.Decision.NEW:
             row.transaction = self._create_transaction(row)
             row.transfer = None
@@ -273,6 +288,31 @@ class BankStatementReconciliationService:
         if self._balance_verification_service is not None:
             self._balance_verification_service.verify_completed(upload)
         return row
+
+    def _apply_linked_decision(
+        self,
+        row: BankStatementRow,
+        user_id: int,
+        candidate_id: int | None,
+        movement: Transaction | TransferMoneyLog | None,
+        *,
+        require_unique: bool,
+    ) -> None:
+        """Validate and link the candidate after the movement was locked."""
+        candidate = self._validated_candidate(row, candidate_id)
+        if require_unique and not self._is_unique_candidate(row, candidate):
+            raise AmbiguousStatementCandidateError(row.pk)
+        if movement is None:
+            movement = self._lock_candidate_movement(
+                row.pk,
+                user_id,
+                candidate.pk,
+            )
+        elif not self._candidate_matches_movement(candidate, movement):
+            raise StaleStatementCandidateError(candidate_id)
+        if not self._movement_is_current(row, movement):
+            raise StaleStatementCandidateError(candidate_id)
+        self._link_movement(row, movement)
 
     @transaction.atomic
     def revise_linked_to_new(
@@ -391,16 +431,14 @@ class BankStatementReconciliationService:
         user_id: int,
         upload_id: int,
     ) -> BankStatementRow:
-        upload = self._lock_upload(row_id, user_id, upload_id)
-        row = (
-            BankStatementRow.objects.select_for_update(of=('self',))
-            .select_related('upload__account')
-            .get(
-                pk=row_id,
-                upload=upload,
-            )
+        # The candidate is discovered before any statement lock: locking a
+        # movement must come before the upload and row locks (see _decide).
+        row = BankStatementRow.objects.select_related('upload__account').get(
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user_id=user_id,
+            upload__account__user_id=user_id,
         )
-        row.upload = upload
         if row.decision == BankStatementRow.Decision.LINKED:
             return row
         candidate_ids = [
@@ -420,6 +458,7 @@ class BankStatementReconciliationService:
             BankStatementRow.Decision.LINKED,
             user_id,
             candidate_ids[0],
+            require_unique=True,
         )
 
     @staticmethod
@@ -518,40 +557,81 @@ class BankStatementReconciliationService:
             raise StaleStatementCandidateError(candidate_id)
         return candidate
 
-    def _locked_candidate_movement(
+    def _lock_candidate_movement(
         self,
-        row: BankStatementRow,
-        candidate: BankStatementCandidate,
+        row_id: int,
+        user_id: int,
         candidate_id: int,
     ) -> Transaction | TransferMoneyLog:
-        """Lock the candidate movement, then re-check it is still current.
+        """Lock the candidate movement before the statement upload and row.
 
-        The candidate was read before the lock, so another owner may have
-        edited or deleted the movement in between. A missing movement is a
-        stale candidate, never an unhandled crash.
+        A statement row deletion takes the movement first and only then its
+        upload, so the opposite order would deadlock with it. The movement
+        is re-read under its lock later, because it may be edited or deleted
+        between this read and the lock.
         """
+        candidate = (
+            BankStatementCandidate.objects.filter(
+                pk=candidate_id,
+                row_id=row_id,
+                row__upload__user_id=user_id,
+                row__upload__account__user_id=user_id,
+            )
+            .only('transaction_id', 'transfer_id')
+            .first()
+        )
+        if candidate is None:
+            raise StaleStatementCandidateError(candidate_id)
         if candidate.transaction_id is not None:
             try:
-                transaction = Transaction.objects.select_for_update(
+                return Transaction.objects.select_for_update(
                     of=('self',),
-                ).get(
-                    pk=candidate.transaction_id,
-                )
+                ).get(pk=candidate.transaction_id)
             except Transaction.DoesNotExist:
                 raise StaleStatementCandidateError(candidate_id) from None
-            if not self._transaction_is_current(row, transaction):
-                raise StaleStatementCandidateError(candidate_id)
-            return transaction
         if candidate.transfer_id is not None:
             transfer = (
                 TransferMoneyLog.objects.select_for_update(of=('self',))
                 .filter(pk=candidate.transfer_id)
                 .first()
             )
-            if transfer is None or not self._transfer_is_current(row, transfer):
+            if transfer is None:
                 raise StaleStatementCandidateError(candidate_id)
             return transfer
         raise StaleStatementCandidateError(candidate_id)
+
+    def _is_unique_candidate(
+        self,
+        row: BankStatementRow,
+        candidate: BankStatementCandidate,
+    ) -> bool:
+        candidate_ids = [
+            item.pk
+            for item in row.candidates.select_related(
+                'transaction',
+                'transfer',
+            )
+            if self._candidate_is_current(row, item)
+        ]
+        return candidate_ids == [candidate.pk]
+
+    @staticmethod
+    def _candidate_matches_movement(
+        candidate: BankStatementCandidate,
+        movement: Transaction | TransferMoneyLog,
+    ) -> bool:
+        if isinstance(movement, TransferMoneyLog):
+            return candidate.transfer_id == movement.pk
+        return candidate.transaction_id == movement.pk
+
+    def _movement_is_current(
+        self,
+        row: BankStatementRow,
+        movement: Transaction | TransferMoneyLog,
+    ) -> bool:
+        if isinstance(movement, TransferMoneyLog):
+            return self._transfer_is_current(row, movement)
+        return self._transaction_is_current(row, movement)
 
     @staticmethod
     def _row_links_movement(
@@ -823,15 +903,18 @@ class BankStatementReconciliationService:
         row_id: int,
         user_id: int,
     ) -> BankStatementRow:
+        # Upload before row: cleanup takes the upload first, so the reverse
+        # order would deadlock with it.
+        upload = self._lock_upload(row_id, user_id)
         row = (
             BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload')
             .get(
                 pk=row_id,
-                upload__user_id=user_id,
-                upload__account__user_id=user_id,
+                upload=upload,
             )
         )
+        row.upload = upload
         if row.decision == BankStatementRow.Decision.NOT_A_PAYMENT:
             return row
         ensure_upload_available(row_id, row.upload)

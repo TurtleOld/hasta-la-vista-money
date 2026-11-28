@@ -2852,16 +2852,18 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         """Run a holder and a decision through their services in order.
 
         The holder announces that it locked the movement, then waits for
-        the decision to pass candidate validation before it locks accounts.
-        No timing is guessed: the two service paths meet on events.
+        the decision thread to start before it commits its change. The
+        decision blocks on the movement lock, so it always re-reads the
+        committed movement. No timing is guessed: the two service paths
+        meet on events.
         """
         holder_locked = Event()
-        decision_ready = Event()
+        decision_started = Event()
         errors: list[Exception | None] = [None, None]
 
         def hold_thread() -> None:
             try:
-                hold(holder_locked, decision_ready)
+                hold(holder_locked, decision_started)
             except Exception as exc:
                 errors[0] = exc
             finally:
@@ -2870,26 +2872,9 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         def decide_thread() -> None:
             try:
                 if not holder_locked.wait(timeout=5):
-                    raise AssertionError('holder did not lock in time')
-                original = (
-                    BankStatementReconciliationService._validated_candidate
-                )
-
-                def signal_after_validation(
-                    service: BankStatementReconciliationService,
-                    row: BankStatementRow,
-                    candidate_id: int | None,
-                ) -> BankStatementCandidate:
-                    candidate = original(service, row, candidate_id)
-                    decision_ready.set()
-                    return candidate
-
-                with patch.object(
-                    BankStatementReconciliationService,
-                    '_validated_candidate',
-                    new=signal_after_validation,
-                ):
-                    decide()
+                    self.fail('holder did not lock in time')
+                decision_started.set()
+                decide()
             except Exception as exc:
                 errors[1] = exc
             finally:
@@ -2900,6 +2885,8 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             thread.start()
         for thread in threads:
             thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
         return errors
 
     def test_concurrent_candidate_edit_is_stale_not_an_error(self) -> None:
@@ -2911,10 +2898,11 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             transaction_service.account_service.apply_account_deltas
         )
 
-        def hold(holder_locked: Event, decision_ready: Event) -> None:
+        def hold(holder_locked: Event, decision_started: Event) -> None:
             def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
                 holder_locked.set()
-                decision_ready.wait(timeout=5)
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
                 return cast('dict[int, Account]', original_apply(deltas))
 
             with patch.object(
@@ -2959,10 +2947,11 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         original_apply = transfer_service._balance_service.apply_account_deltas
 
-        def hold(holder_locked: Event, decision_ready: Event) -> None:
+        def hold(holder_locked: Event, decision_started: Event) -> None:
             def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
                 holder_locked.set()
-                decision_ready.wait(timeout=5)
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
                 return cast('dict[int, Account]', original_apply(deltas))
 
             with patch.object(
@@ -2993,6 +2982,73 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
         self.assertIsNone(row.transfer_id)
+
+    def test_linked_row_of_the_same_upload_does_not_deadlock_a_delete(
+        self,
+    ) -> None:
+        """A movement already closing another row of the upload stays safe.
+
+        The decision must take the movement before the upload and the row;
+        otherwise deleting the movement (which takes it first) would wait
+        for the upload while the decision waits for the movement.
+        """
+        movement, row, candidate = self._candidate_fixture()
+        linked_row = BankStatementRow.objects.create(
+            upload=row.upload,
+            source_row_position=1,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        balance_service = transaction_service.account_service.balance_service
+        original_apply = balance_service.apply_account_deltas
+
+        def hold(holder_locked: Event, decision_started: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                if not decision_started.wait(timeout=5):
+                    self.fail('decision did not start in time')
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transaction_service.delete_transaction(
+                    user=self.user,
+                    transaction_obj=movement,
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
+
+        self.assertIsNone(errors[0])
+        self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            Transaction.objects.filter(pk=movement.pk).exists(),
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(row.transaction_id)
+        linked_row.refresh_from_db()
+        self.assertEqual(
+            linked_row.decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertIsNone(linked_row.transaction_id)
 
     def test_deleted_candidate_movement_is_stale_not_an_error(self) -> None:
         movement, row, candidate = self._candidate_fixture()
