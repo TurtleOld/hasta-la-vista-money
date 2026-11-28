@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.audit_registry import TRANSACTION_LABEL
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.transactions.commands import (
@@ -275,8 +276,17 @@ class TransactionService:
                 transaction_obj.amount,
                 transaction_obj.type,
             )
-            self.statement_row_links.release_linked_rows(transaction_obj)
+            transaction_pk = transaction_obj.pk
+            was_cleaned = self.statement_row_links.release_linked_rows(
+                transaction_obj,
+            )
             transaction_obj.delete()
+            if was_cleaned:
+                self.statement_row_links.scrub_deleted_movement_audit(
+                    user_id=transaction_obj.user_id,
+                    model_name=TRANSACTION_LABEL,
+                    object_id=transaction_pk,
+                )
 
     def copy_transaction(
         self,

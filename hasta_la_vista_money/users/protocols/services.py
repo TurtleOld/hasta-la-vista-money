@@ -259,6 +259,14 @@ class StatementRowLinkServiceProtocol(Protocol):
     def release_linked_rows(
         self,
         movement: Transaction | TransferMoneyLog,
+    ) -> bool: ...
+
+    def scrub_deleted_movement_audit(
+        self,
+        *,
+        user_id: int,
+        model_name: str,
+        object_id: int,
     ) -> None: ...
 
     def lock_repayment_row(

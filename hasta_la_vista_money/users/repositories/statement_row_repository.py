@@ -1,8 +1,10 @@
 """ORM access for statement rows closed by a transfer or a transaction."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from functools import reduce
 from operator import or_
+from typing import NamedTuple
 
 from django.db.models import (
     BooleanField,
@@ -36,15 +38,36 @@ _REPAYMENT_ROW = Q(
 )
 
 
-def _decision_ids(
-    released: Sequence[tuple[int, str, str]],
-    decision: str,
-) -> list[int]:
-    """Return the rows released into one decision."""
+class LockedStatementRow(NamedTuple):
+    """One locked statement row and its upload's retention state."""
+
+    pk: int
+    decision: str
+    upload_id: int
+    retention_cleaned_at: datetime | None
+
+
+class LockedRelease(NamedTuple):
+    """Rows and uploads locked to release one deleted movement."""
+
+    linked: list[LockedStatementRow]
+    repeats: list[LockedStatementRow]
+    repayment_ids: set[int]
+    uploads: list[BankStatementUpload]
+
+
+def _locked_rows(
+    rows: QuerySet[BankStatementRow],
+) -> list[LockedStatementRow]:
+    """Read locked rows without choosing any new decision."""
     return [
-        pk
-        for pk, _, released_decision in released
-        if released_decision == decision
+        LockedStatementRow(pk, decision, upload_id, cleaned_at)
+        for pk, decision, upload_id, cleaned_at in rows.values_list(
+            'pk',
+            'decision',
+            'upload_id',
+            'upload__retention_cleaned_at',
+        )
     ]
 
 
@@ -92,45 +115,22 @@ class StatementRowRepository:
     def has_linked_row(self, movement: Transaction | TransferMoneyLog) -> bool:
         return self._linked_rows(movement).exists()
 
-    def release_linked_rows(
+    def lock_released_rows(
         self,
         movement: Transaction | TransferMoneyLog,
-    ) -> list[BankStatementUpload]:
-        """Reopen the movement's rows and return their uploads.
-
-        A cleaned upload kept no bank payload, so its rows become
-        ``EXPIRED`` instead of an unresolvable pending decision and keep
-        the upload marked as completed with unresolved rows. A
-        credit-account repayment goes back to waiting for a transfer,
-        every other row goes back to the pending decision. Rows that are
-        exact repeat observations of a reopened row are reopened too, so a
-        closed row never outlives its movement.
-        """
+    ) -> LockedRelease:
+        """Lock rows closed by the movement and their repeat observations."""
         rows = self._linked_rows(movement)
-        linked_rows = list(
-            rows.select_for_update()
-            .order_by('pk')
-            .values_list(
-                'pk',
-                'decision',
-                'upload_id',
-                'upload__retention_cleaned_at',
-            ),
+        linked = _locked_rows(
+            rows.select_for_update().order_by('pk'),
         )
-        if not linked_rows:
-            return []
+        if not linked:
+            return LockedRelease([], [], set(), [])
         repeats = BankStatementRow.objects.filter(
-            canonical_row_id__in=[pk for pk, *_ in linked_rows],
+            canonical_row_id__in=[row.pk for row in linked],
         )
-        repeat_rows = list(
-            repeats.select_for_update()
-            .order_by('pk')
-            .values_list(
-                'pk',
-                'decision',
-                'upload_id',
-                'upload__retention_cleaned_at',
-            ),
+        repeat_rows = _locked_rows(
+            repeats.select_for_update().order_by('pk'),
         )
         repayment_ids = set(
             rows.filter(_REPAYMENT_ROW).values_list('pk', flat=True),
@@ -144,69 +144,52 @@ class StatementRowRepository:
                 ),
             ),
         )
-        released: list[tuple[int, str, str]] = []
-        for pk, previous_decision, _, cleaned_at in linked_rows:
-            if cleaned_at is not None:
-                decision = BankStatementRow.Decision.EXPIRED
-            elif pk in repayment_ids:
-                decision = BankStatementRow.Decision.NEEDS_TRANSFER
-            else:
-                decision = BankStatementRow.Decision.PENDING
-            released.append((pk, previous_decision, decision))
-        for pk, previous_decision, _, cleaned_at in repeat_rows:
-            released.append(
-                (
-                    pk,
-                    previous_decision,
-                    (
-                        BankStatementRow.Decision.EXPIRED
-                        if cleaned_at is not None
-                        else BankStatementRow.Decision.PENDING
-                    ),
-                ),
-            )
-        expired_ids = _decision_ids(released, BankStatementRow.Decision.EXPIRED)
-        if expired_ids:
-            BankStatementRow.objects.filter(pk__in=expired_ids).update(
-                decision=BankStatementRow.Decision.EXPIRED,
-                transaction=None,
-                transfer=None,
-                canonical_row=None,
-                decided_at=timezone.now(),
-            )
-            cleaned_upload_ids = {
-                upload_id
-                for _, _, upload_id, cleaned_at in (
-                    *linked_rows,
-                    *repeat_rows,
-                )
-                if cleaned_at is not None
-            }
-            BankStatementUpload.objects.filter(
-                pk__in=cleaned_upload_ids,
-            ).update(
-                status=BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
-            )
-        reopened = {'transaction': None, 'transfer': None, 'decided_at': None}
-        BankStatementRow.objects.filter(
-            pk__in=_decision_ids(
-                released,
-                BankStatementRow.Decision.NEEDS_TRANSFER,
-            ),
-        ).update(
-            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
-            **reopened,
-        )
-        BankStatementRow.objects.filter(
-            pk__in=_decision_ids(
-                released,
-                BankStatementRow.Decision.PENDING,
-            ),
-        ).update(
-            decision=BankStatementRow.Decision.PENDING,
+        return LockedRelease(linked, repeat_rows, repayment_ids, uploads)
+
+    @staticmethod
+    def expire_rows(row_ids: Sequence[int], decided_at: datetime) -> None:
+        """Mark locked rows as expired and detach their movement."""
+        BankStatementRow.objects.filter(pk__in=row_ids).update(
+            decision=BankStatementRow.Decision.EXPIRED,
+            transaction=None,
+            transfer=None,
             canonical_row=None,
+            decided_at=decided_at,
+        )
+
+    @staticmethod
+    def reopen_rows(
+        row_ids: Sequence[int],
+        decision: str,
+        *,
+        clear_canonical: bool,
+    ) -> None:
+        """Reopen locked rows into the decision chosen by the service."""
+        reopened: dict[str, None] = {
+            'transaction': None,
+            'transfer': None,
+            'decided_at': None,
+        }
+        if clear_canonical:
+            reopened['canonical_row'] = None
+        BankStatementRow.objects.filter(pk__in=row_ids).update(
+            decision=decision,
             **reopened,
         )
+
+    @staticmethod
+    def update_upload_status(upload_ids: set[int], status: str) -> None:
+        """Persist the status chosen by the service for these uploads."""
+        BankStatementUpload.objects.filter(pk__in=upload_ids).update(
+            status=status,
+        )
+
+    @staticmethod
+    def record_release_decisions(
+        movement: Transaction | TransferMoneyLog,
+        released: Sequence[tuple[int, str, str]],
+    ) -> None:
+        """Store the decision history of one release in one insert."""
         is_transfer = isinstance(movement, TransferMoneyLog)
         BankStatementDecisionAudit.objects.bulk_create(
             [
@@ -223,7 +206,6 @@ class StatementRowRepository:
                 for pk, previous_decision, decision in released
             ],
         )
-        return uploads
 
     def invalidate_linked_checks(
         self,

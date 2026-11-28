@@ -10796,11 +10796,14 @@ class TestBankStatementImportReliability(TestCase):
             object_pk=str(transaction.pk),
             kind=AuditOperationKind.TRANSACTION_DELETE,
         )
-        delete_diff = delete_audit.diff
         upload.expires_at = timezone.now()
         upload.save(update_fields=['expires_at'])
 
-        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
 
         statement_audit = AuditLog.objects.get(
             model_name='transactions.Transaction',
@@ -10818,7 +10821,14 @@ class TestBankStatementImportReliability(TestCase):
         independent_audit.refresh_from_db()
         self.assertEqual(independent_audit.diff, independent_diff)
         delete_audit.refresh_from_db()
-        self.assertEqual(delete_audit.diff, delete_diff)
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description', 'source_ref'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+        self.assertEqual(
+            deleted['source_fingerprint'],
+            'deleted-fingerprint',
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 
@@ -10908,7 +10918,7 @@ class TestBankStatementImportReliability(TestCase):
             transaction_type=TransactionType.EXPENSE,
             transaction_date=timezone.now(),
             amount=Decimal('100.00'),
-            description='Секретное банковское описание',
+            description='Секретное описание банка',
             decision=BankStatementRow.Decision.PENDING,
         )
         with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
@@ -10919,7 +10929,7 @@ class TestBankStatementImportReliability(TestCase):
                 type=TransactionType.EXPENSE,
                 amount=Decimal('100.00'),
                 date=timezone.now(),
-                description='Секретное банковское описание',
+                description='Секретное описание банка',
             )
         transaction_pk = transaction.pk
         row.transaction = transaction
@@ -10930,7 +10940,11 @@ class TestBankStatementImportReliability(TestCase):
         upload.expires_at = timezone.now()
         upload.save(update_fields=['expires_at'])
 
-        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
         upload.refresh_from_db()
         row.refresh_from_db()
         self.assertIsNotNone(upload.retention_cleaned_at)
@@ -10940,7 +10954,10 @@ class TestBankStatementImportReliability(TestCase):
         )
         self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
 
-        ApplicationContainer().transactions.transaction_service().delete_transaction(
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
             user=self.user,
             transaction_obj=transaction,
         )
@@ -10960,6 +10977,15 @@ class TestBankStatementImportReliability(TestCase):
             BankStatementRow.Decision.NEW,
         )
         self.assertEqual(audit.previous_transaction_pk, transaction_pk)
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
 
     def test_deleting_transfer_after_cleanup_expires_linked_row(
         self,
@@ -11001,11 +11027,18 @@ class TestBankStatementImportReliability(TestCase):
         upload.expires_at = timezone.now()
         upload.save(update_fields=['expires_at'])
 
-        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
         upload.refresh_from_db()
         self.assertIsNotNone(upload.retention_cleaned_at)
 
-        ApplicationContainer().finance_account.transfer_service().delete_transfer(
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.delete_transfer(
             transfer_id=transfer_pk,
             user=self.user,
         )
@@ -11024,6 +11057,15 @@ class TestBankStatementImportReliability(TestCase):
             BankStatementRow.Decision.TRANSFERRED,
         )
         self.assertEqual(audit.previous_transfer_pk, transfer_pk)
+        delete_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
 
     def test_cleanup_scrubs_deleted_movement_by_saved_id_across_statements(
         self,
@@ -11082,7 +11124,10 @@ class TestBankStatementImportReliability(TestCase):
         self.account.balance = Decimal('900.00')
         self.account.save(update_fields=['balance'])
 
-        ApplicationContainer().transactions.transaction_service().delete_transaction(
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
             user=self.user,
             transaction_obj=transaction,
         )
@@ -11091,7 +11136,11 @@ class TestBankStatementImportReliability(TestCase):
         upload.expires_at = timezone.now()
         upload.save(update_fields=['expires_at'])
 
-        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
 
         statement_audit = AuditLog.objects.get(
             model_name='transactions.Transaction',
@@ -11104,6 +11153,19 @@ class TestBankStatementImportReliability(TestCase):
                 self.assertNotIn(field, created)
         self.assertEqual(
             created['source_fingerprint'],
+            'overlap-fingerprint',
+        )
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+        self.assertEqual(
+            deleted['source_fingerprint'],
             'overlap-fingerprint',
         )
 
@@ -11164,7 +11226,10 @@ class TestBankStatementImportReliability(TestCase):
             process_bank_statement_task.apply(args=[upload.pk])
         row = BankStatementRow.objects.get(upload=upload)
         transaction = cast('Transaction', row.transaction)
-        ApplicationContainer().transactions.transaction_service().delete_transaction(
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
             user=self.user,
             transaction_obj=transaction,
         )

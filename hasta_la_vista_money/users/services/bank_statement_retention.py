@@ -70,6 +70,10 @@ _STATEMENT_AUDIT_KINDS: Final = frozenset(
         # bank copy; only exact provenance below can reach it, so manual
         # transfers stay untouched.
         AuditOperationKind.TRANSFER,
+        # A deletion performed before cleanup carries a full snapshot. It
+        # is scrubbed only through the exact model label and primary key,
+        # never through a shared fingerprint.
+        AuditOperationKind.TRANSACTION_DELETE,
     },
 )
 
@@ -469,6 +473,32 @@ class BankStatementRetentionService:
             )
 
 
+def scrub_movement_audit_copy(
+    *,
+    user_id: int,
+    model_name: str,
+    object_id: int,
+) -> None:
+    """Scrub bank payload from statement copies of one exact movement.
+
+    A movement deleted after its statement was cleaned writes a fresh
+    deletion snapshot outside the retention run, so the exact model label
+    and primary key select the copies to scrub.
+    """
+    entries = AuditLog.objects.filter(
+        user_id=user_id,
+        model_name=model_name,
+        object_pk=str(object_id),
+        kind__in=_STATEMENT_AUDIT_KINDS,
+    )
+    for entry in entries.iterator(
+        chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
+    ):
+        scrubbed = _scrub_diff(entry.diff)
+        if scrubbed != entry.diff:
+            AuditLog.objects.filter(pk=entry.pk).update(diff=scrubbed)
+
+
 def _collect_created_movement(
     transaction_ids: set[int],
     transfer_ids: set[int],
@@ -501,6 +531,10 @@ def _is_statement_audit_copy(
         and movement_id in provenance.transfer_ids
     ):
         return True
+    # A deletion snapshot is bank payload only when the exact movement is
+    # proved to belong to this upload; a shared fingerprint is not enough.
+    if entry.kind == AuditOperationKind.TRANSACTION_DELETE:
+        return False
     diff = entry.diff if isinstance(entry.diff, dict) else {}
     if provenance.fingerprints & _audit_values(diff, 'source_fingerprint'):
         return True
