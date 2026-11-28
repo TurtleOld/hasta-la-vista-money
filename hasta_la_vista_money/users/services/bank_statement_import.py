@@ -178,6 +178,20 @@ def _is_unparsed(trans: dict[str, Any]) -> bool:
     )
 
 
+def _match_calendar_date(bank: str, trans: dict[str, Any]) -> bool:
+    """Return whether the row's date compares by calendar day.
+
+    A tabular or Ozon statement has no reliable time, and a parser that
+    dropped the time marks the row with ``date_only``. Every other row
+    keeps the exact timestamp, including Sberbank minute precision.
+    """
+    return (
+        trans.get('source') == 'ozon'
+        or bank in {'ozon', 'generic'}
+        or bool(trans.get('date_only'))
+    )
+
+
 def _reference_strength(bank: str, trans: dict[str, Any]) -> str:
     """Return the trust level of a parsed row reference.
 
@@ -637,12 +651,7 @@ class BankStatementImportService:
                 run_id=run_id,
             )
             if stopped:
-                return self._stopped_result(
-                    income_count=income_count,
-                    expense_count=expense_count,
-                    skipped_count=skipped_count,
-                    needs_transfer_count=needs_transfer_count,
-                )
+                return self._stopped_result()
             upload.refresh_from_db()
 
         return StatementImportResult(
@@ -657,19 +666,13 @@ class BankStatementImportService:
             closing_balance_semantics=parse_result.closing_balance_semantics,
         )
 
-    def _stopped_result(
-        self,
-        income_count: int = 0,
-        expense_count: int = 0,
-        skipped_count: int = 0,
-        needs_transfer_count: int = 0,
-    ) -> StatementImportResult:
-        """Return a result without bank details after the run has stopped."""
+    def _stopped_result(self) -> StatementImportResult:
+        """Return zero counters without bank details after a stopped run."""
         return StatementImportResult(
-            income_count=income_count,
-            expense_count=expense_count,
-            skipped_count=skipped_count,
-            needs_transfer_count=needs_transfer_count,
+            income_count=0,
+            expense_count=0,
+            skipped_count=0,
+            needs_transfer_count=0,
             closing_balance=None,
             stopped=True,
         )
@@ -768,13 +771,8 @@ class BankStatementImportService:
                 ambiguous_refs,
             )
             row_position = trans.get('row_position', idx)
-            source = trans.get('source')
             abs_amount = abs(amount) if amount is not None else None
-            match_calendar_date = (
-                source == 'ozon'
-                or bank in {'ozon', 'generic'}
-                or bool(trans.get('date_only'))
-            )
+            match_calendar_date = _match_calendar_date(bank, trans)
             is_credit_income = (
                 amount is not None
                 and amount > 0
@@ -888,7 +886,7 @@ class BankStatementImportService:
                         source_ref_strength=source_ref_strength,
                     )
                     failed_count += 1
-                elif is_credit_income:
+                elif is_credit_income and (exact is None or exact.conflict):
                     self._save_needs_transfer_row(
                         upload=upload,
                         trans=trans,
@@ -939,6 +937,7 @@ class BankStatementImportService:
                             upload=upload,
                             trans=trans,
                             row_position=row_position,
+                            bank=bank,
                             type_value=type_value,
                             fingerprint=self._fingerprint(
                                 upload=upload,
@@ -972,6 +971,9 @@ class BankStatementImportService:
                                 row_position=row_position,
                                 category_name=row_category,
                                 match_calendar_date=match_calendar_date,
+                                bank=bank,
+                                format_version=format_version,
+                                source_ref_strength=source_ref_strength,
                             )
                             skipped_count += 1
                         else:
@@ -1036,6 +1038,7 @@ class BankStatementImportService:
                                     upload=upload,
                                     trans=trans,
                                     row_position=row_position,
+                                    bank=bank,
                                     type_value=type_value,
                                     fingerprint=fingerprint,
                                     format_version=format_version,
@@ -1402,6 +1405,44 @@ class BankStatementImportService:
         match_calendar_date: bool,
     ) -> ExactObservation | None:
         """Return a position match or a parser/format drift conflict."""
+        if (
+            upload.file_hash
+            and type_value == TransactionType.INCOME
+            and upload.account.type_account in constants.CREDIT_ACCOUNT_TYPES
+        ):
+            # A closed repayment has no movement, so the position is its
+            # only proof; an unresolved row stays a separate observation.
+            existing_rows = (
+                BankStatementRow.objects.filter(
+                    upload__account=upload.account,
+                    upload__file_hash=upload.file_hash,
+                    source_row_position=row_position,
+                    source_format_version=format_version,
+                )
+                .exclude(
+                    decision__in={
+                        BankStatementRow.Decision.PENDING,
+                        BankStatementRow.Decision.AWAITING_MARKUP,
+                        BankStatementRow.Decision.NEEDS_TRANSFER,
+                        BankStatementRow.Decision.EXPIRED,
+                        BankStatementRow.Decision.DUPLICATE,
+                        BankStatementRow.Decision.MUTUAL_CANCEL,
+                    },
+                )
+                .exclude(
+                    decision=BankStatementRow.Decision.SKIPPED,
+                    exclusion_code='',
+                )
+            )
+            for row in existing_rows:
+                if self._row_matches(
+                    row,
+                    type_value=type_value,
+                    amount=amount,
+                    trans_date=trans_date,
+                    match_calendar_date=match_calendar_date,
+                ):
+                    return ExactObservation(row=row)
         existing = Transaction.objects.filter(
             account=upload.account,
             source_file_hash=upload.file_hash,
@@ -1509,6 +1550,7 @@ class BankStatementImportService:
                     upload=upload,
                     trans=trans,
                     row_position=row_position,
+                    bank=bank,
                     type_value=type_value,
                     fingerprint=fingerprint,
                     format_version=format_version,
@@ -1522,6 +1564,7 @@ class BankStatementImportService:
                 upload=upload,
                 trans=trans,
                 row_position=row_position,
+                bank=bank,
                 type_value=type_value,
                 fingerprint=fingerprint,
                 format_version=format_version,
@@ -1533,6 +1576,7 @@ class BankStatementImportService:
             upload=upload,
             trans=trans,
             row_position=row_position,
+            bank=bank,
             type_value=type_value,
             fingerprint=fingerprint,
             format_version=format_version,
@@ -1577,6 +1621,7 @@ class BankStatementImportService:
             upload=upload,
             trans=trans,
             row_position=row_position,
+            bank=bank,
             type_value=type_value,
             fingerprint=self._fingerprint(
                 upload=upload,
@@ -1598,6 +1643,7 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         trans: dict[str, Any],
         row_position: int,
+        bank: str,
         type_value: str,
         fingerprint: StatementFingerprint | None,
         format_version: int,
@@ -1629,7 +1675,7 @@ class BankStatementImportService:
                 'source_ref_strength': source_ref_strength,
                 'canonical_row': canonical_row,
                 'transaction': transaction,
-                'match_calendar_date': bool(trans.get('date_only')),
+                'match_calendar_date': _match_calendar_date(bank, trans),
                 'source_format_version': format_version,
                 'source_fingerprint': (
                     fingerprint.digest if fingerprint else ''
@@ -1673,6 +1719,7 @@ class BankStatementImportService:
             upload=upload,
             trans={**trans, 'description': trans.get('description') or ''},
             row_position=row_position,
+            bank=bank,
             type_value=type_value,
             fingerprint=self._fingerprint(
                 upload=upload,
@@ -1694,6 +1741,7 @@ class BankStatementImportService:
         upload: BankStatementUpload,
         trans: dict[str, Any],
         row_position: int,
+        bank: str,
         type_value: str,
         fingerprint: StatementFingerprint | None,
         format_version: int,
@@ -1706,6 +1754,7 @@ class BankStatementImportService:
             upload=upload,
             trans=trans,
             row_position=row_position,
+            bank=bank,
             type_value=type_value,
             fingerprint=fingerprint,
             format_version=format_version,
@@ -1924,11 +1973,7 @@ class BankStatementImportService:
                         ),
                         amount=abs(trans['amount']),
                         trans_date=trans['date'],
-                        match_calendar_date=(
-                            bool(trans.get('date_only'))
-                            if bank == 'raiffeisen'
-                            else True
-                        ),
+                        match_calendar_date=_match_calendar_date(bank, trans),
                         format_version=format_version,
                         source_ref_strength=source_ref_strength,
                     )
@@ -2003,11 +2048,7 @@ class BankStatementImportService:
                         source_fingerprint_format_version=(
                             fingerprint.format_version if fingerprint else 0
                         ),
-                        match_calendar_date=(
-                            bool(trans.get('date_only'))
-                            if bank == 'raiffeisen'
-                            else True
-                        ),
+                        match_calendar_date=_match_calendar_date(bank, trans),
                         kind=str(trans.get('kind', '')),
                         merchant_key=trans.get('merchant_key') or '',
                         counterparty_account=(
@@ -2154,9 +2195,7 @@ class BankStatementImportService:
             'source_ref': trans.get('source_ref') or None,
             'source_ref_strength': source_ref_strength,
             'source_format_version': format_version,
-            'match_calendar_date': (
-                bool(trans.get('date_only')) if bank == 'raiffeisen' else True
-            ),
+            'match_calendar_date': _match_calendar_date(bank, trans),
             'kind': str(trans.get('kind', '')),
             'merchant_key': trans.get('merchant_key') or '',
             'counterparty_account': trans.get('counterparty_account') or '',
@@ -2302,8 +2341,18 @@ class BankStatementImportService:
         row_position: int,
         category_name: str,
         match_calendar_date: bool,
+        bank: str,
+        format_version: int,
+        source_ref_strength: str,
     ) -> bool:
-        clean_desc = strip_pii(str(trans['description']))
+        clean_desc = strip_pii(str(trans['description']))[
+            : constants.TWO_HUNDRED_FIFTY
+        ]
+        fingerprint = self._fingerprint(
+            upload=upload,
+            bank=bank,
+            source_ref=trans.get('source_ref'),
+        )
         first_transaction = next(
             (
                 candidate.movement
@@ -2332,6 +2381,17 @@ class BankStatementImportService:
                     : constants.TWO_HUNDRED_FIFTY
                 ],
                 'source_ref': trans.get('source_ref') or None,
+                'source_ref_strength': source_ref_strength,
+                'source_format_version': format_version,
+                'source_fingerprint': (
+                    fingerprint.digest if fingerprint else ''
+                ),
+                'source_fingerprint_key_version': (
+                    fingerprint.key_version if fingerprint else ''
+                ),
+                'source_fingerprint_format_version': (
+                    fingerprint.format_version if fingerprint else 0
+                ),
                 'candidate': first_transaction,
                 'match_calendar_date': match_calendar_date,
             },

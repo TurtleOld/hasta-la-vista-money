@@ -6807,6 +6807,68 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         'hasta_la_vista_money.users.services.bank_statement_import.'
         'BankStatementParser',
     )
+    def test_probable_duplicate_truncates_long_description(
+        self,
+        mock_parser_cls: MagicMock,
+    ) -> None:
+        """A long payment purpose fits the column without losing identity."""
+        transaction_date = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('500.00'),
+            date=transaction_date,
+        )
+        classifier = MagicMock()
+        classifier.classify.return_value = 'Такси'
+        ApplicationContainer.users.category_classifier.override(
+            classifier,
+        )
+        self.addCleanup(
+            ApplicationContainer.users.category_classifier.reset_override,
+        )
+        long_description = 'Назначение платежа ' + 'Я' * 300
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            bank='testbank',
+            format_version=2,
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-500.00'),
+                    'description': long_description,
+                    'source_ref': 'long-statement-ref',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/long-duplicate.pdf',
+            file_hash='long-duplicate-file',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(len(row.description), 250)
+        self.assertEqual(row.source_ref, 'long-statement-ref')
+        self.assertEqual(row.source_ref_strength, 'weak')
+        self.assertEqual(row.source_format_version, 2)
+        self.assertTrue(row.source_fingerprint)
+        self.assertEqual(row.source_fingerprint_key_version, 'test')
+        self.assertEqual(row.source_fingerprint_format_version, 1)
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement_import.'
+        'BankStatementParser',
+    )
     def test_classifier_failure_uses_fallback_for_probable_duplicate(
         self,
         mock_parser_cls: MagicMock,
@@ -7361,6 +7423,147 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(upload.imported_count, 1)
         self.assertEqual(upload.awaiting_decision_count, 0)
         self.assertEqual(self.account.balance, Decimal('9750.00'))
+
+
+class StatementCalendarDateRuleTest(TestCase):
+    """The calendar-date flag comes from one rule on every code path."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Правило даты',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.moment = datetime(2026, 2, 1, 12, 34, tzinfo=UTC)
+        self.service = (
+            ApplicationContainer().users.bank_statement_import_service()
+        )
+
+    def _import(
+        self,
+        parse_result: StatementParseResult,
+    ) -> BankStatementUpload:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/calendar-date.pdf',
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = parse_result
+            self.service.import_statement(upload)
+        upload.refresh_from_db()
+        return upload
+
+    def test_generic_import_uses_calendar_date(self) -> None:
+        """A tabular statement without bank identity compares by day."""
+        upload = self._import(
+            StatementParseResult(
+                bank='generic',
+                transactions=[
+                    {
+                        'date': self.moment,
+                        'amount': Decimal('-10.00'),
+                        'description': 'Покупка',
+                        'source_ref': None,
+                        'row_position': 0,
+                    },
+                ],
+            ),
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertTrue(row.match_calendar_date)
+
+    def test_ozon_import_uses_calendar_date(self) -> None:
+        """An Ozon row without a usable time compares by calendar day."""
+        upload = self._import(
+            StatementParseResult(
+                bank='ozon',
+                transactions=[
+                    {
+                        'date': self.moment,
+                        'amount': Decimal('-10.00'),
+                        'description': 'Покупка Ozon',
+                        'source_ref': 'OZ-1',
+                        'source_ref_strength': 'weak',
+                        'source': 'ozon',
+                        'row_position': 0,
+                    },
+                ],
+            ),
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertTrue(row.match_calendar_date)
+
+    def test_sberbank_markup_keeps_minute_precision(self) -> None:
+        """A bank timestamp with a time is not widened to the whole day."""
+        upload = self._import(
+            StatementParseResult(
+                bank='sberbank',
+                requires_markup=True,
+                transactions=[
+                    {
+                        'date': self.moment,
+                        'amount': Decimal('-10.00'),
+                        'description': 'Покупка',
+                        'source_ref': 'S-1',
+                        'source_ref_strength': 'weak',
+                        'row_position': 0,
+                    },
+                ],
+            ),
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+        self.assertFalse(row.match_calendar_date)
+
+    def test_sberbank_restore_keeps_minute_precision(self) -> None:
+        """Re-uploading a cleaned row does not widen its date to a day."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/calendar-restore.pdf',
+        )
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            source_format_version=1,
+            source_ref='S-2',
+            source_ref_strength='weak',
+            decision=BankStatementRow.Decision.AWAITING_MARKUP,
+        )
+
+        restored = self.service._restore_existing_row(
+            upload=upload,
+            trans={
+                'date': self.moment,
+                'amount': Decimal('-10.00'),
+                'description': 'Покупка',
+                'source_ref': 'S-2',
+                'row_position': 0,
+            },
+            row_position=0,
+            bank='sberbank',
+            fingerprint=None,
+            format_version=1,
+            source_ref_strength='weak',
+        )
+
+        if restored is None:
+            self.fail('The existing row was not restored.')
+        self.assertFalse(restored.match_calendar_date)
 
 
 class TestOzonBankStatement(TestCase):

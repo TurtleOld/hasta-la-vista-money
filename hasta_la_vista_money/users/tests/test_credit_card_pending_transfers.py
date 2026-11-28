@@ -34,6 +34,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.services.bank_statement import (
+    StatementParseResult,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
@@ -163,6 +166,103 @@ class CreditCardStatementImportTest(CreditCardStatementBaseTest):
         self.assertEqual(row.amount, Decimal('199.00'))
         self.card.refresh_from_db()
         self.assertEqual(self.card.balance, Decimal('914.87'))
+
+
+class ClosedRepaymentReimportTest(CreditCardStatementBaseTest):
+    """A re-uploaded credit statement recognises a closed repayment."""
+
+    def _import_repayment(
+        self,
+        *,
+        when: datetime,
+        amount: Decimal,
+        source_ref: str,
+        file_hash: str,
+        source_ref_strength: str = 'weak',
+    ) -> tuple[BankStatementUpload, dict[str, int]]:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.card,
+            pdf_file=SimpleUploadedFile(
+                f'{source_ref}.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                bank='testbank',
+                format_version=2,
+                transactions=[
+                    {
+                        'date': when,
+                        'amount': amount,
+                        'description': 'Перевод на карту',
+                        'source_ref': source_ref,
+                        'source_ref_strength': source_ref_strength,
+                        'row_position': 0,
+                    },
+                ],
+            )
+            result = process_bank_statement_task.apply(args=[upload.pk]).get()
+        return upload, result
+
+    def test_closed_repayment_is_duplicate_on_reimport(self) -> None:
+        when = datetime(2026, 2, 9, 12, 0, tzinfo=UTC)
+        amount = Decimal('199.00')
+        first_upload, first_result = self._import_repayment(
+            when=when,
+            amount=amount,
+            source_ref='closed-repayment',
+            file_hash='closed-repayment-file',
+            source_ref_strength='strong',
+        )
+        self.assertEqual(first_result['needs_transfer_count'], 1)
+        closed_row = BankStatementRow.objects.get(upload=first_upload)
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=amount,
+            user=self.user,
+            exchange_date=when,
+            statement_row_id=closed_row.pk,
+        )
+        closed_row.refresh_from_db()
+        self.assertEqual(
+            closed_row.decision,
+            BankStatementRow.Decision.TRANSFERRED,
+        )
+
+        second_upload, second_result = self._import_repayment(
+            when=when,
+            amount=amount,
+            source_ref='closed-repayment',
+            file_hash='closed-repayment-second-file',
+            source_ref_strength='strong',
+        )
+
+        self.assertEqual(second_result['needs_transfer_count'], 0)
+        self.assertEqual(second_result['skipped_count'], 1)
+        self.assertFalse(
+            BankStatementRow.objects.filter(
+                upload=second_upload,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            ).exists(),
+        )
+        duplicate = BankStatementRow.objects.get(upload=second_upload)
+        self.assertEqual(
+            duplicate.decision,
+            BankStatementRow.Decision.DUPLICATE,
+        )
+        self.assertEqual(duplicate.canonical_row, closed_row)
+        self.assertEqual(TransferMoneyLog.objects.count(), 1)
 
 
 class PendingTransferDismissTest(CreditCardStatementBaseTest):
