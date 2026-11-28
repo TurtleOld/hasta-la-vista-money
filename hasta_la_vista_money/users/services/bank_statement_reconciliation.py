@@ -68,6 +68,10 @@ class AmbiguousStatementCandidateError(ValueError):
     """Raised when safe automatic linking has multiple current candidates."""
 
 
+class _RevisionRetryError(Exception):
+    """Signal that a row's movement changed while locks were taken."""
+
+
 # Statement data is kept only until the ADR-0003 retention deadline.
 _AVAILABLE_UPLOAD = Q(expires_at__gt=Now(), retention_cleaned_at__isnull=True)
 
@@ -314,7 +318,6 @@ class BankStatementReconciliationService:
             raise StaleStatementCandidateError(candidate_id)
         self._link_movement(row, movement)
 
-    @transaction.atomic
     def revise_linked_to_new(
         self,
         row_id: int,
@@ -324,13 +327,24 @@ class BankStatementReconciliationService:
         with audit_operation(
             kind=AuditOperationKind.STATEMENT_IMPORT_RESOLUTION,
         ):
-            return self._revise_linked_to_new(row_id, user_id)
+            for _attempt in range(3):
+                try:
+                    with transaction.atomic():
+                        return self._revise_linked_to_new(row_id, user_id)
+                except _RevisionRetryError:
+                    continue
+            raise ReconciliationDecisionConflictError('movement')
 
     def _revise_linked_to_new(
         self,
         row_id: int,
         user_id: int,
     ) -> BankStatementRow:
+        # The revised movement is locked before the upload and the row, so
+        # deleting it (which takes the movement first) cannot wait for an
+        # upload this revision already holds.
+        transaction_id, transfer_id = self._row_movement_ids(row_id, user_id)
+        self._lock_revision_movement(transaction_id, transfer_id, user_id)
         upload = self._lock_upload(row_id, user_id)
         row = (
             BankStatementRow.objects.select_for_update(of=('self',))
@@ -341,6 +355,11 @@ class BankStatementReconciliationService:
             )
         )
         row.upload = upload
+        if (row.transaction_id, row.transfer_id) != (
+            transaction_id,
+            transfer_id,
+        ):
+            raise _RevisionRetryError(row_id)
         if row.decision == BankStatementRow.Decision.NEW:
             return row
         if row.decision != BankStatementRow.Decision.LINKED:
@@ -462,6 +481,58 @@ class BankStatementReconciliationService:
             candidate_ids[0],
             require_unique=True,
         )
+
+    @staticmethod
+    def _row_movement_ids(
+        row_id: int,
+        user_id: int,
+    ) -> tuple[int | None, int | None]:
+        """Read the movement ids a revision must lock before its statement."""
+        return (
+            BankStatementRow.objects.filter(
+                pk=row_id,
+                upload__user_id=user_id,
+                upload__account__user_id=user_id,
+            )
+            .values_list('transaction_id', 'transfer_id')
+            .get()
+        )
+
+    @staticmethod
+    def _lock_revision_movement(
+        transaction_id: int | None,
+        transfer_id: int | None,
+        user_id: int,
+    ) -> None:
+        """Lock the movement a revision replaces before the statement.
+
+        ``FOR NO KEY UPDATE`` serializes with the ``FOR UPDATE`` and the
+        ``DELETE`` of a movement deletion, while the ``KEY SHARE`` the
+        audit's previous-movement reference needs stays compatible with it.
+        """
+        if transaction_id is not None:
+            locked_transaction = (
+                Transaction.objects.select_for_update(
+                    no_key=True,
+                    of=('self',),
+                )
+                .filter(pk=transaction_id, user_id=user_id)
+                .first()
+            )
+            if locked_transaction is None:
+                raise _RevisionRetryError(transaction_id)
+            return
+        if transfer_id is not None:
+            locked_transfer = (
+                TransferMoneyLog.objects.select_for_update(
+                    no_key=True,
+                    of=('self',),
+                )
+                .filter(pk=transfer_id, user_id=user_id)
+                .first()
+            )
+            if locked_transfer is None:
+                raise _RevisionRetryError(transfer_id)
 
     @staticmethod
     def _lock_upload(

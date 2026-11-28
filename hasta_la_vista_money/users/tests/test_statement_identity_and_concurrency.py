@@ -127,12 +127,12 @@ def _signal_after_movement_lock(
         context: dict[str, Any],
     ) -> Any:
         result = execute(sql, params, many, context)
-        if 'FOR UPDATE' in sql and any(
+        if ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and any(
             table in sql for table in movement_tables
         ):
             movement_locked.set()
             if not release.wait(timeout=5):
-                raise TimeoutError('cleanup did not reach the movement lock')
+                raise TimeoutError('partner did not reach the movement lock')
         return result
 
     return wrapper
@@ -140,9 +140,9 @@ def _signal_after_movement_lock(
 
 def _signal_after_upload_lock(
     upload_locked: Event,
-    movement_locked: Event,
+    release: Event,
 ) -> Callable[..., Any]:
-    """Hold a revision until the duplicate link owns the movement."""
+    """Hold a revision after its upload lock until the other path runs."""
     upload_table = BankStatementUpload._meta.db_table
 
     def wrapper(
@@ -155,31 +155,8 @@ def _signal_after_upload_lock(
         result = execute(sql, params, many, context)
         if 'FOR UPDATE' in sql and upload_table in sql:
             upload_locked.set()
-            if not movement_locked.wait(timeout=5):
-                raise TimeoutError('link did not lock the movement in time')
-        return result
-
-    return wrapper
-
-
-def _signal_after_canonical_movement_lock(
-    movement_locked: Event,
-) -> Callable[..., Any]:
-    """Announce the canonical movement lock after its SQL returned."""
-    transaction_table = Transaction._meta.db_table
-
-    def wrapper(
-        execute: Callable[..., Any],
-        sql: str,
-        params: Any,
-        many: bool,
-        context: dict[str, Any],
-    ) -> Any:
-        result = execute(sql, params, many, context)
-        if (
-            'FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql
-        ) and transaction_table in sql:
-            movement_locked.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError('race partner did not run in time')
         return result
 
     return wrapper
@@ -3752,16 +3729,17 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         self.assertIsNone(row.transfer_id)
 
     def test_duplicate_link_does_not_deadlock_a_revision(self) -> None:
-        """A weak movement lock lets a revision take its KEY SHARE.
+        """A link and a revision take the same movement in the same order.
 
-        The revision holds the upload and adds a reference to the same
-        movement, while the link holds that movement and waits for the
-        upload. A plain ``FOR UPDATE`` would deadlock with the ``FOR KEY
-        SHARE`` the reference needs; ``FOR NO KEY UPDATE`` does not.
+        The revision locks the movement that its audit will reference
+        before it touches the upload, so a link that already holds that
+        movement only makes the revision wait for it. The link then takes
+        the upload and the row it needs instead of waiting for an upload
+        the revision already holds.
         """
         movement, canonical, pending = self._duplicate_revision_fixture()
-        upload_locked = Event()
         movement_locked = Event()
+        revision_started = Event()
         errors: list[Exception | None] = [None, None]
         revise_service = (
             ApplicationContainer().users.bank_statement_reconciliation_service()
@@ -3770,16 +3748,13 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
 
         def revise_thread() -> None:
             try:
-                with connections['default'].execute_wrapper(
-                    _signal_after_upload_lock(
-                        upload_locked,
-                        movement_locked,
-                    ),
-                ):
-                    revise_service.revise_linked_to_new(
-                        canonical.pk,
-                        self.user.pk,
-                    )
+                if not movement_locked.wait(timeout=5):
+                    self.fail('link did not lock the movement in time')
+                revision_started.set()
+                revise_service.revise_linked_to_new(
+                    canonical.pk,
+                    self.user.pk,
+                )
             except Exception as exc:
                 errors[0] = exc
             finally:
@@ -3787,10 +3762,11 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
 
         def link_thread() -> None:
             try:
-                if not upload_locked.wait(timeout=5):
-                    self.fail('revision did not lock the upload in time')
                 with connections['default'].execute_wrapper(
-                    _signal_after_canonical_movement_lock(movement_locked),
+                    _signal_after_movement_lock(
+                        movement_locked,
+                        revision_started,
+                    ),
                 ):
                     link_service.link_duplicate(
                         pending.pk,
@@ -3817,6 +3793,72 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             BankStatementRow.Decision.DUPLICATE,
         )
         self.assertEqual(pending.canonical_row_id, canonical.pk)
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.decision, BankStatementRow.Decision.NEW)
+        self.assertNotEqual(canonical.transaction_id, movement.pk)
+
+    def test_revision_does_not_deadlock_a_movement_delete(self) -> None:
+        """A revision takes the movement before the upload it replaces.
+
+        Deleting the movement takes it first and only then the upload; a
+        revision that held the upload while its audit needed a ``KEY
+        SHARE`` of the movement would deadlock with that delete. The
+        revision therefore waits for the movement and finishes once the
+        delete commits.
+        """
+        movement, canonical, _pending = self._duplicate_revision_fixture()
+        upload_locked = Event()
+        delete_attempted = Event()
+        errors: list[Exception | None] = [None, None]
+        revise_service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+
+        def revise_thread() -> None:
+            try:
+                with connections['default'].execute_wrapper(
+                    _signal_after_upload_lock(
+                        upload_locked,
+                        delete_attempted,
+                    ),
+                ):
+                    revise_service.revise_linked_to_new(
+                        canonical.pk,
+                        self.user.pk,
+                    )
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def delete_thread() -> None:
+            try:
+                if not upload_locked.wait(timeout=5):
+                    self.fail('revision did not lock the upload in time')
+                delete_attempted.set()
+                transaction_service.delete_transaction(
+                    user=self.user,
+                    transaction_obj=movement,
+                )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=revise_thread), Thread(target=delete_thread)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
+        self.assertEqual(errors, [None, None])
+        self.assertFalse(
+            Transaction.objects.filter(pk=movement.pk).exists(),
+        )
         canonical.refresh_from_db()
         self.assertEqual(canonical.decision, BankStatementRow.Decision.NEW)
         self.assertNotEqual(canonical.transaction_id, movement.pk)
