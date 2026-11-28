@@ -1405,44 +1405,6 @@ class BankStatementImportService:
         match_calendar_date: bool,
     ) -> ExactObservation | None:
         """Return a position match or a parser/format drift conflict."""
-        if (
-            upload.file_hash
-            and type_value == TransactionType.INCOME
-            and upload.account.type_account in constants.CREDIT_ACCOUNT_TYPES
-        ):
-            # A closed repayment has no movement, so the position is its
-            # only proof; an unresolved row stays a separate observation.
-            existing_rows = (
-                BankStatementRow.objects.filter(
-                    upload__account=upload.account,
-                    upload__file_hash=upload.file_hash,
-                    source_row_position=row_position,
-                    source_format_version=format_version,
-                )
-                .exclude(
-                    decision__in={
-                        BankStatementRow.Decision.PENDING,
-                        BankStatementRow.Decision.AWAITING_MARKUP,
-                        BankStatementRow.Decision.NEEDS_TRANSFER,
-                        BankStatementRow.Decision.EXPIRED,
-                        BankStatementRow.Decision.DUPLICATE,
-                        BankStatementRow.Decision.MUTUAL_CANCEL,
-                    },
-                )
-                .exclude(
-                    decision=BankStatementRow.Decision.SKIPPED,
-                    exclusion_code='',
-                )
-            )
-            for row in existing_rows:
-                if self._row_matches(
-                    row,
-                    type_value=type_value,
-                    amount=amount,
-                    trans_date=trans_date,
-                    match_calendar_date=match_calendar_date,
-                ):
-                    return ExactObservation(row=row)
         existing = Transaction.objects.filter(
             account=upload.account,
             source_file_hash=upload.file_hash,
@@ -1782,6 +1744,7 @@ class BankStatementImportService:
             ],
             source_ref=trans.get('source_ref') or None,
             source_ref_strength=source_ref_strength,
+            match_calendar_date=_match_calendar_date(bank, trans),
             source_format_version=format_version,
             source_fingerprint=(fingerprint.digest if fingerprint else ''),
             source_fingerprint_key_version=(

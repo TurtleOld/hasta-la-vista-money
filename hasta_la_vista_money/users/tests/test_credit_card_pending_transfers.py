@@ -278,7 +278,7 @@ class KnownFileRepaymentReplayTest(CreditCardStatementBaseTest):
 
     def _post_statement(self) -> BankStatementUpload:
         def run_task(upload_id: int, run_id: str) -> MagicMock:
-            process_bank_statement_task.apply(args=[upload_id, run_id])
+            process_bank_statement_task.apply(args=[upload_id, run_id]).get()
             return MagicMock(id='task-id')
 
         with patch(
@@ -297,6 +297,7 @@ class KnownFileRepaymentReplayTest(CreditCardStatementBaseTest):
                     ),
                 },
             )
+        task.delay.assert_called_once()
         self.assertEqual(response.status_code, 302)
         upload = BankStatementUpload.objects.get(account=self.card)
         upload.refresh_from_db()
@@ -330,6 +331,8 @@ class KnownFileRepaymentReplayTest(CreditCardStatementBaseTest):
             BankStatementUpload.ProcessingMode.RECONCILIATION,
         )
         self.assertEqual(replay.statement_rows.count(), rows_before)
+        self.assertEqual(replay.progress, 100)
+        self.assertGreater(replay.processed_transactions, 0)
         closed_row.refresh_from_db()
         self.assertEqual(
             closed_row.decision,

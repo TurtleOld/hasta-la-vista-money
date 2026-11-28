@@ -9266,6 +9266,7 @@ class TestBankStatementImportReliability(TestCase):
                         'source_ref_strength': 'weak',
                         'category_name': 'Комиссия банка',
                         'row_position': 0,
+                        'date_only': True,
                     },
                 ],
                 bank='raiffeisen',
@@ -9278,6 +9279,7 @@ class TestBankStatementImportReliability(TestCase):
         self.assertEqual(row.amount, Decimal('13.20'))
         self.assertEqual(row.transaction_date, moment)
         self.assertEqual(row.transaction_type, TransactionType.EXPENSE)
+        self.assertTrue(row.match_calendar_date)
         self.assertEqual(Transaction.objects.count(), 1)
 
     def test_duplicate_identical_rows_stay_visible(self) -> None:
