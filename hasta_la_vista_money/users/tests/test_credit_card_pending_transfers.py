@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -34,6 +35,9 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.services.bank_statement import (
+    StatementParseResult,
+)
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
@@ -48,6 +52,8 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
+
+SBERBANK_FIXTURE = Path(__file__).parent / 'fixtures' / 'sberbank_statement.pdf'
 
 
 class CreditCardStatementBaseTest(TestCase):
@@ -163,6 +169,188 @@ class CreditCardStatementImportTest(CreditCardStatementBaseTest):
         self.assertEqual(row.amount, Decimal('199.00'))
         self.card.refresh_from_db()
         self.assertEqual(self.card.balance, Decimal('914.87'))
+
+
+class ClosedRepaymentReimportTest(CreditCardStatementBaseTest):
+    """A re-uploaded credit statement recognises a closed repayment."""
+
+    def _import_repayment(
+        self,
+        *,
+        when: datetime,
+        amount: Decimal,
+        source_ref: str,
+        file_hash: str,
+        source_ref_strength: str = 'weak',
+    ) -> tuple[BankStatementUpload, dict[str, int]]:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.card,
+            pdf_file=SimpleUploadedFile(
+                f'{source_ref}.pdf',
+                b'%PDF-1.4 mock pdf',
+                content_type='application/pdf',
+            ),
+            file_hash=file_hash,
+        )
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_import.'
+            'BankStatementParser',
+        ) as parser:
+            parser.return_value.parse.return_value = StatementParseResult(
+                bank='testbank',
+                format_version=2,
+                transactions=[
+                    {
+                        'date': when,
+                        'amount': amount,
+                        'description': 'Перевод на карту',
+                        'source_ref': source_ref,
+                        'source_ref_strength': source_ref_strength,
+                        'row_position': 0,
+                    },
+                ],
+            )
+            result = process_bank_statement_task.apply(args=[upload.pk]).get()
+        return upload, result
+
+    def test_closed_repayment_is_duplicate_on_reimport(self) -> None:
+        when = datetime(2026, 2, 9, 12, 0, tzinfo=UTC)
+        amount = Decimal('199.00')
+        first_upload, first_result = self._import_repayment(
+            when=when,
+            amount=amount,
+            source_ref='closed-repayment',
+            file_hash='closed-repayment-file',
+            source_ref_strength='strong',
+        )
+        self.assertEqual(first_result['needs_transfer_count'], 1)
+        closed_row = BankStatementRow.objects.get(upload=first_upload)
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=amount,
+            user=self.user,
+            exchange_date=when,
+            statement_row_id=closed_row.pk,
+        )
+        closed_row.refresh_from_db()
+        self.assertEqual(
+            closed_row.decision,
+            BankStatementRow.Decision.TRANSFERRED,
+        )
+
+        second_upload, second_result = self._import_repayment(
+            when=when,
+            amount=amount,
+            source_ref='closed-repayment',
+            file_hash='closed-repayment-second-file',
+            source_ref_strength='strong',
+        )
+
+        self.assertEqual(second_result['needs_transfer_count'], 0)
+        self.assertEqual(second_result['skipped_count'], 1)
+        self.assertFalse(
+            BankStatementRow.objects.filter(
+                upload=second_upload,
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            ).exists(),
+        )
+        duplicate = BankStatementRow.objects.get(upload=second_upload)
+        self.assertEqual(
+            duplicate.decision,
+            BankStatementRow.Decision.DUPLICATE,
+        )
+        self.assertEqual(duplicate.canonical_row, closed_row)
+        self.assertEqual(TransferMoneyLog.objects.count(), 1)
+
+
+class KnownFileRepaymentReplayTest(CreditCardStatementBaseTest):
+    """The upload entry point keeps a closed repayment closed on replay."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.client.force_login(self.user)
+        self.upload_url = reverse('finance_account:bank_statement_upload')
+
+    def _post_statement(self) -> BankStatementUpload:
+        def run_task(upload_id: int, run_id: str) -> MagicMock:
+            process_bank_statement_task.apply(args=[upload_id, run_id]).get()
+            return MagicMock(id='task-id')
+
+        with patch(
+            'hasta_la_vista_money.finance_account.bank_statement_views.'
+            'process_bank_statement_task',
+        ) as task:
+            task.delay.side_effect = run_task
+            response = self.client.post(
+                self.upload_url,
+                {
+                    'account': self.card.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        'statement.pdf',
+                        SBERBANK_FIXTURE.read_bytes(),
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+        task.delay.assert_called_once()
+        self.assertEqual(response.status_code, 302)
+        upload = BankStatementUpload.objects.get(account=self.card)
+        upload.refresh_from_db()
+        return upload
+
+    def test_same_bytes_do_not_reopen_a_closed_repayment(self) -> None:
+        """A weak-reference re-upload links to the closed repayment once."""
+        upload = self._post_statement()
+        closed_row = BankStatementRow.objects.get(
+            upload=upload,
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            amount=Decimal('199.00'),
+        )
+        transfer = (
+            ApplicationContainer().finance_account.transfer_service()
+        ).transfer_money(
+            from_account=self.debit,
+            to_account=self.card,
+            amount=Decimal('199.00'),
+            user=self.user,
+            exchange_date=closed_row.transaction_date,
+            statement_row_id=closed_row.pk,
+        )
+        rows_before = upload.statement_rows.count()
+
+        replay = self._post_statement()
+
+        self.assertEqual(replay.pk, upload.pk)
+        self.assertEqual(
+            replay.processing_mode,
+            BankStatementUpload.ProcessingMode.RECONCILIATION,
+        )
+        self.assertEqual(replay.statement_rows.count(), rows_before)
+        self.assertEqual(replay.progress, 100)
+        self.assertGreater(replay.processed_transactions, 0)
+        closed_row.refresh_from_db()
+        self.assertEqual(
+            closed_row.decision,
+            BankStatementRow.Decision.TRANSFERRED,
+        )
+        self.assertEqual(closed_row.transfer_id, transfer.pk)
+        self.assertEqual(
+            replay.statement_rows.filter(
+                decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            replay.statement_rows.filter(
+                decision=BankStatementRow.Decision.DUPLICATE,
+            ).exists(),
+        )
+        self.assertEqual(TransferMoneyLog.objects.count(), 1)
 
 
 class PendingTransferDismissTest(CreditCardStatementBaseTest):

@@ -227,7 +227,7 @@ def process_bank_statement_task(
                 'bank_statement_run_stopped_after_retention',
                 upload_id=upload_id,
             )
-            return _statement_result_counts(result)
+            return _empty_result_counts()
 
         finalized = _finalize_upload(
             upload_id,
@@ -240,7 +240,7 @@ def process_bank_statement_task(
                 'bank_statement_finalization_skipped',
                 upload_id=upload_id,
             )
-            return _statement_result_counts(result)
+            return _empty_result_counts()
         upload = finalized
 
         logger.info(
