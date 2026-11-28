@@ -226,7 +226,7 @@ class StatementRowRepository:
         account: Account,
     ) -> BankStatementRow | None:
         return (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload')
             .filter(
                 pk=row_id,
@@ -239,7 +239,7 @@ class StatementRowRepository:
     def lock_owned_row(self, row_id: int, user_id: int) -> BankStatementRow:
         """Raises ``BankStatementRow.DoesNotExist`` for a foreign row."""
         return (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload__account', 'upload__user')
             .get(
                 pk=row_id,
@@ -254,7 +254,7 @@ class StatementRowRepository:
         user_id: int,
     ) -> TransferMoneyLog | None:
         return (
-            TransferMoneyLog.objects.select_for_update()
+            TransferMoneyLog.objects.select_for_update(of=('self',))
             .filter(pk=transfer_id, user_id=user_id)
             .first()
         )

@@ -215,7 +215,7 @@ class BankStatementReconciliationService:
     ) -> BankStatementRow:
         upload = self._lock_upload(row_id, user_id)
         row = (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload__account')
             .get(
                 pk=row_id,
@@ -293,7 +293,7 @@ class BankStatementReconciliationService:
     ) -> BankStatementRow:
         upload = self._lock_upload(row_id, user_id)
         row = (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload__account')
             .get(
                 pk=row_id,
@@ -393,7 +393,7 @@ class BankStatementReconciliationService:
     ) -> BankStatementRow:
         upload = self._lock_upload(row_id, user_id, upload_id)
         row = (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload__account')
             .get(
                 pk=row_id,
@@ -428,7 +428,9 @@ class BankStatementReconciliationService:
         user_id: int,
         upload_id: int | None = None,
     ) -> BankStatementUpload:
-        uploads = BankStatementUpload.objects.select_for_update().filter(
+        uploads = BankStatementUpload.objects.select_for_update(
+            of=('self',),
+        ).filter(
             statement_rows__pk=row_id,
             user_id=user_id,
             account__user_id=user_id,
@@ -530,7 +532,9 @@ class BankStatementReconciliationService:
         """
         if candidate.transaction_id is not None:
             try:
-                transaction = Transaction.objects.select_for_update().get(
+                transaction = Transaction.objects.select_for_update(
+                    of=('self',),
+                ).get(
                     pk=candidate.transaction_id,
                 )
             except Transaction.DoesNotExist:
@@ -540,7 +544,7 @@ class BankStatementReconciliationService:
             return transaction
         if candidate.transfer_id is not None:
             transfer = (
-                TransferMoneyLog.objects.select_for_update()
+                TransferMoneyLog.objects.select_for_update(of=('self',))
                 .filter(pk=candidate.transfer_id)
                 .first()
             )
@@ -820,7 +824,7 @@ class BankStatementReconciliationService:
         user_id: int,
     ) -> BankStatementRow:
         row = (
-            BankStatementRow.objects.select_for_update()
+            BankStatementRow.objects.select_for_update(of=('self',))
             .select_related('upload')
             .get(
                 pk=row_id,

@@ -4,7 +4,6 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier, Event, Thread
-from time import sleep
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -2806,77 +2805,194 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         return movement, row, candidate
 
-    def _race_candidate_change(
+    def _candidate_transfer_fixture(
         self,
-        action: Callable[[Transaction], None],
-    ) -> tuple[list[Exception | None], BankStatementRow]:
-        """Lock the candidate, change it, then let a decision race in."""
-        movement, row, candidate = self._candidate_fixture()
-        locked = Event()
+    ) -> tuple[TransferMoneyLog, BankStatementRow, BankStatementCandidate]:
+        target = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('0.00'),
+            currency='RUB',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=target,
+            amount=Decimal('100.00'),
+            user=self.user,
+            exchange_date=WHEN,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='candidate-transfer-race.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        candidate = BankStatementCandidate.objects.create(
+            row=row,
+            transfer=transfer,
+            description='Перевод',
+        )
+        return transfer, row, candidate
+
+    def _run_service_race(
+        self,
+        hold: Callable[[Event, Event], None],
+        decide: Callable[[], object],
+    ) -> list[Exception | None]:
+        """Run a holder and a decision through their services in order.
+
+        The holder announces that it locked the movement, then waits for
+        the decision to pass candidate validation before it locks accounts.
+        No timing is guessed: the two service paths meet on events.
+        """
+        holder_locked = Event()
+        decision_ready = Event()
         errors: list[Exception | None] = [None, None]
 
-        def change() -> None:
+        def hold_thread() -> None:
             try:
-                with transaction.atomic():
-                    locked_movement = (
-                        Transaction.objects.select_for_update().get(
-                            pk=movement.pk,
-                        )
-                    )
-                    action(locked_movement)
-                    locked.set()
-                    # Hold the lock until the other thread blocks on it.
-                    sleep(0.5)
+                hold(holder_locked, decision_ready)
             except Exception as exc:
                 errors[0] = exc
             finally:
                 connections.close_all()
 
-        def decide() -> None:
+        def decide_thread() -> None:
             try:
-                locked.wait(timeout=5)
-                BankStatementReconciliationService().decide(
-                    row.pk,
-                    BankStatementRow.Decision.LINKED,
-                    self.user.pk,
-                    candidate.pk,
+                if not holder_locked.wait(timeout=5):
+                    raise AssertionError('holder did not lock in time')
+                original = (
+                    BankStatementReconciliationService._validated_candidate
                 )
+
+                def signal_after_validation(
+                    service: BankStatementReconciliationService,
+                    row: BankStatementRow,
+                    candidate_id: int | None,
+                ) -> BankStatementCandidate:
+                    candidate = original(service, row, candidate_id)
+                    decision_ready.set()
+                    return candidate
+
+                with patch.object(
+                    BankStatementReconciliationService,
+                    '_validated_candidate',
+                    new=signal_after_validation,
+                ):
+                    decide()
             except Exception as exc:
                 errors[1] = exc
             finally:
                 connections.close_all()
 
-        threads = [Thread(target=change), Thread(target=decide)]
+        threads = [Thread(target=hold_thread), Thread(target=decide_thread)]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join(timeout=10)
-        return errors, row
+        return errors
 
     def test_concurrent_candidate_edit_is_stale_not_an_error(self) -> None:
-        def change_amount(movement: Transaction) -> None:
-            movement.amount = Decimal('999.00')
-            movement.save(update_fields=['amount'])
+        movement, row, candidate = self._candidate_fixture()
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        original_apply = (
+            transaction_service.account_service.apply_account_deltas
+        )
 
-        errors, row = self._race_candidate_change(change_amount)
+        def hold(holder_locked: Event, decision_ready: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                decision_ready.wait(timeout=5)
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transaction_service.account_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transaction_service.update_transaction(
+                    UpdateTransactionCommand(
+                        user=self.user,
+                        transaction_obj=movement,
+                        account=self.account,
+                        category=movement.category,
+                        amount=Decimal('999.00'),
+                        transaction_date=WHEN.date(),
+                        type_value=TransactionType.EXPENSE,
+                    ),
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
 
         self.assertIsNone(errors[0])
         self.assertIsInstance(errors[1], StaleStatementCandidateError)
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
         self.assertIsNone(row.transaction_id)
+        movement.refresh_from_db()
+        self.assertEqual(movement.amount, Decimal('999.00'))
 
     def test_concurrent_candidate_delete_is_stale_not_an_error(self) -> None:
-        def delete_movement(movement: Transaction) -> None:
-            movement.delete()
+        transfer, row, candidate = self._candidate_transfer_fixture()
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        original_apply = transfer_service._balance_service.apply_account_deltas
 
-        errors, row = self._race_candidate_change(delete_movement)
+        def hold(holder_locked: Event, decision_ready: Event) -> None:
+            def apply(deltas: dict[int, Decimal]) -> dict[int, Account]:
+                holder_locked.set()
+                decision_ready.wait(timeout=5)
+                return cast('dict[int, Account]', original_apply(deltas))
+
+            with patch.object(
+                transfer_service._balance_service,
+                'apply_account_deltas',
+                side_effect=apply,
+            ):
+                transfer_service.delete_transfer(
+                    transfer_id=transfer.pk,
+                    user=self.user,
+                )
+
+        errors = self._run_service_race(
+            hold,
+            lambda: BankStatementReconciliationService().decide(
+                row.pk,
+                BankStatementRow.Decision.LINKED,
+                self.user.pk,
+                candidate.pk,
+            ),
+        )
 
         self.assertIsNone(errors[0])
         self.assertIsInstance(errors[1], StaleStatementCandidateError)
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
         row.refresh_from_db()
         self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
-        self.assertIsNone(row.transaction_id)
+        self.assertIsNone(row.transfer_id)
 
     def test_deleted_candidate_movement_is_stale_not_an_error(self) -> None:
         movement, row, candidate = self._candidate_fixture()

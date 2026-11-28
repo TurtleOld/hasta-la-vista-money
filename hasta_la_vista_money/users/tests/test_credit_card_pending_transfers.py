@@ -209,7 +209,10 @@ class ExpiredRepaymentRowRejectionTest(CreditCardStatementBaseTest):
         BankStatementRow,
     ]:
         upload = self._create_upload()
-        upload.expires_at = timezone.now() - timedelta(seconds=1)
+        if cleaned:
+            upload.expires_at = timezone.now() + timedelta(days=1)
+        else:
+            upload.expires_at = timezone.now() - timedelta(seconds=1)
         update_fields = ['expires_at']
         if cleaned:
             upload.retention_cleaned_at = timezone.now()
