@@ -7,21 +7,26 @@ anonymization with an actor and time. Decisions, movement links, technical
 fingerprints and the independent financial audit stay untouched.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Any, Final, NamedTuple
+from uuid import UUID
 
 import structlog
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.audit_registry import (
     TRANSACTION_LABEL,
     TRANSFER_LABEL,
 )
 from hasta_la_vista_money.system.models import AuditLog, AuditOperationKind
-from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+    current_operation_id,
+)
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
@@ -40,7 +45,7 @@ from hasta_la_vista_money.users.services.statement_completion import (
 
 logger = structlog.get_logger(__name__)
 
-_CREATED_DECISIONS: Final = frozenset(
+CREATED_DECISIONS: Final = frozenset(
     {
         BankStatementRow.Decision.NEW,
         BankStatementRow.Decision.TRANSFERRED,
@@ -69,17 +74,39 @@ _STATEMENT_AUDIT_KINDS: Final = frozenset(
         # bank copy; only exact provenance below can reach it, so manual
         # transfers stay untouched.
         AuditOperationKind.TRANSFER,
+        # A deletion performed before cleanup carries a full snapshot. It
+        # is scrubbed only through the exact model label and primary key,
+        # never through a shared fingerprint.
+        AuditOperationKind.TRANSACTION_DELETE,
     },
 )
 
 _STATEMENT_AUDIT_MODELS: Final = frozenset({TRANSACTION_LABEL, TRANSFER_LABEL})
 
+# A deletion copy is written right after the release decision that saved
+# the movement id, so a legacy decision without an operation id still owns
+# a snapshot created within this small allowance.
+_LEGACY_DELETE_SNAPSHOT_TOLERANCE: Final = timedelta(seconds=5)
+
 
 class _AuditProvenance(NamedTuple):
-    """Typed identities and safe technical keys of created movements."""
+    """Typed identities and safe technical keys of created movements.
+
+    Live ids come from a row that still points at its movement; deleted
+    ids are saved by a release decision and carry the release time. They
+    are kept apart so a reused primary key never clears a live reference,
+    an unrelated snapshot, or an audit copy written after the release.
+    Each deleted id also carries the time its own movement started, so an
+    earlier holder of the same primary key keeps its audit copy.
+    """
 
     transaction_ids: set[int]
     transfer_ids: set[int]
+    deleted_transaction_ids: dict[int, datetime]
+    deleted_transfer_ids: dict[int, datetime]
+    deleted_movement_starts: dict[tuple[str, int], datetime]
+    delete_snapshots: set[tuple[UUID, str, str]]
+    legacy_delete_snapshot_ids: set[int]
     fingerprints: set[str]
     row_positions: set[int]
     file_hash: str
@@ -321,16 +348,25 @@ class BankStatementRetentionService:
 
         Deleting a movement sets the row and decision-audit foreign keys to
         NULL. Its statement audit copy still carries the same HMAC
-        fingerprint, or the same (upload file hash, row position) pair, so
-        those safe technical keys recover the link without guessing from a
-        weak reference or an amount. A fingerprint shared with another
+        fingerprint, or the same (upload file hash, row position) pair, or
+        the movement id saved by the release decision, so those safe
+        technical keys recover the link without guessing from a weak
+        reference or an amount. A fingerprint shared with another
         upload is not trusted on its own; the exact file-hash/position and
         account composite still reaches the copy proved to belong to this
         upload, so sharing never blocks cleanup forever and never scrubs
         another upload's records.
+
+        Saved movement ids and the delete operation that released them are
+        kept apart from live references: a primary key reused by a later
+        movement never inherits the deleted movement's provenance.
         """
         transaction_ids: set[int] = set()
         transfer_ids: set[int] = set()
+        deleted_transaction_ids: dict[int, datetime] = {}
+        deleted_transfer_ids: dict[int, datetime] = {}
+        delete_snapshots: set[tuple[UUID, str, str]] = set()
+        legacy_delete_snapshot_ids: set[int] = set()
         fingerprints: set[str] = set()
         row_positions: set[int] = set()
         for row in rows:
@@ -372,9 +408,37 @@ class BankStatementRetentionService:
                 audit.previous_transaction_id,
                 audit.previous_transfer_id,
             )
+            _collect_deleted_movement(
+                deleted_transaction_ids,
+                deleted_transfer_ids,
+                decision=audit.previous_decision,
+                transaction_id=audit.previous_transaction_pk,
+                transfer_id=audit.previous_transfer_pk,
+                deleted_at=audit.created_at,
+            )
+            _collect_delete_snapshot(
+                delete_snapshots,
+                legacy_delete_snapshot_ids,
+                operation_id=audit.release_operation_id,
+                decision=audit.previous_decision,
+                transaction_pk=audit.previous_transaction_pk,
+                transfer_pk=audit.previous_transfer_pk,
+                upload=upload,
+                deleted_at=audit.created_at,
+            )
+        deleted_movement_starts = _deleted_movement_starts(
+            upload,
+            deleted_transaction_ids,
+            deleted_transfer_ids,
+        )
         return _AuditProvenance(
             transaction_ids=transaction_ids,
             transfer_ids=transfer_ids,
+            deleted_transaction_ids=deleted_transaction_ids,
+            deleted_transfer_ids=deleted_transfer_ids,
+            deleted_movement_starts=deleted_movement_starts,
+            delete_snapshots=delete_snapshots,
+            legacy_delete_snapshot_ids=legacy_delete_snapshot_ids,
             fingerprints=fingerprints,
             row_positions=row_positions,
             file_hash=upload.file_hash,
@@ -391,14 +455,31 @@ class BankStatementRetentionService:
         Only entries written by an import, resolution or markup operation
         are touched. A match needs the exact model label plus primary key,
         or an exact safe technical key from a statement row; independent
-        financial audit entries keep their values.
+        financial audit entries keep their values. The search starts at
+        the upload and includes known movement ids, and it streams the
+        result in chunks so a years-long history is never loaded at once.
         """
+        movement_ids = sorted(
+            {
+                str(pk)
+                for pk in (
+                    set(provenance.transaction_ids)
+                    | set(provenance.transfer_ids)
+                    | set(provenance.deleted_transaction_ids)
+                    | set(provenance.deleted_transfer_ids)
+                )
+            },
+        )
         entries = AuditLog.objects.filter(
+            Q(created_at__gte=upload.created_at)
+            | Q(object_pk__in=movement_ids),
             user_id=upload.user_id,
             model_name__in=_STATEMENT_AUDIT_MODELS,
             kind__in=_STATEMENT_AUDIT_KINDS,
         )
-        for entry in entries:
+        for entry in entries.iterator(
+            chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
+        ):
             if not _is_statement_audit_copy(entry, provenance):
                 continue
             scrubbed = _scrub_diff(entry.diff)
@@ -411,11 +492,12 @@ class BankStatementRetentionService:
     ) -> None:
         """Drop the raw bank reference from movements this upload created.
 
-        The provenance set only contains decisions that created money, so
-        a linked pre-existing movement keeps its own reference. A queryset
-        update bypasses the audit signal: the technical fingerprint, file
-        position and the financial record stay, only the bank identifier
-        is removed.
+        The provenance set only contains live rows whose decision created
+        money, so a linked pre-existing movement keeps its own reference
+        and a reused primary key of a deleted movement is never touched. A
+        queryset update bypasses the audit signal: the technical
+        fingerprint, file position and the financial record stay, only the
+        bank identifier is removed.
         """
         if not provenance.transaction_ids:
             return
@@ -451,6 +533,38 @@ class BankStatementRetentionService:
             )
 
 
+def scrub_movement_audit_copy(
+    *,
+    user_id: int,
+    model_name: str,
+    object_id: int,
+) -> None:
+    """Scrub bank payload from the fresh deletion copy of one movement.
+
+    A movement deleted after its statement was cleaned writes a deletion
+    snapshot outside the retention run. The DELETE action, exact model
+    label and primary key select that copy, and the current operation id
+    keeps out an older snapshot of a reused primary key. The movement's
+    original creation audit is left as the retention cleanup stored it.
+    """
+    entries = AuditLog.objects.filter(
+        user_id=user_id,
+        model_name=model_name,
+        object_pk=str(object_id),
+        action=AuditLog.Action.DELETE,
+        kind__in=_STATEMENT_AUDIT_KINDS,
+    )
+    operation_id = current_operation_id()
+    if operation_id is not None:
+        entries = entries.filter(operation_id=operation_id)
+    for entry in entries.iterator(
+        chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
+    ):
+        scrubbed = _scrub_diff(entry.diff)
+        if scrubbed != entry.diff:
+            AuditLog.objects.filter(pk=entry.pk).update(diff=scrubbed)
+
+
 def _collect_created_movement(
     transaction_ids: set[int],
     transfer_ids: set[int],
@@ -459,7 +573,7 @@ def _collect_created_movement(
     transfer_id: int | None,
 ) -> None:
     """Add the typed movement id a NEW or TRANSFERRED decision created."""
-    if decision not in _CREATED_DECISIONS:
+    if decision not in CREATED_DECISIONS:
         return
     if transaction_id is not None:
         transaction_ids.add(transaction_id)
@@ -467,22 +581,242 @@ def _collect_created_movement(
         transfer_ids.add(transfer_id)
 
 
+def _collect_deleted_movement(
+    transaction_ids: dict[int, datetime],
+    transfer_ids: dict[int, datetime],
+    *,
+    decision: str,
+    transaction_id: int | None,
+    transfer_id: int | None,
+    deleted_at: datetime,
+) -> None:
+    """Save a released movement id with the time it stopped being live."""
+    if decision not in CREATED_DECISIONS:
+        return
+    for ids, movement_id in (
+        (transaction_ids, transaction_id),
+        (transfer_ids, transfer_id),
+    ):
+        if movement_id is None:
+            continue
+        known = ids.get(movement_id)
+        if known is None:
+            ids[movement_id] = deleted_at
+        else:
+            ids[movement_id] = min(known, deleted_at)
+
+
+def _collect_delete_snapshot(
+    keys: set[tuple[UUID, str, str]],
+    legacy_keys: set[int],
+    *,
+    operation_id: UUID | None,
+    decision: str,
+    transaction_pk: int | None,
+    transfer_pk: int | None,
+    upload: BankStatementUpload,
+    deleted_at: datetime,
+) -> None:
+    """Save the exact deletion audit copy a release decision confirmed.
+
+    A decision saved before the release operation id existed has no exact
+    operation, so the deletion copy nearest the same safety window is
+    resolved instead. A deletion of a primary key taken again after the
+    decision is never selected.
+    """
+    if decision not in CREATED_DECISIONS:
+        return
+    movements = (
+        (TRANSACTION_LABEL, transaction_pk),
+        (TRANSFER_LABEL, transfer_pk),
+    )
+    for model_name, movement_pk in movements:
+        if movement_pk is None:
+            continue
+        if operation_id is not None:
+            keys.add((operation_id, model_name, str(movement_pk)))
+            continue
+        _collect_legacy_delete_snapshot(
+            legacy_keys,
+            upload,
+            model_name,
+            movement_pk,
+            deleted_at,
+        )
+
+
+def _collect_legacy_delete_snapshot(
+    keys: set[int],
+    upload: BankStatementUpload,
+    model_name: str,
+    object_pk: int,
+    released_at: datetime,
+) -> None:
+    """Resolve the deletion copy of a decision without an operation id.
+
+    The release decision is written right before the movement is deleted,
+    so the copy nearest the release deadline belongs to it: a manual
+    movement deleted before the statement one was created stays earlier
+    and keeps its own copy. A primary key taken again after the release
+    is skipped, because that deletion released a different movement.
+    """
+    snapshots = (
+        AuditLog.objects.filter(
+            user_id=upload.user_id,
+            model_name=model_name,
+            object_pk=str(object_pk),
+            action=AuditLog.Action.DELETE,
+            kind__in=_STATEMENT_AUDIT_KINDS,
+            created_at__gte=upload.created_at,
+            created_at__lte=(released_at + _LEGACY_DELETE_SNAPSHOT_TOLERANCE),
+        )
+        .order_by('-created_at', '-pk')
+        .values_list('pk', 'created_at')
+    )
+    for snapshot_pk, deleted_at in snapshots:
+        if _movement_created_since(
+            upload,
+            model_name,
+            object_pk,
+            released_at,
+            deleted_at,
+        ):
+            continue
+        keys.add(snapshot_pk)
+        return
+
+
+def _movement_created_since(
+    upload: BankStatementUpload,
+    model_name: str,
+    object_pk: int,
+    released_at: datetime,
+    deleted_at: datetime,
+) -> bool:
+    """Return whether the released id was created again before deleting."""
+    return (
+        AuditLog.objects.filter(
+            user_id=upload.user_id,
+            model_name=model_name,
+            object_pk=str(object_pk),
+            created_at__gte=released_at,
+            created_at__lt=deleted_at,
+        )
+        .filter(
+            Q(action=AuditLog.Action.CREATE)
+            | Q(kind__in=_STATEMENT_AUDIT_KINDS),
+        )
+        .exclude(action=AuditLog.Action.DELETE)
+        .exists()
+    )
+
+
+def _deleted_movement_starts(
+    upload: BankStatementUpload,
+    transaction_ids: dict[int, datetime],
+    transfer_ids: dict[int, datetime],
+) -> dict[tuple[str, int], datetime]:
+    """Return when each released id started living its current life."""
+    return {
+        (model_name, movement_id): _movement_lifetime_start(
+            upload,
+            model_name,
+            movement_id,
+            released_at,
+        )
+        for model_name, ids in (
+            (TRANSACTION_LABEL, transaction_ids),
+            (TRANSFER_LABEL, transfer_ids),
+        )
+        for movement_id, released_at in ids.items()
+    }
+
+
+def _movement_lifetime_start(
+    upload: BankStatementUpload,
+    model_name: str,
+    object_pk: int,
+    released_at: datetime,
+) -> datetime:
+    """Return the creation bound of the movement that the release deleted.
+
+    An earlier holder of the same primary key was deleted before this
+    movement existed, so copies written before that deletion belong to it
+    and keep their values.
+    """
+    previous = (
+        AuditLog.objects.filter(
+            user_id=upload.user_id,
+            model_name=model_name,
+            object_pk=str(object_pk),
+            action=AuditLog.Action.DELETE,
+            kind__in=_STATEMENT_AUDIT_KINDS,
+            created_at__lt=released_at,
+        )
+        .order_by('-created_at', '-pk')
+        .values_list('created_at', flat=True)
+        .first()
+    )
+    if previous is None or previous < upload.created_at:
+        return upload.created_at
+    return previous
+
+
 def _is_statement_audit_copy(
     entry: AuditLog,
     provenance: _AuditProvenance,
 ) -> bool:
     """Return whether one audit entry belongs to this upload's movement."""
+    if entry.model_name == TRANSACTION_LABEL:
+        created_ids = provenance.transaction_ids
+        deleted_ids = provenance.deleted_transaction_ids
+    elif entry.model_name == TRANSFER_LABEL:
+        created_ids = provenance.transfer_ids
+        deleted_ids = provenance.deleted_transfer_ids
+    else:
+        return False
+    # A deletion snapshot is bank payload only when the release decision
+    # selected exactly this copy. A reused primary key never reaches an
+    # unrelated snapshot.
+    if entry.action == AuditLog.Action.DELETE:
+        return _is_delete_audit_copy(entry, provenance)
     movement_id = _int_or_none(entry.object_pk)
-    if (
-        entry.model_name == TRANSACTION_LABEL
-        and movement_id in provenance.transaction_ids
-    ):
+    if movement_id is not None:
+        if movement_id in created_ids:
+            return True
+        released_at = deleted_ids.get(movement_id)
+        if released_at is not None:
+            # A movement created after the release reused the primary key;
+            # its own audit copy is not a statement copy. A copy older
+            # than the latest deletion of the same id belongs to an
+            # earlier, unrelated movement.
+            started_at = provenance.deleted_movement_starts.get(
+                (entry.model_name, movement_id),
+                entry.created_at,
+            )
+            return started_at <= entry.created_at <= released_at
+    return _has_technical_match(entry, provenance)
+
+
+def _is_delete_audit_copy(
+    entry: AuditLog,
+    provenance: _AuditProvenance,
+) -> bool:
+    """Return whether a deletion snapshot belongs to this upload's movement."""
+    if entry.pk in provenance.legacy_delete_snapshot_ids:
         return True
-    if (
-        entry.model_name == TRANSFER_LABEL
-        and movement_id in provenance.transfer_ids
-    ):
-        return True
+    return (
+        entry.operation_id is not None
+        and (entry.operation_id, entry.model_name, entry.object_pk)
+        in provenance.delete_snapshots
+    )
+
+
+def _has_technical_match(
+    entry: AuditLog,
+    provenance: _AuditProvenance,
+) -> bool:
+    """Return whether safe technical keys still prove the audit copy."""
     diff = entry.diff if isinstance(entry.diff, dict) else {}
     if provenance.fingerprints & _audit_values(diff, 'source_fingerprint'):
         return True

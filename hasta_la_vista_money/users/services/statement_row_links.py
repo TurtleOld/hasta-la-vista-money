@@ -14,16 +14,21 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.system.models import AuditOperationKind
-from hasta_la_vista_money.system.services.audit_context import audit_operation
+from hasta_la_vista_money.system.services.audit_context import (
+    audit_operation,
+    current_operation_id,
+)
 from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import (
     BankStatementDecisionAudit,
     BankStatementRow,
+    BankStatementUpload,
 )
 from hasta_la_vista_money.users.protocols.services import (
     BankStatementReconciliationServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statement_row_repository import (
+    LockedStatementRow,
     StatementRowRepository,
 )
 from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
@@ -31,6 +36,22 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     StaleStatementCandidateError,
     ensure_upload_available,
 )
+from hasta_la_vista_money.users.services.bank_statement_retention import (
+    CREATED_DECISIONS,
+    scrub_movement_audit_copy,
+)
+
+
+def _released_decision(
+    row: LockedStatementRow,
+    repayment_ids: set[int],
+) -> str:
+    """Choose the decision a released row returns to."""
+    if row.retention_cleaned_at is not None:
+        return BankStatementRow.Decision.EXPIRED
+    if row.pk in repayment_ids:
+        return BankStatementRow.Decision.NEEDS_TRANSFER
+    return BankStatementRow.Decision.PENDING
 
 
 class StatementRowLinkService:
@@ -51,12 +72,109 @@ class StatementRowLinkService:
     def release_linked_rows(
         self,
         movement: Transaction | TransferMoneyLog,
-    ) -> None:
-        """Reopen rows closed by the movement and recount their uploads."""
-        for upload in self.statement_row_repository.release_linked_rows(
+    ) -> bool:
+        """Release rows closed by the movement and recount their uploads.
+
+        A cleaned upload kept no bank payload, so its rows become
+        ``EXPIRED`` instead of an unresolvable pending decision and the
+        upload stays completed with unresolved rows. A credit-account
+        repayment goes back to waiting for a transfer, every other row
+        goes back to the pending decision. Rows that are exact repeat
+        observations of a released row are released too, so a closed row
+        never outlives its movement.
+
+        Returns whether the movement was created from a cleaned upload;
+        only such a movement proves its deletion audit copy is a bank copy.
+        A movement merely linked as ``LINKED`` keeps its own audit.
+        """
+        locked = self.statement_row_repository.lock_released_rows(movement)
+        if not locked.linked:
+            return False
+        scrub_audit = any(
+            row.retention_cleaned_at is not None
+            and row.decision in CREATED_DECISIONS
+            for row in locked.linked
+        )
+        rows = (*locked.linked, *locked.repeats)
+        released = [
+            (
+                row.pk,
+                row.decision,
+                _released_decision(row, locked.repayment_ids),
+            )
+            for row in locked.linked
+        ]
+        released += [
+            (
+                row.pk,
+                row.decision,
+                _released_decision(row, set()),
+            )
+            for row in locked.repeats
+        ]
+        expired_ids = [
+            pk
+            for pk, _, decision in released
+            if decision == BankStatementRow.Decision.EXPIRED
+        ]
+        needs_transfer_ids = [
+            pk
+            for pk, _, decision in released
+            if decision == BankStatementRow.Decision.NEEDS_TRANSFER
+        ]
+        pending_ids = [
+            pk
+            for pk, _, decision in released
+            if decision == BankStatementRow.Decision.PENDING
+        ]
+        if expired_ids:
+            self.statement_row_repository.expire_rows(
+                expired_ids,
+                timezone.now(),
+            )
+            cleaned_upload_ids = {
+                row.upload_id
+                for row in rows
+                if row.retention_cleaned_at is not None
+            }
+            self.statement_row_repository.update_upload_status(
+                cleaned_upload_ids,
+                BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+            )
+        if needs_transfer_ids:
+            self.statement_row_repository.reopen_rows(
+                needs_transfer_ids,
+                BankStatementRow.Decision.NEEDS_TRANSFER,
+                clear_canonical=False,
+            )
+        if pending_ids:
+            self.statement_row_repository.reopen_rows(
+                pending_ids,
+                BankStatementRow.Decision.PENDING,
+                clear_canonical=True,
+            )
+        self.statement_row_repository.record_release_decisions(
             movement,
-        ):
+            released,
+            release_operation_id=current_operation_id(),
+        )
+        for upload in locked.uploads:
             self.reconciliation_service.refresh_outcome_counts(upload)
+        return scrub_audit
+
+    def scrub_deleted_movement_audit(
+        self,
+        *,
+        user_id: int,
+        model_name: str,
+        object_id: int,
+    ) -> None:
+        """Scrub bank values from the deletion copy of a cleaned movement."""
+        scrub_movement_audit_copy(
+            user_id=user_id,
+            model_name=model_name,
+            object_id=object_id,
+        )
 
     def invalidate_linked_checks(
         self,

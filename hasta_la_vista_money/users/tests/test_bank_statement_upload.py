@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pandas as pd
 from celery.exceptions import Retry
@@ -75,6 +76,8 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
 )
 from hasta_la_vista_money.users.services.bank_statement_retention import (
     BankStatementRetentionService,
+    _AuditProvenance,
+    scrub_movement_audit_copy,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
@@ -11077,11 +11080,14 @@ class TestBankStatementImportReliability(TestCase):
             object_pk=str(transaction.pk),
             kind=AuditOperationKind.TRANSACTION_DELETE,
         )
-        delete_diff = delete_audit.diff
         upload.expires_at = timezone.now()
         upload.save(update_fields=['expires_at'])
 
-        ApplicationContainer().users.bank_statement_retention_service().cleanup_expired()
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
 
         statement_audit = AuditLog.objects.get(
             model_name='transactions.Transaction',
@@ -11099,9 +11105,59 @@ class TestBankStatementImportReliability(TestCase):
         independent_audit.refresh_from_db()
         self.assertEqual(independent_audit.diff, independent_diff)
         delete_audit.refresh_from_db()
-        self.assertEqual(delete_audit.diff, delete_diff)
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description', 'source_ref'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+        self.assertEqual(
+            deleted['source_fingerprint'],
+            'deleted-fingerprint',
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_scrub_keeps_delete_snapshot_of_another_operation(
+        self,
+    ) -> None:
+        """A reused primary key must not scrub an older deletion copy."""
+        diff = {
+            'v': 2,
+            'deleted': {
+                'amount': '100.00',
+                'description': 'Старое секретное описание',
+            },
+        }
+        historical = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk='501',
+            action=AuditLog.Action.DELETE,
+            diff=diff,
+            operation_id=uuid4(),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        with audit_operation(
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        ) as operation_id:
+            current = AuditLog.objects.create(
+                user=self.user,
+                model_name='transactions.Transaction',
+                object_pk='501',
+                action=AuditLog.Action.DELETE,
+                diff=diff,
+                operation_id=operation_id,
+                kind=AuditOperationKind.TRANSACTION_DELETE,
+            )
+            scrub_movement_audit_copy(
+                user_id=self.user.pk,
+                model_name='transactions.Transaction',
+                object_id=501,
+            )
+
+        historical.refresh_from_db()
+        current.refresh_from_db()
+        self.assertEqual(historical.diff, diff)
+        self.assertNotIn('description', current.diff['deleted'])
 
     def test_cleanup_uses_file_hash_and_position_after_safe_delete(
         self,
@@ -11168,6 +11224,928 @@ class TestBankStatementImportReliability(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 
+    def test_deleting_transaction_after_cleanup_expires_linked_row(
+        self,
+    ) -> None:
+        """A cleaned statement never shows an unresolvable pending row."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/post-cleanup-delete.pdf',
+            total_transactions=1,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+            )
+        transaction_pk = transaction.pk
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        row.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+        self.assertEqual(row.decision, BankStatementRow.Decision.NEW)
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+
+        row.refresh_from_db()
+        upload.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+        self.assertEqual(upload.expired_count, 1)
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(audit.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.NEW,
+        )
+        self.assertEqual(audit.previous_transaction_pk, transaction_pk)
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+
+    def test_deleting_transfer_after_cleanup_expires_linked_row(
+        self,
+    ) -> None:
+        """A cleaned statement expires a row whose transfer is deleted."""
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/post-cleanup-transfer.pdf',
+            total_transactions=1,
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('50.00'),
+                user=self.user,
+                exchange_date=timezone.now(),
+            )
+        )
+        transfer_pk = transfer.pk
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+
+        row.refresh_from_db()
+        upload.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(audit.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.TRANSFERRED,
+        )
+        self.assertEqual(audit.previous_transfer_pk, transfer_pk)
+        delete_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+
+    def test_deleting_linked_manual_transaction_keeps_its_audit(
+        self,
+    ) -> None:
+        """A manual movement linked to a cleaned row keeps its own audit."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        manual = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=timezone.now(),
+            description='Ручная операция',
+        )
+        manual_pk = manual.pk
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/linked-manual-delete.pdf',
+            total_transactions=1,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            transaction=manual,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        create_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(manual_pk),
+            action=AuditLog.Action.CREATE,
+        )
+        created_diff = create_audit.diff
+
+        (
+            ApplicationContainer()
+            .transactions.transaction_service()
+            .delete_transaction(user=self.user, transaction_obj=manual)
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
+        create_audit.refresh_from_db()
+        self.assertEqual(create_audit.diff, created_diff)
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(manual_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertIn(field, deleted)
+
+    def test_deleting_linked_manual_transfer_keeps_its_audit(
+        self,
+    ) -> None:
+        """A manual linked transfer keeps its creation and deletion audit."""
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('50.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+        transfer_pk = transfer.pk
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/linked-manual-transfer.pdf',
+            total_transactions=1,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+        upload.refresh_from_db()
+        self.assertIsNotNone(upload.retention_cleaned_at)
+        create_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.CREATE,
+        )
+        created_diff = create_audit.diff
+
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.EXPIRED)
+        audit = BankStatementDecisionAudit.objects.filter(row=row).latest('pk')
+        self.assertEqual(
+            audit.previous_decision,
+            BankStatementRow.Decision.LINKED,
+        )
+        create_audit.refresh_from_db()
+        self.assertEqual(create_audit.diff, created_diff)
+        delete_audit = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertIn(field, deleted)
+
+    def test_cleanup_scrubs_deleted_movement_by_saved_id_across_statements(
+        self,
+    ) -> None:
+        """A shared fingerprint cannot hide a deleted movement's bank copy."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/overlap-a.pdf',
+            file_hash='overlap-a',
+        )
+        overlapping = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/overlap-b.pdf',
+            file_hash='overlap-b',
+        )
+        BankStatementRow.objects.create(
+            upload=overlapping,
+            source_row_position=7,
+            source_fingerprint='overlap-fingerprint',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=7,
+            source_fingerprint='overlap-fingerprint',
+            source_fingerprint_key_version='k1',
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+                source_fingerprint='overlap-fingerprint',
+                source_fingerprint_key_version='k1',
+            )
+        transaction_pk = transaction.pk
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.decision, BankStatementRow.Decision.PENDING)
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        statement_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction_pk),
+            kind=AuditOperationKind.STATEMENT_IMPORT,
+        )
+        created = statement_audit.diff['created']
+        for field in ('amount', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, created)
+        self.assertEqual(
+            created['source_fingerprint'],
+            'overlap-fingerprint',
+        )
+        delete_audit = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(transaction_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        deleted = delete_audit.diff['deleted']
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, deleted)
+        self.assertEqual(
+            deleted['source_fingerprint'],
+            'overlap-fingerprint',
+        )
+
+    def test_cleanup_keeps_reused_primary_key_of_deleted_movement(
+        self,
+    ) -> None:
+        """A reused primary key keeps its reference and a foreign copy."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reused-pk.pdf',
+            file_hash='reused-pk-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=3,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            transaction = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+                source_ref='R-STALE',
+            )
+        deleted_pk = transaction.pk
+        row.transaction = transaction
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=transaction,
+        )
+        foreign_diff = {
+            'v': 2,
+            'deleted': {
+                'amount': '50.00',
+                'description': 'Чужое описание',
+            },
+        }
+        foreign = AuditLog.objects.create(
+            user=self.user,
+            model_name='transactions.Transaction',
+            object_pk=str(deleted_pk),
+            action=AuditLog.Action.DELETE,
+            diff=foreign_diff,
+            operation_id=uuid4(),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        with audit_operation(kind=AuditOperationKind.EXPENSE):
+            reused = Transaction.objects.create(
+                pk=deleted_pk,
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('70.00'),
+                date=timezone.now(),
+                description='Ручная операция',
+                source_ref='R-NEW',
+            )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        reused.refresh_from_db()
+        self.assertEqual(reused.source_ref, 'R-NEW')
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.diff, foreign_diff)
+        own_deleted = (
+            AuditLog.objects.filter(
+                model_name='transactions.Transaction',
+                object_pk=str(deleted_pk),
+                kind=AuditOperationKind.TRANSACTION_DELETE,
+            )
+            .exclude(pk=foreign.pk)
+            .get()
+        )
+        for field in ('amount', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, own_deleted.diff['deleted'])
+
+    def test_cleanup_keeps_create_audit_of_reused_transfer_pk(
+        self,
+    ) -> None:
+        """A manual transfer reusing a released id keeps its creation copy."""
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reused-transfer-pk.pdf',
+            file_hash='reused-transfer-pk-file',
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('50.00'),
+                user=self.user,
+                exchange_date=timezone.now(),
+            )
+        )
+        transfer_pk = transfer.pk
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            reused = TransferMoneyLog.objects.create(
+                pk=transfer_pk,
+                user=self.user,
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('75.00'),
+                exchange_date=timezone.now(),
+                notes='Ручной перевод',
+            )
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        reused.refresh_from_db()
+        self.assertEqual(reused.notes, 'Ручной перевод')
+        created = AuditLog.objects.filter(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.CREATE,
+            kind=AuditOperationKind.TRANSFER,
+        ).latest('pk')
+        self.assertEqual(created.diff['created']['amount'], '75.00')
+        self.assertEqual(created.diff['created']['notes'], 'Ручной перевод')
+        self.assertIn('exchange_date', created.diff['created'])
+
+    def test_cleanup_scrubs_legacy_delete_snapshot_without_operation(
+        self,
+    ) -> None:
+        """A decision before the release operation id still scrubs its copy."""
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/legacy-delete-snapshot.pdf',
+            file_hash='legacy-delete-snapshot-file',
+        )
+        transfer = (
+            ApplicationContainer()
+            .finance_account.transfer_service()
+            .transfer_money(
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('50.00'),
+                user=self.user,
+                exchange_date=timezone.now(),
+            )
+        )
+        transfer_pk = transfer.pk
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('50.00'),
+            transfer=transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        original_delete = AuditLog.objects.get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        BankStatementDecisionAudit.objects.filter(
+            row__upload=upload,
+        ).update(release_operation_id=None)
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            TransferMoneyLog.objects.create(
+                pk=transfer_pk,
+                user=self.user,
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('75.00'),
+                exchange_date=timezone.now(),
+                notes='Ручной перевод',
+            )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        later_delete = AuditLog.objects.exclude(pk=original_delete.pk).get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        later_diff = later_delete.diff
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        original_delete.refresh_from_db()
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, original_delete.diff['deleted'])
+        later_delete.refresh_from_db()
+        self.assertEqual(later_delete.diff, later_diff)
+
+    def test_cleanup_keeps_manual_delete_of_reused_transaction_id(
+        self,
+    ) -> None:
+        """A manual transaction deleting a reused id keeps its own copy.
+
+        The manual movement is created and deleted inside the legacy
+        tolerance, so only its own creation copy proves the deletion
+        belongs to another movement.
+        """
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reused-delete-pk.pdf',
+            file_hash='reused-delete-pk-file',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=4,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('100.00'),
+            description='Секретное описание банка',
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        with audit_operation(kind=AuditOperationKind.STATEMENT_IMPORT):
+            statement = Transaction.objects.create(
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('100.00'),
+                date=timezone.now(),
+                description='Секретное описание банка',
+                source_ref='R-STALE',
+            )
+        released_pk = statement.pk
+        row.transaction = statement
+        row.decision = BankStatementRow.Decision.NEW
+        row.save(update_fields=['transaction', 'decision'])
+        self.account.balance = Decimal('900.00')
+        self.account.save(update_fields=['balance'])
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=statement,
+        )
+        statement_delete = AuditLog.objects.get(
+            model_name='transactions.Transaction',
+            object_pk=str(released_pk),
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        BankStatementDecisionAudit.objects.filter(
+            row__upload=upload,
+        ).update(release_operation_id=None)
+        with audit_operation(kind=AuditOperationKind.EXPENSE):
+            manual = Transaction.objects.create(
+                pk=released_pk,
+                user=self.user,
+                account=self.account,
+                category=category,
+                type=TransactionType.EXPENSE,
+                amount=Decimal('70.00'),
+                date=timezone.now(),
+                description='Ручная операция',
+            )
+        transaction_service.delete_transaction(
+            user=self.user,
+            transaction_obj=manual,
+        )
+        manual_delete = AuditLog.objects.exclude(
+            pk=statement_delete.pk,
+        ).get(
+            model_name='transactions.Transaction',
+            object_pk=str(released_pk),
+            action=AuditLog.Action.DELETE,
+            kind=AuditOperationKind.TRANSACTION_DELETE,
+        )
+        manual_diff = manual_delete.diff
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        manual_delete.refresh_from_db()
+        self.assertEqual(manual_delete.diff, manual_diff)
+        statement_delete.refresh_from_db()
+        for field in ('amount', 'date', 'description'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, statement_delete.diff['deleted'])
+
+    def test_cleanup_keeps_delete_of_manual_movement_before_statement_row(
+        self,
+    ) -> None:
+        """A manual movement deleted before the statement row stays intact.
+
+        The statement movement reuses the released primary key, so the
+        legacy decision must scrub its own deletion copy, not the earlier
+        foreign one, and must not touch the earlier creation copy.
+        """
+        other = Account.objects.create(
+            user=self.user,
+            name_account='Накопительный',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/legacy-earlier-delete.pdf',
+            file_hash='legacy-earlier-delete-file',
+        )
+        transfer_service = (
+            ApplicationContainer().finance_account.transfer_service()
+        )
+        manual = transfer_service.transfer_money(
+            from_account=self.account,
+            to_account=other,
+            amount=Decimal('50.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+        transfer_pk = manual.pk
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        manual_audits = AuditLog.objects.filter(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+        )
+        manual_create = manual_audits.get(action=AuditLog.Action.CREATE)
+        manual_delete = manual_audits.get(action=AuditLog.Action.DELETE)
+        manual_create_diff = manual_create.diff
+        manual_delete_diff = manual_delete.diff
+        with audit_operation(kind=AuditOperationKind.TRANSFER):
+            statement_transfer = TransferMoneyLog.objects.create(
+                pk=transfer_pk,
+                user=self.user,
+                from_account=self.account,
+                to_account=other,
+                amount=Decimal('75.00'),
+                exchange_date=timezone.now(),
+                notes='Ручной перевод',
+            )
+        BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('75.00'),
+            transfer=statement_transfer,
+            decision=BankStatementRow.Decision.TRANSFERRED,
+        )
+        transfer_service.delete_transfer(
+            transfer_id=transfer_pk,
+            user=self.user,
+        )
+        statement_delete = AuditLog.objects.exclude(pk=manual_delete.pk).get(
+            model_name='finance_account.TransferMoneyLog',
+            object_pk=str(transfer_pk),
+            action=AuditLog.Action.DELETE,
+        )
+        BankStatementDecisionAudit.objects.filter(
+            row__upload=upload,
+        ).update(release_operation_id=None)
+        upload.expires_at = timezone.now()
+        upload.save(update_fields=['expires_at'])
+
+        (
+            ApplicationContainer()
+            .users.bank_statement_retention_service()
+            .cleanup_expired()
+        )
+
+        manual_create.refresh_from_db()
+        self.assertEqual(manual_create.diff, manual_create_diff)
+        manual_delete.refresh_from_db()
+        self.assertEqual(manual_delete.diff, manual_delete_diff)
+        statement_delete.refresh_from_db()
+        for field in ('amount', 'exchange_date', 'notes'):
+            with self.subTest(field=field):
+                self.assertNotIn(field, statement_delete.diff['deleted'])
+
+    def test_cleanup_scans_audit_entries_in_bounded_chunks(self) -> None:
+        """Cleanup must not load a user's whole audit history at once."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/bounded-audit.pdf',
+        )
+        provenance = _AuditProvenance(
+            transaction_ids={1},
+            transfer_ids=set(),
+            deleted_transaction_ids={},
+            deleted_transfer_ids={},
+            deleted_movement_starts={},
+            delete_snapshots=set(),
+            legacy_delete_snapshot_ids=set(),
+            fingerprints=set(),
+            row_positions=set(),
+            file_hash='bounded-audit-file',
+            account_id=self.account.pk,
+        )
+
+        with patch(
+            'hasta_la_vista_money.users.services.bank_statement_retention.'
+            'AuditLog.objects',
+        ) as audit_manager:
+            entries = audit_manager.filter.return_value
+            entries.iterator.return_value = []
+            BankStatementRetentionService._anonymize_audit_copies(
+                upload,
+                provenance,
+            )
+
+        query = str(audit_manager.filter.call_args)
+        self.assertIn('created_at__gte', query)
+        self.assertIn('object_pk__in', query)
+        entries.iterator.assert_called_once_with(
+            chunk_size=constants.STATEMENT_AUDIT_SCAN_CHUNK_SIZE,
+        )
+
     def test_known_file_replay_does_not_recreate_deleted_movement(
         self,
     ) -> None:
@@ -11191,7 +12169,10 @@ class TestBankStatementImportReliability(TestCase):
             process_bank_statement_task.apply(args=[upload.pk])
         row = BankStatementRow.objects.get(upload=upload)
         transaction = cast('Transaction', row.transaction)
-        ApplicationContainer().transactions.transaction_service().delete_transaction(
+        transaction_service = (
+            ApplicationContainer().transactions.transaction_service()
+        )
+        transaction_service.delete_transaction(
             user=self.user,
             transaction_obj=transaction,
         )

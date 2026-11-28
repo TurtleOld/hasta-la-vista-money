@@ -18,6 +18,7 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_positive_amount,
     validate_same_currency,
 )
+from hasta_la_vista_money.system.audit_registry import TRANSFER_LABEL
 from hasta_la_vista_money.system.models import AuditOperationKind
 from hasta_la_vista_money.system.services.audit_context import audit_operation
 from hasta_la_vista_money.users.models import User
@@ -216,5 +217,14 @@ class TransferService:
                     to_account.pk: -transfer_log.amount,
                 },
             )
-            self.statement_row_links.release_linked_rows(transfer_log)
+            transfer_pk = transfer_log.pk
+            was_cleaned = self.statement_row_links.release_linked_rows(
+                transfer_log,
+            )
             self.transfer_money_log_repository.delete_log(transfer_log)
+            if was_cleaned:
+                self.statement_row_links.scrub_deleted_movement_audit(
+                    user_id=transfer_log.user_id,
+                    model_name=TRANSFER_LABEL,
+                    object_id=transfer_pk,
+                )
