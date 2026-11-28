@@ -88,6 +88,12 @@ _STATEMENT_AUDIT_MODELS: Final = frozenset({TRANSACTION_LABEL, TRANSFER_LABEL})
 # a snapshot created within this small allowance.
 _LEGACY_DELETE_SNAPSHOT_TOLERANCE: Final = timedelta(seconds=5)
 
+# Only a movement that still carries a bank reference needs the cleanup
+# lock and update; an already cleared one is left alone.
+_HAS_BANK_REFERENCE: Final = Q(source_ref__isnull=False) & ~Q(
+    source_ref='',
+)
+
 
 class _StatementCompositionChangedError(Exception):
     """Signal that statement rows changed while their locks were taken."""
@@ -203,9 +209,10 @@ class BankStatementRetentionService:
         """Lock only live movements a ``NEW``/``TRANSFERRED`` row created.
 
         The shared order is movement, upload, row. Cleanup rewrites
-        ``source_ref`` only on movements the statement created, so a
-        ``LINKED`` row's independent movement is never locked: a revision
-        holds the upload and waits for that movement's ``KEY SHARE`` on
+        ``source_ref`` only on movements the statement created and that
+        still carry that reference, so an already cleared movement and a
+        ``LINKED`` row's independent movement are never locked: a revision
+        holds the upload and waits for such a movement's ``KEY SHARE`` on
         commit, so cleanup taking it would close a new deadlock cycle.
         The row composition is rechecked under the upload and row locks.
         """
@@ -221,6 +228,7 @@ class BankStatementRetentionService:
         return set(
             Transaction.objects.select_for_update(of=('self',))
             .filter(pk__in=movement_ids)
+            .filter(_HAS_BANK_REFERENCE)
             .order_by('pk')
             .values_list('pk', flat=True),
         )
@@ -244,7 +252,14 @@ class BankStatementRetentionService:
         complete = is_statement_complete(upload)
         row_ids = [row.pk for row in rows]
         provenance = self._statement_audit_provenance(upload, rows)
-        if not provenance.transaction_ids <= locked_transaction_ids:
+        clearable_ids = set(
+            Transaction.objects.filter(
+                pk__in=provenance.transaction_ids,
+            )
+            .filter(_HAS_BANK_REFERENCE)
+            .values_list('pk', flat=True),
+        )
+        if not clearable_ids <= locked_transaction_ids:
             raise _StatementCompositionChangedError(upload.pk)
 
         file_name = upload.pdf_file.name
@@ -288,7 +303,7 @@ class BankStatementRetentionService:
             match_calendar_date=False,
         )
         self._anonymize_audit_copies(upload, provenance)
-        self._clear_created_movement_references(provenance)
+        self._clear_created_movement_references(clearable_ids)
         upload.pdf_file = ''
         upload.retention_pending_pdf_paths = pending_paths
         upload.retention_cleaned_at = now
@@ -543,22 +558,23 @@ class BankStatementRetentionService:
 
     @staticmethod
     def _clear_created_movement_references(
-        provenance: _AuditProvenance,
+        transaction_ids: set[int],
     ) -> None:
         """Drop the raw bank reference from movements this upload created.
 
-        The provenance set only contains live rows whose decision created
-        money, so a linked pre-existing movement keeps its own reference
-        and a reused primary key of a deleted movement is never touched. A
-        queryset update bypasses the audit signal: the technical
-        fingerprint, file position and the financial record stay, only the
-        bank identifier is removed.
+        The ids are the locked live movements whose decision created money
+        and that still carry a reference, so a linked pre-existing
+        movement keeps its own reference, a reused primary key of a deleted
+        movement is never touched, and an already cleared movement gets no
+        statement at all. A queryset update bypasses the audit signal: the
+        technical fingerprint, file position and the financial record stay,
+        only the bank identifier is removed.
         """
-        if not provenance.transaction_ids:
+        if not transaction_ids:
             return
-        Transaction.objects.filter(
-            pk__in=provenance.transaction_ids,
-        ).update(source_ref=None)
+        Transaction.objects.filter(pk__in=transaction_ids).update(
+            source_ref=None,
+        )
 
     @staticmethod
     def _record_anonymization(

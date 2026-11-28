@@ -440,8 +440,17 @@ class StatementRowRepository:
         transfer_id: int,
         user_id: int,
     ) -> TransferMoneyLog | None:
+        """Lock a transfer weakly: a revision's KEY SHARE still fits.
+
+        ``FOR NO KEY UPDATE`` serializes with another such lock and with
+        ``DELETE``, but not with the ``FOR KEY SHARE`` a revision needs for
+        its ``previous_transfer`` reference, so the two cannot deadlock.
+        """
         return (
-            TransferMoneyLog.objects.select_for_update(of=('self',))
+            TransferMoneyLog.objects.select_for_update(
+                no_key=True,
+                of=('self',),
+            )
             .filter(pk=transfer_id, user_id=user_id)
             .first()
         )
@@ -467,8 +476,17 @@ class StatementRowRepository:
         transaction_id: int,
         user_id: int,
     ) -> Transaction | None:
+        """Lock a transaction weakly: a revision's KEY SHARE still fits.
+
+        ``FOR NO KEY UPDATE`` serializes with another such lock and with
+        ``DELETE``, but not with the ``FOR KEY SHARE`` a revision needs for
+        its ``previous_transaction`` reference, so the two cannot deadlock.
+        """
         return (
-            Transaction.objects.select_for_update(of=('self',))
+            Transaction.objects.select_for_update(
+                no_key=True,
+                of=('self',),
+            )
             .filter(pk=transaction_id, user_id=user_id)
             .first()
         )

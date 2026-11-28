@@ -95,7 +95,7 @@ def _signal_before_movement_lock(
         many: bool,
         context: dict[str, Any],
     ) -> Any:
-        if 'FOR UPDATE' in sql and any(
+        if ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and any(
             table in sql for table in movement_tables
         ):
             decision_started.set()
@@ -133,6 +133,53 @@ def _signal_after_movement_lock(
             movement_locked.set()
             if not release.wait(timeout=5):
                 raise TimeoutError('cleanup did not reach the movement lock')
+        return result
+
+    return wrapper
+
+
+def _signal_after_upload_lock(
+    upload_locked: Event,
+    movement_locked: Event,
+) -> Callable[..., Any]:
+    """Hold a revision until the duplicate link owns the movement."""
+    upload_table = BankStatementUpload._meta.db_table
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        result = execute(sql, params, many, context)
+        if 'FOR UPDATE' in sql and upload_table in sql:
+            upload_locked.set()
+            if not movement_locked.wait(timeout=5):
+                raise TimeoutError('link did not lock the movement in time')
+        return result
+
+    return wrapper
+
+
+def _signal_after_canonical_movement_lock(
+    movement_locked: Event,
+) -> Callable[..., Any]:
+    """Announce the canonical movement lock after its SQL returned."""
+    transaction_table = Transaction._meta.db_table
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        result = execute(sql, params, many, context)
+        if (
+            'FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql
+        ) and transaction_table in sql:
+            movement_locked.set()
         return result
 
     return wrapper
@@ -3379,6 +3426,52 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         )
         return transfer, row
 
+    def _duplicate_revision_fixture(
+        self,
+    ) -> tuple[
+        Transaction,
+        BankStatementRow,
+        BankStatementRow,
+    ]:
+        """One linked canonical row and one pending repeat of it."""
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        movement = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('100.00'),
+            date=WHEN,
+            description='Продукты',
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='duplicate-revision-race.pdf',
+        )
+        canonical = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            transaction=movement,
+            decision=BankStatementRow.Decision.LINKED,
+        )
+        pending = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=1,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=WHEN,
+            amount=Decimal('100.00'),
+            decision=BankStatementRow.Decision.PENDING,
+        )
+        return movement, canonical, pending
+
     def _run_service_race(
         self,
         hold: Callable[[Event, Event], None],
@@ -3657,6 +3750,76 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             BankStatementRow.Decision.NEEDS_TRANSFER,
         )
         self.assertIsNone(row.transfer_id)
+
+    def test_duplicate_link_does_not_deadlock_a_revision(self) -> None:
+        """A weak movement lock lets a revision take its KEY SHARE.
+
+        The revision holds the upload and adds a reference to the same
+        movement, while the link holds that movement and waits for the
+        upload. A plain ``FOR UPDATE`` would deadlock with the ``FOR KEY
+        SHARE`` the reference needs; ``FOR NO KEY UPDATE`` does not.
+        """
+        movement, canonical, pending = self._duplicate_revision_fixture()
+        upload_locked = Event()
+        movement_locked = Event()
+        errors: list[Exception | None] = [None, None]
+        revise_service = (
+            ApplicationContainer().users.bank_statement_reconciliation_service()
+        )
+        link_service = ApplicationContainer().users.statement_row_link_service()
+
+        def revise_thread() -> None:
+            try:
+                with connections['default'].execute_wrapper(
+                    _signal_after_upload_lock(
+                        upload_locked,
+                        movement_locked,
+                    ),
+                ):
+                    revise_service.revise_linked_to_new(
+                        canonical.pk,
+                        self.user.pk,
+                    )
+            except Exception as exc:
+                errors[0] = exc
+            finally:
+                connections.close_all()
+
+        def link_thread() -> None:
+            try:
+                if not upload_locked.wait(timeout=5):
+                    self.fail('revision did not lock the upload in time')
+                with connections['default'].execute_wrapper(
+                    _signal_after_canonical_movement_lock(movement_locked),
+                ):
+                    link_service.link_duplicate(
+                        pending.pk,
+                        canonical.pk,
+                        self.user.pk,
+                    )
+            except Exception as exc:
+                errors[1] = exc
+            finally:
+                connections.close_all()
+
+        threads = [Thread(target=revise_thread), Thread(target=link_thread)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        for thread in threads:
+            self.assertFalse(thread.is_alive(), 'race thread did not finish')
+        self.assertEqual(errors, [None, None])
+
+        pending.refresh_from_db()
+        self.assertEqual(
+            pending.decision,
+            BankStatementRow.Decision.DUPLICATE,
+        )
+        self.assertEqual(pending.canonical_row_id, canonical.pk)
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.decision, BankStatementRow.Decision.NEW)
+        self.assertNotEqual(canonical.transaction_id, movement.pk)
 
 
 class CoverageRevisionTest(TestCase):
