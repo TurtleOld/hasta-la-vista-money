@@ -7446,10 +7446,11 @@ class StatementCalendarDateRuleTest(TestCase):
     def _import(
         self,
         parse_result: StatementParseResult,
+        account: Account | None = None,
     ) -> BankStatementUpload:
         upload = BankStatementUpload.objects.create(
             user=self.user,
-            account=self.account,
+            account=account or self.account,
             pdf_file='bank_statements/calendar-date.pdf',
         )
         with patch(
@@ -7564,6 +7565,82 @@ class StatementCalendarDateRuleTest(TestCase):
         if restored is None:
             self.fail('The existing row was not restored.')
         self.assertFalse(restored.match_calendar_date)
+
+    def test_generic_repayment_uses_calendar_date(self) -> None:
+        """A first-import repayment without time compares by day."""
+        card = Account.objects.create(
+            user=self.user,
+            name_account='Кредитка правила даты',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+            type_account=constants.ACCOUNT_TYPE_CREDIT_CARD,
+        )
+        upload = self._import(
+            StatementParseResult(
+                bank='generic',
+                transactions=[
+                    {
+                        'date': self.moment,
+                        'amount': Decimal('100.00'),
+                        'description': 'Перевод на карту',
+                        'source_ref': None,
+                        'row_position': 0,
+                    },
+                ],
+            ),
+            account=card,
+        )
+
+        row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            row.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+        self.assertTrue(row.match_calendar_date)
+
+    def test_sberbank_restore_recomputes_a_filled_row(self) -> None:
+        """A filled row loses a stale calendar-date widening on replay."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/calendar-refresh.pdf',
+        )
+        row = BankStatementRow.objects.create(
+            upload=upload,
+            source_row_position=0,
+            source_format_version=1,
+            source_ref='S-3',
+            source_ref_strength='weak',
+            transaction_date=self.moment,
+            amount=Decimal('10.00'),
+            match_calendar_date=True,
+            decision=BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
+
+        restored = self.service._restore_existing_row(
+            upload=upload,
+            trans={
+                'date': self.moment,
+                'amount': Decimal('10.00'),
+                'description': 'Перевод на карту',
+                'source_ref': 'S-3',
+                'row_position': 0,
+            },
+            row_position=0,
+            bank='sberbank',
+            fingerprint=None,
+            format_version=1,
+            source_ref_strength='weak',
+        )
+
+        if restored is None:
+            self.fail('The existing row was not restored.')
+        stored = BankStatementRow.objects.get(pk=row.pk)
+        self.assertFalse(stored.match_calendar_date)
+        self.assertEqual(
+            stored.decision,
+            BankStatementRow.Decision.NEEDS_TRANSFER,
+        )
 
 
 class TestOzonBankStatement(TestCase):

@@ -2120,7 +2120,8 @@ class BankStatementImportService:
         version. A stale position from another mapping is detached so the
         row can be reassigned instead of silently merged. Only blank bank
         fields are filled: movement, transfer, candidate and canonical
-        links stay exactly as they were.
+        links stay exactly as they were. The derived calendar-date flag is
+        recomputed for every restored row.
 
         A row expired by retention has no user decision behind it, so
         restoring its bank data reopens it for manual resolution: a parsed
@@ -2180,11 +2181,18 @@ class BankStatementImportService:
                 )
             return None
         if row.amount is not None and row.transaction_date is not None:
+            update_fields: dict[str, Any] = {}
             if row.source_ref_strength != source_ref_strength:
+                update_fields['source_ref_strength'] = source_ref_strength
+            match_calendar_date = _match_calendar_date(bank, trans)
+            if row.match_calendar_date != match_calendar_date:
+                update_fields['match_calendar_date'] = match_calendar_date
+            if update_fields:
                 BankStatementRow.objects.filter(pk=row.pk).update(
-                    source_ref_strength=source_ref_strength,
+                    **update_fields,
                 )
-                row.source_ref_strength = source_ref_strength
+                for field, value in update_fields.items():
+                    setattr(row, field, value)
             return row
         amount = trans.get('amount')
         trans_date = trans.get('date')
@@ -2327,6 +2335,7 @@ class BankStatementImportService:
                 'source_fingerprint_format_version': (
                     fingerprint.format_version if fingerprint else 0
                 ),
+                'match_calendar_date': _match_calendar_date(bank, trans),
                 'decision': BankStatementRow.Decision.NEEDS_TRANSFER,
             },
         )
