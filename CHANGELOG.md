@@ -1,5 +1,58 @@
 # История изменений
 
+## [2.26.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.25.0...v2.26.0) (2026-11-28)
+
+
+### ✨ Новые возможности
+
+* **finance_account:** add accounting control coverage entry ([#1181](https://github.com/TurtleOld/hasta-la-vista-money/issues/1181)) ([8438668](https://github.com/TurtleOld/hasta-la-vista-money/commit/84386688c2633443101ca070e9e0305bf6c226d0))
+* **finance_account:** add statement row exclusion lifecycle ([#1180](https://github.com/TurtleOld/hasta-la-vista-money/issues/1180)) ([05d477a](https://github.com/TurtleOld/hasta-la-vista-money/commit/05d477a530e5657ab308134113b2b801b5eb1e0c))
+* **finance_account:** complete legacy statement compatibility rollout ([#1190](https://github.com/TurtleOld/hasta-la-vista-money/issues/1190)) ([2bfab55](https://github.com/TurtleOld/hasta-la-vista-money/commit/2bfab55f5627dcb88a6f73ee92e1e592094c4f68))
+* **finance_account:** complete sberbank statement lifecycle ([#1185](https://github.com/TurtleOld/hasta-la-vista-money/issues/1185)) ([421cdd6](https://github.com/TurtleOld/hasta-la-vista-money/commit/421cdd602c5cd06d1c846cee9c20d8fe14e0b828))
+* **finance_account:** configure statement retention and scrub audit copies ([#1189](https://github.com/TurtleOld/hasta-la-vista-money/issues/1189)) ([fefe4dd](https://github.com/TurtleOld/hasta-la-vista-money/commit/fefe4dd016a01e61461b8c186aa67bf857d05040))
+* **finance_account:** preserve ozon unknown operations and transfers ([#1186](https://github.com/TurtleOld/hasta-la-vista-money/issues/1186)) ([0be5f38](https://github.com/TurtleOld/hasta-la-vista-money/commit/0be5f38f3eaede111bb0dff8d5d0678a6012add0))
+* **finance_account:** trace generic statement rows without bank identity ([#1187](https://github.com/TurtleOld/hasta-la-vista-money/issues/1187)) ([442f117](https://github.com/TurtleOld/hasta-la-vista-money/commit/442f1172b196eb194d55de73766b3f7aef908c24))
+* **finance_account:** trace raiffeisen statement rows ([#1184](https://github.com/TurtleOld/hasta-la-vista-money/issues/1184)) ([d7d1bff](https://github.com/TurtleOld/hasta-la-vista-money/commit/d7d1bff77ade222f4ff2624870fad24dc36ff03d))
+* **finance_account:** verify statement balances and explanations ([#1183](https://github.com/TurtleOld/hasta-la-vista-money/issues/1183)) ([e29e2b5](https://github.com/TurtleOld/hasta-la-vista-money/commit/e29e2b5459011fdd216085fa93826b67d1013552))
+* **finance_account:** verify statement identity and atomic links ([#1182](https://github.com/TurtleOld/hasta-la-vista-money/issues/1182)) ([a55e1f0](https://github.com/TurtleOld/hasta-la-vista-money/commit/a55e1f0dc9d177c9e3250d1e3c42de4ef4521c4c))
+
+
+### 🐛 Исправления
+
+* **finance_account:** allow revoking manual period coverage ([#1216](https://github.com/TurtleOld/hasta-la-vista-money/issues/1216)) ([2271775](https://github.com/TurtleOld/hasta-la-vista-money/commit/227177571651ebd225198fe663eba3300125e1eb))
+* **finance_account:** allow settled statement expenses above balance ([#1212](https://github.com/TurtleOld/hasta-la-vista-money/issues/1212)) ([c55ae40](https://github.com/TurtleOld/hasta-la-vista-money/commit/c55ae40869f67ad41f26253a6d8ad81da1692d32))
+* **finance_account:** clear statement movement bank reference on retention ([#1207](https://github.com/TurtleOld/hasta-la-vista-money/issues/1207)) ([deed58e](https://github.com/TurtleOld/hasta-la-vista-money/commit/deed58e23b652d378fad8a445d38e5d4e4b03657))
+* **finance_account:** count duplicate statement rows in control summary ([#1193](https://github.com/TurtleOld/hasta-la-vista-money/issues/1193)) ([d144677](https://github.com/TurtleOld/hasta-la-vista-money/commit/d14467743f580b3a1e7681942bdf0c1e06bc9409))
+* **finance_account:** enforce statement run ownership before coverage ([#1203](https://github.com/TurtleOld/hasta-la-vista-money/issues/1203)) ([5d606d7](https://github.com/TurtleOld/hasta-la-vista-money/commit/5d606d77d53d9e9a7f8a0d3583b6bb8e6dbed0eb))
+* **finance_account:** harden statement reconciliation and repayment linking ([#1219](https://github.com/TurtleOld/hasta-la-vista-money/issues/1219)) ([00cfb61](https://github.com/TurtleOld/hasta-la-vista-money/commit/00cfb6147da751f6edc2c12cfa118f7e175f8e48))
+* **finance_account:** keep confirmed recheck date and bank time ([#1206](https://github.com/TurtleOld/hasta-la-vista-money/issues/1206)) ([1ada850](https://github.com/TurtleOld/hasta-la-vista-money/commit/1ada850fafc54df5ceacd1e5338fbd35e35555da))
+* **finance_account:** mark matched statement checks stale on date change ([#1197](https://github.com/TurtleOld/hasta-la-vista-money/issues/1197)) ([3dfdcb1](https://github.com/TurtleOld/hasta-la-vista-money/commit/3dfdcb1ff219401294cd9986fbaea58621eebfbd))
+* **finance_account:** preserve statement decision history ([#1215](https://github.com/TurtleOld/hasta-la-vista-money/issues/1215)) ([e678b63](https://github.com/TurtleOld/hasta-la-vista-money/commit/e678b63c943e7a5ec7292a377db8e42357cbbc2e))
+* **finance_account:** preserve unparsed ozon statement fragments ([#1194](https://github.com/TurtleOld/hasta-la-vista-money/issues/1194)) ([474e68f](https://github.com/TurtleOld/hasta-la-vista-money/commit/474e68f40e1e26016c621f9254572c4a92620ab1))
+* **finance_account:** preserve weak cross-file statement observations ([#1191](https://github.com/TurtleOld/hasta-la-vista-money/issues/1191)) ([4d467d3](https://github.com/TurtleOld/hasta-la-vista-money/commit/4d467d345dd9bf0f5379da52d569dde7d84108cf))
+* **finance_account:** reopen expired statement rows on replay ([#1192](https://github.com/TurtleOld/hasta-la-vista-money/issues/1192)) ([6961dd3](https://github.com/TurtleOld/hasta-la-vista-money/commit/6961dd398b7ffced44c70137fbc45fba9cf5b486))
+* **finance_account:** require parsed rows for statement coverage ([#1196](https://github.com/TurtleOld/hasta-la-vista-money/issues/1196)) ([51e12f9](https://github.com/TurtleOld/hasta-la-vista-money/commit/51e12f91cee305856ee37106aecb1ae1c736a36f))
+* **finance_account:** retain statement balance discrepancy on failed recheck ([#1199](https://github.com/TurtleOld/hasta-la-vista-money/issues/1199)) ([7091591](https://github.com/TurtleOld/hasta-la-vista-money/commit/70915919345d8dccff1b2dac07e28a11a88db6e8))
+* **finance_account:** select statements by effective upload period ([#1209](https://github.com/TurtleOld/hasta-la-vista-money/issues/1209)) ([eb74b43](https://github.com/TurtleOld/hasta-la-vista-money/commit/eb74b43c6bcfd503d2089e12c78df057ed51d348))
+* **finance_account:** streamline accounting control and statement history ([#1211](https://github.com/TurtleOld/hasta-la-vista-money/issues/1211)) ([b93c685](https://github.com/TurtleOld/hasta-la-vista-money/commit/b93c6859b94b99035ca9c3eaa2369c94bded38f5))
+* **finance_account:** sync statement status with row decisions ([#1213](https://github.com/TurtleOld/hasta-la-vista-money/issues/1213)) ([f56383a](https://github.com/TurtleOld/hasta-la-vista-money/commit/f56383a11b36c976f95fa22990c4d859a816689b))
+* **finance_account:** unify statement balance lock order and checks ([#1222](https://github.com/TurtleOld/hasta-la-vista-money/issues/1222)) ([2f6d2c1](https://github.com/TurtleOld/hasta-la-vista-money/commit/2f6d2c13ffa2539773bb8b7752e1b2476fcf6e96))
+* **finance_account:** unify statement completion rules ([#1208](https://github.com/TurtleOld/hasta-la-vista-money/issues/1208)) ([317a132](https://github.com/TurtleOld/hasta-la-vista-money/commit/317a132b850bb1d3d12599259ecdaed4bae811c7))
+* **finance_account:** verify balance after statement reconciliation ([#1214](https://github.com/TurtleOld/hasta-la-vista-money/issues/1214)) ([b7d1d66](https://github.com/TurtleOld/hasta-la-vista-money/commit/b7d1d665f2c9229f922c30d94c2d8fe584406e79))
+* **finance_account:** verify statement bank before account binding ([#1204](https://github.com/TurtleOld/hasta-la-vista-money/issues/1204)) ([6207880](https://github.com/TurtleOld/hasta-la-vista-money/commit/6207880e3934727c284b9e38c1725b2a362a9f05))
+* **users:** delete statement PDF after retention commit ([#1210](https://github.com/TurtleOld/hasta-la-vista-money/issues/1210)) ([db8c881](https://github.com/TurtleOld/hasta-la-vista-money/commit/db8c88141850aeb3983863f647a39a732032ac35))
+* **users:** fix post-retention statement lifecycle and audit scrubbing ([#1220](https://github.com/TurtleOld/hasta-la-vista-money/issues/1220)) ([1b03e15](https://github.com/TurtleOld/hasta-la-vista-money/commit/1b03e15a320deebc967050acb144fad84c284647))
+* **users:** keep repeated unresolved statement observations ([#1205](https://github.com/TurtleOld/hasta-la-vista-money/issues/1205)) ([9230659](https://github.com/TurtleOld/hasta-la-vista-money/commit/9230659916c30c66a11e24cd11e7c180400e45b2))
+* **users:** keep statement import duplicates and dates consistent ([#1218](https://github.com/TurtleOld/hasta-la-vista-money/issues/1218)) ([caaf230](https://github.com/TurtleOld/hasta-la-vista-money/commit/caaf230dd0cf51e8040e20023acc2d6bc1f51775))
+* **users:** preserve bank statement rows and signed amounts ([#1217](https://github.com/TurtleOld/hasta-la-vista-money/issues/1217)) ([204d827](https://github.com/TurtleOld/hasta-la-vista-money/commit/204d82776aca41cc83412c55b40f1c3b849863b1))
+* **users:** publish statement coverage on every successful parse ([#1195](https://github.com/TurtleOld/hasta-la-vista-money/issues/1195)) ([fbc24fd](https://github.com/TurtleOld/hasta-la-vista-money/commit/fbc24fd37d80d6a8f28228c5d4b79fd2d1c5af09))
+* **users:** stop stale statement run after retention cleanup ([#1198](https://github.com/TurtleOld/hasta-la-vista-money/issues/1198)) ([d0b3a4e](https://github.com/TurtleOld/hasta-la-vista-money/commit/d0b3a4e7f0bff42b65d9fed5354d071ecdb47c90))
+
+
+### 📚 Документация
+
+* **finance_account:** document accounting control domain decisions ([#1177](https://github.com/TurtleOld/hasta-la-vista-money/issues/1177)) ([abbbbbf](https://github.com/TurtleOld/hasta-la-vista-money/commit/abbbbbf7d3dbf766fb58db0a8b4915dcf9de8861))
+
 ## [2.25.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.24.0...v2.25.0) (2026-11-16)
 
 
