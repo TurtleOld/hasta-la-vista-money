@@ -33,6 +33,11 @@
           "type": "toml",
           "path": "pyproject.toml",
           "jsonpath": "$.tool.bumpversion.current_version"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='hastalavistamoney')].version"
         }
       ]
     }
