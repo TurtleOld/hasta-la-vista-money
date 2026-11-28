@@ -3803,8 +3803,9 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         Deleting the movement takes it first and only then the upload; a
         revision that held the upload while its audit needed a ``KEY
         SHARE`` of the movement would deadlock with that delete. The
-        revision therefore waits for the movement and finishes once the
-        delete commits.
+        delete is signalled only when its own movement SQL is about to
+        run, so the revision cannot finish before the delete has really
+        attempted that lock.
         """
         movement, canonical, _pending = self._duplicate_revision_fixture()
         upload_locked = Event()
@@ -3838,11 +3839,13 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             try:
                 if not upload_locked.wait(timeout=5):
                     self.fail('revision did not lock the upload in time')
-                delete_attempted.set()
-                transaction_service.delete_transaction(
-                    user=self.user,
-                    transaction_obj=movement,
-                )
+                with connections['default'].execute_wrapper(
+                    _signal_before_movement_lock(delete_attempted),
+                ):
+                    transaction_service.delete_transaction(
+                        user=self.user,
+                        transaction_obj=movement,
+                    )
             except Exception as exc:
                 errors[1] = exc
             finally:
