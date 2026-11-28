@@ -38,9 +38,6 @@ from hasta_la_vista_money.users.models import (
     BankStatementUpload,
     User,
 )
-from hasta_la_vista_money.users.repositories.statement_row_repository import (
-    StatementRowRepository,
-)
 from hasta_la_vista_money.users.services.bank_statement import (
     StatementParseResult,
 )
@@ -74,6 +71,37 @@ SYNTHETIC_BANK = 'synthetic-test'
 # The import classifies a row before its write transaction, so acting on
 # the second call pauses the run with the first row already posted.
 PAUSE_BEFORE_SECOND_ROW = 2
+
+
+def _signal_before_movement_lock(
+    decision_started: Event,
+) -> Callable[..., Any]:
+    """Announce the movement lock only when its own SQL is about to run.
+
+    The candidate is read by a plain ``SELECT`` before the movement is
+    re-read with ``SELECT ... FOR UPDATE``; signalling at method entry
+    would let the holder commit first and the movement read would then
+    fail without ever waiting on the lock.
+    """
+    movement_tables = (
+        Transaction._meta.db_table,
+        TransferMoneyLog._meta.db_table,
+    )
+
+    def wrapper(
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: dict[str, Any],
+    ) -> Any:
+        if 'FOR UPDATE' in sql and any(
+            table in sql for table in movement_tables
+        ):
+            decision_started.set()
+        return execute(sql, params, many, context)
+
+    return wrapper
 
 
 class StatementFingerprintTest(TestCase):
@@ -2897,28 +2925,20 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
         self,
         hold: Callable[[Event, Event], None],
         decide: Callable[[], object],
-        lock_target: tuple[type[Any], str] = (
-            BankStatementReconciliationService,
-            '_lock_candidate_movement',
-        ),
     ) -> list[Exception | None]:
         """Run a holder and a decision through their services in order.
 
         The holder announces that it locked the movement, then waits until
         the decision is about to take the movement lock before it commits
         its change. The decision then blocks on that lock, so it always
-        re-reads the committed movement. No timing is guessed: the two
-        service paths meet on events.
+        re-reads the committed movement. The signal comes from the SQL that
+        takes the lock itself, not from a service method, so it cannot fire
+        before the candidate is read. No timing is guessed: the two service
+        paths meet on events.
         """
         holder_locked = Event()
         decision_started = Event()
         errors: list[Exception | None] = [None, None]
-        lock_owner, lock_name = lock_target
-        original_lock = getattr(lock_owner, lock_name)
-
-        def lock_after_signal(*args: Any, **kwargs: Any) -> Any:
-            decision_started.set()
-            return original_lock(*args, **kwargs)
 
         def hold_thread() -> None:
             try:
@@ -2932,11 +2952,8 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
             try:
                 if not holder_locked.wait(timeout=5):
                     self.fail('holder did not lock in time')
-                with patch.object(
-                    lock_owner,
-                    lock_name,
-                    autospec=True,
-                    side_effect=lock_after_signal,
+                with connections['default'].execute_wrapper(
+                    _signal_before_movement_lock(decision_started),
                 ):
                     decide()
             except Exception as exc:
@@ -3169,7 +3186,6 @@ class ConcurrentStatementActionsTest(TransactionTestCase):
                 transfer.pk,
                 self.user.pk,
             ),
-            lock_target=(StatementRowRepository, 'lock_owned_transfer'),
         )
 
         self.assertIsNone(errors[0])
